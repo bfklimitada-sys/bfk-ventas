@@ -123,6 +123,15 @@ async function supaUpdatePerfilRol(accessToken, userId, rol) {
   return res.json();
 }
 
+// ─── OC + ITEMS: lectura combinada vía resource embedding de PostgREST ──────
+async function supaListOCConItems(accessToken) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/ordenes_compra?select=*,items_oc(*)&order=creadoEn.desc`, {
+    headers: supaHeaders(accessToken),
+  });
+  if (!res.ok) throw new Error("Error al leer órdenes de compra");
+  return res.json();
+}
+
 const COLORS = {
   green: "#1D9E75", greenLight: "#E8F7F2",
   amber: "#EF9F27", amberLight: "#FEF6E7",
@@ -366,7 +375,7 @@ function ImportExcelModal({ onImport, onClose, existingCount }) {
   );
 }
 
-// ─── STORAGE HELPERS (localStorage del navegador, para uso fuera de Claude) ──
+// ─── STORAGE HELPERS ─────────────────────────────────────────────────────────
 async function storageGet(key) {
   try { return localStorage.getItem(key); }
   catch { return null; }
@@ -417,7 +426,215 @@ function VencimientoBadge({ venta }) {
   );
 }
 
-// ─── PROGRESS BAR ────────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════
+// MÓDULO: ÓRDENES DE COMPRA (OC) CON ÍTEMS
+// ════════════════════════════════════════════════════════════════════════════
+
+const ESTADOS_COMPRA = [
+  { value: "pendiente", label: "Pendiente", color: COLORS.red, bg: COLORS.redLight },
+  { value: "en_proceso", label: "En proceso", color: COLORS.amber, bg: COLORS.amberLight },
+  { value: "en_transito", label: "En tránsito", color: COLORS.blue, bg: COLORS.blueLight },
+  { value: "comprado", label: "Comprado", color: COLORS.green, bg: COLORS.greenLight },
+];
+function estadoCompraInfo(v) { return ESTADOS_COMPRA.find(e => e.value === v) || ESTADOS_COMPRA[0]; }
+
+function EstadoCompraBadge({ value }) {
+  const info = estadoCompraInfo(value);
+  return <span style={{ background: info.bg, color: info.color, padding: "2px 8px", borderRadius: 12, fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>{info.label}</span>;
+}
+
+function nuevoItem() {
+  return { id: "item_" + Date.now().toString() + "_" + Math.random().toString(36).slice(2, 7), producto: "", cantidad: 1, proveedor: "", costo_compra: "", estado_compra: "pendiente", notas: "" };
+}
+
+// ─── FORMULARIO DE OC (con ítems dinámicos) ─────────────────────────────────
+function OCForm({ initial, onSave, onClose }) {
+  const empty = {
+    numero_oc: "", cliente: "", rut_cliente: "", comuna: "", vendedor: "",
+    fechaVenta: "", fechaEntrega: "", estado: "pendiente",
+    factura: "no", numFactura: "", pago: "n/a", fechaPago: "",
+    facturaPropia: "no", numFacturaPropia: "", fechaFacturaPropia: "",
+    financiamiento: "", estado_credito: "", monto_venta: "", notas: "",
+  };
+  const [f, setF] = useState(initial ? { ...empty, ...initial } : empty);
+  const [items, setItems] = useState(initial?.items_oc?.length ? initial.items_oc.map(it => ({ ...it, costo_compra: it.costo_compra ?? "" })) : [nuevoItem()]);
+  const [err, setErr] = useState({});
+
+  const set = (k, v) => setF(p => {
+    const next = { ...p, [k]: v };
+    if (k === "factura") next.pago = v === "si" ? "pendiente" : "n/a";
+    return next;
+  });
+
+  const setItem = (id, k, v) => setItems(prev => prev.map(it => it.id === id ? { ...it, [k]: v } : it));
+  const addItem = () => setItems(prev => [...prev, nuevoItem()]);
+  const removeItem = (id) => setItems(prev => prev.length > 1 ? prev.filter(it => it.id !== id) : prev);
+
+  const totalCompraItems = items.reduce((s, it) => s + (Number(it.costo_compra) || 0), 0);
+
+  const validate = () => {
+    const e = {};
+    if (!f.numero_oc.trim()) e.numero_oc = "Requerido";
+    if (!f.cliente.trim()) e.cliente = "Requerido";
+    if (!f.fechaVenta) e.fechaVenta = "Requerido";
+    if (!f.monto_venta || isNaN(f.monto_venta) || Number(f.monto_venta) <= 0) e.monto_venta = "Monto válido requerido";
+    const itemsInvalidos = items.some(it => !it.producto.trim());
+    if (itemsInvalidos) e.items = "Cada ítem necesita un nombre de producto";
+    setErr(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const handleSave = () => {
+    if (!validate()) return;
+    const oc = { ...f, monto_venta: Number(f.monto_venta) };
+    if (!initial) { oc.id = "oc_" + Date.now().toString(); oc.creadoEn = new Date().toISOString(); }
+    else { oc.id = initial.id; oc.creadoEn = initial.creadoEn; }
+    const itemsLimpios = items.map(it => ({
+      id: it.id,
+      oc_id: oc.id,
+      producto: it.producto.trim(),
+      cantidad: Number(it.cantidad) || 1,
+      proveedor: it.proveedor.trim(),
+      costo_compra: Number(it.costo_compra) || 0,
+      estado_compra: it.estado_compra,
+      notas: it.notas || "",
+    }));
+    onSave(oc, itemsLimpios, initial?.items_oc || []);
+  };
+
+  return (
+    <div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        <div>
+          <Field label="N° Orden de Compra" required><input style={{ ...inputStyle, borderColor: err.numero_oc ? COLORS.red : COLORS.border }} value={f.numero_oc} onChange={e => set("numero_oc", e.target.value)} placeholder="ej: 4237-108-AG26" /></Field>
+          {err.numero_oc && <div style={{ color: COLORS.red, fontSize: 11, marginTop: -10, marginBottom: 8 }}>{err.numero_oc}</div>}
+        </div>
+        <div>
+          <Field label="Monto venta total ($)" required><input style={{ ...inputStyle, borderColor: err.monto_venta ? COLORS.red : COLORS.border }} type="number" value={f.monto_venta} onChange={e => set("monto_venta", e.target.value)} placeholder="0" /></Field>
+          {err.monto_venta && <div style={{ color: COLORS.red, fontSize: 11, marginTop: -10, marginBottom: 8 }}>{err.monto_venta}</div>}
+        </div>
+        <div style={{ gridColumn: "1/-1" }}>
+          <Field label="Cliente" required><input style={{ ...inputStyle, borderColor: err.cliente ? COLORS.red : COLORS.border }} value={f.cliente} onChange={e => set("cliente", e.target.value)} placeholder="Nombre o razón social" /></Field>
+          {err.cliente && <div style={{ color: COLORS.red, fontSize: 11, marginTop: -10, marginBottom: 8 }}>{err.cliente}</div>}
+        </div>
+        <div><Field label="RUT cliente"><input style={inputStyle} value={f.rut_cliente} onChange={e => set("rut_cliente", e.target.value)} placeholder="12.345.678-9" /></Field></div>
+        <div><Field label="Comuna"><input style={inputStyle} value={f.comuna} onChange={e => set("comuna", e.target.value)} placeholder="ej: Concepción" /></Field></div>
+        <div><Field label="Vendedor"><input style={inputStyle} value={f.vendedor} onChange={e => set("vendedor", e.target.value)} placeholder="ej: Byron Vegas" /></Field></div>
+        <div><Field label="Financiamiento"><input style={inputStyle} value={f.financiamiento} onChange={e => set("financiamiento", e.target.value)} placeholder="ej: Crédito Kevin, Cuenta BFK" /></Field></div>
+        <div>
+          <Field label="Fecha venta" required><input style={{ ...inputStyle, borderColor: err.fechaVenta ? COLORS.red : COLORS.border }} type="date" value={f.fechaVenta} onChange={e => set("fechaVenta", e.target.value)} /></Field>
+          {err.fechaVenta && <div style={{ color: COLORS.red, fontSize: 11, marginTop: -10, marginBottom: 8 }}>{err.fechaVenta}</div>}
+        </div>
+        <div><Field label="Fecha entrega"><input style={inputStyle} type="date" value={f.fechaEntrega} onChange={e => set("fechaEntrega", e.target.value)} /></Field></div>
+        <div>
+          <Field label="Estado entrega">
+            <select style={selectStyle} value={f.estado} onChange={e => set("estado", e.target.value)}>
+              <option value="pendiente">Pendiente</option>
+              <option value="entregado">Entregado</option>
+              <option value="cancelado">Cancelado</option>
+            </select>
+          </Field>
+        </div>
+        <div>
+          <Field label="Estado financiamiento">
+            <select style={selectStyle} value={f.estado_credito} onChange={e => set("estado_credito", e.target.value)}>
+              <option value="">—</option>
+              <option value="PENDIENTE">Pendiente</option>
+              <option value="REALIZADO">Realizado</option>
+            </select>
+          </Field>
+        </div>
+      </div>
+
+      {/* ─── ÍTEMS / PRODUCTOS ─── */}
+      <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px dashed ${COLORS.border}` }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: COLORS.purple }}>📦 Productos / Ítems de la OC</span>
+          <span style={{ fontSize: 11, color: COLORS.gray }}>Total costo: <b style={{ color: COLORS.purple }}>{fmt.money(totalCompraItems)}</b></span>
+        </div>
+        {err.items && <div style={{ color: COLORS.red, fontSize: 11, marginBottom: 8 }}>{err.items}</div>}
+        {items.map((it, idx) => (
+          <div key={it.id} style={{ background: COLORS.grayLight, borderRadius: 8, padding: 10, marginBottom: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: COLORS.gray }}>Ítem {idx + 1}</span>
+              {items.length > 1 && <button onClick={() => removeItem(it.id)} style={{ background: "none", border: "none", color: COLORS.red, cursor: "pointer", fontSize: 11 }}>Quitar</button>}
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 8, marginBottom: 8 }}>
+              <input style={inputStyle} value={it.producto} onChange={e => setItem(it.id, "producto", e.target.value)} placeholder="Producto / descripción" />
+              <input style={inputStyle} type="number" value={it.cantidad} onChange={e => setItem(it.id, "cantidad", e.target.value)} placeholder="Cantidad" />
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+              <input style={inputStyle} value={it.proveedor} onChange={e => setItem(it.id, "proveedor", e.target.value)} placeholder="Proveedor (ej: Mercado Libre)" />
+              <input style={inputStyle} type="number" value={it.costo_compra} onChange={e => setItem(it.id, "costo_compra", e.target.value)} placeholder="Costo compra ($)" />
+            </div>
+            <select style={selectStyle} value={it.estado_compra} onChange={e => setItem(it.id, "estado_compra", e.target.value)}>
+              {ESTADOS_COMPRA.map(es => <option key={es.value} value={es.value}>{es.label}</option>)}
+            </select>
+          </div>
+        ))}
+        <button onClick={addItem} style={{ width: "100%", padding: "8px", borderRadius: 7, border: `1.5px dashed ${COLORS.purple}`, background: "transparent", color: COLORS.purple, fontWeight: 600, cursor: "pointer", fontSize: 12 }}>+ Agregar otro producto</button>
+      </div>
+
+      {/* ─── FACTURA CLIENTE / NUESTRA FACTURA ─── */}
+      <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px dashed ${COLORS.border}`, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        <div style={{ gridColumn: "1/-1", fontSize: 12, fontWeight: 700, color: COLORS.blue, marginBottom: 4 }}>📄 Factura recibida del cliente</div>
+        <div>
+          <Field label="¿Cliente emitió factura?">
+            <select style={selectStyle} value={f.factura} onChange={e => set("factura", e.target.value)}>
+              <option value="no">No</option>
+              <option value="si">Sí</option>
+            </select>
+          </Field>
+        </div>
+        {f.factura === "si" && (
+          <>
+            <div><Field label="N° Factura"><input style={inputStyle} value={f.numFactura} onChange={e => set("numFactura", e.target.value)} /></Field></div>
+            <div>
+              <Field label="Estado de pago">
+                <select style={selectStyle} value={f.pago} onChange={e => set("pago", e.target.value)}>
+                  <option value="pendiente">Sin pagar</option>
+                  <option value="pagado">Pagado</option>
+                  <option value="parcial">Pago parcial</option>
+                </select>
+              </Field>
+            </div>
+            {(f.pago === "pagado" || f.pago === "parcial") && (
+              <div><Field label="Fecha de pago"><input style={inputStyle} type="date" value={f.fechaPago} onChange={e => set("fechaPago", e.target.value)} /></Field></div>
+            )}
+          </>
+        )}
+
+        <div style={{ gridColumn: "1/-1", fontSize: 12, fontWeight: 700, color: COLORS.green, marginTop: 6, marginBottom: 4 }}>🧾 Nuestra factura de venta</div>
+        <div>
+          <Field label="¿BFK ya emitió su factura?">
+            <select style={selectStyle} value={f.facturaPropia} onChange={e => set("facturaPropia", e.target.value)}>
+              <option value="no">No, pendiente de emitir</option>
+              <option value="si">Sí, ya emitida</option>
+            </select>
+          </Field>
+        </div>
+        {f.facturaPropia === "si" && (
+          <>
+            <div><Field label="N° Nuestra factura"><input style={inputStyle} value={f.numFacturaPropia} onChange={e => set("numFacturaPropia", e.target.value)} /></Field></div>
+            <div>
+              <Field label="Fecha de emisión"><input style={inputStyle} type="date" value={f.fechaFacturaPropia} onChange={e => set("fechaFacturaPropia", e.target.value)} /></Field>
+              {f.fechaFacturaPropia && <div style={{ fontSize: 11, color: COLORS.gray, marginTop: -8 }}>💰 Pago esperado: <b style={{ color: COLORS.dark }}>{fmt.date(fechaVencimiento(f.fechaFacturaPropia))}</b> (30 días)</div>}
+            </div>
+          </>
+        )}
+      </div>
+
+      <Field label="Notas"><textarea style={{ ...inputStyle, height: 50, resize: "vertical", marginTop: 10 }} value={f.notas} onChange={e => set("notas", e.target.value)} placeholder="Observaciones opcionales" /></Field>
+
+      <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 }}>
+        <button onClick={onClose} style={{ padding: "8px 18px", borderRadius: 7, border: `1px solid ${COLORS.border}`, background: COLORS.white, cursor: "pointer", fontSize: 13, color: COLORS.dark }}>Cancelar</button>
+        <button onClick={handleSave} style={{ padding: "8px 18px", borderRadius: 7, border: "none", background: COLORS.green, color: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>{initial ? "Guardar cambios" : "Registrar OC"}</button>
+      </div>
+    </div>
+  );
+}
+
+
 function ProgressBar({ venta }) {
   const steps = [
     { label: "Reg.", active: true, warn: false },
@@ -722,6 +939,177 @@ function GastosPanel({ gastos, kpis, onNuevo, onEditar, onEliminar }) {
   );
 }
 
+
+// ─── PANEL DE ÓRDENES DE COMPRA ──────────────────────────────────────────────
+function OCPanel({ ocs, onNuevo, onEditar, onEliminar }) {
+  const [open, setOpen] = useState(true);
+  const [expandedId, setExpandedId] = useState(null);
+  const [search, setSearch] = useState("");
+  const [fEstadoCompra, setFEstadoCompra] = useState("todos");
+
+  const filtered = useMemo(() => {
+    return ocs.filter(oc => {
+      const q = search.toLowerCase();
+      if (q && !oc.numero_oc.toLowerCase().includes(q) && !oc.cliente.toLowerCase().includes(q)) return false;
+      if (fEstadoCompra !== "todos") {
+        const items = oc.items_oc || [];
+        const tieneEstado = items.some(it => it.estado_compra === fEstadoCompra);
+        if (!tieneEstado) return false;
+      }
+      return true;
+    });
+  }, [ocs, search, fEstadoCompra]);
+
+  return (
+    <div style={{ background: COLORS.white, border: `1px solid ${COLORS.border}`, borderRadius: 10, marginBottom: 18 }}>
+      <div style={{ padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+        <span onClick={() => setOpen(o => !o)} style={{ fontWeight: 700, fontSize: 13, color: COLORS.dark, cursor: "pointer" }}>
+          📋 ÓRDENES DE COMPRA <span style={{ color: COLORS.gray, fontWeight: 400 }}>({ocs.length})</span> <span style={{ fontSize: 11, color: COLORS.gray }}>{open ? "▲" : "▼"}</span>
+        </span>
+        <button onClick={onNuevo} style={{ padding: "6px 14px", borderRadius: 7, border: "none", background: COLORS.purple, color: "#fff", fontWeight: 700, cursor: "pointer", fontSize: 12 }}>+ Nueva OC</button>
+      </div>
+
+      {open && (
+        <div style={{ borderTop: `1px solid ${COLORS.border}` }}>
+          <div style={{ padding: "10px 16px", display: "flex", flexWrap: "wrap", gap: 8 }}>
+            <input style={{ border: `1px solid ${COLORS.border}`, borderRadius: 6, padding: "6px 10px", fontSize: 12, flex: 1, minWidth: 140 }} placeholder="Buscar OC o cliente…" value={search} onChange={e => setSearch(e.target.value)} />
+            <select style={{ border: `1px solid ${COLORS.border}`, borderRadius: 6, padding: "6px 10px", fontSize: 12, background: COLORS.white }} value={fEstadoCompra} onChange={e => setFEstadoCompra(e.target.value)}>
+              <option value="todos">Estado compra: todos</option>
+              {ESTADOS_COMPRA.map(es => <option key={es.value} value={es.value}>{es.label}</option>)}
+            </select>
+          </div>
+
+          {filtered.length === 0 ? (
+            <div style={{ padding: "20px 16px", textAlign: "center", color: COLORS.gray, fontSize: 13, borderTop: `1px solid ${COLORS.border}` }}>No hay órdenes de compra que coincidan.</div>
+          ) : (
+            <div style={{ borderTop: `1px solid ${COLORS.border}` }}>
+              {filtered.map(oc => {
+                const items = oc.items_oc || [];
+                const totalCosto = items.reduce((s, it) => s + (Number(it.costo_compra) || 0), 0);
+                const pendientesCount = items.filter(it => it.estado_compra !== "comprado").length;
+                const isOpen = expandedId === oc.id;
+                return (
+                  <div key={oc.id} style={{ borderBottom: `1px solid ${COLORS.border}` }}>
+                    <div onClick={() => setExpandedId(isOpen ? null : oc.id)} style={{ padding: "10px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", gap: 8, flexWrap: "wrap" }}>
+                      <div style={{ flex: 1, minWidth: 200 }}>
+                        <span style={{ fontWeight: 700, fontSize: 13, color: COLORS.dark }}>{oc.numero_oc}</span>
+                        <span style={{ fontSize: 12, color: COLORS.gray, marginLeft: 8 }}>{oc.cliente}</span>
+                        {pendientesCount > 0 && <span style={{ marginLeft: 8, background: COLORS.redLight, color: COLORS.red, padding: "1px 7px", borderRadius: 10, fontSize: 10, fontWeight: 700 }}>{pendientesCount} ítem(s) sin comprar</span>}
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: COLORS.green }}>{fmt.money(oc.monto_venta)}</span>
+                        <span style={{ fontSize: 11, color: COLORS.purple }}>costo {fmt.money(totalCosto)}</span>
+                        <Badge type={oc.estado} />
+                        <span style={{ fontSize: 12, color: COLORS.gray }}>{isOpen ? "▲" : "▼"}</span>
+                      </div>
+                    </div>
+                    {isOpen && (
+                      <div style={{ padding: "0 16px 14px", background: COLORS.bg }}>
+                        <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 11, color: COLORS.gray, marginBottom: 10, paddingTop: 10 }}>
+                          <span>Vendedor: <b style={{ color: COLORS.dark }}>{oc.vendedor || "—"}</b></span>
+                          <span>Financiamiento: <b style={{ color: COLORS.dark }}>{oc.financiamiento || "—"}</b></span>
+                          <span>F. venta: <b style={{ color: COLORS.dark }}>{fmt.date(oc.fechaVenta)}</b></span>
+                          <span>Nuestra factura: {oc.facturaPropia === "si" ? <b style={{ color: COLORS.green }}>✓ {oc.numFacturaPropia}</b> : <b style={{ color: COLORS.red }}>Por emitir</b>}</span>
+                        </div>
+                        <div style={{ overflowX: "auto" }}>
+                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11.5 }}>
+                            <thead>
+                              <tr style={{ background: COLORS.grayLight }}>
+                                {["Producto", "Cant.", "Proveedor", "Costo", "Estado compra"].map(h => (
+                                  <th key={h} style={{ padding: "6px 10px", textAlign: "left", fontWeight: 600, color: COLORS.gray, fontSize: 10.5, borderBottom: `1px solid ${COLORS.border}` }}>{h}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {items.map(it => (
+                                <tr key={it.id} style={{ borderBottom: `1px solid ${COLORS.border}` }}>
+                                  <td style={{ padding: "6px 10px", fontWeight: 600 }}>{it.producto}</td>
+                                  <td style={{ padding: "6px 10px", color: COLORS.gray }}>{it.cantidad}</td>
+                                  <td style={{ padding: "6px 10px", color: COLORS.gray }}>{it.proveedor || "—"}</td>
+                                  <td style={{ padding: "6px 10px", color: COLORS.purple, fontWeight: 600 }}>{fmt.money(it.costo_compra)}</td>
+                                  <td style={{ padding: "6px 10px" }}><EstadoCompraBadge value={it.estado_compra} /></td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 10 }}>
+                          <button onClick={() => onEditar(oc)} style={{ padding: "5px 12px", borderRadius: 6, border: `1px solid ${COLORS.border}`, background: COLORS.white, cursor: "pointer", fontSize: 12 }}>✏️ Editar</button>
+                          <button onClick={() => onEliminar(oc.id)} style={{ padding: "5px 12px", borderRadius: 6, border: "none", background: COLORS.redLight, color: COLORS.red, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>🗑️ Eliminar</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── PANEL: COMPRAS PENDIENTES DE REALIZAR ───────────────────────────────────
+function ComprasPendientesPanel({ ocs }) {
+  const [open, setOpen] = useState(true);
+
+  const pendientes = useMemo(() => {
+    const out = [];
+    ocs.forEach(oc => {
+      (oc.items_oc || []).forEach(it => {
+        if (it.estado_compra !== "comprado") {
+          out.push({ ...it, numero_oc: oc.numero_oc, cliente: oc.cliente, oc_id: oc.id });
+        }
+      });
+    });
+    return out.sort((a, b) => {
+      const order = { pendiente: 0, en_proceso: 1, en_transito: 2 };
+      return (order[a.estado_compra] ?? 9) - (order[b.estado_compra] ?? 9);
+    });
+  }, [ocs]);
+
+  const totalPendiente = pendientes.reduce((s, it) => s + (Number(it.costo_compra) || 0), 0);
+
+  if (pendientes.length === 0) return null;
+
+  return (
+    <div style={{ background: COLORS.redLight, border: `1px solid #FECACA`, borderRadius: 10, marginBottom: 18 }}>
+      <div onClick={() => setOpen(o => !o)} style={{ padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", flexWrap: "wrap", gap: 8 }}>
+        <span style={{ fontWeight: 700, fontSize: 13, color: COLORS.red }}>
+          🛒 COMPRAS PENDIENTES DE REALIZAR <span style={{ fontWeight: 400 }}>({pendientes.length} ítems · {fmt.money(totalPendiente)} estimado)</span>
+        </span>
+        <span style={{ fontSize: 12, color: COLORS.red }}>{open ? "▲" : "▼"}</span>
+      </div>
+      {open && (
+        <div style={{ overflowX: "auto", borderTop: "1px solid #FECACA" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+            <thead>
+              <tr style={{ background: "#FEE2E2" }}>
+                {["OC", "Cliente", "Producto", "Cant.", "Proveedor", "Costo est.", "Estado"].map(h => (
+                  <th key={h} style={{ padding: "8px 12px", textAlign: "left", fontWeight: 600, color: COLORS.red, fontSize: 11, whiteSpace: "nowrap", borderBottom: "1px solid #FECACA" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {pendientes.map(it => (
+                <tr key={it.id} style={{ borderBottom: "1px solid #FECACA" }}>
+                  <td style={{ padding: "8px 12px", fontWeight: 700, whiteSpace: "nowrap" }}>{it.numero_oc}</td>
+                  <td style={{ padding: "8px 12px", color: COLORS.gray, whiteSpace: "nowrap" }}>{it.cliente}</td>
+                  <td style={{ padding: "8px 12px" }}>{it.producto}</td>
+                  <td style={{ padding: "8px 12px", color: COLORS.gray }}>{it.cantidad}</td>
+                  <td style={{ padding: "8px 12px", color: COLORS.gray }}>{it.proveedor || "—"}</td>
+                  <td style={{ padding: "8px 12px", color: COLORS.purple, fontWeight: 600, whiteSpace: "nowrap" }}>{fmt.money(it.costo_compra)}</td>
+                  <td style={{ padding: "8px 12px" }}><EstadoCompraBadge value={it.estado_compra} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function Modal({ title, onClose, children }) {
   return (
@@ -1046,13 +1434,16 @@ export default function App() {
   const [perfil, setPerfil] = useState(null); // { id, nombre, rol }
   const [ventas, setVentas] = useState([]);
   const [gastos, setGastos] = useState([]);
+  const [ocs, setOcs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [dataError, setDataError] = useState("");
-  const [modal, setModal] = useState(null); // null | 'nueva' | 'editar' | 'usuarios' | 'confirmar' | 'gasto' | 'gasto-editar' | 'gasto-confirmar' | 'import'
+  const [modal, setModal] = useState(null); // null | 'nueva' | 'editar' | 'usuarios' | 'confirmar' | 'gasto' | 'gasto-editar' | 'gasto-confirmar' | 'import' | 'oc' | 'oc-editar' | 'oc-confirmar'
   const [editing, setEditing] = useState(null);
   const [editingGasto, setEditingGasto] = useState(null);
+  const [editingOC, setEditingOC] = useState(null);
   const [toDelete, setToDelete] = useState(null);
   const [gastoToDelete, setGastoToDelete] = useState(null);
+  const [ocToDelete, setOcToDelete] = useState(null);
   const [search, setSearch] = useState("");
   const [fEstado, setFEstado] = useState("todos");
   const [fFactura, setFFactura] = useState("todas");
@@ -1065,12 +1456,13 @@ export default function App() {
     setTimeout(() => setToast(null), 2800);
   };
 
-  // Carga datos compartidos (ventas, gastos, perfil) usando el token activo
+  // Carga datos compartidos (ventas, gastos, OCs, perfil) usando el token activo
   const loadData = async (accessToken, userId) => {
     try {
-      const [ventasData, gastosData, perfilData] = await Promise.all([
+      const [ventasData, gastosData, ocsData, perfilData] = await Promise.all([
         supaSelect("ventas", accessToken, "&order=creadoEn.desc"),
         supaSelect("gastos", accessToken, "&order=creadoEn.desc"),
+        supaListOCConItems(accessToken),
         supaGetPerfil(accessToken, userId),
       ]);
       setVentas(ventasData.map(v => ({
@@ -1083,6 +1475,7 @@ export default function App() {
         costoCompra: v.costoCompra ?? 0,
       })));
       setGastos(gastosData);
+      setOcs(ocsData);
       setPerfil(perfilData);
       setDataError("");
     } catch (e) {
@@ -1182,6 +1575,53 @@ export default function App() {
       setGastos(prev => prev.filter(g => g.id !== gastoToDelete));
       setModal(null); setGastoToDelete(null);
       showToast("Gasto eliminado", "error");
+    } catch (e) {
+      showToast("Error al eliminar: " + e.message, "error");
+    }
+  };
+
+  // ── ÓRDENES DE COMPRA: guarda la OC y sincroniza sus ítems (insertar/actualizar/eliminar) ──
+  const handleSaveOC = async (oc, itemsNuevos, itemsOriginales) => {
+    try {
+      const ocSanitizada = sanitizeFechas({ ...oc }, CAMPOS_FECHA_VENTA);
+      if (editingOC) {
+        const { id, creadoEn, items_oc, ...rest } = ocSanitizada;
+        await supaUpdate("ordenes_compra", session.access_token, id, rest);
+      } else {
+        const { items_oc, ...rest } = ocSanitizada;
+        await supaInsert("ordenes_compra", session.access_token, { ...rest, creado_por: session.user.id });
+      }
+
+      // Sincronizar ítems: eliminar los que ya no están, actualizar existentes, insertar nuevos
+      const idsOriginales = itemsOriginales.map(it => it.id);
+      const idsNuevos = itemsNuevos.map(it => it.id);
+      const aEliminar = idsOriginales.filter(id => !idsNuevos.includes(id));
+      await Promise.all(aEliminar.map(id => supaDelete("items_oc", session.access_token, id)));
+
+      for (const item of itemsNuevos) {
+        if (idsOriginales.includes(item.id)) {
+          const { id, ...rest } = item;
+          await supaUpdate("items_oc", session.access_token, id, rest);
+        } else {
+          await supaInsert("items_oc", session.access_token, item);
+        }
+      }
+
+      const ocsActualizadas = await supaListOCConItems(session.access_token);
+      setOcs(ocsActualizadas);
+      setModal(null); setEditingOC(null);
+      showToast(editingOC ? "OC actualizada" : "OC registrada");
+    } catch (e) {
+      showToast("Error al guardar OC: " + e.message, "error");
+    }
+  };
+
+  const handleDeleteOC = async () => {
+    try {
+      await supaDelete("ordenes_compra", session.access_token, ocToDelete); // items_oc se borran en cascada
+      setOcs(prev => prev.filter(o => o.id !== ocToDelete));
+      setModal(null); setOcToDelete(null);
+      showToast("OC eliminada", "error");
     } catch (e) {
       showToast("Error al eliminar: " + e.message, "error");
     }
@@ -1304,6 +1744,7 @@ export default function App() {
             </>
           )}
           <button onClick={exportXLSX} style={{ ...selStyle, background: COLORS.grayLight, fontWeight: 600 }}>⬇ Exportar Excel</button>
+          <button onClick={() => { setEditingOC(null); setModal("oc"); }} style={{ padding: "7px 16px", borderRadius: 7, border: "none", background: COLORS.purple, color: "#fff", fontWeight: 700, cursor: "pointer", fontSize: 13 }}>+ Nueva OC</button>
           <button onClick={() => { setEditing(null); setModal("nueva"); }} style={{ padding: "7px 16px", borderRadius: 7, border: "none", background: COLORS.green, color: "#fff", fontWeight: 700, cursor: "pointer", fontSize: 13 }}>+ Nueva venta</button>
           <button onClick={handleLogout} style={{ ...selStyle, color: COLORS.red }}>Salir</button>
         </div>
@@ -1358,6 +1799,17 @@ export default function App() {
             <button onClick={() => document.getElementById("tabla-ventas")?.scrollIntoView({ behavior: "smooth" })} style={{ padding: "7px 14px", borderRadius: 7, border: "none", background: COLORS.amber, color: "#fff", fontWeight: 700, cursor: "pointer", fontSize: 12, whiteSpace: "nowrap" }}>Ver detalle</button>
           </div>
         )}
+
+        {/* COMPRAS PENDIENTES (alerta prioritaria) */}
+        <ComprasPendientesPanel ocs={ocs} />
+
+        {/* ÓRDENES DE COMPRA */}
+        <OCPanel
+          ocs={ocs}
+          onNuevo={() => { setEditingOC(null); setModal("oc"); }}
+          onEditar={(oc) => { setEditingOC(oc); setModal("oc-editar"); }}
+          onEliminar={(id) => { setOcToDelete(id); setModal("oc-confirmar"); }}
+        />
 
         {/* CHART */}
         <BarChart ventas={ventas} />
@@ -1502,6 +1954,25 @@ export default function App() {
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
             <button onClick={() => setModal(null)} style={{ padding: "8px 18px", borderRadius: 7, border: `1px solid ${COLORS.border}`, background: COLORS.white, cursor: "pointer", fontSize: 13 }}>Cancelar</button>
             <button onClick={handleDeleteGasto} style={{ padding: "8px 18px", borderRadius: 7, border: "none", background: COLORS.red, color: "#fff", fontWeight: 600, cursor: "pointer", fontSize: 13 }}>Eliminar</button>
+          </div>
+        </Modal>
+      )}
+      {modal === "oc" && (
+        <Modal title="Nueva Orden de Compra" onClose={() => setModal(null)}>
+          <OCForm onSave={handleSaveOC} onClose={() => setModal(null)} />
+        </Modal>
+      )}
+      {modal === "oc-editar" && editingOC && (
+        <Modal title="Editar Orden de Compra" onClose={() => { setModal(null); setEditingOC(null); }}>
+          <OCForm initial={editingOC} onSave={handleSaveOC} onClose={() => { setModal(null); setEditingOC(null); }} />
+        </Modal>
+      )}
+      {modal === "oc-confirmar" && (
+        <Modal title="Confirmar eliminación de OC" onClose={() => setModal(null)}>
+          <p style={{ fontSize: 14, color: COLORS.dark, marginBottom: 20 }}>¿Estás seguro de que deseas eliminar esta Orden de Compra? Se eliminarán también todos sus ítems. Esta acción no se puede deshacer.</p>
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+            <button onClick={() => setModal(null)} style={{ padding: "8px 18px", borderRadius: 7, border: `1px solid ${COLORS.border}`, background: COLORS.white, cursor: "pointer", fontSize: 13 }}>Cancelar</button>
+            <button onClick={handleDeleteOC} style={{ padding: "8px 18px", borderRadius: 7, border: "none", background: COLORS.red, color: "#fff", fontWeight: 600, cursor: "pointer", fontSize: 13 }}>Eliminar</button>
           </div>
         </Modal>
       )}
