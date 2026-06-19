@@ -592,6 +592,7 @@ function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, 
             <div>Saldo: <b style={{color:saldo>0?C.danger:C.ok}}>{fmt.money(saldo)}</b></div>
             {evF&&<div style={{gridColumn:"1/-1"}}>Factura: <b>{evF.numero_factura}</b> · {fmt.date(evF.fecha)}{dias!==null&&` · ${dias} días`}</div>}
           </div>
+          {oc.ultimo_reclamo_fecha&&<div style={{fontSize:11,color:C.warn,fontWeight:600,marginBottom:8}}>📧 Último reclamo: {fmt.datetime(oc.ultimo_reclamo_fecha)} · {oc.correo_cliente}</div>}
           {puedeReclamar&&<button onClick={()=>setReclamando(true)} style={{...btnP(C.danger),marginBottom:12}}>📧 Reclamar pago de factura</button>}
           <div style={{fontSize:11,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",marginBottom:6,letterSpacing:0.3}}>Historial</div>
           {[
@@ -621,6 +622,7 @@ function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, 
 
 function PanelCompras({ ocs, perfiles, filtroInicial, contactos, onEnviarReclamo, onGuardarContacto }) {
   const [filtros,setFiltros]=useState({}); const [busq,setBusq]=useState(""); const [expId,setExpId]=useState(null);
+  const [reclamandoBanner,setReclamandoBanner]=useState(null);
   useEffect(()=>{ if(filtroInicial) setFiltros({[filtroInicial]:"pend"}); },[filtroInicial]);
   const toggle=(key,val)=>setFiltros(prev=>({...prev,[key]:prev[key]===val?undefined:val}));
   const filtered=useMemo(()=>ocs.filter(oc=>{
@@ -648,10 +650,19 @@ function PanelCompras({ ocs, perfiles, filtroInicial, contactos, onEnviarReclamo
           {alertas.map(o=>{ const evF=(o.eventos_factura||[])[0]; const dias=fmt.diasDesde(evF?.fecha); return (
             <div key={o.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4,fontSize:12}}>
               <span style={{fontFamily:MONO,fontWeight:700}}>{o.numero_oc}</span>
-              <DiasBadge dias={dias} />
+              <button onClick={()=>setReclamandoBanner(o)} style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:20,fontSize:11,fontWeight:700,background:C.danger,color:"#fff",border:"none",cursor:"pointer"}}>
+                {dias}d · ⚠ Reclamar
+              </button>
             </div>
           );})}
         </div>
+      )}
+      {reclamandoBanner&&(
+        <Modal title="Reclamar pago de factura" onClose={()=>setReclamandoBanner(null)}>
+          <FormReclamarFactura oc={reclamandoBanner} evF={(reclamandoBanner.eventos_factura||[])[0]} dias={fmt.diasDesde((reclamandoBanner.eventos_factura||[])[0]?.fecha)} contactos={contactos||[]}
+            onGuardarContacto={onGuardarContacto}
+            onEnviar={async(data)=>{ await onEnviarReclamo(data); setReclamandoBanner(null); }} />
+        </Modal>
       )}
       <input style={{...iStyle,marginBottom:12}} placeholder="Buscar por N° OC o cliente…" value={busq} onChange={e=>setBusq(e.target.value)} />
       <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:14}}>
@@ -747,8 +758,8 @@ function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onAjustar 
 function FormReclamarFactura({ oc, evF, dias, contactos, onEnviar, onGuardarContacto }) {
   const contactoExistente = contactos.find(c => c.rut === (oc.rut_cliente || "").trim());
   const [rut, setRut] = useState(oc.rut_cliente || "");
-  const [nombreCliente, setNombreCliente] = useState(contactoExistente?.nombre_cliente || oc.cliente || "");
-  const [correo, setCorreo] = useState(contactoExistente?.correo || "");
+  const [nombreCliente, setNombreCliente] = useState(oc.cliente || contactoExistente?.nombre_cliente || "");
+  const [correo, setCorreo] = useState(oc.correo_cliente || contactoExistente?.correo || "");
   const [err, setErr] = useState(""); const [sending, setSending] = useState(false);
 
   const asunto = `OC ${oc.numero_oc} — Solicitud de pago factura N°${evF?.numero_factura || ""}`;
@@ -760,7 +771,7 @@ function FormReclamarFactura({ oc, evF, dias, contactos, onEnviar, onGuardarCont
     setErr(""); setSending(true);
     try {
       if (rut.trim() && !contactoExistente) await onGuardarContacto({ rut: rut.trim(), nombreCliente: nombreCliente.trim(), correo: correo.trim() });
-      await onEnviar({ correo: correo.trim(), asunto, cuerpo, ocId: oc.id });
+      await onEnviar({ correo: correo.trim(), asunto, cuerpo, ocId: oc.id, rut: rut.trim() });
     } catch (e) { setErr(e.message); } finally { setSending(false); }
   };
 
@@ -769,9 +780,10 @@ function FormReclamarFactura({ oc, evF, dias, contactos, onEnviar, onGuardarCont
       <div style={{background:C.dangerLight,borderRadius:9,padding:"10px 12px",fontSize:12.5,color:C.danger,fontWeight:700,marginBottom:14}}>
         Factura {evF?.numero_factura} · {dias} días desde emisión
       </div>
+      {oc.ultimo_reclamo_fecha&&<div style={{background:C.warnLight,borderRadius:9,padding:"8px 12px",fontSize:11.5,color:C.warn,fontWeight:600,marginBottom:14}}>Ya se reclamó esta factura el {fmt.datetime(oc.ultimo_reclamo_fecha)}</div>}
       <Field label="RUT del cliente" hint="Para guardar el correo y reutilizarlo después"><input style={iStyle} value={rut} onChange={e=>setRut(e.target.value)} placeholder="ej: 12.345.678-9" /></Field>
       <Field label="Nombre del cliente" required><input style={iStyle} value={nombreCliente} onChange={e=>setNombreCliente(e.target.value)} /></Field>
-      <Field label="Correo del cliente" required hint={contactoExistente?"Correo guardado encontrado para este RUT":"Se guardará para futuras facturas de este RUT"}><input style={iStyle} type="email" value={correo} onChange={e=>setCorreo(e.target.value)} placeholder="contacto@entidad.cl" /></Field>
+      <Field label="Correo del cliente" required hint={oc.correo_cliente?"Correo ya guardado en esta OC":contactoExistente?"Correo guardado encontrado para este RUT":"Se guardará para futuras facturas"}><input style={iStyle} type="email" value={correo} onChange={e=>setCorreo(e.target.value)} placeholder="contacto@entidad.cl" /></Field>
       <div style={{background:C.paper,borderRadius:9,padding:"10px 12px",marginBottom:14}}>
         <div style={{fontSize:10.5,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:4}}>Asunto</div>
         <div style={{fontSize:12.5,color:C.ink,marginBottom:8}}>{asunto}</div>
@@ -1214,10 +1226,17 @@ export default function App() {
     try { await ins("contactos_cobranza",session.access_token,{id:genId("cob"),rut,nombre_cliente:nombreCliente,correo,creado_por:session.user.id}); await cargarTodo(); }
     catch(e){ /* si ya existe el RUT (unique), no es un error fatal */ }
   };
-  const handleEnviarReclamo=async({correo,asunto,cuerpo})=>{
+  const handleEnviarReclamo=async({correo,asunto,cuerpo,ocId,rut})=>{
     const url=`mailto:${encodeURIComponent(correo)}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
+    try {
+      await upd("ordenes_compra_v2",session.access_token,ocId,{
+        correo_cliente:correo, rut_cliente:rut||undefined,
+        ultimo_reclamo_fecha:new Date().toISOString(), ultimo_reclamo_por:session.user.id,
+      });
+    } catch {}
     window.location.href=url;
     showToast(`Correo abierto para ${correo} — revisa y envía desde tu app de Mail`);
+    await cargarTodo();
   };
 
   // ─── RENDER ───────────────────────────────────
