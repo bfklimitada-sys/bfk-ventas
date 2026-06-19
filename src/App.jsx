@@ -1078,19 +1078,21 @@ function PanelDatos({ session, showToast }) {
   const [archivoData,setArchivoData]=useState(null); // datos parseados del excel subido
   const [aplicando,setAplicando]=useState(false);
 
+  const generarExcelCompleto = async (prefijo="bfk-datos") => {
+    const wb = XLSX.utils.book_new();
+    for (const { hoja, tabla } of TABLAS_EXPORT) {
+      const data = await sel(tabla, session.access_token, "&order=id");
+      const ws = XLSX.utils.json_to_sheet(data.length ? data : [{}]);
+      XLSX.utils.book_append_sheet(wb, ws, hoja);
+    }
+    const fechaStr = new Date().toISOString().slice(0,16).replace(/[:T]/g,"-");
+    XLSX.writeFile(wb, `${prefijo}-${fechaStr}.xlsx`);
+  };
+
   const handleExportar = async () => {
     setExporting(true);
-    try {
-      const wb = XLSX.utils.book_new();
-      for (const { hoja, tabla } of TABLAS_EXPORT) {
-        const data = await sel(tabla, session.access_token, "&order=id");
-        const ws = XLSX.utils.json_to_sheet(data.length ? data : [{}]);
-        XLSX.utils.book_append_sheet(wb, ws, hoja);
-      }
-      const fechaStr = new Date().toISOString().slice(0,10);
-      XLSX.writeFile(wb, `bfk-datos-${fechaStr}.xlsx`);
-      showToast("Excel exportado");
-    } catch (e) { showToast("Error al exportar: "+e.message, "error"); }
+    try { await generarExcelCompleto("bfk-datos"); showToast("Excel exportado"); }
+    catch (e) { showToast("Error al exportar: "+e.message, "error"); }
     finally { setExporting(false); }
   };
 
@@ -1138,6 +1140,8 @@ function PanelDatos({ session, showToast }) {
     if (!archivoData) return;
     setAplicando(true);
     try {
+      // Respaldo automático del estado actual ANTES de aplicar cualquier cambio
+      await generarExcelCompleto("bfk-RESPALDO-antes-de-importar");
       for (const { tabla } of TABLAS_EXPORT) {
         const actuales = await sel(tabla, session.access_token, "&order=id");
         const mapaActual = Object.fromEntries(actuales.map(r => [String(r.id), r]));
@@ -1185,7 +1189,8 @@ function PanelDatos({ session, showToast }) {
           <div style={{borderTop:`1px solid ${C.warn}`,marginTop:8,paddingTop:8,fontSize:12.5,fontWeight:700,color:C.ink}}>
             Total: {totalNuevas} filas nuevas, {totalActualizadas} actualizadas
           </div>
-          <button onClick={handleAplicarCambios} disabled={aplicando} style={{...btnP(aplicando?C.inkFaint:C.danger),marginTop:12}}>{aplicando?"Aplicando…":"✓ Confirmar y aplicar cambios"}</button>
+          <div style={{fontSize:11,color:C.inkMuted,marginTop:8}}>📥 Al confirmar, se descargará automáticamente un respaldo del estado actual antes de aplicar los cambios.</div>
+          <button onClick={handleAplicarCambios} disabled={aplicando} style={{...btnP(aplicando?C.inkFaint:C.danger),marginTop:12}}>{aplicando?"Respaldando y aplicando…":"✓ Confirmar y aplicar cambios"}</button>
           <button onClick={()=>{setResumenCambios(null);setArchivoData(null);}} style={{...btnG,marginTop:8,width:"100%"}}>Cancelar</button>
         </div>
       )}
