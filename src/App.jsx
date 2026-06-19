@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import * as XLSX from "xlsx";
 
 // ═══════════════════════════════════════════════
 // SUPABASE CONFIG
@@ -41,6 +42,24 @@ async function selOCs(t) {
 const storageGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
 const storageSet = (k,v) => { try { localStorage.setItem(k,v); } catch {} };
 const genId = (p) => `${p}_${Date.now()}_${Math.random().toString(36).slice(2,7)}`;
+
+// ─── Tablas exportables/importables (nombre hoja Excel : nombre tabla Supabase) ──
+const TABLAS_EXPORT = [
+  { hoja:"OrdenesCompra", tabla:"ordenes_compra_v2" },
+  { hoja:"EventosCompra", tabla:"eventos_compra" },
+  { hoja:"EventosEntrega", tabla:"eventos_entrega" },
+  { hoja:"EventosFactura", tabla:"eventos_factura" },
+  { hoja:"EventosPagoCliente", tabla:"eventos_pago_cliente" },
+  { hoja:"EventosPagoFinanciamiento", tabla:"eventos_pago_financiamiento" },
+  { hoja:"Financiadores", tabla:"financiadores" },
+  { hoja:"Vendedores", tabla:"vendedores" },
+  { hoja:"CategoriasGasto", tabla:"categorias_gasto" },
+  { hoja:"GastosIndirectos", tabla:"gastos_indirectos" },
+  { hoja:"IvaMensual", tabla:"iva_mensual" },
+  { hoja:"PagosVendedor", tabla:"pagos_vendedor" },
+  { hoja:"AjustesSaldo", tabla:"ajustes_saldo_financiador" },
+  { hoja:"ContactosCobranza", tabla:"contactos_cobranza" },
+];
 
 // ═══════════════════════════════════════════════
 // DISEÑO — Torre de Control
@@ -1049,7 +1068,132 @@ function FormIvaMensual({ ivaExistente, onSave }) {
 // ═══════════════════════════════════════════════
 // PANEL USUARIOS
 // ═══════════════════════════════════════════════
-function PanelUsuarios({ perfiles, ocs, onChangeRol }) {
+// ═══════════════════════════════════════════════
+// PANEL DATOS — Exportar/Importar Excel completo (solo admin)
+// ═══════════════════════════════════════════════
+function PanelDatos({ session, showToast }) {
+  const [exporting,setExporting]=useState(false);
+  const [comparando,setComparando]=useState(false);
+  const [resumenCambios,setResumenCambios]=useState(null); // {porTabla:[{tabla,hoja,nuevas,actualizadas,sinCambios,filasNuevas,filasActualizadas}]}
+  const [archivoData,setArchivoData]=useState(null); // datos parseados del excel subido
+  const [aplicando,setAplicando]=useState(false);
+
+  const handleExportar = async () => {
+    setExporting(true);
+    try {
+      const wb = XLSX.utils.book_new();
+      for (const { hoja, tabla } of TABLAS_EXPORT) {
+        const data = await sel(tabla, session.access_token, "&order=id");
+        const ws = XLSX.utils.json_to_sheet(data.length ? data : [{}]);
+        XLSX.utils.book_append_sheet(wb, ws, hoja);
+      }
+      const fechaStr = new Date().toISOString().slice(0,10);
+      XLSX.writeFile(wb, `bfk-datos-${fechaStr}.xlsx`);
+      showToast("Excel exportado");
+    } catch (e) { showToast("Error al exportar: "+e.message, "error"); }
+    finally { setExporting(false); }
+  };
+
+  const handleArchivoSeleccionado = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setComparando(true); setResumenCambios(null);
+    try {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type:"array" });
+      const datosPorTabla = {};
+      for (const { hoja, tabla } of TABLAS_EXPORT) {
+        const ws = wb.Sheets[hoja];
+        datosPorTabla[tabla] = ws ? XLSX.utils.sheet_to_json(ws) : [];
+      }
+      setArchivoData(datosPorTabla);
+
+      // Comparar contra estado actual de Supabase
+      const resumen = [];
+      for (const { hoja, tabla } of TABLAS_EXPORT) {
+        const actuales = await sel(tabla, session.access_token, "&order=id");
+        const mapaActual = Object.fromEntries(actuales.map(r => [String(r.id), r]));
+        const nuevasFilas = []; const actualizadasFilas = [];
+        for (const fila of (datosPorTabla[tabla]||[])) {
+          if (!fila.id) continue;
+          const id = String(fila.id);
+          if (!mapaActual[id]) { nuevasFilas.push(fila); }
+          else {
+            const existente = mapaActual[id];
+            const cambio = Object.keys(fila).some(k => String(fila[k]??"") !== String(existente[k]??""));
+            if (cambio) actualizadasFilas.push(fila);
+          }
+        }
+        if (nuevasFilas.length || actualizadasFilas.length) {
+          resumen.push({ tabla, hoja, nuevas:nuevasFilas.length, actualizadas:actualizadasFilas.length });
+        }
+      }
+      setResumenCambios(resumen);
+      if (resumen.length===0) showToast("Sin cambios detectados respecto a la base de datos actual");
+    } catch (e) { showToast("Error al leer el Excel: "+e.message, "error"); }
+    finally { setComparando(false); }
+  };
+
+  const handleAplicarCambios = async () => {
+    if (!archivoData) return;
+    setAplicando(true);
+    try {
+      for (const { tabla } of TABLAS_EXPORT) {
+        const actuales = await sel(tabla, session.access_token, "&order=id");
+        const mapaActual = Object.fromEntries(actuales.map(r => [String(r.id), r]));
+        for (const fila of (archivoData[tabla]||[])) {
+          if (!fila.id) continue;
+          const id = String(fila.id);
+          if (!mapaActual[id]) { await ins(tabla, session.access_token, fila); }
+          else {
+            const existente = mapaActual[id];
+            const cambio = Object.keys(fila).some(k => String(fila[k]??"") !== String(existente[k]??""));
+            if (cambio) await upd(tabla, session.access_token, id, fila);
+          }
+        }
+      }
+      showToast("Cambios aplicados correctamente");
+      setResumenCambios(null); setArchivoData(null);
+    } catch (e) { showToast("Error al aplicar cambios: "+e.message, "error"); }
+    finally { setAplicando(false); }
+  };
+
+  const totalNuevas = resumenCambios?.reduce((s,r)=>s+r.nuevas,0) || 0;
+  const totalActualizadas = resumenCambios?.reduce((s,r)=>s+r.actualizadas,0) || 0;
+
+  return (
+    <div style={{marginTop:20}}>
+      <div style={{fontSize:12,fontWeight:800,color:C.inkMuted,marginBottom:8,textTransform:"uppercase",letterSpacing:0.4}}>Exportar / Importar datos</div>
+      <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:16,marginBottom:12}}>
+        <div style={{fontSize:12.5,color:C.inkMuted,marginBottom:12}}>Descarga toda la base de datos en un Excel con una hoja por tabla. Edítalo y vuelve a subirlo para actualizar los valores.</div>
+        <button onClick={handleExportar} disabled={exporting} style={{...btnP(exporting?C.inkFaint:C.teal),marginBottom:10}}>{exporting?"Generando…":"⬇ Exportar Excel completo"}</button>
+        <label style={{...btnG,display:"block",textAlign:"center",cursor:"pointer"}}>
+          {comparando?"Comparando…":"⬆ Subir Excel editado"}
+          <input type="file" accept=".xlsx" onChange={handleArchivoSeleccionado} style={{display:"none"}} disabled={comparando} />
+        </label>
+      </div>
+
+      {resumenCambios && resumenCambios.length>0 && (
+        <div style={{background:C.warnLight,border:`1px solid ${C.warn}`,borderRadius:14,padding:16,marginBottom:12}}>
+          <div style={{fontWeight:800,color:C.warn,fontSize:13.5,marginBottom:10}}>Resumen de cambios detectados</div>
+          {resumenCambios.map(r=>(
+            <div key={r.tabla} style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:5}}>
+              <span style={{color:C.ink,fontWeight:600}}>{r.hoja}</span>
+              <span style={{color:C.inkMuted}}>{r.nuevas>0&&`+${r.nuevas} nuevas `}{r.actualizadas>0&&`· ${r.actualizadas} actualizadas`}</span>
+            </div>
+          ))}
+          <div style={{borderTop:`1px solid ${C.warn}`,marginTop:8,paddingTop:8,fontSize:12.5,fontWeight:700,color:C.ink}}>
+            Total: {totalNuevas} filas nuevas, {totalActualizadas} actualizadas
+          </div>
+          <button onClick={handleAplicarCambios} disabled={aplicando} style={{...btnP(aplicando?C.inkFaint:C.danger),marginTop:12}}>{aplicando?"Aplicando…":"✓ Confirmar y aplicar cambios"}</button>
+          <button onClick={()=>{setResumenCambios(null);setArchivoData(null);}} style={{...btnG,marginTop:8,width:"100%"}}>Cancelar</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PanelUsuarios({ perfiles, ocs, onChangeRol, session, showToast }) {
   // Calcula la fecha del último evento creado por cada usuario, cruzando todas las tablas de eventos embebidas en ocs
   const ultimaActividad = useMemo(() => {
     const map = {};
@@ -1086,6 +1230,7 @@ function PanelUsuarios({ perfiles, ocs, onChangeRol }) {
           </div>
         );
       })}
+      <PanelDatos session={session} showToast={showToast} />
     </div>
   );
 }
@@ -1268,7 +1413,7 @@ export default function App() {
         {tab==="financiamiento"&&<PanelFinanciamiento financiadores={financiadores} ocs={ocs} ajustes={ajustesSaldo} perfiles={perfiles} onAjustar={handleAjusteSaldo} />}
         {tab==="gastos"&&<PanelGastos gastos={gastos} categorias={categoriasGasto} vendedores={vendedores} pagosVendedor={pagosVendedor} onNuevoGasto={handleNuevoGasto} onPagoVendedor={handlePagoVendedorSimple} />}
         {tab==="vendedores"&&<PanelVendedores vendedores={vendedores} ocs={ocs} ivaMensual={ivaMensual} pagosVendedor={pagosVendedor} onGuardarIva={handleGuardarIva} onPagoVendedor={handlePagoVendedorSimple} />}
-        {tab==="usuarios"&&perfil?.rol==="admin"&&<PanelUsuarios perfiles={perfiles} ocs={ocs} onChangeRol={handleChangeRol} />}
+        {tab==="usuarios"&&perfil?.rol==="admin"&&<PanelUsuarios perfiles={perfiles} ocs={ocs} onChangeRol={handleChangeRol} session={session} showToast={showToast} />}
       </div>
 
       {/* NAV BOTTOM */}
