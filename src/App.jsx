@@ -1083,6 +1083,39 @@ function PanelDatos({ session, showToast }) {
     for (const { hoja, tabla } of TABLAS_EXPORT) {
       const data = await sel(tabla, session.access_token, "&order=id");
       const ws = XLSX.utils.json_to_sheet(data.length ? data : [{}]);
+
+      // Hoja OrdenesCompra: agregar columnas calculadas de SOLO LECTURA con fórmulas reales de Excel,
+      // para auditar visualmente cómo se calculan margen/% y días desde factura.
+      // Estas columnas (prefijo "_") se IGNORAN al importar — son solo para revisión.
+      if (hoja === "OrdenesCompra" && data.length) {
+        const cols = Object.keys(data[0]);
+        const colIdx = (name) => cols.indexOf(name);
+        const colLetter = (idx) => XLSX.utils.encode_col(idx);
+        const idxMontoTotal = colIdx("monto_total");
+        const idxCostoTotal = colIdx("costo_total");
+        const baseCol = cols.length; // primera columna nueva, después de las existentes
+
+        // Encabezados de las columnas calculadas
+        XLSX.utils.sheet_add_aoa(ws, [["_Margen($)", "_Margen(%)"]], { origin: { r:0, c:baseCol } });
+
+        if (idxMontoTotal >= 0 && idxCostoTotal >= 0) {
+          const letMonto = colLetter(idxMontoTotal);
+          const letCosto = colLetter(idxCostoTotal);
+          const letMargenPesos = colLetter(baseCol);
+          data.forEach((_, i) => {
+            const row = i + 2; // fila 1 = encabezado
+            const cellMargen = XLSX.utils.encode_cell({ r:i+1, c:baseCol });
+            const cellPct = XLSX.utils.encode_cell({ r:i+1, c:baseCol+1 });
+            ws[cellMargen] = { t:"n", f:`${letMonto}${row}-${letCosto}${row}` };
+            ws[cellPct] = { t:"n", f:`IF(${letMonto}${row}=0,0,ROUND((${letMonto}${row}-${letCosto}${row})/${letMonto}${row}*100,0))`, z:"0\"%\"" };
+          });
+        }
+        // Expandir el rango de la hoja para que Excel reconozca las nuevas columnas
+        const range = XLSX.utils.decode_range(ws["!ref"]);
+        range.e.c = Math.max(range.e.c, baseCol+1);
+        ws["!ref"] = XLSX.utils.encode_range(range);
+      }
+
       XLSX.utils.book_append_sheet(wb, ws, hoja);
     }
     const fechaStr = new Date().toISOString().slice(0,16).replace(/[:T]/g,"-");
@@ -1106,7 +1139,13 @@ function PanelDatos({ session, showToast }) {
       const datosPorTabla = {};
       for (const { hoja, tabla } of TABLAS_EXPORT) {
         const ws = wb.Sheets[hoja];
-        datosPorTabla[tabla] = ws ? XLSX.utils.sheet_to_json(ws) : [];
+        const filas = ws ? XLSX.utils.sheet_to_json(ws) : [];
+        // Ignorar columnas calculadas de solo lectura (prefijo "_", ej: _Margen($), _Margen(%))
+        datosPorTabla[tabla] = filas.map(fila => {
+          const limpia = {};
+          for (const k of Object.keys(fila)) { if (!k.startsWith("_")) limpia[k] = fila[k]; }
+          return limpia;
+        });
       }
       setArchivoData(datosPorTabla);
 
