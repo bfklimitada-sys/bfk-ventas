@@ -59,6 +59,16 @@ const fmt = {
   diasDesde: (fechaStr) => { if(!fechaStr) return null; const hoy=new Date(); hoy.setHours(0,0,0,0); const f=new Date(fechaStr+"T00:00:00"); return Math.floor((hoy-f)/(1000*60*60*24)); },
 };
 
+
+// ─── Margen ────────────────────────────────────
+const calcMargen=(venta,costo)=>{
+  const v=Number(venta)||0; const c=Number(costo)||0;
+  if(v<=0) return {pesos:0,pct:0,color:C.danger,bg:C.dangerLight};
+  const pesos=v-c; const pct=Math.round((pesos/v)*100);
+  const color=pct>=20?C.ok:pct>=10?C.warn:C.danger;
+  const bg=pct>=20?C.okLight:pct>=10?C.warnLight:C.dangerLight;
+  return {pesos,pct,color,bg};
+};
 // ═══════════════════════════════════════════════
 // COMPONENTES BASE
 // ═══════════════════════════════════════════════
@@ -367,7 +377,11 @@ function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual,
     const mesActual=hoy.getMonth()+1; const anioActual=hoy.getFullYear();
     const ivaMes=ivaMensual.find(i=>i.mes===mesActual&&i.anio===anioActual);
     const f29=ivaMes?(ivaMes.iva_ventas-ivaMes.iva_compras):0;
-    return {cobrado,porCobrar,deudaFin,utilidad,saldoProyectado,gastoContador,gastosVendedores,gastoImpuesto,f29};
+    // Margen promedio del mes actual
+    const hoyMes=hoy.getMonth()+1; const hoyAnio=hoy.getFullYear();
+    const ocsDelMes=ocs.filter(o=>{ const evC=(o.eventos_compra||[])[0]; if(!evC) return false; const f=new Date(evC.fecha); return f.getMonth()+1===hoyMes&&f.getFullYear()===hoyAnio; });
+    const margenPromPct=ocsDelMes.length>0?Math.round(ocsDelMes.reduce((s,o)=>{ const v=o.monto_total||0; if(v<=0) return s; return s+((v-(o.costo_total||0))/v)*100; },0)/ocsDelMes.length):0;
+    return {cobrado,porCobrar,deudaFin,utilidad,saldoProyectado,gastoContador,gastosVendedores,gastoImpuesto,f29,margenPromPct};
   },[ocs,financiadores,gastos,pagosVendedor,ivaMensual]);
 
   // OCs pagadas para expandir "Ingresos cobrados"
@@ -435,6 +449,7 @@ function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual,
         <div style={{fontSize:11.5,color:C.inkFaint,fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:0.5}}>Saldo Proyectado</div>
         <div style={{fontFamily:MONO,fontWeight:800,fontSize:28,color:kpis.saldoProyectado>=0?C.teal:C.danger,letterSpacing:-1}}>{fmt.money(kpis.saldoProyectado)}</div>
         <div style={{fontSize:11,color:C.inkFaint,marginTop:4}}>Ventas − Compras − Contador − Vendedores − Impuestos</div>
+        {kpis.margenPromPct!==undefined&&<div style={{marginTop:8,display:"inline-flex",alignItems:"center",gap:6,padding:"4px 10px",borderRadius:20,fontSize:11.5,fontWeight:700,background:kpis.margenPromPct>=20?C.okLight:kpis.margenPromPct>=10?C.warnLight:C.dangerLight,color:kpis.margenPromPct>=20?C.ok:kpis.margenPromPct>=10?C.warn:C.danger}}><span>Margen promedio del mes:</span><span>{kpis.margenPromPct}%</span></div>}
       </div>
 
       {/* 4 KPIs clickeables */}
@@ -544,7 +559,7 @@ function FilaOC({ oc, perfiles, expanded, onToggle }) {
           </div>
           <div style={{textAlign:"right"}}>
             <div style={{fontFamily:MONO,fontWeight:800,fontSize:14,color:C.ok}}>{fmt.money(oc.monto_total)}</div>
-            <div style={{fontSize:10.5,color:C.inkFaint}}>costo {fmt.money(oc.costo_total)}</div>
+            {(()=>{ const mg=calcMargen(oc.monto_total,oc.costo_total); return (<div style={{fontSize:10.5}}><span style={{color:C.inkFaint}}>costo {fmt.money(oc.costo_total)}</span>{" · "}<span style={{color:mg.color,fontWeight:700,background:mg.bg,padding:"1px 6px",borderRadius:6}}>ganancia {fmt.money(mg.pesos)} ({mg.pct}%)</span></div>); })()}
           </div>
         </div>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
