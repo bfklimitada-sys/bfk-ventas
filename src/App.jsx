@@ -17,6 +17,10 @@ async function supaSignUp(email, password, nombre) {
   const d = await r.json(); if(!r.ok) throw new Error(d.error_description||"Error al registrar"); return d;
 }
 async function supaSignOut(token) { try { await fetch(`${SUPABASE_URL}/auth/v1/logout`, {method:"POST", headers:{apikey:SUPABASE_ANON_KEY, Authorization:`Bearer ${token}`}}); } catch {} }
+async function supaResetPassword(email) {
+  const r = await fetch(`${SUPABASE_URL}/auth/v1/recover`, { method:"POST", headers:{"Content-Type":"application/json", apikey:SUPABASE_ANON_KEY}, body:JSON.stringify({email}) });
+  if(!r.ok) { const d=await r.json().catch(()=>({})); throw new Error(d.error_description||"Error al enviar correo de recuperación"); }
+}
 async function supaRefresh(rt) {
   const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, { method:"POST", headers:{"Content-Type":"application/json", apikey:SUPABASE_ANON_KEY}, body:JSON.stringify({refresh_token:rt}) });
   const d = await r.json(); if(!r.ok) throw new Error("Sesión expirada"); return d;
@@ -159,12 +163,16 @@ function LoginScreen({ onLogin }) {
       if(mode==="login"){
         if(!email.trim()||!pass){setErr("Completa correo y contraseña");return;}
         const s=await supaSignIn(email.trim(),pass); await onLogin(s);
-      } else {
+      } else if(mode==="signup") {
         if(!nombre.trim()||!email.trim()||!pass){setErr("Completa todos los campos");return;}
         if(pass.length<6){setErr("Contraseña mínimo 6 caracteres");return;}
         const d=await supaSignUp(email.trim(),pass,nombre.trim());
         if(d.access_token) await onLogin(d);
         else { setInfo("Cuenta creada. Confirma tu correo, luego inicia sesión."); setMode("login"); }
+      } else if(mode==="recover") {
+        if(!email.trim()){setErr("Indica tu correo");return;}
+        await supaResetPassword(email.trim());
+        setInfo("Te enviamos un correo con instrucciones para recuperar tu contraseña.");
       }
     } catch(e){setErr(e.message);}
     finally{setLoading(false);}
@@ -177,20 +185,25 @@ function LoginScreen({ onLogin }) {
           <div style={{fontWeight:800,fontSize:19,color:C.ink,letterSpacing:-0.3}}>Torre de Control</div>
           <div style={{fontSize:12.5,color:C.inkMuted,marginTop:3}}>BFK Ltda · Ventas Mercado Público</div>
         </div>
-        <div style={{display:"flex",borderRadius:10,background:C.paper,padding:3,marginBottom:22}}>
-          {["login","signup"].map(m=>(
-            <button key={m} onClick={()=>{setMode(m);setErr("");setInfo("");}} style={{flex:1,padding:"8px",borderRadius:8,border:"none",cursor:"pointer",fontSize:13,fontWeight:700,background:mode===m?C.card:"transparent",color:mode===m?C.ink:C.inkMuted,boxShadow:mode===m?"0 1px 4px rgba(0,0,0,0.08)":"none"}}>
-              {m==="login"?"Iniciar sesión":"Crear cuenta"}
-            </button>
-          ))}
-        </div>
+        {mode!=="recover"&&(
+          <div style={{display:"flex",borderRadius:10,background:C.paper,padding:3,marginBottom:22}}>
+            {["login","signup"].map(m=>(
+              <button key={m} onClick={()=>{setMode(m);setErr("");setInfo("");}} style={{flex:1,padding:"8px",borderRadius:8,border:"none",cursor:"pointer",fontSize:13,fontWeight:700,background:mode===m?C.card:"transparent",color:mode===m?C.ink:C.inkMuted,boxShadow:mode===m?"0 1px 4px rgba(0,0,0,0.08)":"none"}}>
+                {m==="login"?"Iniciar sesión":"Crear cuenta"}
+              </button>
+            ))}
+          </div>
+        )}
+        {mode==="recover"&&<div style={{fontWeight:800,fontSize:15,color:C.ink,marginBottom:16,textAlign:"center"}}>Recuperar contraseña</div>}
         {err&&<div style={{background:C.dangerLight,color:C.danger,borderRadius:9,padding:"9px 12px",fontSize:12.5,marginBottom:14,textAlign:"center",fontWeight:600}}>{err}</div>}
         {info&&<div style={{background:C.okLight,color:C.ok,borderRadius:9,padding:"9px 12px",fontSize:12.5,marginBottom:14,textAlign:"center",fontWeight:600}}>{info}</div>}
         {mode==="signup"&&<Field label="Nombre"><input style={iStyle} value={nombre} onChange={e=>setNombre(e.target.value)} placeholder="Tu nombre" onKeyDown={e=>e.key==="Enter"&&submit()} /></Field>}
         <Field label="Correo"><input style={iStyle} type="email" value={email} onChange={e=>{setEmail(e.target.value);setErr("");}} placeholder="correo@ejemplo.com" onKeyDown={e=>e.key==="Enter"&&submit()} /></Field>
-        <Field label="Contraseña"><input style={iStyle} type="password" value={pass} onChange={e=>{setPass(e.target.value);setErr("");}} placeholder="••••••••" onKeyDown={e=>e.key==="Enter"&&submit()} /></Field>
-        <button onClick={submit} disabled={loading} style={btnP(loading?C.inkFaint:C.night)}>{loading?"Procesando…":mode==="login"?"Ingresar":"Crear cuenta"}</button>
-        <div style={{textAlign:"center",fontSize:11,color:C.inkFaint,marginTop:16}}>{mode==="login"?'¿Sin cuenta? Usa "Crear cuenta"':"El primer usuario será administrador."}</div>
+        {mode!=="recover"&&<Field label="Contraseña"><input style={iStyle} type="password" value={pass} onChange={e=>{setPass(e.target.value);setErr("");}} placeholder="••••••••" onKeyDown={e=>e.key==="Enter"&&submit()} /></Field>}
+        <button onClick={submit} disabled={loading} style={btnP(loading?C.inkFaint:C.night)}>{loading?"Procesando…":mode==="login"?"Ingresar":mode==="signup"?"Crear cuenta":"Enviar correo de recuperación"}</button>
+        {mode==="login"&&<div style={{textAlign:"center",marginTop:14}}><button onClick={()=>{setMode("recover");setErr("");setInfo("");}} style={{background:"none",border:"none",color:C.teal,fontSize:12,fontWeight:700,cursor:"pointer"}}>¿Olvidaste tu contraseña?</button></div>}
+        {mode==="recover"&&<div style={{textAlign:"center",marginTop:14}}><button onClick={()=>{setMode("login");setErr("");setInfo("");}} style={{background:"none",border:"none",color:C.teal,fontSize:12,fontWeight:700,cursor:"pointer"}}>← Volver a iniciar sesión</button></div>}
+        <div style={{textAlign:"center",fontSize:11,color:C.inkFaint,marginTop:16}}>{mode==="login"?'¿Sin cuenta? Usa "Crear cuenta"':mode==="signup"?"El primer usuario será administrador.":""}</div>
       </div>
     </div>
   );
@@ -237,7 +250,7 @@ function BuscadorOC({ ocs, ocId, setOcId, permitirNueva, numeroNueva, setNumeroN
 // ═══════════════════════════════════════════════
 function FormIngresarCompra({ ocs, financiadores, vendedores, onSave }) {
   const [ocId,setOcId]=useState(null); const [numNueva,setNumNueva]=useState("");
-  const [cliente,setCliente]=useState(""); const [vendedorId,setVendedorId]=useState(vendedores[0]?.id||"");
+  const [cliente,setCliente]=useState(""); const [rutCliente,setRutCliente]=useState(""); const [vendedorId,setVendedorId]=useState(vendedores[0]?.id||"");
   const [fecha,setFecha]=useState(new Date().toISOString().slice(0,10));
   const [montoVenta,setMontoVenta]=useState(""); const [costoCompra,setCostoCompra]=useState("");
   const [fechaEst,setFechaEst]=useState(""); const [financiadorId,setFinanciadorId]=useState(financiadores[0]?.id||"");
@@ -249,13 +262,14 @@ function FormIngresarCompra({ ocs, financiadores, vendedores, onSave }) {
     if(!montoVenta||Number(montoVenta)<=0){setErr("Indica el monto de venta");return;}
     if(!costoCompra||Number(costoCompra)<0){setErr("Indica el costo de compra");return;}
     setErr(""); setSaving(true);
-    try { await onSave({ocId,esNueva,numNueva,cliente,vendedorId,fecha,montoVenta:Number(montoVenta),costoCompra:Number(costoCompra),fechaEst:fechaEst||null,financiadorId,proveedor}); }
+    try { await onSave({ocId,esNueva,numNueva,cliente,rutCliente,vendedorId,fecha,montoVenta:Number(montoVenta),costoCompra:Number(costoCompra),fechaEst:fechaEst||null,financiadorId,proveedor}); }
     catch(e){setErr(e.message);} finally{setSaving(false);}
   };
   return (
     <div>
       <Field label="Orden de Compra" required><BuscadorOC ocs={ocs} ocId={ocId} setOcId={setOcId} permitirNueva numNueva={numNueva} setNumeroNueva={setNumNueva} /></Field>
       {esNueva&&<Field label="Cliente" required><input style={iStyle} value={cliente} onChange={e=>setCliente(e.target.value)} placeholder="Nombre del cliente" /></Field>}
+      {esNueva&&<Field label="RUT del cliente" hint="Para vincular correo de cobranza"><input style={iStyle} value={rutCliente} onChange={e=>setRutCliente(e.target.value)} placeholder="ej: 12.345.678-9" /></Field>}
       <Field label="Vendedor"><select style={selStyle} value={vendedorId} onChange={e=>setVendedorId(e.target.value)}>{vendedores.map(v=><option key={v.id} value={v.id}>{v.nombre}</option>)}</select></Field>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
         <Field label="Fecha" required><input style={iStyle} type="date" value={fecha} onChange={e=>setFecha(e.target.value)} /></Field>
@@ -543,10 +557,12 @@ const FILTROS=[
   {key:"financ",label:"Financ.",okField:"estado_pago_financiamiento",okValue:"pagado",okLabel:"Pagado",pendLabel:"Con deuda"},
 ];
 
-function FilaOC({ oc, perfiles, expanded, onToggle }) {
+function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, onGuardarContacto }) {
   const evF=(oc.eventos_factura||[])[0];
   const dias=fmt.diasDesde(evF?.fecha);
   const saldo=(oc.monto_facturado||0)-(oc.monto_cobrado||0);
+  const [reclamando,setReclamando]=useState(false);
+  const puedeReclamar = oc.estado_pago_cliente!=="pagado" && evF && dias!==null && dias>=30;
   return (
     <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:13,marginBottom:8,overflow:"hidden"}}>
       <div onClick={onToggle} style={{padding:"13px 15px",cursor:"pointer"}}>
@@ -576,6 +592,7 @@ function FilaOC({ oc, perfiles, expanded, onToggle }) {
             <div>Saldo: <b style={{color:saldo>0?C.danger:C.ok}}>{fmt.money(saldo)}</b></div>
             {evF&&<div style={{gridColumn:"1/-1"}}>Factura: <b>{evF.numero_factura}</b> · {fmt.date(evF.fecha)}{dias!==null&&` · ${dias} días`}</div>}
           </div>
+          {puedeReclamar&&<button onClick={()=>setReclamando(true)} style={{...btnP(C.danger),marginBottom:12}}>📧 Reclamar pago de factura</button>}
           <div style={{fontSize:11,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",marginBottom:6,letterSpacing:0.3}}>Historial</div>
           {[
             ...(oc.eventos_compra||[]).map(e=>({tipo:"📦 Compra",fecha:e.fecha,extra:"",e})),
@@ -591,11 +608,18 @@ function FilaOC({ oc, perfiles, expanded, onToggle }) {
           ))}
         </div>
       )}
+      {reclamando&&(
+        <Modal title="Reclamar pago de factura" onClose={()=>setReclamando(false)}>
+          <FormReclamarFactura oc={oc} evF={evF} dias={dias} contactos={contactos||[]}
+            onGuardarContacto={onGuardarContacto}
+            onEnviar={async(data)=>{ await onEnviarReclamo(data); setReclamando(false); }} />
+        </Modal>
+      )}
     </div>
   );
 }
 
-function PanelCompras({ ocs, perfiles, filtroInicial }) {
+function PanelCompras({ ocs, perfiles, filtroInicial, contactos, onEnviarReclamo, onGuardarContacto }) {
   const [filtros,setFiltros]=useState({}); const [busq,setBusq]=useState(""); const [expId,setExpId]=useState(null);
   useEffect(()=>{ if(filtroInicial) setFiltros({[filtroInicial]:"pend"}); },[filtroInicial]);
   const toggle=(key,val)=>setFiltros(prev=>({...prev,[key]:prev[key]===val?undefined:val}));
@@ -639,7 +663,7 @@ function PanelCompras({ ocs, perfiles, filtroInicial }) {
         ))}
       </div>
       <div style={{fontSize:11.5,color:C.inkFaint,marginBottom:10}}>{filtered.length} orden{filtered.length!==1?"es":""}</div>
-      {filtered.map(oc=><FilaOC key={oc.id} oc={oc} perfiles={perfiles} expanded={expId===oc.id} onToggle={()=>setExpId(expId===oc.id?null:oc.id)} />)}
+      {filtered.map(oc=><FilaOC key={oc.id} oc={oc} perfiles={perfiles} expanded={expId===oc.id} onToggle={()=>setExpId(expId===oc.id?null:oc.id)} contactos={contactos} onEnviarReclamo={onEnviarReclamo} onGuardarContacto={onGuardarContacto} />)}
       {filtered.length===0&&<div style={{textAlign:"center",padding:30,color:C.inkFaint,fontSize:13}}>No hay órdenes con estos filtros.</div>}
     </div>
   );
@@ -716,6 +740,46 @@ function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onAjustar 
           <div style={{fontFamily:MONO,fontWeight:800,fontSize:20,color:Number(f.saldo_deuda)>0?C.danger:C.ok}}>{fmt.money(f.saldo_deuda)}</div>
         </button>
       ))}
+    </div>
+  );
+}
+
+function FormReclamarFactura({ oc, evF, dias, contactos, onEnviar, onGuardarContacto }) {
+  const contactoExistente = contactos.find(c => c.rut === (oc.rut_cliente || "").trim());
+  const [rut, setRut] = useState(oc.rut_cliente || "");
+  const [nombreCliente, setNombreCliente] = useState(contactoExistente?.nombre_cliente || oc.cliente || "");
+  const [correo, setCorreo] = useState(contactoExistente?.correo || "");
+  const [err, setErr] = useState(""); const [sending, setSending] = useState(false);
+
+  const asunto = `OC ${oc.numero_oc} — Solicitud de pago factura N°${evF?.numero_factura || ""}`;
+  const cuerpo = `Estimados,\n\nEsperamos se encuentren bien. Por medio del presente correo solicitamos la gestión de pago de la factura N°${evF?.numero_factura || ""} asociada a la Orden de Compra ${oc.numero_oc}, emitida con fecha ${fmt.date(evF?.fecha)}, la cual registra ${dias} días desde su emisión.\n\nQuedamos atentos a su pronta respuesta.\n\nSaludos cordiales,\nBFK Ltda`;
+
+  const handleEnviar = async () => {
+    if (!correo.trim()) { setErr("Indica el correo del cliente"); return; }
+    if (!nombreCliente.trim()) { setErr("Indica el nombre del cliente"); return; }
+    setErr(""); setSending(true);
+    try {
+      if (rut.trim() && !contactoExistente) await onGuardarContacto({ rut: rut.trim(), nombreCliente: nombreCliente.trim(), correo: correo.trim() });
+      await onEnviar({ correo: correo.trim(), asunto, cuerpo, ocId: oc.id });
+    } catch (e) { setErr(e.message); } finally { setSending(false); }
+  };
+
+  return (
+    <div>
+      <div style={{background:C.dangerLight,borderRadius:9,padding:"10px 12px",fontSize:12.5,color:C.danger,fontWeight:700,marginBottom:14}}>
+        Factura {evF?.numero_factura} · {dias} días desde emisión
+      </div>
+      <Field label="RUT del cliente" hint="Para guardar el correo y reutilizarlo después"><input style={iStyle} value={rut} onChange={e=>setRut(e.target.value)} placeholder="ej: 12.345.678-9" /></Field>
+      <Field label="Nombre del cliente" required><input style={iStyle} value={nombreCliente} onChange={e=>setNombreCliente(e.target.value)} /></Field>
+      <Field label="Correo del cliente" required hint={contactoExistente?"Correo guardado encontrado para este RUT":"Se guardará para futuras facturas de este RUT"}><input style={iStyle} type="email" value={correo} onChange={e=>setCorreo(e.target.value)} placeholder="contacto@entidad.cl" /></Field>
+      <div style={{background:C.paper,borderRadius:9,padding:"10px 12px",marginBottom:14}}>
+        <div style={{fontSize:10.5,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:4}}>Asunto</div>
+        <div style={{fontSize:12.5,color:C.ink,marginBottom:8}}>{asunto}</div>
+        <div style={{fontSize:10.5,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:4}}>Mensaje</div>
+        <div style={{fontSize:12,color:C.ink,whiteSpace:"pre-wrap"}}>{cuerpo}</div>
+      </div>
+      {err&&<div style={{background:C.dangerLight,color:C.danger,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}
+      <button onClick={handleEnviar} disabled={sending} style={btnP(sending?C.inkFaint:C.danger)}>{sending?"Enviando…":"✓ Enviar reclamo de pago"}</button>
     </div>
   );
 }
@@ -973,15 +1037,43 @@ function FormIvaMensual({ ivaExistente, onSave }) {
 // ═══════════════════════════════════════════════
 // PANEL USUARIOS
 // ═══════════════════════════════════════════════
-function PanelUsuarios({ perfiles, onChangeRol }) {
+function PanelUsuarios({ perfiles, ocs, onChangeRol }) {
+  // Calcula la fecha del último evento creado por cada usuario, cruzando todas las tablas de eventos embebidas en ocs
+  const ultimaActividad = useMemo(() => {
+    const map = {};
+    for (const oc of ocs) {
+      const todos = [
+        ...(oc.eventos_compra||[]), ...(oc.eventos_entrega||[]), ...(oc.eventos_factura||[]),
+        ...(oc.eventos_pago_cliente||[]), ...(oc.eventos_pago_financiamiento||[]),
+      ];
+      for (const e of todos) {
+        if (!e.creado_por || !e.creadoEn) continue;
+        if (!map[e.creado_por] || e.creadoEn > map[e.creado_por]) map[e.creado_por] = e.creadoEn;
+      }
+    }
+    return map;
+  }, [ocs]);
+
   return (
     <div>
-      {perfiles.map(p=>(
-        <div key={p.id} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 15px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div><div style={{fontWeight:700,fontSize:13.5,color:C.ink}}>{p.nombre}</div><div style={{fontSize:11.5,color:C.inkMuted}}>{p.rol==="admin"?"Administrador":"Usuario"}</div></div>
-          <button onClick={()=>onChangeRol(p.id,p.rol==="admin"?"usuario":"admin")} style={btnG}>{p.rol==="admin"?"Quitar admin":"Hacer admin"}</button>
-        </div>
-      ))}
+      {perfiles.map(p=>{
+        const ultima=ultimaActividad[p.id];
+        const diasInactivo = ultima ? Math.floor((new Date()-new Date(ultima))/(1000*60*60*24)) : null;
+        const activo = diasInactivo!==null && diasInactivo<=14;
+        return (
+          <div key={p.id} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 15px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div>
+              <div style={{display:"flex",alignItems:"center",gap:6}}>
+                <span style={{width:7,height:7,borderRadius:"50%",background:activo?C.ok:C.inkFaint,display:"inline-block"}} />
+                <span style={{fontWeight:700,fontSize:13.5,color:C.ink}}>{p.nombre}</span>
+              </div>
+              <div style={{fontSize:11.5,color:C.inkMuted,marginTop:2}}>{p.rol==="admin"?"Administrador":"Usuario"}</div>
+              <div style={{fontSize:10.5,color:C.inkFaint,marginTop:2}}>{ultima?`Última actividad: ${fmt.datetime(ultima)}`:"Sin actividad registrada"}</div>
+            </div>
+            <button onClick={()=>onChangeRol(p.id,p.rol==="admin"?"usuario":"admin")} style={btnG}>{p.rol==="admin"?"Quitar admin":"Hacer admin"}</button>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -1012,6 +1104,7 @@ export default function App() {
   const [ocs,setOcs]=useState([]); const [financiadores,setFinanciadores]=useState([]); const [vendedores,setVendedores]=useState([]);
   const [categoriasGasto,setCategoriasGasto]=useState([]); const [gastos,setGastos]=useState([]); const [ivaMensual,setIvaMensual]=useState([]);
   const [pagosVendedor,setPagosVendedor]=useState([]); const [ajustesSaldo,setAjustesSaldo]=useState([]); const [perfiles,setPerfiles]=useState([]);
+  const [contactos,setContactos]=useState([]);
 
   const showToast=(msg,type="success")=>{ setToast({msg,type}); setTimeout(()=>setToast(null),3000); };
 
@@ -1041,14 +1134,15 @@ export default function App() {
     if(!session) return;
     const t=session.access_token;
     try {
-      const [ocsD,finD,vendD,catD,gastD,ivaD,pagVD,ajuD,perfD]=await Promise.all([
+      const [ocsD,finD,vendD,catD,gastD,ivaD,pagVD,ajuD,perfD,contD]=await Promise.all([
         selOCs(t), sel("financiadores",t,"&order=nombre"), sel("vendedores",t,"&order=nombre"),
         sel("categorias_gasto",t,"&order=nombre"), sel("gastos_indirectos",t,"&order=fecha.desc"),
         sel("iva_mensual",t), sel("pagos_vendedor",t), sel("ajustes_saldo_financiador",t,"&order=creadoEn.desc"),
-        selPerfiles(t),
+        selPerfiles(t), sel("contactos_cobranza",t).catch(()=>[]),
       ]);
       setOcs(ocsD); setFinanciadores(finD); setVendedores(vendD); setCategoriasGasto(catD);
       setGastos(gastD); setIvaMensual(ivaD); setPagosVendedor(pagVD); setAjustesSaldo(ajuD); setPerfiles(perfD);
+      setContactos(contD);
     } catch(e){ showToast(e.message,"error"); }
   };
   useEffect(()=>{ if(session) cargarTodo(); },[session]);
@@ -1057,7 +1151,7 @@ export default function App() {
   const handleIngresarCompra=async(data)=>{
     const t=session.access_token; let ocId=data.ocId;
     if(data.esNueva){
-      const nOc=await ins("ordenes_compra_v2",t,{id:genId("ocv2"),numero_oc:data.numNueva,cliente:data.cliente,vendedor_id:data.vendedorId,financiador_id:data.financiadorId,monto_total:data.montoVenta,costo_total:data.costoCompra,estado_compra:"comprado",creado_por:session.user.id});
+      const nOc=await ins("ordenes_compra_v2",t,{id:genId("ocv2"),numero_oc:data.numNueva,cliente:data.cliente,rut_cliente:data.rutCliente||"",vendedor_id:data.vendedorId,financiador_id:data.financiadorId,monto_total:data.montoVenta,costo_total:data.costoCompra,estado_compra:"comprado",creado_por:session.user.id});
       ocId=(Array.isArray(nOc)?nOc[0]:nOc).id;
     } else {
       await upd("ordenes_compra_v2",t,ocId,{estado_compra:"comprado",monto_total:data.montoVenta,costo_total:data.costoCompra,financiador_id:data.financiadorId});
@@ -1116,6 +1210,15 @@ export default function App() {
     showToast("IVA guardado"); await cargarTodo();
   };
   const handleChangeRol=async(uid,rol)=>{ await updRol(session.access_token,uid,rol); showToast("Rol actualizado"); await cargarTodo(); };
+  const handleGuardarContacto=async({rut,nombreCliente,correo})=>{
+    try { await ins("contactos_cobranza",session.access_token,{id:genId("cob"),rut,nombre_cliente:nombreCliente,correo,creado_por:session.user.id}); await cargarTodo(); }
+    catch(e){ /* si ya existe el RUT (unique), no es un error fatal */ }
+  };
+  const handleEnviarReclamo=async({correo,asunto,cuerpo})=>{
+    const url=`mailto:${encodeURIComponent(correo)}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
+    window.location.href=url;
+    showToast(`Correo abierto para ${correo} — revisa y envía desde tu app de Mail`);
+  };
 
   // ─── RENDER ───────────────────────────────────
   if(loadingApp) return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",color:C.inkMuted,fontFamily:SANS}}>Cargando…</div>;
@@ -1142,11 +1245,11 @@ export default function App() {
       {/* CONTENIDO */}
       <div style={{padding:16}}>
         {tab==="panel"&&<PanelDashboard ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} onNavigate={(t)=>{setTab(t);}} />}
-        {tab==="compras"&&<PanelCompras ocs={ocs} perfiles={perfiles} filtroInicial={filtroCompras} />}
+        {tab==="compras"&&<PanelCompras ocs={ocs} perfiles={perfiles} filtroInicial={filtroCompras} contactos={contactos} onEnviarReclamo={handleEnviarReclamo} onGuardarContacto={handleGuardarContacto} />}
         {tab==="financiamiento"&&<PanelFinanciamiento financiadores={financiadores} ocs={ocs} ajustes={ajustesSaldo} perfiles={perfiles} onAjustar={handleAjusteSaldo} />}
         {tab==="gastos"&&<PanelGastos gastos={gastos} categorias={categoriasGasto} vendedores={vendedores} pagosVendedor={pagosVendedor} onNuevoGasto={handleNuevoGasto} onPagoVendedor={handlePagoVendedorSimple} />}
         {tab==="vendedores"&&<PanelVendedores vendedores={vendedores} ocs={ocs} ivaMensual={ivaMensual} pagosVendedor={pagosVendedor} onGuardarIva={handleGuardarIva} onPagoVendedor={handlePagoVendedorSimple} />}
-        {tab==="usuarios"&&perfil?.rol==="admin"&&<PanelUsuarios perfiles={perfiles} onChangeRol={handleChangeRol} />}
+        {tab==="usuarios"&&perfil?.rol==="admin"&&<PanelUsuarios perfiles={perfiles} ocs={ocs} onChangeRol={handleChangeRol} />}
       </div>
 
       {/* NAV BOTTOM */}
