@@ -580,11 +580,35 @@ const FILTROS=[
   {key:"financ",label:"Financ.",okField:"estado_pago_financiamiento",okValue:"pagado",okLabel:"Pagado",pendLabel:"Con deuda"},
 ];
 
-function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, onGuardarContacto }) {
+function FormEditarDatosOC({ oc, onSave }) {
+  const [entidad,setEntidad]=useState(oc.entidad||"");
+  const [comuna,setComuna]=useState(oc.comuna||"");
+  const [contacto,setContacto]=useState(oc.contacto||"");
+  const [rutCliente,setRutCliente]=useState(oc.rut_cliente||"");
+  const [err,setErr]=useState(""); const [saving,setSaving]=useState(false);
+  const handleSave=async()=>{
+    setErr(""); setSaving(true);
+    try { await onSave({ entidad, comuna, contacto, rutCliente }); }
+    catch(e){ setErr(e.message); } finally{ setSaving(false); }
+  };
+  return (
+    <div>
+      <Field label="Entidad (organismo público)"><input style={iStyle} value={entidad} onChange={e=>setEntidad(e.target.value)} placeholder="ej: I. Municipalidad de..." /></Field>
+      <Field label="Comuna"><input style={iStyle} value={comuna} onChange={e=>setComuna(e.target.value)} placeholder="ej: Concepción" /></Field>
+      <Field label="Contacto"><input style={iStyle} value={contacto} onChange={e=>setContacto(e.target.value)} placeholder="Nombre y/o teléfono de contacto" /></Field>
+      <Field label="RUT del cliente" hint="Para vincular correo de cobranza"><input style={iStyle} value={rutCliente} onChange={e=>setRutCliente(e.target.value)} placeholder="ej: 12.345.678-9" /></Field>
+      {err&&<div style={{background:C.dangerLight,color:C.danger,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}
+      <button onClick={handleSave} disabled={saving} style={btnP(saving?C.inkFaint:C.info)}>{saving?"Guardando…":"✓ Guardar datos"}</button>
+    </div>
+  );
+}
+
+function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, onGuardarContacto, onGuardarDatosOC }) {
   const evF=(oc.eventos_factura||[])[0];
   const dias=fmt.diasDesde(evF?.fecha);
   const saldo=(oc.monto_facturado||0)-(oc.monto_cobrado||0);
   const [reclamando,setReclamando]=useState(false);
+  const [editandoDatos,setEditandoDatos]=useState(false);
   const puedeReclamar = oc.estado_pago_cliente!=="pagado" && evF && dias!==null && dias>=30;
   return (
     <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:13,marginBottom:8,overflow:"hidden"}}>
@@ -620,6 +644,7 @@ function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, 
           </div>
           {oc.ultimo_reclamo_fecha&&<div style={{fontSize:11,color:C.warn,fontWeight:600,marginBottom:8}}>📧 Último reclamo: {fmt.datetime(oc.ultimo_reclamo_fecha)} · {oc.correo_cliente}</div>}
           {puedeReclamar&&<button onClick={()=>setReclamando(true)} style={{...btnP(C.danger),marginBottom:12}}>📧 Reclamar pago de factura</button>}
+          <button onClick={()=>setEditandoDatos(true)} style={{...btnG,marginBottom:12,width:"100%"}}>✏️ Editar entidad / comuna / contacto</button>
           <div style={{fontSize:11,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",marginBottom:6,letterSpacing:0.3}}>Historial</div>
           {[
             ...(oc.eventos_compra||[]).map(e=>({tipo:"📦 Compra",fecha:e.fecha,extra:"",e})),
@@ -642,11 +667,16 @@ function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, 
             onEnviar={async(data)=>{ await onEnviarReclamo(data); setReclamando(false); }} />
         </Modal>
       )}
+      {editandoDatos&&(
+        <Modal title="Editar datos de la OC" onClose={()=>setEditandoDatos(false)}>
+          <FormEditarDatosOC oc={oc} onSave={async(data)=>{ await onGuardarDatosOC(oc.id,data); setEditandoDatos(false); }} />
+        </Modal>
+      )}
     </div>
   );
 }
 
-function PanelCompras({ ocs, perfiles, filtroInicial, contactos, onEnviarReclamo, onGuardarContacto }) {
+function PanelCompras({ ocs, perfiles, filtroInicial, contactos, onEnviarReclamo, onGuardarContacto, onGuardarDatosOC }) {
   const [filtros,setFiltros]=useState({}); const [busq,setBusq]=useState(""); const [expId,setExpId]=useState(null);
   const [reclamandoBanner,setReclamandoBanner]=useState(null); const [comunaSel,setComunaSel]=useState("");
   useEffect(()=>{ if(filtroInicial) setFiltros({[filtroInicial]:"pend"}); },[filtroInicial]);
@@ -708,7 +738,7 @@ function PanelCompras({ ocs, perfiles, filtroInicial, contactos, onEnviarReclamo
         ))}
       </div>
       <div style={{fontSize:11.5,color:C.inkFaint,marginBottom:10}}>{filtered.length} orden{filtered.length!==1?"es":""}</div>
-      {filtered.map(oc=><FilaOC key={oc.id} oc={oc} perfiles={perfiles} expanded={expId===oc.id} onToggle={()=>setExpId(expId===oc.id?null:oc.id)} contactos={contactos} onEnviarReclamo={onEnviarReclamo} onGuardarContacto={onGuardarContacto} />)}
+      {filtered.map(oc=><FilaOC key={oc.id} oc={oc} perfiles={perfiles} expanded={expId===oc.id} onToggle={()=>setExpId(expId===oc.id?null:oc.id)} contactos={contactos} onEnviarReclamo={onEnviarReclamo} onGuardarContacto={onGuardarContacto} onGuardarDatosOC={onGuardarDatosOC} />)}
       {filtered.length===0&&<div style={{textAlign:"center",padding:30,color:C.inkFaint,fontSize:13}}>No hay órdenes con estos filtros.</div>}
     </div>
   );
@@ -1426,6 +1456,10 @@ export default function App() {
     showToast("IVA guardado"); await cargarTodo();
   };
   const handleChangeRol=async(uid,rol)=>{ await updRol(session.access_token,uid,rol); showToast("Rol actualizado"); await cargarTodo(); };
+  const handleGuardarDatosOC=async(ocId,{entidad,comuna,contacto,rutCliente})=>{
+    await upd("ordenes_compra_v2",session.access_token,ocId,{entidad,comuna,contacto,rut_cliente:rutCliente});
+    showToast("Datos actualizados"); await cargarTodo();
+  };
   const handleGuardarContacto=async({rut,nombreCliente,correo})=>{
     try { await ins("contactos_cobranza",session.access_token,{id:genId("cob"),rut,nombre_cliente:nombreCliente,correo,creado_por:session.user.id}); await cargarTodo(); }
     catch(e){ /* si ya existe el RUT (unique), no es un error fatal */ }
@@ -1468,7 +1502,7 @@ export default function App() {
       {/* CONTENIDO */}
       <div style={{padding:16}}>
         {tab==="panel"&&<PanelDashboard ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} onNavigate={(t)=>{setTab(t);}} />}
-        {tab==="compras"&&<PanelCompras ocs={ocs} perfiles={perfiles} filtroInicial={filtroCompras} contactos={contactos} onEnviarReclamo={handleEnviarReclamo} onGuardarContacto={handleGuardarContacto} />}
+        {tab==="compras"&&<PanelCompras ocs={ocs} perfiles={perfiles} filtroInicial={filtroCompras} contactos={contactos} onEnviarReclamo={handleEnviarReclamo} onGuardarContacto={handleGuardarContacto} onGuardarDatosOC={handleGuardarDatosOC} />}
         {tab==="financiamiento"&&<PanelFinanciamiento financiadores={financiadores} ocs={ocs} ajustes={ajustesSaldo} perfiles={perfiles} onAjustar={handleAjusteSaldo} />}
         {tab==="gastos"&&<PanelGastos gastos={gastos} categorias={categoriasGasto} vendedores={vendedores} pagosVendedor={pagosVendedor} onNuevoGasto={handleNuevoGasto} onPagoVendedor={handlePagoVendedorSimple} />}
         {tab==="vendedores"&&<PanelVendedores vendedores={vendedores} ocs={ocs} ivaMensual={ivaMensual} pagosVendedor={pagosVendedor} onGuardarIva={handleGuardarIva} onPagoVendedor={handlePagoVendedorSimple} />}
