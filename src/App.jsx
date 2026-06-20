@@ -1495,9 +1495,9 @@ export default function App() {
           <div><div style={{fontWeight:800,fontSize:16,letterSpacing:-0.3}}>BFK Ltda</div><div style={{fontSize:11,color:"#94A3B8"}}>{perfil?.nombre} · {perfil?.rol==="admin"?"Admin":"Usuario"}</div></div>
           <button onClick={handleLogout} style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",color:"#fff",borderRadius:8,padding:"7px 12px",fontSize:12,fontWeight:600,cursor:"pointer"}}>Salir</button>
         </div>
-        <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:2}}>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
           {ACCIONES.map(a=>(
-            <button key={a.key} onClick={()=>setAccion(a.key)} style={{flexShrink:0,background:a.color,border:"none",color:"#fff",borderRadius:9,padding:"8px 11px",fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>
+            <button key={a.key} onClick={()=>setAccion(a.key)} style={{background:a.color,border:"none",color:"#fff",borderRadius:9,padding:"9px 10px",fontSize:11.5,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
               {a.icon} {a.label}
             </button>
           ))}
