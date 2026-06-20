@@ -608,12 +608,62 @@ function FormEditarDatosOC({ oc, onSave }) {
   );
 }
 
-function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, onGuardarContacto, onGuardarDatosOC }) {
+function FormEditarEvento({ item, onSave, onCancel }) {
+  const e = item.e; const tabla = item.tabla;
+  const [fecha,setFecha]=useState(e.fecha||"");
+  const [montoVenta,setMontoVenta]=useState(e.monto_venta??"");
+  const [costoCompra,setCostoCompra]=useState(e.costo_compra??"");
+  const [personaRecibe,setPersonaRecibe]=useState(e.persona_recibe||"");
+  const [numeroFactura,setNumeroFactura]=useState(e.numero_factura||"");
+  const [monto,setMonto]=useState(e.monto??"");
+  const [err,setErr]=useState(""); const [saving,setSaving]=useState(false);
+
+  const handleSave=async()=>{
+    setErr(""); setSaving(true);
+    try {
+      let cambios={fecha};
+      if(tabla==="eventos_compra") cambios={...cambios, monto_venta:Number(montoVenta), costo_compra:Number(costoCompra)};
+      if(tabla==="eventos_entrega") cambios={...cambios, persona_recibe:personaRecibe};
+      if(tabla==="eventos_factura") cambios={...cambios, numero_factura:numeroFactura, monto:Number(monto)};
+      if(tabla==="eventos_pago_cliente"||tabla==="eventos_pago_financiamiento") cambios={...cambios, monto:Number(monto)};
+      await onSave(tabla, e, cambios);
+    } catch(err){ setErr(err.message); } finally{ setSaving(false); }
+  };
+
+  return (
+    <div>
+      <div style={{background:C.warnLight,borderRadius:9,padding:"10px 12px",fontSize:12,color:C.warn,fontWeight:600,marginBottom:14}}>
+        ⚠ Editar este evento ajustará automáticamente el saldo del financiador y los totales de la OC según la diferencia.
+      </div>
+      <Field label="Fecha" required><input style={iStyle} type="date" value={fecha} onChange={ev=>setFecha(ev.target.value)} /></Field>
+      {tabla==="eventos_compra"&&(<>
+        <Field label="Monto venta ($)" required><input style={iMono} type="number" value={montoVenta} onChange={ev=>setMontoVenta(ev.target.value)} /></Field>
+        <Field label="Costo compra ($)" required><input style={iMono} type="number" value={costoCompra} onChange={ev=>setCostoCompra(ev.target.value)} /></Field>
+      </>)}
+      {tabla==="eventos_entrega"&&(
+        <Field label="Persona que recibe"><input style={iStyle} value={personaRecibe} onChange={ev=>setPersonaRecibe(ev.target.value)} /></Field>
+      )}
+      {tabla==="eventos_factura"&&(<>
+        <Field label="N° factura" required><input style={iMono} value={numeroFactura} onChange={ev=>setNumeroFactura(ev.target.value)} /></Field>
+        <Field label="Monto ($)" required><input style={iMono} type="number" value={monto} onChange={ev=>setMonto(ev.target.value)} /></Field>
+      </>)}
+      {(tabla==="eventos_pago_cliente"||tabla==="eventos_pago_financiamiento")&&(
+        <Field label="Monto ($)" required><input style={iMono} type="number" value={monto} onChange={ev=>setMonto(ev.target.value)} /></Field>
+      )}
+      {err&&<div style={{background:C.dangerLight,color:C.danger,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}
+      <button onClick={handleSave} disabled={saving} style={btnP(saving?C.inkFaint:C.warn)}>{saving?"Guardando…":"✓ Guardar corrección"}</button>
+      <button onClick={onCancel} style={{...btnG,marginTop:8,width:"100%"}}>Cancelar</button>
+    </div>
+  );
+}
+
+function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento }) {
   const evF=(oc.eventos_factura||[])[0];
   const dias=fmt.diasDesde(evF?.fecha);
   const saldo=(oc.monto_facturado||0)-(oc.monto_cobrado||0);
   const [reclamando,setReclamando]=useState(false);
   const [editandoDatos,setEditandoDatos]=useState(false);
+  const [editandoEvento,setEditandoEvento]=useState(null);
   const puedeReclamar = oc.estado_pago_cliente!=="pagado" && evF && dias!==null && dias>=30;
   return (
     <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:13,marginBottom:8,overflow:"hidden"}}>
@@ -652,15 +702,16 @@ function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, 
           <button onClick={()=>setEditandoDatos(true)} style={{...btnG,marginBottom:12,width:"100%"}}>✏️ Editar entidad / comuna / contacto</button>
           <div style={{fontSize:11,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",marginBottom:6,letterSpacing:0.3}}>Historial</div>
           {[
-            ...(oc.eventos_compra||[]).map(e=>({tipo:"📦 Compra",fecha:e.fecha,extra:"",e})),
-            ...(oc.eventos_entrega||[]).map(e=>({tipo:"🚚 Entrega",fecha:e.fecha,extra:e.persona_recibe?` · ${e.persona_recibe}`:"",e})),
-            ...(oc.eventos_factura||[]).map(e=>({tipo:`🧾 Factura ${e.numero_factura}`,fecha:e.fecha,extra:` · ${fmt.money(e.monto)}`,e})),
-            ...(oc.eventos_pago_cliente||[]).map(e=>({tipo:`💰 Pago ${fmt.money(e.monto)}`,fecha:e.fecha,extra:"",e})),
-            ...(oc.eventos_pago_financiamiento||[]).map(e=>({tipo:`🏦 Pago fin. ${fmt.money(e.monto)}`,fecha:e.fecha,extra:"",e})),
+            ...(oc.eventos_compra||[]).map(e=>({tipo:"📦 Compra",fecha:e.fecha,extra:"",e,tabla:"eventos_compra"})),
+            ...(oc.eventos_entrega||[]).map(e=>({tipo:"🚚 Entrega",fecha:e.fecha,extra:e.persona_recibe?` · ${e.persona_recibe}`:"",e,tabla:"eventos_entrega"})),
+            ...(oc.eventos_factura||[]).map(e=>({tipo:`🧾 Factura ${e.numero_factura}`,fecha:e.fecha,extra:` · ${fmt.money(e.monto)}`,e,tabla:"eventos_factura"})),
+            ...(oc.eventos_pago_cliente||[]).map(e=>({tipo:`💰 Pago ${fmt.money(e.monto)}`,fecha:e.fecha,extra:"",e,tabla:"eventos_pago_cliente"})),
+            ...(oc.eventos_pago_financiamiento||[]).map(e=>({tipo:`🏦 Pago fin. ${fmt.money(e.monto)}`,fecha:e.fecha,extra:"",e,tabla:"eventos_pago_financiamiento"})),
           ].sort((a,b)=>a.fecha>b.fecha?1:-1).map((item,i)=>(
-            <div key={i} style={{fontSize:11.5,display:"flex",justifyContent:"space-between",marginBottom:4}}>
-              <span style={{color:C.ink}}>{item.tipo}{item.extra} · {fmt.date(item.fecha)}</span>
+            <div key={i} style={{fontSize:11.5,display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4,gap:6}}>
+              <span style={{color:C.ink,flex:1}}>{item.tipo}{item.extra} · {fmt.date(item.fecha)}</span>
               <Trazabilidad creadoPor={item.e.creado_por} creadoEn={item.e.creadoEn} perfiles={perfiles} />
+              <button onClick={()=>setEditandoEvento(item)} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,padding:"2px 4px",flexShrink:0}}>✏️</button>
             </div>
           ))}
         </div>
@@ -677,11 +728,18 @@ function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, 
           <FormEditarDatosOC oc={oc} onSave={async(data)=>{ await onGuardarDatosOC(oc.id,data); setEditandoDatos(false); }} />
         </Modal>
       )}
+      {editandoEvento&&(
+        <Modal title={`Editar ${editandoEvento.tipo}`} onClose={()=>setEditandoEvento(null)}>
+          <FormEditarEvento item={editandoEvento}
+            onCancel={()=>setEditandoEvento(null)}
+            onSave={async(tabla,eventoOriginal,cambios)=>{ await onEditarEvento(oc, tabla, eventoOriginal, cambios); setEditandoEvento(null); }} />
+        </Modal>
+      )}
     </div>
   );
 }
 
-function PanelCompras({ ocs, perfiles, filtroInicial, contactos, onEnviarReclamo, onGuardarContacto, onGuardarDatosOC }) {
+function PanelCompras({ ocs, perfiles, filtroInicial, contactos, onEnviarReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento }) {
   const [filtros,setFiltros]=useState({}); const [busq,setBusq]=useState(""); const [expId,setExpId]=useState(null);
   const [reclamandoBanner,setReclamandoBanner]=useState(null); const [comunaSel,setComunaSel]=useState("");
   useEffect(()=>{ if(filtroInicial) setFiltros({[filtroInicial]:"pend"}); },[filtroInicial]);
@@ -743,7 +801,7 @@ function PanelCompras({ ocs, perfiles, filtroInicial, contactos, onEnviarReclamo
         ))}
       </div>
       <div style={{fontSize:11.5,color:C.inkFaint,marginBottom:10}}>{filtered.length} orden{filtered.length!==1?"es":""}</div>
-      {filtered.map(oc=><FilaOC key={oc.id} oc={oc} perfiles={perfiles} expanded={expId===oc.id} onToggle={()=>setExpId(expId===oc.id?null:oc.id)} contactos={contactos} onEnviarReclamo={onEnviarReclamo} onGuardarContacto={onGuardarContacto} onGuardarDatosOC={onGuardarDatosOC} />)}
+      {filtered.map(oc=><FilaOC key={oc.id} oc={oc} perfiles={perfiles} expanded={expId===oc.id} onToggle={()=>setExpId(expId===oc.id?null:oc.id)} contactos={contactos} onEnviarReclamo={onEnviarReclamo} onGuardarContacto={onGuardarContacto} onGuardarDatosOC={onGuardarDatosOC} onEditarEvento={onEditarEvento} />)}
       {filtered.length===0&&<div style={{textAlign:"center",padding:30,color:C.inkFaint,fontSize:13}}>No hay órdenes con estos filtros.</div>}
     </div>
   );
@@ -1465,6 +1523,48 @@ export default function App() {
     await upd("ordenes_compra_v2",session.access_token,ocId,{cliente,entidad,comuna,contacto,rut_cliente:rutCliente,correo_cliente:correo});
     showToast("Datos actualizados"); await cargarTodo();
   };
+  const handleEditarEvento=async(oc, tabla, eventoOriginal, cambios)=>{
+    const t=session.access_token;
+    // 1. Actualizar el evento mismo
+    await upd(tabla, t, eventoOriginal.id, cambios);
+
+    // 2. Recalcular según el tipo de evento (ajustar por la DIFERENCIA entre valor viejo y nuevo)
+    if (tabla==="eventos_compra") {
+      const difVenta = (cambios.monto_venta??eventoOriginal.monto_venta) - (eventoOriginal.monto_venta||0);
+      const difCosto = (cambios.costo_compra??eventoOriginal.costo_compra) - (eventoOriginal.costo_compra||0);
+      if (difVenta || difCosto) {
+        await upd("ordenes_compra_v2", t, oc.id, {
+          monto_total: Number(oc.monto_total||0) + difVenta,
+          costo_total: Number(oc.costo_total||0) + difCosto,
+        });
+      }
+      if (difCosto && oc.financiador_id) {
+        const fin = financiadores.find(f=>f.id===oc.financiador_id);
+        if (fin) await upd("financiadores", t, fin.id, { saldo_deuda: Math.max(0, Number(fin.saldo_deuda||0) + difCosto) });
+      }
+    }
+    if (tabla==="eventos_factura") {
+      const difMonto = (cambios.monto??eventoOriginal.monto) - (eventoOriginal.monto||0);
+      if (difMonto) await upd("ordenes_compra_v2", t, oc.id, { monto_facturado: Math.max(0, Number(oc.monto_facturado||0) + difMonto) });
+    }
+    if (tabla==="eventos_pago_cliente") {
+      const difMonto = (cambios.monto??eventoOriginal.monto) - (eventoOriginal.monto||0);
+      if (difMonto) {
+        const nuevoCobrado = Math.max(0, Number(oc.monto_cobrado||0) + difMonto);
+        await upd("ordenes_compra_v2", t, oc.id, { monto_cobrado: nuevoCobrado, estado_pago_cliente: nuevoCobrado>=(oc.monto_facturado||0) ? "pagado" : (nuevoCobrado>0 ? "parcial" : "pendiente") });
+      }
+    }
+    if (tabla==="eventos_pago_financiamiento") {
+      const difMonto = (cambios.monto??eventoOriginal.monto) - (eventoOriginal.monto||0);
+      const finId = eventoOriginal.financiador_id;
+      if (difMonto && finId) {
+        const fin = financiadores.find(f=>f.id===finId);
+        // Un pago mayor reduce más la deuda; un pago menor la reduce menos -> restamos la diferencia
+        if (fin) await upd("financiadores", t, fin.id, { saldo_deuda: Math.max(0, Number(fin.saldo_deuda||0) - difMonto) });
+      }
+    }
+    showToast("Evento corregido y totales actualizados"); await cargarTodo();
+  };
   const handleGuardarContacto=async({rut,nombreCliente,correo})=>{
     try { await ins("contactos_cobranza",session.access_token,{id:genId("cob"),rut,nombre_cliente:nombreCliente,correo,creado_por:session.user.id}); await cargarTodo(); }
     catch(e){ /* si ya existe el RUT (unique), no es un error fatal */ }
@@ -1507,7 +1607,7 @@ export default function App() {
       {/* CONTENIDO */}
       <div style={{padding:16}}>
         {tab==="panel"&&<PanelDashboard ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} onNavigate={(t)=>{setTab(t);}} />}
-        {tab==="compras"&&<PanelCompras ocs={ocs} perfiles={perfiles} filtroInicial={filtroCompras} contactos={contactos} onEnviarReclamo={handleEnviarReclamo} onGuardarContacto={handleGuardarContacto} onGuardarDatosOC={handleGuardarDatosOC} />}
+        {tab==="compras"&&<PanelCompras ocs={ocs} perfiles={perfiles} filtroInicial={filtroCompras} contactos={contactos} onEnviarReclamo={handleEnviarReclamo} onGuardarContacto={handleGuardarContacto} onGuardarDatosOC={handleGuardarDatosOC} onEditarEvento={handleEditarEvento} />}
         {tab==="financiamiento"&&<PanelFinanciamiento financiadores={financiadores} ocs={ocs} ajustes={ajustesSaldo} perfiles={perfiles} onAjustar={handleAjusteSaldo} />}
         {tab==="gastos"&&<PanelGastos gastos={gastos} categorias={categoriasGasto} vendedores={vendedores} pagosVendedor={pagosVendedor} onNuevoGasto={handleNuevoGasto} onPagoVendedor={handlePagoVendedorSimple} />}
         {tab==="vendedores"&&<PanelVendedores vendedores={vendedores} ocs={ocs} ivaMensual={ivaMensual} pagosVendedor={pagosVendedor} onGuardarIva={handleGuardarIva} onPagoVendedor={handlePagoVendedorSimple} />}
