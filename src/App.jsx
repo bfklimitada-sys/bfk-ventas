@@ -270,7 +270,7 @@ function BuscadorOC({ ocs, ocId, setOcId, permitirNueva, numeroNueva, setNumeroN
 function FormIngresarCompra({ ocs, financiadores, vendedores, onSave }) {
   const [ocId,setOcId]=useState(null); const [numNueva,setNumNueva]=useState("");
   const [cliente,setCliente]=useState(""); const [rutCliente,setRutCliente]=useState(""); const [vendedorId,setVendedorId]=useState(vendedores[0]?.id||"");
-  const [entidad,setEntidad]=useState(""); const [comuna,setComuna]=useState(""); const [contacto,setContacto]=useState("");
+  const [entidad,setEntidad]=useState(""); const [comuna,setComuna]=useState(""); const [contacto,setContacto]=useState(""); const [correo,setCorreo]=useState("");
   const [fecha,setFecha]=useState(new Date().toISOString().slice(0,10));
   const [montoVenta,setMontoVenta]=useState(""); const [costoCompra,setCostoCompra]=useState("");
   const [fechaEst,setFechaEst]=useState(""); const [financiadorId,setFinanciadorId]=useState(financiadores[0]?.id||"");
@@ -282,17 +282,18 @@ function FormIngresarCompra({ ocs, financiadores, vendedores, onSave }) {
     if(!montoVenta||Number(montoVenta)<=0){setErr("Indica el monto de venta");return;}
     if(!costoCompra||Number(costoCompra)<0){setErr("Indica el costo de compra");return;}
     setErr(""); setSaving(true);
-    try { await onSave({ocId,esNueva,numNueva,cliente,rutCliente,entidad,comuna,contacto,vendedorId,fecha,montoVenta:Number(montoVenta),costoCompra:Number(costoCompra),fechaEst:fechaEst||null,financiadorId,proveedor}); }
+    try { await onSave({ocId,esNueva,numNueva,cliente:cliente.toUpperCase(),rutCliente,entidad:entidad.toUpperCase(),comuna:comuna.toUpperCase(),contacto,correo,vendedorId,fecha,montoVenta:Number(montoVenta),costoCompra:Number(costoCompra),fechaEst:fechaEst||null,financiadorId,proveedor}); }
     catch(e){setErr(e.message);} finally{setSaving(false);}
   };
   return (
     <div>
       <Field label="Orden de Compra" required><BuscadorOC ocs={ocs} ocId={ocId} setOcId={setOcId} permitirNueva numNueva={numNueva} setNumeroNueva={setNumNueva} /></Field>
-      {esNueva&&<Field label="Cliente" required><input style={iStyle} value={cliente} onChange={e=>setCliente(e.target.value)} placeholder="Nombre del cliente" /></Field>}
+      {esNueva&&<Field label="Cliente" required hint="Se guarda en mayúscula"><input style={iStyle} value={cliente} onChange={e=>setCliente(e.target.value)} placeholder="Nombre del cliente" /></Field>}
       {esNueva&&<Field label="RUT del cliente" hint="Para vincular correo de cobranza"><input style={iStyle} value={rutCliente} onChange={e=>setRutCliente(e.target.value)} placeholder="ej: 12.345.678-9" /></Field>}
-      {esNueva&&<Field label="Entidad (organismo público)"><input style={iStyle} value={entidad} onChange={e=>setEntidad(e.target.value)} placeholder="ej: I. Municipalidad de..." /></Field>}
-      {esNueva&&<Field label="Comuna"><input style={iStyle} value={comuna} onChange={e=>setComuna(e.target.value)} placeholder="ej: Concepción" /></Field>}
+      {esNueva&&<Field label="Entidad (organismo público)" hint="Se guarda en mayúscula"><input style={iStyle} value={entidad} onChange={e=>setEntidad(e.target.value)} placeholder="ej: I. Municipalidad de..." /></Field>}
+      {esNueva&&<Field label="Comuna" hint="Se guarda en mayúscula"><input style={iStyle} value={comuna} onChange={e=>setComuna(e.target.value)} placeholder="ej: Concepción" /></Field>}
       {esNueva&&<Field label="Contacto"><input style={iStyle} value={contacto} onChange={e=>setContacto(e.target.value)} placeholder="Nombre y/o teléfono de contacto" /></Field>}
+      {esNueva&&<Field label="Correo del cliente"><input style={iStyle} type="email" value={correo} onChange={e=>setCorreo(e.target.value)} placeholder="contacto@entidad.cl" /></Field>}
       <Field label="Vendedor"><select style={selStyle} value={vendedorId} onChange={e=>setVendedorId(e.target.value)}>{vendedores.map(v=><option key={v.id} value={v.id}>{v.nombre}</option>)}</select></Field>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
         <Field label="Fecha" required><input style={iStyle} type="date" value={fecha} onChange={e=>setFecha(e.target.value)} /></Field>
@@ -581,22 +582,26 @@ const FILTROS=[
 ];
 
 function FormEditarDatosOC({ oc, onSave }) {
+  const [cliente,setCliente]=useState(oc.cliente||"");
   const [entidad,setEntidad]=useState(oc.entidad||"");
   const [comuna,setComuna]=useState(oc.comuna||"");
   const [contacto,setContacto]=useState(oc.contacto||"");
   const [rutCliente,setRutCliente]=useState(oc.rut_cliente||"");
+  const [correo,setCorreo]=useState(oc.correo_cliente||"");
   const [err,setErr]=useState(""); const [saving,setSaving]=useState(false);
   const handleSave=async()=>{
     setErr(""); setSaving(true);
-    try { await onSave({ entidad, comuna, contacto, rutCliente }); }
+    try { await onSave({ cliente:cliente.toUpperCase(), entidad:entidad.toUpperCase(), comuna:comuna.toUpperCase(), contacto, rutCliente, correo }); }
     catch(e){ setErr(e.message); } finally{ setSaving(false); }
   };
   return (
     <div>
-      <Field label="Entidad (organismo público)"><input style={iStyle} value={entidad} onChange={e=>setEntidad(e.target.value)} placeholder="ej: I. Municipalidad de..." /></Field>
-      <Field label="Comuna"><input style={iStyle} value={comuna} onChange={e=>setComuna(e.target.value)} placeholder="ej: Concepción" /></Field>
+      <Field label="Nombre del cliente" hint="Se guarda en mayúscula"><input style={iStyle} value={cliente} onChange={e=>setCliente(e.target.value)} placeholder="Nombre del cliente" /></Field>
+      <Field label="Entidad (organismo público)" hint="Se guarda en mayúscula"><input style={iStyle} value={entidad} onChange={e=>setEntidad(e.target.value)} placeholder="ej: I. Municipalidad de..." /></Field>
+      <Field label="Comuna" hint="Se guarda en mayúscula"><input style={iStyle} value={comuna} onChange={e=>setComuna(e.target.value)} placeholder="ej: Concepción" /></Field>
       <Field label="Contacto"><input style={iStyle} value={contacto} onChange={e=>setContacto(e.target.value)} placeholder="Nombre y/o teléfono de contacto" /></Field>
       <Field label="RUT del cliente" hint="Para vincular correo de cobranza"><input style={iStyle} value={rutCliente} onChange={e=>setRutCliente(e.target.value)} placeholder="ej: 12.345.678-9" /></Field>
+      <Field label="Correo del cliente"><input style={iStyle} type="email" value={correo} onChange={e=>setCorreo(e.target.value)} placeholder="contacto@entidad.cl" /></Field>
       {err&&<div style={{background:C.dangerLight,color:C.danger,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}
       <button onClick={handleSave} disabled={saving} style={btnP(saving?C.inkFaint:C.info)}>{saving?"Guardando…":"✓ Guardar datos"}</button>
     </div>
@@ -1397,7 +1402,7 @@ export default function App() {
   const handleIngresarCompra=async(data)=>{
     const t=session.access_token; let ocId=data.ocId;
     if(data.esNueva){
-      const nOc=await ins("ordenes_compra_v2",t,{id:genId("ocv2"),numero_oc:data.numNueva,cliente:data.cliente,rut_cliente:data.rutCliente||"",entidad:data.entidad||"",comuna:data.comuna||"",contacto:data.contacto||"",vendedor_id:data.vendedorId,financiador_id:data.financiadorId,monto_total:data.montoVenta,costo_total:data.costoCompra,estado_compra:"comprado",creado_por:session.user.id});
+      const nOc=await ins("ordenes_compra_v2",t,{id:genId("ocv2"),numero_oc:data.numNueva,cliente:data.cliente,rut_cliente:data.rutCliente||"",correo_cliente:data.correo||"",entidad:data.entidad||"",comuna:data.comuna||"",contacto:data.contacto||"",vendedor_id:data.vendedorId,financiador_id:data.financiadorId,monto_total:data.montoVenta,costo_total:data.costoCompra,estado_compra:"comprado",creado_por:session.user.id});
       ocId=(Array.isArray(nOc)?nOc[0]:nOc).id;
     } else {
       await upd("ordenes_compra_v2",t,ocId,{estado_compra:"comprado",monto_total:data.montoVenta,costo_total:data.costoCompra,financiador_id:data.financiadorId});
@@ -1456,8 +1461,8 @@ export default function App() {
     showToast("IVA guardado"); await cargarTodo();
   };
   const handleChangeRol=async(uid,rol)=>{ await updRol(session.access_token,uid,rol); showToast("Rol actualizado"); await cargarTodo(); };
-  const handleGuardarDatosOC=async(ocId,{entidad,comuna,contacto,rutCliente})=>{
-    await upd("ordenes_compra_v2",session.access_token,ocId,{entidad,comuna,contacto,rut_cliente:rutCliente});
+  const handleGuardarDatosOC=async(ocId,{cliente,entidad,comuna,contacto,rutCliente,correo})=>{
+    await upd("ordenes_compra_v2",session.access_token,ocId,{cliente,entidad,comuna,contacto,rut_cliente:rutCliente,correo_cliente:correo});
     showToast("Datos actualizados"); await cargarTodo();
   };
   const handleGuardarContacto=async({rut,nombreCliente,correo})=>{
