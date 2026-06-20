@@ -270,6 +270,7 @@ function BuscadorOC({ ocs, ocId, setOcId, permitirNueva, numeroNueva, setNumeroN
 function FormIngresarCompra({ ocs, financiadores, vendedores, onSave }) {
   const [ocId,setOcId]=useState(null); const [numNueva,setNumNueva]=useState("");
   const [cliente,setCliente]=useState(""); const [rutCliente,setRutCliente]=useState(""); const [vendedorId,setVendedorId]=useState(vendedores[0]?.id||"");
+  const [entidad,setEntidad]=useState(""); const [comuna,setComuna]=useState(""); const [contacto,setContacto]=useState("");
   const [fecha,setFecha]=useState(new Date().toISOString().slice(0,10));
   const [montoVenta,setMontoVenta]=useState(""); const [costoCompra,setCostoCompra]=useState("");
   const [fechaEst,setFechaEst]=useState(""); const [financiadorId,setFinanciadorId]=useState(financiadores[0]?.id||"");
@@ -281,7 +282,7 @@ function FormIngresarCompra({ ocs, financiadores, vendedores, onSave }) {
     if(!montoVenta||Number(montoVenta)<=0){setErr("Indica el monto de venta");return;}
     if(!costoCompra||Number(costoCompra)<0){setErr("Indica el costo de compra");return;}
     setErr(""); setSaving(true);
-    try { await onSave({ocId,esNueva,numNueva,cliente,rutCliente,vendedorId,fecha,montoVenta:Number(montoVenta),costoCompra:Number(costoCompra),fechaEst:fechaEst||null,financiadorId,proveedor}); }
+    try { await onSave({ocId,esNueva,numNueva,cliente,rutCliente,entidad,comuna,contacto,vendedorId,fecha,montoVenta:Number(montoVenta),costoCompra:Number(costoCompra),fechaEst:fechaEst||null,financiadorId,proveedor}); }
     catch(e){setErr(e.message);} finally{setSaving(false);}
   };
   return (
@@ -289,6 +290,9 @@ function FormIngresarCompra({ ocs, financiadores, vendedores, onSave }) {
       <Field label="Orden de Compra" required><BuscadorOC ocs={ocs} ocId={ocId} setOcId={setOcId} permitirNueva numNueva={numNueva} setNumeroNueva={setNumNueva} /></Field>
       {esNueva&&<Field label="Cliente" required><input style={iStyle} value={cliente} onChange={e=>setCliente(e.target.value)} placeholder="Nombre del cliente" /></Field>}
       {esNueva&&<Field label="RUT del cliente" hint="Para vincular correo de cobranza"><input style={iStyle} value={rutCliente} onChange={e=>setRutCliente(e.target.value)} placeholder="ej: 12.345.678-9" /></Field>}
+      {esNueva&&<Field label="Entidad (organismo público)"><input style={iStyle} value={entidad} onChange={e=>setEntidad(e.target.value)} placeholder="ej: I. Municipalidad de..." /></Field>}
+      {esNueva&&<Field label="Comuna"><input style={iStyle} value={comuna} onChange={e=>setComuna(e.target.value)} placeholder="ej: Concepción" /></Field>}
+      {esNueva&&<Field label="Contacto"><input style={iStyle} value={contacto} onChange={e=>setContacto(e.target.value)} placeholder="Nombre y/o teléfono de contacto" /></Field>}
       <Field label="Vendedor"><select style={selStyle} value={vendedorId} onChange={e=>setVendedorId(e.target.value)}>{vendedores.map(v=><option key={v.id} value={v.id}>{v.nombre}</option>)}</select></Field>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
         <Field label="Fecha" required><input style={iStyle} type="date" value={fecha} onChange={e=>setFecha(e.target.value)} /></Field>
@@ -609,6 +613,9 @@ function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, 
             <div>Financiador: <b style={{color:C.ink}}>{oc.financiadores?.nombre||"—"}</b></div>
             <div>Facturado: <b style={{color:C.ink}}>{fmt.money(oc.monto_facturado)}</b></div>
             <div>Saldo: <b style={{color:saldo>0?C.danger:C.ok}}>{fmt.money(saldo)}</b></div>
+            {oc.entidad&&<div>Entidad: <b style={{color:C.ink}}>{oc.entidad}</b></div>}
+            {oc.comuna&&<div>Comuna: <b style={{color:C.ink}}>{oc.comuna}</b></div>}
+            {oc.contacto&&<div style={{gridColumn:"1/-1"}}>Contacto: <b style={{color:C.ink}}>{oc.contacto}</b></div>}
             {evF&&<div style={{gridColumn:"1/-1"}}>Factura: <b>{evF.numero_factura}</b> · {fmt.date(evF.fecha)}{dias!==null&&` · ${dias} días`}</div>}
           </div>
           {oc.ultimo_reclamo_fecha&&<div style={{fontSize:11,color:C.warn,fontWeight:600,marginBottom:8}}>📧 Último reclamo: {fmt.datetime(oc.ultimo_reclamo_fecha)} · {oc.correo_cliente}</div>}
@@ -641,14 +648,16 @@ function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, 
 
 function PanelCompras({ ocs, perfiles, filtroInicial, contactos, onEnviarReclamo, onGuardarContacto }) {
   const [filtros,setFiltros]=useState({}); const [busq,setBusq]=useState(""); const [expId,setExpId]=useState(null);
-  const [reclamandoBanner,setReclamandoBanner]=useState(null);
+  const [reclamandoBanner,setReclamandoBanner]=useState(null); const [comunaSel,setComunaSel]=useState("");
   useEffect(()=>{ if(filtroInicial) setFiltros({[filtroInicial]:"pend"}); },[filtroInicial]);
   const toggle=(key,val)=>setFiltros(prev=>({...prev,[key]:prev[key]===val?undefined:val}));
+  const comunas=useMemo(()=>Array.from(new Set(ocs.map(o=>o.comuna).filter(Boolean))).sort(),[ocs]);
   const filtered=useMemo(()=>ocs.filter(oc=>{
-    if(busq.trim()){ const q=busq.toLowerCase(); if(!oc.numero_oc.toLowerCase().includes(q)&&!(oc.cliente||"").toLowerCase().includes(q)) return false; }
+    if(busq.trim()){ const q=busq.toLowerCase(); if(!oc.numero_oc.toLowerCase().includes(q)&&!(oc.cliente||"").toLowerCase().includes(q)&&!(oc.comuna||"").toLowerCase().includes(q)&&!(oc.entidad||"").toLowerCase().includes(q)) return false; }
+    if(comunaSel&&oc.comuna!==comunaSel) return false;
     for(const f of FILTROS){ const s=filtros[f.key]; if(!s) continue; const ok=oc[f.okField]===f.okValue; if(s==="ok"&&!ok) return false; if(s==="pend"&&ok) return false; }
     return true;
-  }),[ocs,filtros,busq]);
+  }),[ocs,filtros,busq,comunaSel]);
 
   // Alertas de vencimiento
   const alertas=useMemo(()=>ocs.filter(o=>{
@@ -683,7 +692,13 @@ function PanelCompras({ ocs, perfiles, filtroInicial, contactos, onEnviarReclamo
             onEnviar={async(data)=>{ await onEnviarReclamo(data); setReclamandoBanner(null); }} />
         </Modal>
       )}
-      <input style={{...iStyle,marginBottom:12}} placeholder="Buscar por N° OC o cliente…" value={busq} onChange={e=>setBusq(e.target.value)} />
+      <input style={{...iStyle,marginBottom:10}} placeholder="Buscar por N° OC, cliente, entidad o comuna…" value={busq} onChange={e=>setBusq(e.target.value)} />
+      {comunas.length>0&&(
+        <select style={{...selStyle,marginBottom:12}} value={comunaSel} onChange={e=>setComunaSel(e.target.value)}>
+          <option value="">Todas las comunas</option>
+          {comunas.map(c=><option key={c} value={c}>{c}</option>)}
+        </select>
+      )}
       <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:14}}>
         {FILTROS.map(f=>(
           <div key={f.key} style={{display:"flex",gap:3}}>
@@ -782,7 +797,7 @@ function FormReclamarFactura({ oc, evF, dias, contactos, onEnviar, onGuardarCont
   const [err, setErr] = useState(""); const [sending, setSending] = useState(false);
 
   const asunto = `OC ${oc.numero_oc} — Solicitud de pago factura N°${evF?.numero_factura || ""}`;
-  const cuerpo = `Estimados,\n\nEsperamos se encuentren bien. Por medio del presente correo solicitamos la gestión de pago de la factura N°${evF?.numero_factura || ""} asociada a la Orden de Compra ${oc.numero_oc}, emitida con fecha ${fmt.date(evF?.fecha)}, la cual registra ${dias} días desde su emisión.\n\nQuedamos atentos a su pronta respuesta.\n\nSaludos cordiales,\nBFK Ltda`;
+  const cuerpo = `Estimados,\n\nEsperamos se encuentren bien. Por medio del presente correo solicitamos la gestión de pago de la factura N°${evF?.numero_factura || ""} asociada a la Orden de Compra ${oc.numero_oc}, emitida con fecha ${fmt.date(evF?.fecha)}, la cual registra ${dias} días desde su emisión.\n\nQuedamos atentos a su pronta respuesta.\n\nDatos para transferencia:\nBanco Estado\nBFK Ltda.\nRUT: 77.322.317-3\nChequera Electrónica: 54970259913\n\nSaludos cordiales,\nBFK Ltda`;
 
   const handleEnviar = async () => {
     if (!correo.trim()) { setErr("Indica el correo del cliente"); return; }
@@ -1352,7 +1367,7 @@ export default function App() {
   const handleIngresarCompra=async(data)=>{
     const t=session.access_token; let ocId=data.ocId;
     if(data.esNueva){
-      const nOc=await ins("ordenes_compra_v2",t,{id:genId("ocv2"),numero_oc:data.numNueva,cliente:data.cliente,rut_cliente:data.rutCliente||"",vendedor_id:data.vendedorId,financiador_id:data.financiadorId,monto_total:data.montoVenta,costo_total:data.costoCompra,estado_compra:"comprado",creado_por:session.user.id});
+      const nOc=await ins("ordenes_compra_v2",t,{id:genId("ocv2"),numero_oc:data.numNueva,cliente:data.cliente,rut_cliente:data.rutCliente||"",entidad:data.entidad||"",comuna:data.comuna||"",contacto:data.contacto||"",vendedor_id:data.vendedorId,financiador_id:data.financiadorId,monto_total:data.montoVenta,costo_total:data.costoCompra,estado_compra:"comprado",creado_por:session.user.id});
       ocId=(Array.isArray(nOc)?nOc[0]:nOc).id;
     } else {
       await upd("ordenes_compra_v2",t,ocId,{estado_compra:"comprado",monto_total:data.montoVenta,costo_total:data.costoCompra,financiador_id:data.financiadorId});
