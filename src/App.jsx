@@ -309,13 +309,13 @@ function FormIngresarCompra({ ocs, financiadores, vendedores, onSave }) {
   );
 }
 
-function FormConfirmarEntrega({ ocs, onSave }) {
-  const [ocId,setOcId]=useState(null); const [fecha,setFecha]=useState(new Date().toISOString().slice(0,10));
+function FormConfirmarEntrega({ ocs, onSave, ocPreseleccionada }) {
+  const [ocId,setOcId]=useState(ocPreseleccionada||null); const [fecha,setFecha]=useState(new Date().toISOString().slice(0,10));
   const [persona,setPersona]=useState(""); const [err,setErr]=useState(""); const [saving,setSaving]=useState(false);
   const handleSave=async()=>{ if(!ocId){setErr("Selecciona la OC");return;} setErr(""); setSaving(true); try{await onSave({ocId,fecha,personaRecibe:persona});}catch(e){setErr(e.message);}finally{setSaving(false);} };
   return (
     <div>
-      <Field label="Orden de Compra" required><BuscadorOC ocs={ocs} ocId={ocId} setOcId={setOcId} /></Field>
+      {!ocPreseleccionada&&<Field label="Orden de Compra" required><BuscadorOC ocs={ocs} ocId={ocId} setOcId={setOcId} /></Field>}
       <Field label="Fecha de entrega" required><input style={iStyle} type="date" value={fecha} onChange={e=>setFecha(e.target.value)} /></Field>
       <Field label="Persona que recibe"><input style={iStyle} value={persona} onChange={e=>setPersona(e.target.value)} /></Field>
       {err&&<div style={{background:C.dangerLight,color:C.danger,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}
@@ -324,8 +324,8 @@ function FormConfirmarEntrega({ ocs, onSave }) {
   );
 }
 
-function FormEmitirFactura({ ocs, onSave }) {
-  const [ocId,setOcId]=useState(null); const [fecha,setFecha]=useState(new Date().toISOString().slice(0,10));
+function FormEmitirFactura({ ocs, onSave, ocPreseleccionada }) {
+  const [ocId,setOcId]=useState(ocPreseleccionada||null); const [fecha,setFecha]=useState(new Date().toISOString().slice(0,10));
   const [numFact,setNumFact]=useState(""); const [monto,setMonto]=useState(""); const [err,setErr]=useState(""); const [saving,setSaving]=useState(false);
   const selected=ocs.find(o=>o.id===ocId);
   useEffect(()=>{ if(selected&&!monto) setMonto(String(selected.monto_total||"")); },[selected]);
@@ -336,7 +336,7 @@ function FormEmitirFactura({ ocs, onSave }) {
   };
   return (
     <div>
-      <Field label="Orden de Compra" required><BuscadorOC ocs={ocs} ocId={ocId} setOcId={setOcId} /></Field>
+      {!ocPreseleccionada&&<Field label="Orden de Compra" required><BuscadorOC ocs={ocs} ocId={ocId} setOcId={setOcId} /></Field>}
       <Field label="Fecha de emisión" required><input style={iStyle} type="date" value={fecha} onChange={e=>setFecha(e.target.value)} /></Field>
       <Field label="N° factura" required><input style={iMono} value={numFact} onChange={e=>setNumFact(e.target.value)} placeholder="ej: 215" /></Field>
       <Field label="Monto ($)" required hint="Autocompletado con monto venta de la OC"><input style={iMono} type="number" value={monto} onChange={e=>setMonto(e.target.value)} /></Field>
@@ -346,8 +346,8 @@ function FormEmitirFactura({ ocs, onSave }) {
   );
 }
 
-function FormPagoCliente({ ocs, onSave }) {
-  const [ocId,setOcId]=useState(null); const [fecha,setFecha]=useState(new Date().toISOString().slice(0,10));
+function FormPagoCliente({ ocs, onSave, ocPreseleccionada }) {
+  const [ocId,setOcId]=useState(ocPreseleccionada||null); const [fecha,setFecha]=useState(new Date().toISOString().slice(0,10));
   const [monto,setMonto]=useState(""); const [err,setErr]=useState(""); const [saving,setSaving]=useState(false);
   const selected=ocs.find(o=>o.id===ocId);
   const saldo=(selected?.monto_facturado||0)-(selected?.monto_cobrado||0);
@@ -358,7 +358,7 @@ function FormPagoCliente({ ocs, onSave }) {
   };
   return (
     <div>
-      <Field label="Orden de Compra" required><BuscadorOC ocs={ocs} ocId={ocId} setOcId={setOcId} /></Field>
+      {!ocPreseleccionada&&<Field label="Orden de Compra" required><BuscadorOC ocs={ocs} ocId={ocId} setOcId={setOcId} /></Field>}
       {selected&&<div style={{background:C.paper,borderRadius:8,padding:"8px 12px",fontSize:12,color:C.inkMuted,marginBottom:12}}>Facturado: <b style={{color:C.ink}}>{fmt.money(selected.monto_facturado)}</b> · Cobrado: <b style={{color:C.ok}}>{fmt.money(selected.monto_cobrado)}</b> · Saldo: <b style={{color:C.danger}}>{fmt.money(saldo)}</b></div>}
       <Field label="Fecha de pago" required><input style={iStyle} type="date" value={fecha} onChange={e=>setFecha(e.target.value)} /></Field>
       <Field label="Monto pagado ($)" required><input style={iMono} type="number" value={monto} onChange={e=>setMonto(e.target.value)} /></Field>
@@ -368,8 +368,8 @@ function FormPagoCliente({ ocs, onSave }) {
   );
 }
 
-function FormPagoFinanciamiento({ ocs, financiadores, onSave }) {
-  const [finId,setFinId]=useState(financiadores[0]?.id||""); const [ocId,setOcId]=useState(null);
+function FormPagoFinanciamiento({ ocs, financiadores, onSave, ocPreseleccionada, financiadorPreseleccionado }) {
+  const [finId,setFinId]=useState(financiadorPreseleccionado||financiadores[0]?.id||""); const [ocId,setOcId]=useState(ocPreseleccionada||null);
   const [fecha,setFecha]=useState(new Date().toISOString().slice(0,10)); const [monto,setMonto]=useState("");
   const [err,setErr]=useState(""); const [saving,setSaving]=useState(false);
   const fin=financiadores.find(f=>f.id===finId);
@@ -381,7 +381,7 @@ function FormPagoFinanciamiento({ ocs, financiadores, onSave }) {
     <div>
       <Field label="Financiador" required><select style={selStyle} value={finId} onChange={e=>setFinId(e.target.value)}>{financiadores.map(f=><option key={f.id} value={f.id}>{f.nombre}</option>)}</select></Field>
       {fin&&<div style={{background:C.paper,borderRadius:8,padding:"8px 12px",fontSize:12,color:C.inkMuted,marginBottom:12}}>Deuda actual: <b style={{color:C.danger}}>{fmt.money(fin.saldo_deuda)}</b></div>}
-      <Field label="OC relacionada (opcional)"><BuscadorOC ocs={ocs} ocId={ocId} setOcId={setOcId} /></Field>
+      {!ocPreseleccionada&&<Field label="OC relacionada (opcional)"><BuscadorOC ocs={ocs} ocId={ocId} setOcId={setOcId} /></Field>}
       <Field label="Fecha" required><input style={iStyle} type="date" value={fecha} onChange={e=>setFecha(e.target.value)} /></Field>
       <Field label="Monto ($)" required hint="Se descuenta de la deuda automáticamente"><input style={iMono} type="number" value={monto} onChange={e=>setMonto(e.target.value)} /></Field>
       {err&&<div style={{background:C.dangerLight,color:C.danger,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}
@@ -657,13 +657,14 @@ function FormEditarEvento({ item, onSave, onCancel }) {
   );
 }
 
-function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento }) {
+function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento }) {
   const evF=(oc.eventos_factura||[])[0];
   const dias=fmt.diasDesde(evF?.fecha);
   const saldo=(oc.monto_facturado||0)-(oc.monto_cobrado||0);
   const [reclamando,setReclamando]=useState(false);
   const [editandoDatos,setEditandoDatos]=useState(false);
   const [editandoEvento,setEditandoEvento]=useState(null);
+  const [accionRapida,setAccionRapida]=useState(null);
   const puedeReclamar = oc.estado_pago_cliente!=="pagado" && evF && dias!==null && dias>=30;
   return (
     <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:13,marginBottom:8,overflow:"hidden"}}>
@@ -698,6 +699,15 @@ function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, 
             {evF&&<div style={{gridColumn:"1/-1"}}>Factura: <b>{evF.numero_factura}</b> · {fmt.date(evF.fecha)}{dias!==null&&` · ${dias} días`}</div>}
           </div>
           {oc.ultimo_reclamo_fecha&&<div style={{fontSize:11,color:C.warn,fontWeight:600,marginBottom:8}}>📧 Último reclamo: {fmt.datetime(oc.ultimo_reclamo_fecha)} · {oc.correo_cliente}</div>}
+
+          <div style={{fontSize:11,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",marginBottom:6,letterSpacing:0.3}}>Marcar etapa</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:12}}>
+            {oc.estado_entrega!=="confirmada"&&<button onClick={()=>setAccionRapida("entrega")} style={{background:C.transit,border:"none",color:"#fff",borderRadius:9,padding:"9px 8px",fontSize:11.5,fontWeight:700,cursor:"pointer"}}>🚚 Confirmar entrega</button>}
+            {oc.estado_factura_propia!=="emitida"&&<button onClick={()=>setAccionRapida("factura")} style={{background:C.info,border:"none",color:"#fff",borderRadius:9,padding:"9px 8px",fontSize:11.5,fontWeight:700,cursor:"pointer"}}>🧾 Emitir factura</button>}
+            {oc.estado_factura_propia==="emitida"&&oc.estado_pago_cliente!=="pagado"&&<button onClick={()=>setAccionRapida("pago_cliente")} style={{background:C.ok,border:"none",color:"#fff",borderRadius:9,padding:"9px 8px",fontSize:11.5,fontWeight:700,cursor:"pointer"}}>💰 Pago de factura</button>}
+            {oc.estado_pago_financiamiento!=="pagado"&&<button onClick={()=>setAccionRapida("pago_financ")} style={{background:C.purple,border:"none",color:"#fff",borderRadius:9,padding:"9px 8px",fontSize:11.5,fontWeight:700,cursor:"pointer"}}>🏦 Pago financiamiento</button>}
+          </div>
+
           {puedeReclamar&&<button onClick={()=>setReclamando(true)} style={{...btnP(C.danger),marginBottom:12}}>📧 Reclamar pago de factura</button>}
           <button onClick={()=>setEditandoDatos(true)} style={{...btnG,marginBottom:12,width:"100%"}}>✏️ Editar entidad / comuna / contacto</button>
           <div style={{fontSize:11,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",marginBottom:6,letterSpacing:0.3}}>Historial</div>
@@ -735,11 +745,31 @@ function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, 
             onSave={async(tabla,eventoOriginal,cambios)=>{ await onEditarEvento(oc, tabla, eventoOriginal, cambios); setEditandoEvento(null); }} />
         </Modal>
       )}
+      {accionRapida==="entrega"&&(
+        <Modal title="Confirmar entrega" onClose={()=>setAccionRapida(null)}>
+          <FormConfirmarEntrega ocs={[oc]} ocPreseleccionada={oc.id} onSave={async(data)=>{ await onConfirmarEntrega(data); setAccionRapida(null); }} />
+        </Modal>
+      )}
+      {accionRapida==="factura"&&(
+        <Modal title="Emitir factura" onClose={()=>setAccionRapida(null)}>
+          <FormEmitirFactura ocs={[oc]} ocPreseleccionada={oc.id} onSave={async(data)=>{ await onEmitirFactura(data); setAccionRapida(null); }} />
+        </Modal>
+      )}
+      {accionRapida==="pago_cliente"&&(
+        <Modal title="Pago de factura" onClose={()=>setAccionRapida(null)}>
+          <FormPagoCliente ocs={[oc]} ocPreseleccionada={oc.id} onSave={async(data)=>{ await onPagoCliente(data); setAccionRapida(null); }} />
+        </Modal>
+      )}
+      {accionRapida==="pago_financ"&&(
+        <Modal title="Pago de financiamiento" onClose={()=>setAccionRapida(null)}>
+          <FormPagoFinanciamiento ocs={[oc]} financiadores={financiadores} ocPreseleccionada={oc.id} financiadorPreseleccionado={oc.financiador_id} onSave={async(data)=>{ await onPagoFinanciamiento(data); setAccionRapida(null); }} />
+        </Modal>
+      )}
     </div>
   );
 }
 
-function PanelCompras({ ocs, perfiles, filtroInicial, contactos, onEnviarReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento }) {
+function PanelCompras({ ocs, perfiles, filtroInicial, contactos, onEnviarReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento }) {
   const [filtros,setFiltros]=useState({}); const [busq,setBusq]=useState(""); const [expId,setExpId]=useState(null);
   const [reclamandoBanner,setReclamandoBanner]=useState(null); const [comunaSel,setComunaSel]=useState("");
   useEffect(()=>{ if(filtroInicial) setFiltros({[filtroInicial]:"pend"}); },[filtroInicial]);
@@ -801,7 +831,7 @@ function PanelCompras({ ocs, perfiles, filtroInicial, contactos, onEnviarReclamo
         ))}
       </div>
       <div style={{fontSize:11.5,color:C.inkFaint,marginBottom:10}}>{filtered.length} orden{filtered.length!==1?"es":""}</div>
-      {filtered.map(oc=><FilaOC key={oc.id} oc={oc} perfiles={perfiles} expanded={expId===oc.id} onToggle={()=>setExpId(expId===oc.id?null:oc.id)} contactos={contactos} onEnviarReclamo={onEnviarReclamo} onGuardarContacto={onGuardarContacto} onGuardarDatosOC={onGuardarDatosOC} onEditarEvento={onEditarEvento} />)}
+      {filtered.map(oc=><FilaOC key={oc.id} oc={oc} perfiles={perfiles} expanded={expId===oc.id} onToggle={()=>setExpId(expId===oc.id?null:oc.id)} contactos={contactos} onEnviarReclamo={onEnviarReclamo} onGuardarContacto={onGuardarContacto} onGuardarDatosOC={onGuardarDatosOC} onEditarEvento={onEditarEvento} financiadores={financiadores} onConfirmarEntrega={onConfirmarEntrega} onEmitirFactura={onEmitirFactura} onPagoCliente={onPagoCliente} onPagoFinanciamiento={onPagoFinanciamiento} />)}
       {filtered.length===0&&<div style={{textAlign:"center",padding:30,color:C.inkFaint,fontSize:13}}>No hay órdenes con estos filtros.</div>}
     </div>
   );
@@ -1607,7 +1637,7 @@ export default function App() {
       {/* CONTENIDO */}
       <div style={{padding:16}}>
         {tab==="panel"&&<PanelDashboard ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} onNavigate={(t)=>{setTab(t);}} />}
-        {tab==="compras"&&<PanelCompras ocs={ocs} perfiles={perfiles} filtroInicial={filtroCompras} contactos={contactos} onEnviarReclamo={handleEnviarReclamo} onGuardarContacto={handleGuardarContacto} onGuardarDatosOC={handleGuardarDatosOC} onEditarEvento={handleEditarEvento} />}
+        {tab==="compras"&&<PanelCompras ocs={ocs} perfiles={perfiles} filtroInicial={filtroCompras} contactos={contactos} onEnviarReclamo={handleEnviarReclamo} onGuardarContacto={handleGuardarContacto} onGuardarDatosOC={handleGuardarDatosOC} onEditarEvento={handleEditarEvento} financiadores={financiadores} onConfirmarEntrega={handleEntrega} onEmitirFactura={handleFactura} onPagoCliente={handlePagoCliente} onPagoFinanciamiento={handlePagoFin} />}
         {tab==="financiamiento"&&<PanelFinanciamiento financiadores={financiadores} ocs={ocs} ajustes={ajustesSaldo} perfiles={perfiles} onAjustar={handleAjusteSaldo} />}
         {tab==="gastos"&&<PanelGastos gastos={gastos} categorias={categoriasGasto} vendedores={vendedores} pagosVendedor={pagosVendedor} onNuevoGasto={handleNuevoGasto} onPagoVendedor={handlePagoVendedorSimple} />}
         {tab==="vendedores"&&<PanelVendedores vendedores={vendedores} ocs={ocs} ivaMensual={ivaMensual} pagosVendedor={pagosVendedor} onGuardarIva={handleGuardarIva} onPagoVendedor={handlePagoVendedorSimple} />}
