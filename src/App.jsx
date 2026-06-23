@@ -665,6 +665,8 @@ function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, 
   const [editandoDatos,setEditandoDatos]=useState(false);
   const [editandoEvento,setEditandoEvento]=useState(null);
   const [accionRapida,setAccionRapida]=useState(null);
+  const [correoFallida,setCorreoFallida]=useState(false);
+  const [correoFecha,setCorreoFecha]=useState(false);
   const puedeReclamar = oc.estado_pago_cliente!=="pagado" && evF && dias!==null && dias>=30;
   return (
     <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:13,marginBottom:8,overflow:"hidden"}}>
@@ -706,6 +708,8 @@ function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, 
             {oc.estado_factura_propia!=="emitida"&&<button onClick={()=>setAccionRapida("factura")} style={{background:C.info,border:"none",color:"#fff",borderRadius:9,padding:"9px 8px",fontSize:11.5,fontWeight:700,cursor:"pointer"}}>🧾 Emitir factura</button>}
             {oc.estado_factura_propia==="emitida"&&oc.estado_pago_cliente!=="pagado"&&<button onClick={()=>setAccionRapida("pago_cliente")} style={{background:C.ok,border:"none",color:"#fff",borderRadius:9,padding:"9px 8px",fontSize:11.5,fontWeight:700,cursor:"pointer"}}>💰 Pago de factura</button>}
             {oc.estado_pago_financiamiento!=="pagado"&&<button onClick={()=>setAccionRapida("pago_financ")} style={{background:C.purple,border:"none",color:"#fff",borderRadius:9,padding:"9px 8px",fontSize:11.5,fontWeight:700,cursor:"pointer"}}>🏦 Pago financiamiento</button>}
+            <button onClick={()=>setCorreoFallida(true)} style={{background:C.warn,border:"none",color:"#fff",borderRadius:9,padding:"9px 8px",fontSize:11.5,fontWeight:700,cursor:"pointer"}}>⚠️ Entrega fallida</button>
+            <button onClick={()=>setCorreoFecha(true)} style={{background:C.ink,border:"none",color:"#fff",borderRadius:9,padding:"9px 8px",fontSize:11.5,fontWeight:700,cursor:"pointer"}}>📅 Fecha de entrega</button>
           </div>
 
           {puedeReclamar&&<button onClick={()=>setReclamando(true)} style={{...btnP(C.danger),marginBottom:12}}>📧 Reclamar pago de factura</button>}
@@ -763,6 +767,16 @@ function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, 
       {accionRapida==="pago_financ"&&(
         <Modal title="Pago de financiamiento" onClose={()=>setAccionRapida(null)}>
           <FormPagoFinanciamiento ocs={[oc]} financiadores={financiadores} ocPreseleccionada={oc.id} financiadorPreseleccionado={oc.financiador_id} onSave={async(data)=>{ await onPagoFinanciamiento(data); setAccionRapida(null); }} />
+        </Modal>
+      )}
+      {correoFallida&&(
+        <Modal title="Aviso de entrega fallida" onClose={()=>setCorreoFallida(false)}>
+          <FormEntregaFallida oc={oc} onEnviar={async()=>{ setCorreoFallida(false); }} />
+        </Modal>
+      )}
+      {correoFecha&&(
+        <Modal title="Fecha estimada de entrega" onClose={()=>setCorreoFecha(false)}>
+          <FormFechaEntrega oc={oc} onEnviar={async()=>{ setCorreoFecha(false); }} />
         </Modal>
       )}
     </div>
@@ -908,6 +922,80 @@ function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onAjustar 
           <div style={{fontFamily:MONO,fontWeight:800,fontSize:20,color:Number(f.saldo_deuda)>0?C.danger:C.ok}}>{fmt.money(f.saldo_deuda)}</div>
         </button>
       ))}
+    </div>
+  );
+}
+
+function FormEntregaFallida({ oc, onEnviar }) {
+  const [lugar,setLugar]=useState("bodega");
+  const [motivo,setMotivo]=useState("usted no estaba en el lugar");
+  const [correo,setCorreo]=useState(oc.correo_cliente||"");
+  const [err,setErr]=useState(""); const [sending,setSending]=useState(false);
+
+  const asunto=`Entrega OC ${oc.numero_oc}`;
+  const cuerpo=`Estimado/a,\n\nJunto con saludar le comento que hoy durante la mañana nos acercamos a ${lugar} para hacer la entrega de los productos asociados a la OC del asunto, siendo esta entrega fallida debido a que ${motivo}.\n\nPor favor avisar a personal de bodega que realizaremos un nuevo intento de entrega entre hoy y el resto de la semana en curso.\n\nAgradezco su ayuda con esa gestión.\n\nSin más que agregar, saludos cordiales,\nBFK Ltda`;
+
+  const handleEnviar=async()=>{
+    if(!correo.trim()){setErr("Indica el correo del destinatario");return;}
+    setErr(""); setSending(true);
+    const url=`mailto:${encodeURIComponent(correo)}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
+    window.location.href=url;
+    await onEnviar({correo,ocId:oc.id});
+    setSending(false);
+  };
+
+  return (
+    <div>
+      <div style={{background:C.warnLight,borderRadius:9,padding:"10px 12px",fontSize:12.5,color:C.warn,fontWeight:700,marginBottom:14}}>OC {oc.numero_oc} · Correo de entrega fallida</div>
+      <Field label="Correo del destinatario" required hint={oc.correo_cliente?"Correo guardado en esta OC":""}><input style={iStyle} type="email" value={correo} onChange={e=>setCorreo(e.target.value)} placeholder="contacto@entidad.cl" /></Field>
+      <Field label="Lugar de entrega" required hint="ej: bodega de farmacología, bodega central"><input style={iStyle} value={lugar} onChange={e=>setLugar(e.target.value)} /></Field>
+      <Field label="Motivo de la entrega fallida" required hint="ej: usted no estaba en el lugar, bodega estaba cerrada"><input style={iStyle} value={motivo} onChange={e=>setMotivo(e.target.value)} /></Field>
+      <div style={{background:C.paper,borderRadius:9,padding:"10px 12px",marginBottom:14}}>
+        <div style={{fontSize:10.5,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:4}}>Asunto</div>
+        <div style={{fontSize:12.5,color:C.ink,marginBottom:8}}>{asunto}</div>
+        <div style={{fontSize:10.5,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:4}}>Vista previa</div>
+        <div style={{fontSize:11.5,color:C.ink,whiteSpace:"pre-wrap"}}>{cuerpo}</div>
+      </div>
+      {err&&<div style={{background:C.dangerLight,color:C.danger,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}
+      <button onClick={handleEnviar} disabled={sending} style={btnP(sending?C.inkFaint:C.warn)}>{sending?"Abriendo correo…":"📧 Enviar aviso de entrega fallida"}</button>
+    </div>
+  );
+}
+
+function FormFechaEntrega({ oc, onEnviar }) {
+  const evC=(oc.eventos_compra||[])[0];
+  const fechaEstimadaDefault=evC?.fecha_entrega_estimada||"";
+  const [fechaEntrega,setFechaEntrega]=useState(fechaEstimadaDefault);
+  const [correo,setCorreo]=useState(oc.correo_cliente||"");
+  const [err,setErr]=useState(""); const [sending,setSending]=useState(false);
+
+  const asunto=`Fecha de entrega OC ${oc.numero_oc}`;
+  const fechaFmt=fechaEntrega?fmt.dateLong(fechaEntrega):"[fecha a definir]";
+  const cuerpo=`Estimado/a,\n\nJunto con saludar le informamos que la entrega de los productos asociados a la OC del asunto está programada para el día ${fechaFmt}.\n\nQuedamos atentos ante cualquier consulta.\n\nSaludos cordiales,\nBFK Ltda`;
+
+  const handleEnviar=async()=>{
+    if(!correo.trim()){setErr("Indica el correo del destinatario");return;}
+    if(!fechaEntrega){setErr("Indica la fecha estimada de entrega");return;}
+    setErr(""); setSending(true);
+    const url=`mailto:${encodeURIComponent(correo)}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
+    window.location.href=url;
+    await onEnviar({correo,ocId:oc.id});
+    setSending(false);
+  };
+
+  return (
+    <div>
+      <div style={{background:C.transitLight,borderRadius:9,padding:"10px 12px",fontSize:12.5,color:C.transit,fontWeight:700,marginBottom:14}}>OC {oc.numero_oc} · Correo de fecha de entrega</div>
+      <Field label="Correo del destinatario" required hint={oc.correo_cliente?"Correo guardado en esta OC":""}><input style={iStyle} type="email" value={correo} onChange={e=>setCorreo(e.target.value)} placeholder="contacto@entidad.cl" /></Field>
+      <Field label="Fecha estimada de entrega" required hint={fechaEstimadaDefault?"Autocompletado con la fecha estimada registrada":""}><input style={iStyle} type="date" value={fechaEntrega} onChange={e=>setFechaEntrega(e.target.value)} /></Field>
+      <div style={{background:C.paper,borderRadius:9,padding:"10px 12px",marginBottom:14}}>
+        <div style={{fontSize:10.5,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:4}}>Asunto</div>
+        <div style={{fontSize:12.5,color:C.ink,marginBottom:8}}>{asunto}</div>
+        <div style={{fontSize:10.5,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:4}}>Vista previa</div>
+        <div style={{fontSize:11.5,color:C.ink,whiteSpace:"pre-wrap"}}>{cuerpo}</div>
+      </div>
+      {err&&<div style={{background:C.dangerLight,color:C.danger,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}
+      <button onClick={handleEnviar} disabled={sending} style={btnP(sending?C.inkFaint:C.transit)}>{sending?"Abriendo correo…":"📅 Enviar fecha estimada de entrega"}</button>
     </div>
   );
 }
