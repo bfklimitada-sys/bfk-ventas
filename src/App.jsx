@@ -429,10 +429,11 @@ function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual,
     // =SUMAR.SI.CONJUNTO(pagos_mp; estado; "REALIZADO") - SUMA(monto_pagado_credito) - SUMA(PAGOS GENERAL) - AB17
     const saldoCtaCte = cobrado - creditoPagadoTotal - gastosTotal - costoBFK;
 
-    // ── Ingresos pendientes (por cobrar) ────────────────────────────────────
+    // ── Ingresos pendientes (fórmula Excel) ────────────────────────────────────
+    // = monto_total de TODAS las OCs que aún no han sido cobradas (con o sin factura)
     let ingresosPendientes=0;
     for(const oc of ocs){
-      if(oc.estado_pago_cliente!=="pagado") ingresosPendientes+=(oc.monto_facturado||0)-(oc.monto_cobrado||0);
+      if(oc.estado_pago_cliente!=="pagado") ingresosPendientes+=oc.monto_total||0;
     }
 
     // ── Deuda total (fórmula Excel) ─────────────────────────────────────────
@@ -543,7 +544,7 @@ function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual,
         <div style={{fontSize:11,color:C.inkFaint,marginTop:4}}>Saldo Cta Cte + Ingresos Pendientes − Deuda total</div>
         <div style={{display:"flex",gap:12,marginTop:8,flexWrap:"wrap"}}>
           <div style={{fontSize:10.5,color:C.inkFaint}}>Cta Cte: <span style={{color:C.teal,fontWeight:700}}>{fmt.money(kpis.saldoCtaCte)}</span></div>
-          <div style={{fontSize:10.5,color:C.inkFaint}}>Por cobrar: <span style={{color:C.warn,fontWeight:700}}>{fmt.money(kpis.ingresosPendientes)}</span></div>
+          <div style={{fontSize:10.5,color:C.inkFaint}}>Ing. Pendientes: <span style={{color:C.warn,fontWeight:700}}>{fmt.money(kpis.ingresosPendientes)}</span></div>
           <div style={{fontSize:10.5,color:C.inkFaint}}>Deuda: <span style={{color:C.danger,fontWeight:700}}>{fmt.money(kpis.deudaTotal)}</span></div>
         </div>
         {kpis.margenPromPct!==undefined&&<div style={{marginTop:8,display:"inline-flex",alignItems:"center",gap:6,padding:"4px 10px",borderRadius:20,fontSize:11.5,fontWeight:700,background:kpis.margenPromPct>=20?C.okLight:kpis.margenPromPct>=10?C.warnLight:C.dangerLight,color:kpis.margenPromPct>=20?C.ok:kpis.margenPromPct>=10?C.warn:C.danger}}><span>Margen promedio del mes:</span><span>{kpis.margenPromPct}%</span></div>}
