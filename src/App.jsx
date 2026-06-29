@@ -397,30 +397,84 @@ function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual,
   const [expandido,setExpandido]=useState(null);
 
   const kpis=useMemo(()=>{
-    let cobrado=0,porCobrar=0,deudaFin=0,ingresos=0,costos=0;
     const hoy=new Date(); hoy.setHours(0,0,0,0);
+    const mesActual=hoy.getMonth()+1; const anioActual=hoy.getFullYear();
+
+    // ── Variables base ──────────────────────────────────────────────────────
+    let cobrado=0, ingresos=0, costos=0;
+    let creditoPendienteTotal=0;  // suma col Y (credito_pendiente) de todas las OCs
+    let creditoPagadoTotal=0;     // suma col X (monto_pagado_credito) = lo devuelto a financiadores
+    let costoBFK=0;               // AB17: costo de OCs donde financiador es "Cuenta BFK"
+
     for(const oc of ocs){
       cobrado+=oc.monto_cobrado||0;
-      if(oc.estado_factura_propia==="emitida") porCobrar+=(oc.monto_facturado||0)-(oc.monto_cobrado||0);
       ingresos+=oc.monto_total||0;
       costos+=oc.costo_total||0;
+      // Crédito pendiente = costo de compra de OCs con pago a financiador pendiente
+      if(oc.estado_pago_financiamiento!=="pagado") creditoPendienteTotal+=oc.costo_total||0;
+      // Crédito pagado = suma de eventos_pago_financiamiento de esa OC
+      creditoPagadoTotal+=(oc.eventos_pago_financiamiento||[]).reduce((s,e)=>s+(e.monto||0),0);
+      // Costo BFK = OCs financiadas por Cuenta BFK
+      const finNombre=oc.financiadores?.nombre||"";
+      if(finNombre.toLowerCase().includes("bfk")||finNombre.toLowerCase().includes("cuenta bfk")) costoBFK+=oc.costo_total||0;
     }
-    deudaFin=financiadores.reduce((s,f)=>s+(Number(f.saldo_deuda)||0),0);
-    const utilidad=ingresos-costos;
+
+    // ── Gastos generales (PAGOS GENERAL) ────────────────────────────────────
+    const gastosTotal=gastos.reduce((s,g)=>s+(g.monto||0),0);
     const gastoContador=gastos.filter(g=>g.categoria_id==="cat_contador").reduce((s,g)=>s+(g.monto||0),0);
     const gastoImpuesto=gastos.filter(g=>g.categoria_id==="cat_impuesto").reduce((s,g)=>s+(g.monto||0),0);
     const gastosVendedores=pagosVendedor.reduce((s,p)=>s+(p.monto_pagado||0),0);
-    const saldoProyectado=ingresos-costos-gastoContador-gastosVendedores-gastoImpuesto;
-    // Deuda general: contador no pagado (mes actual), impuesto F29 proyectado, vendedores no pagados
-    const mesActual=hoy.getMonth()+1; const anioActual=hoy.getFullYear();
+
+    // ── Saldo Cta Cte (fórmula Excel) ───────────────────────────────────────
+    // =SUMAR.SI.CONJUNTO(pagos_mp; estado; "REALIZADO") - SUMA(monto_pagado_credito) - SUMA(PAGOS GENERAL) - AB17
+    const saldoCtaCte = cobrado - creditoPagadoTotal - gastosTotal - costoBFK;
+
+    // ── Ingresos pendientes (por cobrar) ────────────────────────────────────
+    let ingresosPendientes=0;
+    for(const oc of ocs){
+      if(oc.estado_pago_cliente!=="pagado") ingresosPendientes+=(oc.monto_facturado||0)-(oc.monto_cobrado||0);
+    }
+
+    // ── Deuda total (fórmula Excel) ─────────────────────────────────────────
+    // =SUMA(credito_pendiente_OCs) + deuda_vendedores + deuda_contador + deuda_impuesto
+    // Usamos el saldo real de financiadores (ya calculado y ajustado manualmente)
+    const deudaFin=financiadores.reduce((s,f)=>s+(Number(f.saldo_deuda)||0),0);
+    // Deuda a vendedores del mes actual
+    const deudaVendedoresMes=vendedores?.reduce((sv,v)=>{
+      const factsMes=ocs.filter(o=>{
+        if(o.vendedor_id!==v.id||o.estado_factura_propia!=="emitida") return false;
+        const evF=(o.eventos_factura||[])[0]; if(!evF) return false;
+        const f=new Date(evF.fecha); return f.getMonth()+1===mesActual&&f.getFullYear()===anioActual;
+      });
+      const sumaFacts=factsMes.reduce((s,o)=>s+(o.monto_facturado||0),0);
+      const ivaMes=ivaMensual.find(i=>i.mes===mesActual&&i.anio===anioActual);
+      const impPagado=ivaMes?(ivaMes.iva_ventas-ivaMes.iva_compras):0;
+      const calculado=Math.round(sumaFacts/2 - impPagado/2);
+      const pagado=pagosVendedor.filter(p=>p.vendedor_id===v.id&&p.mes===mesActual&&p.anio===anioActual).reduce((s,p)=>s+(p.monto_pagado||0),0);
+      return sv+Math.max(0,calculado-pagado);
+    },0)||0;
     const ivaMes=ivaMensual.find(i=>i.mes===mesActual&&i.anio===anioActual);
-    const f29=ivaMes?(ivaMes.iva_ventas-ivaMes.iva_compras):0;
-    // Margen promedio del mes actual
-    const hoyMes=hoy.getMonth()+1; const hoyAnio=hoy.getFullYear();
-    const ocsDelMes=ocs.filter(o=>{ const evC=(o.eventos_compra||[])[0]; if(!evC) return false; const f=new Date(evC.fecha); return f.getMonth()+1===hoyMes&&f.getFullYear()===hoyAnio; });
+    const f29=ivaMes?Math.max(0,(ivaMes.iva_ventas||0)-(ivaMes.iva_compras||0)):0;
+    const deudaContadorMes=0; // contador pagado al día según Excel
+    const deudaTotal=deudaFin+deudaVendedoresMes+f29+deudaContadorMes;
+
+    // ── Proyectado (fórmula Excel) ───────────────────────────────────────────
+    // =K3+K4-M7 = Saldo Cta Cte + Ingresos Pendientes - Deuda
+    const saldoProyectado=saldoCtaCte+ingresosPendientes-deudaTotal;
+
+    // ── Por cobrar (para KPI) ────────────────────────────────────────────────
+    let porCobrar=0;
+    for(const oc of ocs){
+      if(oc.estado_factura_propia==="emitida") porCobrar+=(oc.monto_facturado||0)-(oc.monto_cobrado||0);
+    }
+
+    // ── Margen promedio del mes ──────────────────────────────────────────────
+    const ocsDelMes=ocs.filter(o=>{ const evC=(o.eventos_compra||[])[0]; if(!evC) return false; const f=new Date(evC.fecha); return f.getMonth()+1===mesActual&&f.getFullYear()===anioActual; });
     const margenPromPct=ocsDelMes.length>0?Math.round(ocsDelMes.reduce((s,o)=>{ const v=o.monto_total||0; if(v<=0) return s; return s+((v-(o.costo_total||0))/v)*100; },0)/ocsDelMes.length):0;
-    return {cobrado,porCobrar,deudaFin,utilidad,saldoProyectado,gastoContador,gastosVendedores,gastoImpuesto,f29,margenPromPct};
-  },[ocs,financiadores,gastos,pagosVendedor,ivaMensual]);
+
+    const utilidad=ingresos-costos;
+    return {cobrado,porCobrar,deudaFin,utilidad,saldoProyectado,saldoCtaCte,ingresosPendientes,deudaTotal,gastoContador,gastosVendedores,gastoImpuesto,f29,margenPromPct,deudaVendedoresMes};
+  },[ocs,financiadores,gastos,pagosVendedor,ivaMensual,vendedores]);
 
   // OCs pagadas para expandir "Ingresos cobrados"
   const ocsPagadas=useMemo(()=>ocs.filter(o=>o.estado_pago_cliente==="pagado").map(o=>{
@@ -463,7 +517,7 @@ function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual,
         const f=new Date(evF.fecha); return f.getMonth()+1===mesActual&&f.getFullYear()===anioActual;
       });
       const sumaFacts=factsMes.reduce((s,o)=>s+(o.monto_facturado||0),0);
-      const pagoCalculado=Math.round(sumaFacts/2);
+      const ivaMesV=ivaMensual.find(i=>i.mes===mesActual&&i.anio===anioActual); const impPagadoV=ivaMesV?Math.max(0,(ivaMesV.iva_ventas||0)-(ivaMesV.iva_compras||0)):0; const pagoCalculado=Math.max(0,Math.round(sumaFacts/2 - impPagadoV/2));
       const pagado=pagosVendedor.filter(p=>p.vendedor_id===v.id&&p.mes===mesActual&&p.anio===anioActual).reduce((s,p)=>s+(p.monto_pagado||0),0);
       return {vendedor:v,pagoCalculado,pagado,deuda:Math.max(0,pagoCalculado-pagado)};
     });
@@ -486,7 +540,12 @@ function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual,
       <div style={{background:`linear-gradient(135deg,${C.night},${C.nightSoft})`,borderRadius:16,padding:"18px 20px",marginBottom:14}}>
         <div style={{fontSize:11.5,color:C.inkFaint,fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:0.5}}>Saldo Proyectado</div>
         <div style={{fontFamily:MONO,fontWeight:800,fontSize:28,color:kpis.saldoProyectado>=0?C.teal:C.danger,letterSpacing:-1}}>{fmt.money(kpis.saldoProyectado)}</div>
-        <div style={{fontSize:11,color:C.inkFaint,marginTop:4}}>Ventas − Compras − Contador − Vendedores − Impuestos</div>
+        <div style={{fontSize:11,color:C.inkFaint,marginTop:4}}>Saldo Cta Cte + Ingresos Pendientes − Deuda total</div>
+        <div style={{display:"flex",gap:12,marginTop:8,flexWrap:"wrap"}}>
+          <div style={{fontSize:10.5,color:C.inkFaint}}>Cta Cte: <span style={{color:C.teal,fontWeight:700}}>{fmt.money(kpis.saldoCtaCte)}</span></div>
+          <div style={{fontSize:10.5,color:C.inkFaint}}>Por cobrar: <span style={{color:C.warn,fontWeight:700}}>{fmt.money(kpis.ingresosPendientes)}</span></div>
+          <div style={{fontSize:10.5,color:C.inkFaint}}>Deuda: <span style={{color:C.danger,fontWeight:700}}>{fmt.money(kpis.deudaTotal)}</span></div>
+        </div>
         {kpis.margenPromPct!==undefined&&<div style={{marginTop:8,display:"inline-flex",alignItems:"center",gap:6,padding:"4px 10px",borderRadius:20,fontSize:11.5,fontWeight:700,background:kpis.margenPromPct>=20?C.okLight:kpis.margenPromPct>=10?C.warnLight:C.dangerLight,color:kpis.margenPromPct>=20?C.ok:kpis.margenPromPct>=10?C.warn:C.danger}}><span>Margen promedio del mes:</span><span>{kpis.margenPromPct}%</span></div>}
       </div>
 
@@ -1202,7 +1261,7 @@ function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, onGuardar
         const factsMes=(o.eventos_factura||[]).filter(ef=>{ const f=new Date(ef.fecha); return f.getFullYear()===y&&f.getMonth()+1===m; });
         return s+factsMes.reduce((ss,ef)=>ss+(ef.monto||0),0);
       },0);
-      const pagoCalculado=Math.round(sumaFacts/2);
+      const ivaMesV2=ivaMensual.find(i=>i.mes===m&&i.anio===y); const impPagadoV2=ivaMesV2?Math.max(0,(ivaMesV2.iva_ventas||0)-(ivaMesV2.iva_compras||0)):0; const pagoCalculado=Math.max(0,Math.round(sumaFacts/2 - impPagadoV2/2));
       const pagosDelMes=pagosVendedor.filter(p=>p.vendedor_id===v.id&&p.mes===m&&p.anio===y);
       const pagado=pagosDelMes.reduce((s,p)=>s+(p.monto_pagado||0),0);
       const estado=pagado>=pagoCalculado?"pagado":"pendiente";
