@@ -267,15 +267,28 @@ function BuscadorOC({ ocs, ocId, setOcId, permitirNueva, numeroNueva, setNumeroN
 // ═══════════════════════════════════════════════
 // FORMULARIOS DE EVENTOS RÁPIDOS
 // ═══════════════════════════════════════════════
-function FormIngresarCompra({ ocs, financiadores, vendedores, onSave }) {
+function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, entidadesCatalogo }) {
   const [ocId,setOcId]=useState(null); const [numNueva,setNumNueva]=useState("");
   const [cliente,setCliente]=useState(""); const [rutCliente,setRutCliente]=useState(""); const [vendedorId,setVendedorId]=useState(vendedores[0]?.id||"");
   const [entidad,setEntidad]=useState(""); const [comuna,setComuna]=useState(""); const [contacto,setContacto]=useState(""); const [correo,setCorreo]=useState("");
+  const [autocompletado,setAutocompletado]=useState(false);
   const [fecha,setFecha]=useState(new Date().toISOString().slice(0,10));
   const [montoVenta,setMontoVenta]=useState(""); const [costoCompra,setCostoCompra]=useState("");
   const [fechaEst,setFechaEst]=useState(""); const [financiadorId,setFinanciadorId]=useState(financiadores[0]?.id||"");
   const [proveedor,setProveedor]=useState(""); const [err,setErr]=useState(""); const [saving,setSaving]=useState(false);
   const esNueva=!ocId&&numNueva;
+  const handleRutChange=(val)=>{
+    setRutCliente(val);
+    const match=(entidadesCatalogo||[]).find(e=>e.rut===val.trim());
+    if(match&&val.trim()){
+      if(!entidad) setEntidad(match.nombre_entidad||"");
+      if(!comuna) setComuna(match.comuna||"");
+      if(!contacto) setContacto(match.contacto||"");
+      if(!correo) setCorreo(match.correo||"");
+      if(!cliente) setCliente(match.nombre_entidad||"");
+      setAutocompletado(true);
+    }
+  };
   const handleSave=async()=>{
     if(!ocId&&!numNueva){setErr("Busca una OC o crea una nueva");return;}
     if(esNueva&&!cliente.trim()){setErr("Indica el cliente");return;}
@@ -288,8 +301,9 @@ function FormIngresarCompra({ ocs, financiadores, vendedores, onSave }) {
   return (
     <div>
       <Field label="Orden de Compra" required><BuscadorOC ocs={ocs} ocId={ocId} setOcId={setOcId} permitirNueva numNueva={numNueva} setNumeroNueva={setNumNueva} /></Field>
+      {esNueva&&<Field label="RUT del cliente" hint="Si ya existe en el catálogo, autocompleta los demás datos"><input style={iStyle} value={rutCliente} onChange={e=>handleRutChange(e.target.value)} placeholder="ej: 12.345.678-9" /></Field>}
+      {esNueva&&autocompletado&&<div style={{background:C.okLight,borderRadius:8,padding:"8px 12px",fontSize:11.5,color:C.ok,fontWeight:600,marginBottom:12}}>✓ Datos autocompletados desde el catálogo de entidades</div>}
       {esNueva&&<Field label="Cliente" required hint="Se guarda en mayúscula"><input style={iStyle} value={cliente} onChange={e=>setCliente(e.target.value)} placeholder="Nombre del cliente" /></Field>}
-      {esNueva&&<Field label="RUT del cliente" hint="Para vincular correo de cobranza"><input style={iStyle} value={rutCliente} onChange={e=>setRutCliente(e.target.value)} placeholder="ej: 12.345.678-9" /></Field>}
       {esNueva&&<Field label="Entidad (organismo público)" hint="Se guarda en mayúscula"><input style={iStyle} value={entidad} onChange={e=>setEntidad(e.target.value)} placeholder="ej: I. Municipalidad de..." /></Field>}
       {esNueva&&<Field label="Comuna" hint="Se guarda en mayúscula"><input style={iStyle} value={comuna} onChange={e=>setComuna(e.target.value)} placeholder="ej: Concepción" /></Field>}
       {esNueva&&<Field label="Contacto"><input style={iStyle} value={contacto} onChange={e=>setContacto(e.target.value)} placeholder="Nombre y/o teléfono de contacto" /></Field>}
@@ -654,14 +668,26 @@ const FILTROS=[
   {key:"financ",label:"Financ.",okField:"estado_pago_financiamiento",okValue:"pagado",okLabel:"Pagado",pendLabel:"Con deuda"},
 ];
 
-function FormEditarDatosOC({ oc, onSave }) {
+function FormEditarDatosOC({ oc, onSave, entidadesCatalogo }) {
   const [cliente,setCliente]=useState(oc.cliente||"");
   const [entidad,setEntidad]=useState(oc.entidad||"");
   const [comuna,setComuna]=useState(oc.comuna||"");
   const [contacto,setContacto]=useState(oc.contacto||"");
   const [rutCliente,setRutCliente]=useState(oc.rut_cliente||"");
   const [correo,setCorreo]=useState(oc.correo_cliente||"");
+  const [autocompletado,setAutocompletado]=useState(false);
   const [err,setErr]=useState(""); const [saving,setSaving]=useState(false);
+  const handleRutChange=(val)=>{
+    setRutCliente(val);
+    const match=(entidadesCatalogo||[]).find(e=>e.rut===val.trim());
+    if(match&&val.trim()){
+      if(!entidad) setEntidad(match.nombre_entidad||"");
+      if(!comuna) setComuna(match.comuna||"");
+      if(!contacto) setContacto(match.contacto||"");
+      if(!correo) setCorreo(match.correo||"");
+      setAutocompletado(true);
+    }
+  };
   const handleSave=async()=>{
     setErr(""); setSaving(true);
     try { await onSave({ cliente:cliente.toUpperCase(), entidad:entidad.toUpperCase(), comuna:comuna.toUpperCase(), contacto, rutCliente, correo }); }
@@ -669,11 +695,12 @@ function FormEditarDatosOC({ oc, onSave }) {
   };
   return (
     <div>
+      <Field label="RUT del cliente" hint="Si ya existe en el catálogo, autocompleta los demás datos"><input style={iStyle} value={rutCliente} onChange={e=>handleRutChange(e.target.value)} placeholder="ej: 12.345.678-9" /></Field>
+      {autocompletado&&<div style={{background:C.okLight,borderRadius:8,padding:"8px 12px",fontSize:11.5,color:C.ok,fontWeight:600,marginBottom:12}}>✓ Datos autocompletados desde el catálogo de entidades</div>}
       <Field label="Nombre del cliente" hint="Se guarda en mayúscula"><input style={iStyle} value={cliente} onChange={e=>setCliente(e.target.value)} placeholder="Nombre del cliente" /></Field>
       <Field label="Entidad (organismo público)" hint="Se guarda en mayúscula"><input style={iStyle} value={entidad} onChange={e=>setEntidad(e.target.value)} placeholder="ej: I. Municipalidad de..." /></Field>
       <Field label="Comuna" hint="Se guarda en mayúscula"><input style={iStyle} value={comuna} onChange={e=>setComuna(e.target.value)} placeholder="ej: Concepción" /></Field>
       <Field label="Contacto"><input style={iStyle} value={contacto} onChange={e=>setContacto(e.target.value)} placeholder="Nombre y/o teléfono de contacto" /></Field>
-      <Field label="RUT del cliente" hint="Para vincular correo de cobranza"><input style={iStyle} value={rutCliente} onChange={e=>setRutCliente(e.target.value)} placeholder="ej: 12.345.678-9" /></Field>
       <Field label="Correo del cliente"><input style={iStyle} type="email" value={correo} onChange={e=>setCorreo(e.target.value)} placeholder="contacto@entidad.cl" /></Field>
       {err&&<div style={{background:C.dangerLight,color:C.danger,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}
       <button onClick={handleSave} disabled={saving} style={btnP(saving?C.inkFaint:C.info)}>{saving?"Guardando…":"✓ Guardar datos"}</button>
@@ -730,7 +757,7 @@ function FormEditarEvento({ item, onSave, onCancel }) {
   );
 }
 
-function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento }) {
+function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo }) {
   const evF=(oc.eventos_factura||[])[0];
   const dias=fmt.diasDesde(evF?.fecha);
   const saldo=(oc.monto_facturado||0)-(oc.monto_cobrado||0);
@@ -775,6 +802,7 @@ function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, 
           </div>
           {oc.ultimo_reclamo_fecha&&<div style={{fontSize:11,color:C.warn,fontWeight:600,marginBottom:8}}>📧 Último reclamo: {fmt.datetime(oc.ultimo_reclamo_fecha)} · {oc.correo_cliente}</div>}
           {oc.vendedor_pagado&&<div style={{fontSize:11,color:C.ok,fontWeight:600,marginBottom:8}}>✓ Vendedor ya pagado por esta venta</div>}
+          {oc.ultima_edicion&&<div style={{fontSize:10.5,color:C.inkFaint,marginBottom:8}}>✏️ Datos editados por <Trazabilidad creadoPor={oc.ultimo_editor} creadoEn={oc.ultima_edicion} perfiles={perfiles} /></div>}
 
           <div style={{fontSize:11,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",marginBottom:6,letterSpacing:0.3}}>Marcar etapa</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:12}}>
@@ -813,7 +841,7 @@ function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, 
       )}
       {editandoDatos&&(
         <Modal title="Editar datos de la OC" onClose={()=>setEditandoDatos(false)}>
-          <FormEditarDatosOC oc={oc} onSave={async(data)=>{ await onGuardarDatosOC(oc.id,data); setEditandoDatos(false); }} />
+          <FormEditarDatosOC oc={oc} entidadesCatalogo={entidadesCatalogo} onSave={async(data)=>{ await onGuardarDatosOC(oc.id,data); setEditandoDatos(false); }} />
         </Modal>
       )}
       {editandoEvento&&(
@@ -845,19 +873,19 @@ function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, 
       )}
       {correoFallida&&(
         <Modal title="Aviso de entrega fallida" onClose={()=>setCorreoFallida(false)}>
-          <FormEntregaFallida oc={oc} onEnviar={async()=>{ setCorreoFallida(false); }} />
+          <FormEntregaFallida oc={oc} entidadesCatalogo={entidadesCatalogo} onEnviar={async()=>{ setCorreoFallida(false); }} />
         </Modal>
       )}
       {correoFecha&&(
         <Modal title="Fecha estimada de entrega" onClose={()=>setCorreoFecha(false)}>
-          <FormFechaEntrega oc={oc} onEnviar={async()=>{ setCorreoFecha(false); }} />
+          <FormFechaEntrega oc={oc} entidadesCatalogo={entidadesCatalogo} onEnviar={async()=>{ setCorreoFecha(false); }} />
         </Modal>
       )}
     </div>
   );
 }
 
-function PanelCompras({ ocs, perfiles, filtroInicial, contactos, onEnviarReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento }) {
+function PanelCompras({ ocs, perfiles, filtroInicial, contactos, onEnviarReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo }) {
   const [filtros,setFiltros]=useState({}); const [busq,setBusq]=useState(""); const [expId,setExpId]=useState(null);
   const [reclamandoBanner,setReclamandoBanner]=useState(null); const [comunaSel,setComunaSel]=useState("");
   useEffect(()=>{ if(filtroInicial) setFiltros({[filtroInicial]:"pend"}); },[filtroInicial]);
@@ -868,7 +896,7 @@ function PanelCompras({ ocs, perfiles, filtroInicial, contactos, onEnviarReclamo
     if(comunaSel&&oc.comuna!==comunaSel) return false;
     for(const f of FILTROS){ const s=filtros[f.key]; if(!s) continue; const ok=oc[f.okField]===f.okValue; if(s==="ok"&&!ok) return false; if(s==="pend"&&ok) return false; }
     return true;
-  }),[ocs,filtros,busq,comunaSel]);
+  }).sort((a,b)=>(b.creadoEn||"").localeCompare(a.creadoEn||"")),[ocs,filtros,busq,comunaSel]);
 
   // Alertas de vencimiento
   const alertas=useMemo(()=>ocs.filter(o=>{
@@ -919,7 +947,7 @@ function PanelCompras({ ocs, perfiles, filtroInicial, contactos, onEnviarReclamo
         ))}
       </div>
       <div style={{fontSize:11.5,color:C.inkFaint,marginBottom:10}}>{filtered.length} orden{filtered.length!==1?"es":""}</div>
-      {filtered.map(oc=><FilaOC key={oc.id} oc={oc} perfiles={perfiles} expanded={expId===oc.id} onToggle={()=>setExpId(expId===oc.id?null:oc.id)} contactos={contactos} onEnviarReclamo={onEnviarReclamo} onGuardarContacto={onGuardarContacto} onGuardarDatosOC={onGuardarDatosOC} onEditarEvento={onEditarEvento} financiadores={financiadores} onConfirmarEntrega={onConfirmarEntrega} onEmitirFactura={onEmitirFactura} onPagoCliente={onPagoCliente} onPagoFinanciamiento={onPagoFinanciamiento} />)}
+      {filtered.map(oc=><FilaOC key={oc.id} oc={oc} perfiles={perfiles} expanded={expId===oc.id} onToggle={()=>setExpId(expId===oc.id?null:oc.id)} contactos={contactos} onEnviarReclamo={onEnviarReclamo} onGuardarContacto={onGuardarContacto} onGuardarDatosOC={onGuardarDatosOC} onEditarEvento={onEditarEvento} financiadores={financiadores} onConfirmarEntrega={onConfirmarEntrega} onEmitirFactura={onEmitirFactura} onPagoCliente={onPagoCliente} onPagoFinanciamiento={onPagoFinanciamiento} entidadesCatalogo={entidadesCatalogo} />)}
       {filtered.length===0&&<div style={{textAlign:"center",padding:30,color:C.inkFaint,fontSize:13}}>No hay órdenes con estos filtros.</div>}
     </div>
   );
@@ -1000,10 +1028,11 @@ function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onAjustar 
   );
 }
 
-function FormEntregaFallida({ oc, onEnviar }) {
+function FormEntregaFallida({ oc, onEnviar, entidadesCatalogo }) {
+  const matchCatalogo=(entidadesCatalogo||[]).find(e=>e.rut===(oc.rut_cliente||"").trim());
   const [lugar,setLugar]=useState("bodega");
   const [motivo,setMotivo]=useState("usted no estaba en el lugar");
-  const [correo,setCorreo]=useState(oc.correo_cliente||"");
+  const [correo,setCorreo]=useState(oc.correo_cliente||matchCatalogo?.correo||"");
   const [err,setErr]=useState(""); const [sending,setSending]=useState(false);
 
   const asunto=`Entrega OC ${oc.numero_oc}`;
@@ -1021,7 +1050,7 @@ function FormEntregaFallida({ oc, onEnviar }) {
   return (
     <div>
       <div style={{background:C.warnLight,borderRadius:9,padding:"10px 12px",fontSize:12.5,color:C.warn,fontWeight:700,marginBottom:14}}>OC {oc.numero_oc} · Correo de entrega fallida</div>
-      <Field label="Correo del destinatario" required hint={oc.correo_cliente?"Correo guardado en esta OC":""}><input style={iStyle} type="email" value={correo} onChange={e=>setCorreo(e.target.value)} placeholder="contacto@entidad.cl" /></Field>
+      <Field label="Correo del destinatario" required hint={oc.correo_cliente?"Correo guardado en esta OC":matchCatalogo?"Autocompletado desde el catálogo de entidades":""}><input style={iStyle} type="email" value={correo} onChange={e=>setCorreo(e.target.value)} placeholder="contacto@entidad.cl" /></Field>
       <Field label="Lugar de entrega" required hint="ej: bodega de farmacología, bodega central"><input style={iStyle} value={lugar} onChange={e=>setLugar(e.target.value)} /></Field>
       <Field label="Motivo de la entrega fallida" required hint="ej: usted no estaba en el lugar, bodega estaba cerrada"><input style={iStyle} value={motivo} onChange={e=>setMotivo(e.target.value)} /></Field>
       <div style={{background:C.paper,borderRadius:9,padding:"10px 12px",marginBottom:14}}>
@@ -1036,11 +1065,12 @@ function FormEntregaFallida({ oc, onEnviar }) {
   );
 }
 
-function FormFechaEntrega({ oc, onEnviar }) {
+function FormFechaEntrega({ oc, onEnviar, entidadesCatalogo }) {
+  const matchCatalogo=(entidadesCatalogo||[]).find(e=>e.rut===(oc.rut_cliente||"").trim());
   const evC=(oc.eventos_compra||[])[0];
   const fechaEstimadaDefault=evC?.fecha_entrega_estimada||"";
   const [fechaEntrega,setFechaEntrega]=useState(fechaEstimadaDefault);
-  const [correo,setCorreo]=useState(oc.correo_cliente||"");
+  const [correo,setCorreo]=useState(oc.correo_cliente||matchCatalogo?.correo||"");
   const [err,setErr]=useState(""); const [sending,setSending]=useState(false);
 
   const asunto=`Fecha de entrega OC ${oc.numero_oc}`;
@@ -1060,7 +1090,7 @@ function FormFechaEntrega({ oc, onEnviar }) {
   return (
     <div>
       <div style={{background:C.transitLight,borderRadius:9,padding:"10px 12px",fontSize:12.5,color:C.transit,fontWeight:700,marginBottom:14}}>OC {oc.numero_oc} · Correo de fecha de entrega</div>
-      <Field label="Correo del destinatario" required hint={oc.correo_cliente?"Correo guardado en esta OC":""}><input style={iStyle} type="email" value={correo} onChange={e=>setCorreo(e.target.value)} placeholder="contacto@entidad.cl" /></Field>
+      <Field label="Correo del destinatario" required hint={oc.correo_cliente?"Correo guardado en esta OC":matchCatalogo?"Autocompletado desde el catálogo de entidades":""}><input style={iStyle} type="email" value={correo} onChange={e=>setCorreo(e.target.value)} placeholder="contacto@entidad.cl" /></Field>
       <Field label="Fecha estimada de entrega" required hint={fechaEstimadaDefault?"Autocompletado con la fecha estimada registrada":""}><input style={iStyle} type="date" value={fechaEntrega} onChange={e=>setFechaEntrega(e.target.value)} /></Field>
       <div style={{background:C.paper,borderRadius:9,padding:"10px 12px",marginBottom:14}}>
         <div style={{fontSize:10.5,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:4}}>Asunto</div>
@@ -1619,6 +1649,7 @@ export default function App() {
   const [categoriasGasto,setCategoriasGasto]=useState([]); const [gastos,setGastos]=useState([]); const [ivaMensual,setIvaMensual]=useState([]);
   const [pagosVendedor,setPagosVendedor]=useState([]); const [ajustesSaldo,setAjustesSaldo]=useState([]); const [perfiles,setPerfiles]=useState([]);
   const [contactos,setContactos]=useState([]);
+  const [entidadesCatalogo,setEntidadesCatalogo]=useState([]);
 
   const showToast=(msg,type="success")=>{ setToast({msg,type}); setTimeout(()=>setToast(null),3000); };
 
@@ -1648,15 +1679,15 @@ export default function App() {
     if(!session) return;
     const t=session.access_token;
     try {
-      const [ocsD,finD,vendD,catD,gastD,ivaD,pagVD,ajuD,perfD,contD]=await Promise.all([
+      const [ocsD,finD,vendD,catD,gastD,ivaD,pagVD,ajuD,perfD,contD,entD]=await Promise.all([
         selOCs(t), sel("financiadores",t,"&order=nombre"), sel("vendedores",t,"&order=nombre"),
         sel("categorias_gasto",t,"&order=nombre"), sel("gastos_indirectos",t,"&order=fecha.desc"),
         sel("iva_mensual",t), sel("pagos_vendedor",t), sel("ajustes_saldo_financiador",t,"&order=creadoEn.desc"),
-        selPerfiles(t), sel("contactos_cobranza",t).catch(()=>[]),
+        selPerfiles(t), sel("contactos_cobranza",t).catch(()=>[]), sel("entidades_catalogo",t).catch(()=>[]),
       ]);
       setOcs(ocsD); setFinanciadores(finD); setVendedores(vendD); setCategoriasGasto(catD);
       setGastos(gastD); setIvaMensual(ivaD); setPagosVendedor(pagVD); setAjustesSaldo(ajuD); setPerfiles(perfD);
-      setContactos(contD);
+      setContactos(contD); setEntidadesCatalogo(entD);
     } catch(e){ showToast(e.message,"error"); }
   };
   useEffect(()=>{ if(session) cargarTodo(); },[session]);
@@ -1667,6 +1698,14 @@ export default function App() {
     if(data.esNueva){
       const nOc=await ins("ordenes_compra_v2",t,{id:genId("ocv2"),numero_oc:data.numNueva,cliente:data.cliente,rut_cliente:data.rutCliente||"",correo_cliente:data.correo||"",entidad:data.entidad||"",comuna:data.comuna||"",contacto:data.contacto||"",vendedor_id:data.vendedorId,financiador_id:data.financiadorId,monto_total:data.montoVenta,costo_total:data.costoCompra,estado_compra:"comprado",creado_por:session.user.id});
       ocId=(Array.isArray(nOc)?nOc[0]:nOc).id;
+      if (data.rutCliente?.trim()) {
+        try {
+          const existente = entidadesCatalogo.find(e=>e.rut===data.rutCliente.trim());
+          const datosEnt = { rut: data.rutCliente.trim(), nombre_entidad: data.entidad||data.cliente||"", comuna: data.comuna||"", contacto: data.contacto||"", correo: data.correo||"" };
+          if (existente) await upd("entidades_catalogo", t, existente.id, datosEnt);
+          else await ins("entidades_catalogo", t, { id: genId("ent"), ...datosEnt, creado_por: session.user.id });
+        } catch {}
+      }
     } else {
       await upd("ordenes_compra_v2",t,ocId,{estado_compra:"comprado",monto_total:data.montoVenta,costo_total:data.costoCompra,financiador_id:data.financiadorId});
     }
@@ -1730,7 +1769,16 @@ export default function App() {
   };
   const handleChangeRol=async(uid,rol)=>{ await updRol(session.access_token,uid,rol); showToast("Rol actualizado"); await cargarTodo(); };
   const handleGuardarDatosOC=async(ocId,{cliente,entidad,comuna,contacto,rutCliente,correo})=>{
-    await upd("ordenes_compra_v2",session.access_token,ocId,{cliente,entidad,comuna,contacto,rut_cliente:rutCliente,correo_cliente:correo});
+    await upd("ordenes_compra_v2",session.access_token,ocId,{cliente,entidad,comuna,contacto,rut_cliente:rutCliente,correo_cliente:correo,ultimo_editor:session.user.id,ultima_edicion:new Date().toISOString()});
+    // Si hay RUT, también actualizamos/creamos el catálogo de entidades para reutilizar después
+    if (rutCliente?.trim()) {
+      try {
+        const existente = entidadesCatalogo.find(e=>e.rut===rutCliente.trim());
+        const datos = { rut: rutCliente.trim(), nombre_entidad: entidad||cliente||"", comuna: comuna||"", contacto: contacto||"", correo: correo||"" };
+        if (existente) await upd("entidades_catalogo", session.access_token, existente.id, datos);
+        else await ins("entidades_catalogo", session.access_token, { id: genId("ent"), ...datos, creado_por: session.user.id });
+      } catch {}
+    }
     showToast("Datos actualizados"); await cargarTodo();
   };
   const handleEditarEvento=async(oc, tabla, eventoOriginal, cambios)=>{
@@ -1817,7 +1865,7 @@ export default function App() {
       {/* CONTENIDO */}
       <div style={{padding:16}}>
         {tab==="panel"&&<PanelDashboard ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} onNavigate={(t)=>{setTab(t);}} />}
-        {tab==="compras"&&<PanelCompras ocs={ocs} perfiles={perfiles} filtroInicial={filtroCompras} contactos={contactos} onEnviarReclamo={handleEnviarReclamo} onGuardarContacto={handleGuardarContacto} onGuardarDatosOC={handleGuardarDatosOC} onEditarEvento={handleEditarEvento} financiadores={financiadores} onConfirmarEntrega={handleEntrega} onEmitirFactura={handleFactura} onPagoCliente={handlePagoCliente} onPagoFinanciamiento={handlePagoFin} />}
+        {tab==="compras"&&<PanelCompras ocs={ocs} perfiles={perfiles} filtroInicial={filtroCompras} contactos={contactos} onEnviarReclamo={handleEnviarReclamo} onGuardarContacto={handleGuardarContacto} onGuardarDatosOC={handleGuardarDatosOC} onEditarEvento={handleEditarEvento} financiadores={financiadores} onConfirmarEntrega={handleEntrega} onEmitirFactura={handleFactura} onPagoCliente={handlePagoCliente} onPagoFinanciamiento={handlePagoFin} entidadesCatalogo={entidadesCatalogo} />}
         {tab==="financiamiento"&&<PanelFinanciamiento financiadores={financiadores} ocs={ocs} ajustes={ajustesSaldo} perfiles={perfiles} onAjustar={handleAjusteSaldo} />}
         {tab==="gastos"&&<PanelGastos gastos={gastos} categorias={categoriasGasto} vendedores={vendedores} pagosVendedor={pagosVendedor} ocs={ocs} onNuevoGasto={handleNuevoGasto} onPagoVendedor={handlePagoVendedorSimple} />}
         {tab==="vendedores"&&<PanelVendedores vendedores={vendedores} ocs={ocs} ivaMensual={ivaMensual} pagosVendedor={pagosVendedor} onGuardarIva={handleGuardarIva} onPagoVendedor={handlePagoVendedorSimple} />}
@@ -1835,7 +1883,7 @@ export default function App() {
       </div>
 
       {/* MODALES DE ACCIONES RÁPIDAS */}
-      {accion==="compra"&&<Modal title="Ingresar compra" onClose={()=>setAccion(null)}><FormIngresarCompra ocs={ocs} financiadores={financiadores} vendedores={vendedores} onSave={handleIngresarCompra} /></Modal>}
+      {accion==="compra"&&<Modal title="Ingresar compra" onClose={()=>setAccion(null)}><FormIngresarCompra ocs={ocs} financiadores={financiadores} vendedores={vendedores} entidadesCatalogo={entidadesCatalogo} onSave={handleIngresarCompra} /></Modal>}
       {accion==="entrega"&&<Modal title="Confirmar entrega" onClose={()=>setAccion(null)}><FormConfirmarEntrega ocs={ocs} onSave={handleEntrega} /></Modal>}
       {accion==="factura"&&<Modal title="Emitir factura" onClose={()=>setAccion(null)}><FormEmitirFactura ocs={ocs} onSave={handleFactura} /></Modal>}
       {accion==="pago_cliente"&&<Modal title="Pago de factura" onClose={()=>setAccion(null)}><FormPagoCliente ocs={ocs} onSave={handlePagoCliente} /></Modal>}
