@@ -326,22 +326,34 @@ function FormConfirmarEntrega({ ocs, onSave, ocPreseleccionada }) {
 
 function FormEmitirFactura({ ocs, onSave, ocPreseleccionada }) {
   const [ocId,setOcId]=useState(ocPreseleccionada||null); const [fecha,setFecha]=useState(new Date().toISOString().slice(0,10));
-  const [numFact,setNumFact]=useState(""); const [monto,setMonto]=useState(""); const [err,setErr]=useState(""); const [saving,setSaving]=useState(false);
+  const [numFact,setNumFact]=useState(""); const [monto,setMonto]=useState("");
+  const [notaCredito,setNotaCredito]=useState(""); const [err,setErr]=useState(""); const [saving,setSaving]=useState(false);
   const selected=ocs.find(o=>o.id===ocId);
+  const facturaAnterior=(selected?.eventos_factura||[])[0];
+  const esReemision=!!facturaAnterior;
   useEffect(()=>{ if(selected&&!monto) setMonto(String(selected.monto_total||"")); },[selected]);
   const handleSave=async()=>{
     if(!ocId){setErr("Selecciona la OC");return;} if(!numFact.trim()){setErr("Indica el número de factura");return;}
     if(!monto||Number(monto)<=0){setErr("Indica el monto");return;}
-    setErr(""); setSaving(true); try{await onSave({ocId,fecha,numeroFactura:numFact.trim(),monto:Number(monto)});}catch(e){setErr(e.message);}finally{setSaving(false);};
+    if(esReemision&&!notaCredito.trim()){setErr("Esta OC ya tiene una factura — indica el N° de nota de crédito que la anula");return;}
+    setErr(""); setSaving(true);
+    try{await onSave({ocId,fecha,numeroFactura:numFact.trim(),monto:Number(monto),esReemision,notaCredito:notaCredito.trim(),facturaAnuladaNumero:facturaAnterior?.numero_factura});}
+    catch(e){setErr(e.message);}finally{setSaving(false);};
   };
   return (
     <div>
       {!ocPreseleccionada&&<Field label="Orden de Compra" required><BuscadorOC ocs={ocs} ocId={ocId} setOcId={setOcId} /></Field>}
+      {esReemision&&(
+        <div style={{background:C.warnLight,borderRadius:9,padding:"10px 12px",fontSize:12,color:C.warn,fontWeight:600,marginBottom:14}}>
+          Esta OC ya tiene la factura N°{facturaAnterior.numero_factura} ({fmt.date(facturaAnterior.fecha)}). Si la estás reemplazando, indica la nota de crédito que la anula — el pago al vendedor solo contará esta venta una vez.
+        </div>
+      )}
       <Field label="Fecha de emisión" required><input style={iStyle} type="date" value={fecha} onChange={e=>setFecha(e.target.value)} /></Field>
       <Field label="N° factura" required><input style={iMono} value={numFact} onChange={e=>setNumFact(e.target.value)} placeholder="ej: 215" /></Field>
       <Field label="Monto ($)" required hint="Autocompletado con monto venta de la OC"><input style={iMono} type="number" value={monto} onChange={e=>setMonto(e.target.value)} /></Field>
+      {esReemision&&<Field label="N° Nota de crédito (anula factura anterior)" required><input style={iMono} value={notaCredito} onChange={e=>setNotaCredito(e.target.value)} placeholder="ej: 123" /></Field>}
       {err&&<div style={{background:C.dangerLight,color:C.danger,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}
-      <button onClick={handleSave} disabled={saving} style={btnP(saving?C.inkFaint:C.info)}>{saving?"Guardando…":"✓ Registrar factura"}</button>
+      <button onClick={handleSave} disabled={saving} style={btnP(saving?C.inkFaint:C.info)}>{saving?"Guardando…":esReemision?"✓ Reemitir factura":"✓ Registrar factura"}</button>
     </div>
   );
 }
@@ -443,7 +455,7 @@ function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual,
     // Deuda a vendedores del mes actual
     const deudaVendedoresMes=vendedores?.reduce((sv,v)=>{
       const factsMes=ocs.filter(o=>{
-        if(o.vendedor_id!==v.id||o.estado_factura_propia!=="emitida") return false;
+        if(o.vendedor_id!==v.id||o.estado_factura_propia!=="emitida"||o.vendedor_pagado) return false;
         const evF=(o.eventos_factura||[])[0]; if(!evF) return false;
         const f=new Date(evF.fecha); return f.getMonth()+1===mesActual&&f.getFullYear()===anioActual;
       });
@@ -514,6 +526,7 @@ function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual,
       const factsMes=ocs.filter(o=>{
         if(o.vendedor_id!==v.id) return false;
         if(o.estado_factura_propia!=="emitida") return false;
+        if(o.vendedor_pagado) return false;
         const evF=(o.eventos_factura||[])[0]; if(!evF) return false;
         const f=new Date(evF.fecha); return f.getMonth()+1===mesActual&&f.getFullYear()===anioActual;
       });
@@ -761,6 +774,7 @@ function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, 
             {evF&&<div style={{gridColumn:"1/-1"}}>Factura: <b>{evF.numero_factura}</b> · {fmt.date(evF.fecha)}{dias!==null&&` · ${dias} días`}</div>}
           </div>
           {oc.ultimo_reclamo_fecha&&<div style={{fontSize:11,color:C.warn,fontWeight:600,marginBottom:8}}>📧 Último reclamo: {fmt.datetime(oc.ultimo_reclamo_fecha)} · {oc.correo_cliente}</div>}
+          {oc.vendedor_pagado&&<div style={{fontSize:11,color:C.ok,fontWeight:600,marginBottom:8}}>✓ Vendedor ya pagado por esta venta</div>}
 
           <div style={{fontSize:11,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",marginBottom:6,letterSpacing:0.3}}>Marcar etapa</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:12}}>
@@ -778,7 +792,7 @@ function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, 
           {[
             ...(oc.eventos_compra||[]).map(e=>({tipo:"📦 Compra",fecha:e.fecha,extra:"",e,tabla:"eventos_compra"})),
             ...(oc.eventos_entrega||[]).map(e=>({tipo:"🚚 Entrega",fecha:e.fecha,extra:e.persona_recibe?` · ${e.persona_recibe}`:"",e,tabla:"eventos_entrega"})),
-            ...(oc.eventos_factura||[]).map(e=>({tipo:`🧾 Factura ${e.numero_factura}`,fecha:e.fecha,extra:` · ${fmt.money(e.monto)}`,e,tabla:"eventos_factura"})),
+            ...(oc.eventos_factura||[]).map(e=>({tipo:`🧾 Factura ${e.numero_factura}`,fecha:e.fecha,extra:` · ${fmt.money(e.monto)}${e.nota_credito?` · anula N°${e.factura_anulada_numero} con NC ${e.nota_credito}`:""}`,e,tabla:"eventos_factura"})),
             ...(oc.eventos_pago_cliente||[]).map(e=>({tipo:`💰 Pago ${fmt.money(e.monto)}`,fecha:e.fecha,extra:"",e,tabla:"eventos_pago_cliente"})),
             ...(oc.eventos_pago_financiamiento||[]).map(e=>({tipo:`🏦 Pago fin. ${fmt.money(e.monto)}`,fecha:e.fecha,extra:"",e,tabla:"eventos_pago_financiamiento"})),
           ].sort((a,b)=>a.fecha>b.fecha?1:-1).map((item,i)=>(
@@ -1136,7 +1150,7 @@ function FormAjusteSaldo({ financiador, onSave }) {
 // ═══════════════════════════════════════════════
 // PANEL GASTOS — categorías inteligentes + pago a vendedores
 // ═══════════════════════════════════════════════
-function PanelGastos({ gastos, categorias, vendedores, pagosVendedor, onNuevoGasto, onPagoVendedor }) {
+function PanelGastos({ gastos, categorias, vendedores, pagosVendedor, ocs, onNuevoGasto, onPagoVendedor }) {
   const [showForm,setShowForm]=useState(false);
   const [tipoForm,setTipoForm]=useState("gasto"); // "gasto" | "vendedor"
 
@@ -1173,7 +1187,7 @@ function PanelGastos({ gastos, categorias, vendedores, pagosVendedor, onNuevoGas
       )}
       {showForm&&tipoForm==="vendedor"&&(
         <Modal title="Pago a vendedor" onClose={()=>setShowForm(false)}>
-          <FormPagoVendedorSimple vendedores={vendedores} onSave={async(d)=>{await onPagoVendedor(d);setShowForm(false);}} />
+          <FormPagoVendedorSimple vendedores={vendedores} ocs={ocs} onSave={async(d)=>{await onPagoVendedor(d);setShowForm(false);}} />
         </Modal>
       )}
     </div>
@@ -1211,18 +1225,25 @@ function FormNuevoGasto({ categorias, onSave }) {
   );
 }
 
-function FormPagoVendedorSimple({ vendedores, onSave }) {
+function FormPagoVendedorSimple({ vendedores, ocs, onSave }) {
   const [vendedorId,setVendedorId]=useState(vendedores[0]?.id||"");
   const [monto,setMonto]=useState(""); const [fecha,setFecha]=useState(new Date().toISOString().slice(0,10));
   const [mes,setMes]=useState(new Date().getMonth()+1); const [anio,setAnio]=useState(new Date().getFullYear());
+  const [marcarPagadas,setMarcarPagadas]=useState(true);
   const [err,setErr]=useState(""); const [saving,setSaving]=useState(false);
   const vend=vendedores.find(v=>v.id===vendedorId);
   const MESES=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
   const labelMes=`Ventas de ${MESES[mes-1]}/${anio}`;
+  // OCs que se marcarían como pagadas con este pago
+  const ocsDelMes=ocs?.filter(o=>{
+    if(o.vendedor_id!==vendedorId||o.estado_factura_propia!=="emitida"||o.vendedor_pagado) return false;
+    const evF=(o.eventos_factura||[])[0]; if(!evF) return false;
+    const f=new Date(evF.fecha); return f.getMonth()+1===Number(mes)&&f.getFullYear()===Number(anio);
+  })||[];
   const handleSave=async()=>{
     if(!monto||Number(monto)<=0){setErr("Indica el monto");return;}
     setErr(""); setSaving(true);
-    try{await onSave({vendedorId,monto:Number(monto),fecha,mes:Number(mes),anio:Number(anio),label:labelMes});}
+    try{await onSave({vendedorId,monto:Number(monto),fecha,mes:Number(mes),anio:Number(anio),label:labelMes,ocIdsAMarcar:marcarPagadas?ocsDelMes.map(o=>o.id):[]});}
     catch(e){setErr(e.message);}finally{setSaving(false);};
   };
   return (
@@ -1235,6 +1256,12 @@ function FormPagoVendedorSimple({ vendedores, onSave }) {
       <div style={{background:C.tealLight,borderRadius:9,padding:"10px 12px",fontSize:12.5,color:C.tealDark,fontWeight:700,marginBottom:12}}>{labelMes}</div>
       <Field label="Fecha de pago" required><input style={iStyle} type="date" value={fecha} onChange={e=>setFecha(e.target.value)} /></Field>
       <Field label="Monto pagado ($)" required><input style={iMono} type="number" value={monto} onChange={e=>setMonto(e.target.value)} /></Field>
+      {ocs&&(
+        <label style={{display:"flex",alignItems:"flex-start",gap:8,background:C.paper,borderRadius:9,padding:"10px 12px",marginBottom:12,cursor:"pointer"}}>
+          <input type="checkbox" checked={marcarPagadas} onChange={e=>setMarcarPagadas(e.target.checked)} style={{marginTop:2}} />
+          <span style={{fontSize:12,color:C.inkMuted}}>Marcar las {ocsDelMes.length} OC{ocsDelMes.length!==1?"s":""} facturadas este mes como "vendedor pagado" — evita que se vuelvan a contar si se re-emite la factura en otro mes</span>
+        </label>
+      )}
       {err&&<div style={{background:C.dangerLight,color:C.danger,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}
       <button onClick={handleSave} disabled={saving} style={btnP(saving?C.inkFaint:C.teal)}>{saving?"Guardando…":"✓ Registrar pago"}</button>
     </div>
@@ -1656,9 +1683,9 @@ export default function App() {
   };
   const handleFactura=async(data)=>{
     const t=session.access_token;
-    await ins("eventos_factura",t,{id:genId("evf"),oc_id:data.ocId,fecha:data.fecha,numero_factura:data.numeroFactura,monto:data.monto,creado_por:session.user.id});
+    await ins("eventos_factura",t,{id:genId("evf"),oc_id:data.ocId,fecha:data.fecha,numero_factura:data.numeroFactura,monto:data.monto,nota_credito:data.notaCredito||null,factura_anulada_numero:data.facturaAnuladaNumero||null,creado_por:session.user.id});
     await upd("ordenes_compra_v2",t,data.ocId,{estado_factura_propia:"emitida",monto_facturado:data.monto});
-    showToast("Factura registrada"); setAccion(null); await cargarTodo();
+    showToast(data.esReemision?`Factura reemitida (anula N°${data.facturaAnuladaNumero} con NC ${data.notaCredito})`:"Factura registrada"); setAccion(null); await cargarTodo();
   };
   const handlePagoCliente=async(data)=>{
     const t=session.access_token; const oc=ocs.find(o=>o.id===data.ocId);
@@ -1688,7 +1715,12 @@ export default function App() {
   };
   const handlePagoVendedorSimple=async(data)=>{
     await ins("pagos_vendedor",session.access_token,{id:genId("pv"),vendedor_id:data.vendedorId,anio:data.anio,mes:data.mes,monto_calculado:data.monto,monto_pagado:data.monto,fecha:data.fecha,estado:"pagado",notas:data.label,creado_por:session.user.id});
-    showToast("Pago a vendedor registrado"); await cargarTodo();
+    if (data.ocIdsAMarcar && data.ocIdsAMarcar.length) {
+      for (const ocId of data.ocIdsAMarcar) {
+        await upd("ordenes_compra_v2", session.access_token, ocId, { vendedor_pagado: true });
+      }
+    }
+    showToast(`Pago a vendedor registrado${data.ocIdsAMarcar?.length?` · ${data.ocIdsAMarcar.length} OCs marcadas como pagadas`:""}`); await cargarTodo();
   };
   const handleGuardarIva=async(data)=>{
     const t=session.access_token; const existe=ivaMensual.find(i=>i.mes===data.mes&&i.anio===data.anio);
@@ -1787,7 +1819,7 @@ export default function App() {
         {tab==="panel"&&<PanelDashboard ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} onNavigate={(t)=>{setTab(t);}} />}
         {tab==="compras"&&<PanelCompras ocs={ocs} perfiles={perfiles} filtroInicial={filtroCompras} contactos={contactos} onEnviarReclamo={handleEnviarReclamo} onGuardarContacto={handleGuardarContacto} onGuardarDatosOC={handleGuardarDatosOC} onEditarEvento={handleEditarEvento} financiadores={financiadores} onConfirmarEntrega={handleEntrega} onEmitirFactura={handleFactura} onPagoCliente={handlePagoCliente} onPagoFinanciamiento={handlePagoFin} />}
         {tab==="financiamiento"&&<PanelFinanciamiento financiadores={financiadores} ocs={ocs} ajustes={ajustesSaldo} perfiles={perfiles} onAjustar={handleAjusteSaldo} />}
-        {tab==="gastos"&&<PanelGastos gastos={gastos} categorias={categoriasGasto} vendedores={vendedores} pagosVendedor={pagosVendedor} onNuevoGasto={handleNuevoGasto} onPagoVendedor={handlePagoVendedorSimple} />}
+        {tab==="gastos"&&<PanelGastos gastos={gastos} categorias={categoriasGasto} vendedores={vendedores} pagosVendedor={pagosVendedor} ocs={ocs} onNuevoGasto={handleNuevoGasto} onPagoVendedor={handlePagoVendedorSimple} />}
         {tab==="vendedores"&&<PanelVendedores vendedores={vendedores} ocs={ocs} ivaMensual={ivaMensual} pagosVendedor={pagosVendedor} onGuardarIva={handleGuardarIva} onPagoVendedor={handlePagoVendedorSimple} />}
         {tab==="usuarios"&&perfil?.rol==="admin"&&<PanelUsuarios perfiles={perfiles} ocs={ocs} onChangeRol={handleChangeRol} session={session} showToast={showToast} />}
       </div>
