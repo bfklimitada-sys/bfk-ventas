@@ -183,8 +183,8 @@ function EtapasOC({ oc }) {
     <div style={{marginBottom:10}}>
       <div style={{display:"flex",alignItems:"center",gap:0,marginBottom:6}}>
         {etapas.map((e,i)=>(
-          <React.Fragment key={e.key}>
-            <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2,flex:1}}>
+          <>
+            <div key={e.key} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2,flex:1}}>
               <div style={{
                 width:32,height:32,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",
                 fontSize:15,background:e.ok?C.ok:C.paper,border:`2px solid ${e.ok?C.ok:C.border}`,
@@ -195,7 +195,7 @@ function EtapasOC({ oc }) {
             {i<etapas.length-1&&(
               <div style={{height:2,flex:0.5,background:etapas[i+1].ok&&e.ok?C.ok:C.border,marginBottom:18,transition:"all 0.2s"}} />
             )}
-          </React.Fragment>
+          </>
         ))}
       </div>
       <div style={{fontSize:10.5,color:completadas===5?C.ok:C.inkMuted,textAlign:"right",fontWeight:completadas===5?700:400}}>
