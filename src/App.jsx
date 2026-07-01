@@ -32,11 +32,32 @@ const hdrs = (t) => ({"Content-Type":"application/json", apikey:SUPABASE_ANON_KE
 async function sel(table, t, q="") { const r=await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=*${q}`,{headers:hdrs(t)}); if(!r.ok) throw new Error(`Error leyendo ${table}`); return r.json(); }
 async function ins(table, t, row) { const r=await fetch(`${SUPABASE_URL}/rest/v1/${table}`,{method:"POST",headers:hdrs(t),body:JSON.stringify(row)}); if(!r.ok){const e=await r.json().catch(()=>({})); throw new Error(e.message||`Error insertando en ${table}`);} return r.json(); }
 async function upd(table, t, id, row) { const r=await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${id}`,{method:"PATCH",headers:hdrs(t),body:JSON.stringify(row)}); if(!r.ok) throw new Error(`Error actualizando ${table}`); return r.json(); }
+async function del(table, t, id) { const r=await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${id}`,{method:"DELETE",headers:hdrs(t)}); if(!r.ok) throw new Error(`Error eliminando en ${table}`); return r.json(); }
+
+// Helpers multiusuario
+async function bloquearOC(t, ocId, usuarioId, usuarioNombre) {
+  const expira = new Date(Date.now()+30000).toISOString(); // 30 segundos
+  await fetch(`${SUPABASE_URL}/rest/v1/oc_bloqueos`,{method:"POST",headers:{...hdrs(t),"Prefer":"resolution=merge-duplicates"},body:JSON.stringify({oc_id:ocId,usuario_id:usuarioId,usuario_nombre:usuarioNombre,expira_en:expira})});
+}
+async function liberarOC(t, ocId) {
+  await fetch(`${SUPABASE_URL}/rest/v1/oc_bloqueos?oc_id=eq.${ocId}`,{method:"DELETE",headers:hdrs(t)});
+}
+async function getBloqueosVigentes(t) {
+  const ahora=new Date().toISOString();
+  const r=await fetch(`${SUPABASE_URL}/rest/v1/oc_bloqueos?select=*&expira_en=gt.${ahora}`,{headers:hdrs(t)});
+  return r.ok?r.json():[];
+}
+async function registrarCambio(t, {ocId, ocNumero, usuarioId, usuarioNombre, accion, campo, valorAnterior, valorNuevo}) {
+  await ins("historial_cambios",t,{id:genId("hc"),oc_id:ocId,oc_numero:ocNumero,usuario_id:usuarioId,usuario_nombre:usuarioNombre,accion,campo:campo||null,valor_anterior:valorAnterior!=null?String(valorAnterior):null,valor_nuevo:valorNuevo!=null?String(valorNuevo):null});
+}
+async function crearNotificacion(t, {usuarioId, tipo, ocId, ocNumero, mensaje}) {
+  await ins("notificaciones",t,{id:genId("ntf"),usuario_id:usuarioId,tipo,oc_id:ocId,oc_numero:ocNumero,mensaje});
+}
 async function selPerfiles(t) { const r=await fetch(`${SUPABASE_URL}/rest/v1/perfiles?select=*`,{headers:hdrs(t)}); if(!r.ok) return []; return r.json(); }
 async function getPerfil(t, uid) { const r=await fetch(`${SUPABASE_URL}/rest/v1/perfiles?id=eq.${uid}&select=*`,{headers:hdrs(t)}); if(!r.ok) return null; const a=await r.json(); return a[0]||null; }
 async function updRol(t, uid, rol) { const r=await fetch(`${SUPABASE_URL}/rest/v1/perfiles?id=eq.${uid}`,{method:"PATCH",headers:hdrs(t),body:JSON.stringify({rol})}); if(!r.ok) throw new Error("Error actualizando rol"); return r.json(); }
 async function selOCs(t) {
-  const r=await fetch(`${SUPABASE_URL}/rest/v1/ordenes_compra_v2?select=*,vendedores(nombre),financiadores(nombre),eventos_compra(*),eventos_entrega(*),eventos_factura(*),eventos_pago_cliente(*),eventos_pago_financiamiento(*),oc_productos_link(*)&order=creadoEn.desc`,{headers:hdrs(t)});
+  const r=await fetch(`${SUPABASE_URL}/rest/v1/ordenes_compra_v2?select=*,vendedores(nombre),financiadores(nombre),eventos_compra(*),eventos_entrega(*),eventos_factura(*),eventos_pago_cliente(*),eventos_pago_financiamiento(*),oc_productos_link(*),oc_comentarios(*)&order=creadoEn.desc`,{headers:hdrs(t)});
   if(!r.ok) throw new Error("Error leyendo OCs"); return r.json();
 }
 const storageGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
@@ -277,6 +298,114 @@ function PanelLinksProductos({ oc, onGuardar, onEliminar, onEditar }) {
       {!showForm&&(
         <button onClick={()=>setShowForm(true)} style={{...btnP(C.teal),fontSize:12,padding:"6px 12px"}}>+ Agregar producto</button>
       )}
+    </div>
+  );
+}
+
+
+// ═══════════════════════════════════════════════
+// MULTIUSUARIO: Bloqueo, Historial, Comentarios
+// ═══════════════════════════════════════════════
+
+// Banner de bloqueo de OC
+function BloqueoBanner({ bloqueo }) {
+  const segs=Math.max(0,Math.round((new Date(bloqueo.expira_en)-new Date())/1000));
+  return (
+    <div style={{background:C.warnLight,border:`1px solid ${C.warn}`,borderRadius:9,padding:"10px 14px",marginBottom:12,display:"flex",alignItems:"center",gap:10}}>
+      <span style={{fontSize:18}}>🔒</span>
+      <div>
+        <div style={{fontSize:12.5,fontWeight:700,color:C.warn}}>{bloqueo.usuario_nombre} está editando esta OC</div>
+        <div style={{fontSize:11,color:C.inkMuted}}>Disponible en ~{segs} segundos</div>
+      </div>
+    </div>
+  );
+}
+
+// Historial de cambios de una OC
+function HistorialCambiosOC({ ocId, historialCambios }) {
+  const items=(historialCambios||[]).filter(h=>h.oc_id===ocId).slice(0,30);
+  if(!items.length) return null;
+  return (
+    <div style={{marginBottom:14}}>
+      <div style={{fontSize:11,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>📋 Historial de cambios</div>
+      {items.map(h=>(
+        <div key={h.id} style={{borderLeft:`2px solid ${C.border}`,paddingLeft:10,marginBottom:8}}>
+          <div style={{fontSize:12,fontWeight:600,color:C.ink}}>{h.accion}</div>
+          {h.campo&&<div style={{fontSize:11,color:C.inkMuted}}>{h.campo}: <span style={{color:C.danger,textDecoration:"line-through"}}>{h.valor_anterior||"—"}</span> → <span style={{color:C.ok}}>{h.valor_nuevo||"—"}</span></div>}
+          <div style={{fontSize:10.5,color:C.inkFaint}}>{h.usuario_nombre} · {fmt.datetime(h.creadoEn)}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Comentarios internos por OC
+function ComentariosOC({ oc, perfil, onAgregar, onEliminar }) {
+  const [texto,setTexto]=useState(""); const [saving,setSaving]=useState(false);
+  const comentarios=(oc.oc_comentarios||[]).slice().sort((a,b)=>(b.creadoEn||"").localeCompare(a.creadoEn||""));
+  const handleAgregar=async()=>{
+    if(!texto.trim()) return;
+    setSaving(true);
+    await onAgregar(oc.id,texto.trim());
+    setTexto(""); setSaving(false);
+  };
+  return (
+    <div style={{marginBottom:14}}>
+      <div style={{fontSize:11,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>
+        💬 Notas del equipo {comentarios.length>0&&<span style={{color:C.teal}}>({comentarios.length})</span>}
+      </div>
+      {comentarios.map(c=>(
+        <div key={c.id} style={{background:C.paper,borderRadius:8,padding:"8px 12px",marginBottom:6}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+            <div style={{flex:1}}>
+              <div style={{fontSize:10.5,color:C.teal,fontWeight:700,marginBottom:3}}>{c.usuario_nombre} · {fmt.datetime(c.creadoEn)}</div>
+              <div style={{fontSize:12.5,color:C.ink,lineHeight:1.5}}>{c.texto}</div>
+            </div>
+            {perfil?.rol==="admin"&&(
+              <button onClick={()=>onEliminar(c.id)} style={{background:"none",border:"none",color:C.inkFaint,fontSize:14,cursor:"pointer",padding:"0 4px",flexShrink:0}}>✕</button>
+            )}
+          </div>
+        </div>
+      ))}
+      <div style={{display:"flex",gap:8,marginTop:6}}>
+        <input style={{...iStyle,flex:1,marginBottom:0}} value={texto} onChange={e=>setTexto(e.target.value)} placeholder="Agregar nota interna…" onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&handleAgregar()} />
+        <button onClick={handleAgregar} disabled={saving||!texto.trim()} style={{...btnP(C.teal),flexShrink:0,padding:"8px 14px"}}>✓</button>
+      </div>
+    </div>
+  );
+}
+
+// Badge de notificaciones no leídas
+function NotifBadge({ notificaciones }) {
+  const noLeidas=(notificaciones||[]).filter(n=>!n.leida).length;
+  if(!noLeidas) return null;
+  return (
+    <span style={{background:C.danger,color:"#fff",borderRadius:10,fontSize:9.5,fontWeight:800,padding:"1px 5px",marginLeft:4,verticalAlign:"top"}}>
+      {noLeidas>9?"9+":noLeidas}
+    </span>
+  );
+}
+
+// Panel de notificaciones
+function PanelNotificaciones({ notificaciones, onMarcarLeidas }) {
+  const [verTodas,setVerTodas]=useState(false);
+  const items=verTodas?notificaciones:(notificaciones||[]).filter(n=>!n.leida);
+  return (
+    <div style={{padding:"0 16px"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+        <div style={{fontWeight:800,fontSize:13}}>🔔 Notificaciones</div>
+        <div style={{display:"flex",gap:8}}>
+          <button onClick={()=>setVerTodas(v=>!v)} style={{fontSize:11,color:C.teal,background:"none",border:"none",cursor:"pointer"}}>{verTodas?"Solo no leídas":"Ver todas"}</button>
+          {(notificaciones||[]).some(n=>!n.leida)&&<button onClick={onMarcarLeidas} style={{fontSize:11,color:C.inkMuted,background:"none",border:"none",cursor:"pointer"}}>Marcar leídas</button>}
+        </div>
+      </div>
+      {items.length===0&&<div style={{fontSize:12,color:C.inkFaint,textAlign:"center",padding:"20px 0"}}>Sin notificaciones{verTodas?"":" no leídas"}</div>}
+      {items.map(n=>(
+        <div key={n.id} style={{background:n.leida?C.paper:C.tealLight,borderRadius:9,padding:"10px 12px",marginBottom:6,borderLeft:`3px solid ${n.leida?C.border:C.teal}`}}>
+          <div style={{fontSize:12.5,color:C.ink,fontWeight:n.leida?400:600}}>{n.mensaje}</div>
+          <div style={{fontSize:10.5,color:C.inkFaint,marginTop:3}}>{fmt.datetime(n.creadoEn)}{n.oc_numero&&` · OC ${n.oc_numero}`}</div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -868,7 +997,7 @@ function FormEditarEvento({ item, onSave, onCancel }) {
   );
 }
 
-function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink }) {
+function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, bloqueos, perfil, historialCambios, onAgregarComentario, onEliminarComentario, onBloquear, onLiberar }) {
   const evF=(oc.eventos_factura||[])[0];
   const dias=fmt.diasDesde(evF?.fecha);
   const saldo=(oc.monto_facturado||0)-(oc.monto_cobrado||0);
@@ -879,9 +1008,19 @@ function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, 
   const [correoFallida,setCorreoFallida]=useState(false);
   const [correoFecha,setCorreoFecha]=useState(false);
   const puedeReclamar = oc.estado_pago_cliente!=="pagado" && evF && dias!==null && dias>=30;
+
+  // Bloqueo: buscar si hay un bloqueo vigente de otro usuario
+  const bloqueoActivo=(bloqueos||[]).find(b=>b.oc_id===oc.id&&b.usuario_id!==perfil?.id&&new Date(b.expira_en)>new Date());
+
+  const handleToggle=async()=>{
+    if(!expanded && onBloquear) await onBloquear(oc.id);
+    if(expanded && onLiberar) await onLiberar(oc.id);
+    onToggle();
+  };
+
   return (
     <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:13,marginBottom:8,overflow:"hidden"}}>
-      <div onClick={onToggle} style={{padding:"13px 15px",cursor:"pointer"}}>
+      <div onClick={handleToggle} style={{padding:"13px 15px",cursor:"pointer"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
           <div>
             <div style={{fontFamily:MONO,fontWeight:800,fontSize:14,color:C.ink}}>{oc.numero_oc}</div>
@@ -915,9 +1054,12 @@ function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, 
           {oc.vendedor_pagado&&<div style={{fontSize:11,color:C.ok,fontWeight:600,marginBottom:8}}>✓ Vendedor ya pagado por esta venta</div>}
           {oc.ultima_edicion&&<div style={{fontSize:10.5,color:C.inkFaint,marginBottom:8}}>✏️ Datos editados por <Trazabilidad creadoPor={oc.ultimo_editor} creadoEn={oc.ultima_edicion} perfiles={perfiles} /></div>}
 
+          {bloqueoActivo&&<BloqueoBanner bloqueo={bloqueoActivo} />}
           <EtapasOC oc={oc} />
 
           <PanelLinksProductos oc={oc} onGuardar={onGuardarLink} onEliminar={onEliminarLink} onEditar={onEditarLink} />
+          <ComentariosOC oc={oc} perfil={perfil} onAgregar={onAgregarComentario} onEliminar={onEliminarComentario} />
+          <HistorialCambiosOC ocId={oc.id} historialCambios={historialCambios} />
 
           <div style={{fontSize:11,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",marginBottom:6,letterSpacing:0.3}}>Marcar etapa</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:12}}>
@@ -1000,7 +1142,7 @@ function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, 
   );
 }
 
-function PanelCompras({ ocs, perfiles, filtroInicial, contactos, onEnviarReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink }) {
+function PanelCompras({ ocs, perfiles, filtroInicial, contactos, onEnviarReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, bloqueos, perfil, historialCambios, onAgregarComentario, onEliminarComentario, onBloquear, onLiberar }) {
   const [filtros,setFiltros]=useState({}); const [busq,setBusq]=useState(""); const [expId,setExpId]=useState(null);
   const [reclamandoBanner,setReclamandoBanner]=useState(null); const [comunaSel,setComunaSel]=useState("");
   useEffect(()=>{ if(filtroInicial) setFiltros({[filtroInicial]:"pend"}); },[filtroInicial]);
@@ -1062,7 +1204,7 @@ function PanelCompras({ ocs, perfiles, filtroInicial, contactos, onEnviarReclamo
         ))}
       </div>
       <div style={{fontSize:11.5,color:C.inkFaint,marginBottom:10}}>{filtered.length} orden{filtered.length!==1?"es":""}</div>
-      {filtered.map(oc=><FilaOC key={oc.id} oc={oc} perfiles={perfiles} expanded={expId===oc.id} onToggle={()=>setExpId(expId===oc.id?null:oc.id)} contactos={contactos} onEnviarReclamo={onEnviarReclamo} onGuardarContacto={onGuardarContacto} onGuardarDatosOC={onGuardarDatosOC} onEditarEvento={onEditarEvento} financiadores={financiadores} onConfirmarEntrega={onConfirmarEntrega} onEmitirFactura={onEmitirFactura} onPagoCliente={onPagoCliente} onPagoFinanciamiento={onPagoFinanciamiento} entidadesCatalogo={entidadesCatalogo} onGuardarLink={onGuardarLink} onEliminarLink={onEliminarLink} onEditarLink={onEditarLink} />)}
+      {filtered.map(oc=><FilaOC key={oc.id} oc={oc} perfiles={perfiles} expanded={expId===oc.id} onToggle={()=>setExpId(expId===oc.id?null:oc.id)} contactos={contactos} onEnviarReclamo={onEnviarReclamo} onGuardarContacto={onGuardarContacto} onGuardarDatosOC={onGuardarDatosOC} onEditarEvento={onEditarEvento} financiadores={financiadores} onConfirmarEntrega={onConfirmarEntrega} onEmitirFactura={onEmitirFactura} onPagoCliente={onPagoCliente} onPagoFinanciamiento={onPagoFinanciamiento} entidadesCatalogo={entidadesCatalogo} onGuardarLink={onGuardarLink} onEliminarLink={onEliminarLink} onEditarLink={onEditarLink} bloqueos={bloqueos} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={onAgregarComentario} onEliminarComentario={onEliminarComentario} onBloquear={onBloquear} onLiberar={onLiberar} />)}
       {filtered.length===0&&<div style={{textAlign:"center",padding:30,color:C.inkFaint,fontSize:13}}>No hay órdenes con estos filtros.</div>}
     </div>
   );
@@ -1800,6 +1942,7 @@ const TABS=[
   {key:"financiamiento",label:"Financ.",icon:"🏦"},
   {key:"gastos",label:"Gastos",icon:"🧾"},
   {key:"vendedores",label:"Vendedores",icon:"🧑‍💼"},
+  {key:"notif",label:"Alertas",icon:"🔔"},
   {key:"usuarios",label:"Usuarios",icon:"👥",adminOnly:true},
 ];
 const ACCIONES=[
@@ -1820,6 +1963,9 @@ export default function App() {
   const [contactos,setContactos]=useState([]);
   const [entidadesCatalogo,setEntidadesCatalogo]=useState([]);
   const [pagoFinSueltos,setPagoFinSueltos]=useState([]);
+  const [bloqueos,setBloqueos]=useState([]);
+  const [notificaciones,setNotificaciones]=useState([]);
+  const [historialCambios,setHistorialCambios]=useState([]);
 
   const showToast=(msg,type="success")=>{ setToast({msg,type}); setTimeout(()=>setToast(null),3000); };
 
@@ -1849,19 +1995,33 @@ export default function App() {
     if(!session) return;
     const t=session.access_token;
     try {
-      const [ocsD,finD,vendD,catD,gastD,ivaD,pagVD,ajuD,perfD,contD,entD,pagoFinSueltosD]=await Promise.all([
+      const [ocsD,finD,vendD,catD,gastD,ivaD,pagVD,ajuD,perfD,contD,entD,pagoFinSueltosD,notifD,histD]=await Promise.all([
         selOCs(t), sel("financiadores",t,"&order=nombre"), sel("vendedores",t,"&order=nombre"),
         sel("categorias_gasto",t,"&order=nombre"), sel("gastos_indirectos",t,"&order=fecha.desc"),
         sel("iva_mensual",t), sel("pagos_vendedor",t), sel("ajustes_saldo_financiador",t,"&order=creadoEn.desc"),
         selPerfiles(t), sel("contactos_cobranza",t).catch(()=>[]), sel("entidades_catalogo",t).catch(()=>[]),
         sel("eventos_pago_financiamiento",t,"&oc_id=is.null").catch(()=>[]),
+        sel("notificaciones",t,`&usuario_id=eq.${session.user.id}&order=creadoEn.desc&limit=50`).catch(()=>[]),
+        sel("historial_cambios",t,"&order=creadoEn.desc&limit=200").catch(()=>[]),
       ]);
       setOcs(ocsD); setFinanciadores(finD); setVendedores(vendD); setCategoriasGasto(catD);
       setGastos(gastD); setIvaMensual(ivaD); setPagosVendedor(pagVD); setAjustesSaldo(ajuD); setPerfiles(perfD);
       setContactos(contD); setEntidadesCatalogo(entD); setPagoFinSueltos(pagoFinSueltosD);
+      setNotificaciones(notifD); setHistorialCambios(histD);
     } catch(e){ showToast(e.message,"error"); }
   };
   useEffect(()=>{ if(session) cargarTodo(); },[session]);
+
+  // Polling de bloqueos cada 10 segundos
+  useEffect(()=>{
+    if(!session) return;
+    const tick=async()=>{
+      try { const b=await getBloqueosVigentes(session.access_token); setBloqueos(b); } catch{}
+    };
+    tick();
+    const id=setInterval(tick,10000);
+    return()=>clearInterval(id);
+  },[session]);
 
   // ─── HANDLERS ─────────────────────────────────
   const handleIngresarCompra=async(data)=>{
@@ -1951,6 +2111,34 @@ export default function App() {
     await upd("oc_productos_link",session.access_token,linkId,{descripcion,url});
     await cargarTodo();
   };
+
+  // ─── HANDLERS MULTIUSUARIO ────────────────────
+  const handleBloquear=async(ocId)=>{
+    if(!perfil) return;
+    await bloquearOC(session.access_token,ocId,perfil.id,perfil.nombre);
+  };
+  const handleLiberar=async(ocId)=>{
+    await liberarOC(session.access_token,ocId);
+  };
+  const handleAgregarComentario=async(ocId,texto)=>{
+    const t=session.access_token;
+    const oc=ocs.find(o=>o.id===ocId);
+    await ins("oc_comentarios",t,{id:genId("cmt"),oc_id:ocId,usuario_id:perfil.id,usuario_nombre:perfil.nombre,texto});
+    // Registrar en historial
+    await registrarCambio(t,{ocId,ocNumero:oc?.numero_oc,usuarioId:perfil.id,usuarioNombre:perfil.nombre,accion:"Comentario agregado"});
+    await cargarTodo();
+  };
+  const handleEliminarComentario=async(comentarioId)=>{
+    await del("oc_comentarios",session.access_token,comentarioId);
+    await cargarTodo();
+  };
+  const handleMarcarNotificacionesLeidas=async()=>{
+    const t=session.access_token;
+    const noLeidas=notificaciones.filter(n=>!n.leida);
+    await Promise.all(noLeidas.map(n=>upd("notificaciones",t,n.id,{leida:true})));
+    setNotificaciones(prev=>prev.map(n=>({...n,leida:true})));
+  };
+
   const handleImportarEntidades=async(filas)=>{
     const t=session.access_token;
     for(const fila of filas){
@@ -2059,7 +2247,8 @@ export default function App() {
       {/* CONTENIDO */}
       <div style={{padding:16}}>
         {tab==="panel"&&<PanelDashboard ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} onNavigate={(t)=>{setTab(t);}} />}
-        {tab==="compras"&&<PanelCompras ocs={ocs} perfiles={perfiles} filtroInicial={filtroCompras} contactos={contactos} onEnviarReclamo={handleEnviarReclamo} onGuardarContacto={handleGuardarContacto} onGuardarDatosOC={handleGuardarDatosOC} onEditarEvento={handleEditarEvento} financiadores={financiadores} onConfirmarEntrega={handleEntrega} onEmitirFactura={handleFactura} onPagoCliente={handlePagoCliente} onPagoFinanciamiento={handlePagoFin} entidadesCatalogo={entidadesCatalogo} onGuardarLink={handleGuardarLink} onEliminarLink={handleEliminarLink} onEditarLink={handleEditarLink} />}
+        {tab==="compras"&&<PanelCompras ocs={ocs} perfiles={perfiles} filtroInicial={filtroCompras} contactos={contactos} onEnviarReclamo={handleEnviarReclamo} onGuardarContacto={handleGuardarContacto} onGuardarDatosOC={handleGuardarDatosOC} onEditarEvento={handleEditarEvento} financiadores={financiadores} onConfirmarEntrega={handleEntrega} onEmitirFactura={handleFactura} onPagoCliente={handlePagoCliente} onPagoFinanciamiento={handlePagoFin} entidadesCatalogo={entidadesCatalogo} onGuardarLink={handleGuardarLink} onEliminarLink={handleEliminarLink} onEditarLink={handleEditarLink} bloqueos={bloqueos} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={handleAgregarComentario} onEliminarComentario={handleEliminarComentario} onBloquear={handleBloquear} onLiberar={handleLiberar} />}
+        {tab==="notif"&&<PanelNotificaciones notificaciones={notificaciones} onMarcarLeidas={handleMarcarNotificacionesLeidas} />}
         {tab==="financiamiento"&&<PanelFinanciamiento financiadores={financiadores} ocs={ocs} ajustes={ajustesSaldo} perfiles={perfiles} onAjustar={handleAjusteSaldo} />}
         {tab==="gastos"&&<PanelGastos gastos={gastos} categorias={categoriasGasto} vendedores={vendedores} pagosVendedor={pagosVendedor} ocs={ocs} onNuevoGasto={handleNuevoGasto} onPagoVendedor={handlePagoVendedorSimple} />}
         {tab==="vendedores"&&<PanelVendedores vendedores={vendedores} ocs={ocs} ivaMensual={ivaMensual} pagosVendedor={pagosVendedor} onGuardarIva={handleGuardarIva} onPagoVendedor={handlePagoVendedorSimple} />}
@@ -2070,7 +2259,10 @@ export default function App() {
       <div style={{position:"fixed",bottom:0,left:0,right:0,background:C.card,borderTop:`1px solid ${C.border}`,display:"flex",padding:"6px 4px"}}>
         {visTabs.map(t=>(
           <button key={t.key} onClick={()=>{setTab(t.key);setFiltroCompras(null);}} style={{flex:1,background:"none",border:"none",padding:"8px 2px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
-            <span style={{fontSize:17}}>{t.icon}</span>
+            <span style={{fontSize:17,position:"relative",display:"inline-block"}}>
+              {t.icon}
+              {t.key==="notif"&&<NotifBadge notificaciones={notificaciones} />}
+            </span>
             <span style={{fontSize:9.5,fontWeight:700,color:tab===t.key?C.teal:C.inkFaint}}>{t.label}</span>
           </button>
         ))}
