@@ -428,22 +428,21 @@ function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual,
 
     // ── Variables base ──────────────────────────────────────────────────────
     let cobrado=0, ingresos=0, costos=0;
-    let creditoPendienteTotal=0;  // suma col Y (credito_pendiente) de todas las OCs
-    let creditoPagadoTotal=0;     // suma col X (monto_pagado_credito) = lo devuelto a financiadores
-    let costoBFK=0;               // AB17: costo de OCs donde financiador es "Cuenta BFK"
+    let creditoPendienteTotal=0;
+    let creditoPagadoTotal=0;     // suma de pagos a financiadores (vinculados a OC)
+    let costoBFK=0;
 
     for(const oc of ocs){
       cobrado+=oc.monto_cobrado||0;
       ingresos+=oc.monto_total||0;
       costos+=oc.costo_total||0;
-      // Crédito pendiente = costo de compra de OCs con pago a financiador pendiente
       if(oc.estado_pago_financiamiento!=="pagado") creditoPendienteTotal+=oc.costo_total||0;
-      // Crédito pagado = suma de eventos_pago_financiamiento de esa OC
       creditoPagadoTotal+=(oc.eventos_pago_financiamiento||[]).reduce((s,e)=>s+(e.monto||0),0);
-      // Costo BFK = OCs financiadas por Cuenta BFK
       const finNombre=oc.financiadores?.nombre||"";
       if(finNombre.toLowerCase().includes("bfk")||finNombre.toLowerCase().includes("cuenta bfk")) costoBFK+=oc.costo_total||0;
     }
+    // Sumar también pagos a financiadores sin OC asociada (ej: pagos sueltos a Kevin)
+    creditoPagadoTotal+=(pagoFinSueltos||[]).reduce((s,e)=>s+(e.monto||0),0);
 
     // ── Gastos generales (PAGOS GENERAL) ────────────────────────────────────
     const gastosTotal=gastos.reduce((s,g)=>s+(g.monto||0),0);
@@ -501,7 +500,7 @@ function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual,
 
     const utilidad=ingresos-costos;
     return {cobrado,porCobrar,deudaFin,utilidad,saldoProyectado,saldoCtaCte,ingresosPendientes,deudaTotal,gastoContador,gastosVendedores,gastoImpuesto,f29,margenPromPct,deudaVendedoresMes};
-  },[ocs,financiadores,gastos,pagosVendedor,ivaMensual,vendedores]);
+  },[ocs,financiadores,gastos,pagosVendedor,ivaMensual,vendedores,pagoFinSueltos]);
 
   // OCs pagadas para expandir "Ingresos cobrados"
   const ocsPagadas=useMemo(()=>ocs.filter(o=>o.estado_pago_cliente==="pagado").map(o=>{
@@ -1650,6 +1649,7 @@ export default function App() {
   const [pagosVendedor,setPagosVendedor]=useState([]); const [ajustesSaldo,setAjustesSaldo]=useState([]); const [perfiles,setPerfiles]=useState([]);
   const [contactos,setContactos]=useState([]);
   const [entidadesCatalogo,setEntidadesCatalogo]=useState([]);
+  const [pagoFinSueltos,setPagoFinSueltos]=useState([]);
 
   const showToast=(msg,type="success")=>{ setToast({msg,type}); setTimeout(()=>setToast(null),3000); };
 
@@ -1679,15 +1679,16 @@ export default function App() {
     if(!session) return;
     const t=session.access_token;
     try {
-      const [ocsD,finD,vendD,catD,gastD,ivaD,pagVD,ajuD,perfD,contD,entD]=await Promise.all([
+      const [ocsD,finD,vendD,catD,gastD,ivaD,pagVD,ajuD,perfD,contD,entD,pagoFinSueltos]=await Promise.all([
         selOCs(t), sel("financiadores",t,"&order=nombre"), sel("vendedores",t,"&order=nombre"),
         sel("categorias_gasto",t,"&order=nombre"), sel("gastos_indirectos",t,"&order=fecha.desc"),
         sel("iva_mensual",t), sel("pagos_vendedor",t), sel("ajustes_saldo_financiador",t,"&order=creadoEn.desc"),
         selPerfiles(t), sel("contactos_cobranza",t).catch(()=>[]), sel("entidades_catalogo",t).catch(()=>[]),
+        sel("eventos_pago_financiamiento",t,"&oc_id=is.null").catch(()=>[]),
       ]);
       setOcs(ocsD); setFinanciadores(finD); setVendedores(vendD); setCategoriasGasto(catD);
       setGastos(gastD); setIvaMensual(ivaD); setPagosVendedor(pagVD); setAjustesSaldo(ajuD); setPerfiles(perfD);
-      setContactos(contD); setEntidadesCatalogo(entD);
+      setContactos(contD); setEntidadesCatalogo(entD); setPagoFinSueltos(pagoFinSueltos);
     } catch(e){ showToast(e.message,"error"); }
   };
   useEffect(()=>{ if(session) cargarTodo(); },[session]);
