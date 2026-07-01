@@ -206,16 +206,28 @@ function EtapasOC({ oc }) {
 }
 
 // Panel de links de productos por OC
-function PanelLinksProductos({ oc, onGuardar, onEliminar }) {
+function PanelLinksProductos({ oc, onGuardar, onEliminar, onEditar }) {
   const [showForm,setShowForm]=useState(false);
   const [desc,setDesc]=useState(""); const [url,setUrl]=useState(""); const [saving,setSaving]=useState(false);
+  const [editId,setEditId]=useState(null); const [editDesc,setEditDesc]=useState(""); const [editUrl,setEditUrl]=useState("");
   const links=(oc.oc_productos_link||[]).sort((a,b)=>a.orden-b.orden);
+
   const handleGuardar=async()=>{
     if(!desc.trim()||!url.trim()) return;
     setSaving(true);
     await onGuardar(oc.id,{descripcion:desc.trim(),url:url.trim(),orden:links.length});
     setDesc(""); setUrl(""); setShowForm(false); setSaving(false);
   };
+  const handleEditar=async(id)=>{
+    if(!editDesc.trim()||!editUrl.trim()) return;
+    await onEditar(id,{descripcion:editDesc.trim(),url:editUrl.trim()});
+    setEditId(null);
+  };
+  const handleEliminar=async(id)=>{
+    if(!window.confirm("¿Eliminar este link?")) return;
+    await onEliminar(id);
+  };
+
   return (
     <div style={{marginBottom:14}}>
       <div style={{fontSize:11,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>
@@ -225,17 +237,31 @@ function PanelLinksProductos({ oc, onGuardar, onEliminar }) {
         <div style={{fontSize:12,color:C.inkFaint,marginBottom:8}}>Sin links registrados</div>
       )}
       {links.map((l,i)=>(
-        <div key={l.id} style={{display:"flex",alignItems:"center",gap:8,background:C.paper,borderRadius:8,padding:"8px 10px",marginBottom:6}}>
-          <span style={{fontSize:11,color:C.inkMuted,fontWeight:700,minWidth:16}}>{i+1}</span>
-          <div style={{flex:1,minWidth:0}}>
-            <div style={{fontSize:12.5,fontWeight:600,color:C.ink,marginBottom:2}}>{l.descripcion}</div>
-            <a href={l.url} target="_blank" rel="noopener noreferrer"
-              style={{fontSize:11,color:C.teal,wordBreak:"break-all",textDecoration:"none"}}>
-              {l.url.length>50?l.url.slice(0,50)+"…":l.url}
-            </a>
-          </div>
-          <button onClick={()=>window.open(l.url,'_blank')} style={{background:C.tealLight,border:"none",borderRadius:6,padding:"5px 8px",fontSize:12,color:C.teal,cursor:"pointer",flexShrink:0}}>↗</button>
-          <button onClick={()=>onEliminar(l.id)} style={{background:C.dangerLight,border:"none",borderRadius:6,padding:"5px 8px",fontSize:12,color:C.danger,cursor:"pointer",flexShrink:0}}>✕</button>
+        <div key={l.id} style={{background:C.paper,borderRadius:8,padding:"8px 10px",marginBottom:6}}>
+          {editId===l.id?(
+            <div>
+              <Field label="Descripción"><input style={iStyle} value={editDesc} onChange={e=>setEditDesc(e.target.value)} /></Field>
+              <Field label="URL"><input style={iStyle} value={editUrl} onChange={e=>setEditUrl(e.target.value)} /></Field>
+              <div style={{display:"flex",gap:6}}>
+                <button onClick={()=>handleEditar(l.id)} style={btnP(C.teal)}>✓ Guardar</button>
+                <button onClick={()=>setEditId(null)} style={btnP(C.inkFaint)}>Cancelar</button>
+              </div>
+            </div>
+          ):(
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <span style={{fontSize:11,color:C.inkMuted,fontWeight:700,minWidth:16}}>{i+1}</span>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:12.5,fontWeight:600,color:C.ink,marginBottom:2}}>{l.descripcion}</div>
+                <a href={l.url} target="_blank" rel="noopener noreferrer"
+                  style={{fontSize:11,color:C.teal,wordBreak:"break-all",textDecoration:"none"}}>
+                  {l.url.length>50?l.url.slice(0,50)+"…":l.url}
+                </a>
+              </div>
+              <button onClick={()=>window.open(l.url,'_blank')} style={{background:C.tealLight,border:"none",borderRadius:6,padding:"5px 8px",fontSize:12,color:C.teal,cursor:"pointer",flexShrink:0}}>↗</button>
+              <button onClick={()=>{setEditId(l.id);setEditDesc(l.descripcion);setEditUrl(l.url);}} style={{background:C.warnLight,border:"none",borderRadius:6,padding:"5px 8px",fontSize:12,color:C.warn,cursor:"pointer",flexShrink:0}}>✏️</button>
+              <button onClick={()=>handleEliminar(l.id)} style={{background:C.dangerLight,border:"none",borderRadius:6,padding:"5px 8px",fontSize:12,color:C.danger,cursor:"pointer",flexShrink:0}}>✕</button>
+            </div>
+          )}
         </div>
       ))}
       {showForm&&(
@@ -842,7 +868,7 @@ function FormEditarEvento({ item, onSave, onCancel }) {
   );
 }
 
-function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink }) {
+function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink }) {
   const evF=(oc.eventos_factura||[])[0];
   const dias=fmt.diasDesde(evF?.fecha);
   const saldo=(oc.monto_facturado||0)-(oc.monto_cobrado||0);
@@ -891,7 +917,7 @@ function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, 
 
           <EtapasOC oc={oc} />
 
-          <PanelLinksProductos oc={oc} onGuardar={onGuardarLink} onEliminar={onEliminarLink} />
+          <PanelLinksProductos oc={oc} onGuardar={onGuardarLink} onEliminar={onEliminarLink} onEditar={onEditarLink} />
 
           <div style={{fontSize:11,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",marginBottom:6,letterSpacing:0.3}}>Marcar etapa</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:12}}>
@@ -974,7 +1000,7 @@ function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, 
   );
 }
 
-function PanelCompras({ ocs, perfiles, filtroInicial, contactos, onEnviarReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink }) {
+function PanelCompras({ ocs, perfiles, filtroInicial, contactos, onEnviarReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink }) {
   const [filtros,setFiltros]=useState({}); const [busq,setBusq]=useState(""); const [expId,setExpId]=useState(null);
   const [reclamandoBanner,setReclamandoBanner]=useState(null); const [comunaSel,setComunaSel]=useState("");
   useEffect(()=>{ if(filtroInicial) setFiltros({[filtroInicial]:"pend"}); },[filtroInicial]);
@@ -1036,7 +1062,7 @@ function PanelCompras({ ocs, perfiles, filtroInicial, contactos, onEnviarReclamo
         ))}
       </div>
       <div style={{fontSize:11.5,color:C.inkFaint,marginBottom:10}}>{filtered.length} orden{filtered.length!==1?"es":""}</div>
-      {filtered.map(oc=><FilaOC key={oc.id} oc={oc} perfiles={perfiles} expanded={expId===oc.id} onToggle={()=>setExpId(expId===oc.id?null:oc.id)} contactos={contactos} onEnviarReclamo={onEnviarReclamo} onGuardarContacto={onGuardarContacto} onGuardarDatosOC={onGuardarDatosOC} onEditarEvento={onEditarEvento} financiadores={financiadores} onConfirmarEntrega={onConfirmarEntrega} onEmitirFactura={onEmitirFactura} onPagoCliente={onPagoCliente} onPagoFinanciamiento={onPagoFinanciamiento} entidadesCatalogo={entidadesCatalogo} onGuardarLink={onGuardarLink} onEliminarLink={onEliminarLink} />)}
+      {filtered.map(oc=><FilaOC key={oc.id} oc={oc} perfiles={perfiles} expanded={expId===oc.id} onToggle={()=>setExpId(expId===oc.id?null:oc.id)} contactos={contactos} onEnviarReclamo={onEnviarReclamo} onGuardarContacto={onGuardarContacto} onGuardarDatosOC={onGuardarDatosOC} onEditarEvento={onEditarEvento} financiadores={financiadores} onConfirmarEntrega={onConfirmarEntrega} onEmitirFactura={onEmitirFactura} onPagoCliente={onPagoCliente} onPagoFinanciamiento={onPagoFinanciamiento} entidadesCatalogo={entidadesCatalogo} onGuardarLink={onGuardarLink} onEliminarLink={onEliminarLink} onEditarLink={onEditarLink} />)}
       {filtered.length===0&&<div style={{textAlign:"center",padding:30,color:C.inkFaint,fontSize:13}}>No hay órdenes con estos filtros.</div>}
     </div>
   );
@@ -1921,6 +1947,10 @@ export default function App() {
     await fetch(`${SUPABASE_URL}/rest/v1/oc_productos_link?id=eq.${linkId}`,{method:"DELETE",headers:hdrs(session.access_token)});
     await cargarTodo();
   };
+  const handleEditarLink=async(linkId,{descripcion,url})=>{
+    await upd("oc_productos_link",session.access_token,linkId,{descripcion,url});
+    await cargarTodo();
+  };
   const handleImportarEntidades=async(filas)=>{
     const t=session.access_token;
     for(const fila of filas){
@@ -2029,7 +2059,7 @@ export default function App() {
       {/* CONTENIDO */}
       <div style={{padding:16}}>
         {tab==="panel"&&<PanelDashboard ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} onNavigate={(t)=>{setTab(t);}} />}
-        {tab==="compras"&&<PanelCompras ocs={ocs} perfiles={perfiles} filtroInicial={filtroCompras} contactos={contactos} onEnviarReclamo={handleEnviarReclamo} onGuardarContacto={handleGuardarContacto} onGuardarDatosOC={handleGuardarDatosOC} onEditarEvento={handleEditarEvento} financiadores={financiadores} onConfirmarEntrega={handleEntrega} onEmitirFactura={handleFactura} onPagoCliente={handlePagoCliente} onPagoFinanciamiento={handlePagoFin} entidadesCatalogo={entidadesCatalogo} onGuardarLink={handleGuardarLink} onEliminarLink={handleEliminarLink} />}
+        {tab==="compras"&&<PanelCompras ocs={ocs} perfiles={perfiles} filtroInicial={filtroCompras} contactos={contactos} onEnviarReclamo={handleEnviarReclamo} onGuardarContacto={handleGuardarContacto} onGuardarDatosOC={handleGuardarDatosOC} onEditarEvento={handleEditarEvento} financiadores={financiadores} onConfirmarEntrega={handleEntrega} onEmitirFactura={handleFactura} onPagoCliente={handlePagoCliente} onPagoFinanciamiento={handlePagoFin} entidadesCatalogo={entidadesCatalogo} onGuardarLink={handleGuardarLink} onEliminarLink={handleEliminarLink} onEditarLink={handleEditarLink} />}
         {tab==="financiamiento"&&<PanelFinanciamiento financiadores={financiadores} ocs={ocs} ajustes={ajustesSaldo} perfiles={perfiles} onAjustar={handleAjusteSaldo} />}
         {tab==="gastos"&&<PanelGastos gastos={gastos} categorias={categoriasGasto} vendedores={vendedores} pagosVendedor={pagosVendedor} ocs={ocs} onNuevoGasto={handleNuevoGasto} onPagoVendedor={handlePagoVendedorSimple} />}
         {tab==="vendedores"&&<PanelVendedores vendedores={vendedores} ocs={ocs} ivaMensual={ivaMensual} pagosVendedor={pagosVendedor} onGuardarIva={handleGuardarIva} onPagoVendedor={handlePagoVendedorSimple} />}
