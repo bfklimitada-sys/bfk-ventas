@@ -169,18 +169,6 @@ function DiasBadge({ dias }) {
   );
 }
 
-function DiasBadge({ dias }) {
-  if(dias===null||dias===undefined) return null;
-  const color = dias>=39 ? C.danger : dias>=30 ? C.warn : C.ok;
-  const bg = dias>=39 ? C.dangerLight : dias>=30 ? C.warnLight : C.okLight;
-  const label = dias>=39 ? "⚠ Reclamar" : dias>=30 ? "Vence pronto" : "Al día";
-  return (
-    <span style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:20,fontSize:11,fontWeight:700,background:bg,color}}>
-      {dias}d · {label}
-    </span>
-  );
-}
-
 // Indicador de progreso de etapas por OC
 function EtapasOC({ oc }) {
   const etapas = [
