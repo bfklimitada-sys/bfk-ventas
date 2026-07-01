@@ -419,7 +419,7 @@ function FormPagoFinanciamiento({ ocs, financiadores, onSave, ocPreseleccionada,
 // ═══════════════════════════════════════════════
 // PANEL — KPIs clickeables + Saldo Proyectado + Deuda General
 // ═══════════════════════════════════════════════
-function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, onNavigate }) {
+function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, onNavigate }) {
   const [expandido,setExpandido]=useState(null);
 
   const kpis=useMemo(()=>{
@@ -1865,7 +1865,7 @@ export default function App() {
 
       {/* CONTENIDO */}
       <div style={{padding:16}}>
-        {tab==="panel"&&<PanelDashboard ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} onNavigate={(t)=>{setTab(t);}} />}
+        {tab==="panel"&&<PanelDashboard ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} onNavigate={(t)=>{setTab(t);}} />}
         {tab==="compras"&&<PanelCompras ocs={ocs} perfiles={perfiles} filtroInicial={filtroCompras} contactos={contactos} onEnviarReclamo={handleEnviarReclamo} onGuardarContacto={handleGuardarContacto} onGuardarDatosOC={handleGuardarDatosOC} onEditarEvento={handleEditarEvento} financiadores={financiadores} onConfirmarEntrega={handleEntrega} onEmitirFactura={handleFactura} onPagoCliente={handlePagoCliente} onPagoFinanciamiento={handlePagoFin} entidadesCatalogo={entidadesCatalogo} />}
         {tab==="financiamiento"&&<PanelFinanciamiento financiadores={financiadores} ocs={ocs} ajustes={ajustesSaldo} perfiles={perfiles} onAjustar={handleAjusteSaldo} />}
         {tab==="gastos"&&<PanelGastos gastos={gastos} categorias={categoriasGasto} vendedores={vendedores} pagosVendedor={pagosVendedor} ocs={ocs} onNuevoGasto={handleNuevoGasto} onPagoVendedor={handlePagoVendedorSimple} />}
