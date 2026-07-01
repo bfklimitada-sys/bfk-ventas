@@ -36,7 +36,7 @@ async function selPerfiles(t) { const r=await fetch(`${SUPABASE_URL}/rest/v1/per
 async function getPerfil(t, uid) { const r=await fetch(`${SUPABASE_URL}/rest/v1/perfiles?id=eq.${uid}&select=*`,{headers:hdrs(t)}); if(!r.ok) return null; const a=await r.json(); return a[0]||null; }
 async function updRol(t, uid, rol) { const r=await fetch(`${SUPABASE_URL}/rest/v1/perfiles?id=eq.${uid}`,{method:"PATCH",headers:hdrs(t),body:JSON.stringify({rol})}); if(!r.ok) throw new Error("Error actualizando rol"); return r.json(); }
 async function selOCs(t) {
-  const r=await fetch(`${SUPABASE_URL}/rest/v1/ordenes_compra_v2?select=*,vendedores(nombre),financiadores(nombre),eventos_compra(*),eventos_entrega(*),eventos_factura(*),eventos_pago_cliente(*),eventos_pago_financiamiento(*)&order=creadoEn.desc`,{headers:hdrs(t)});
+  const r=await fetch(`${SUPABASE_URL}/rest/v1/ordenes_compra_v2?select=*,vendedores(nombre),financiadores(nombre),eventos_compra(*),eventos_entrega(*),eventos_factura(*),eventos_pago_cliente(*),eventos_pago_financiamiento(*),oc_productos_link(*)&order=creadoEn.desc`,{headers:hdrs(t)});
   if(!r.ok) throw new Error("Error leyendo OCs"); return r.json();
 }
 const storageGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
@@ -166,6 +166,104 @@ function DiasBadge({ dias }) {
     <span style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:20,fontSize:11,fontWeight:700,background:bg,color}}>
       {dias}d · {label}
     </span>
+  );
+}
+
+function DiasBadge({ dias }) {
+  if(dias===null||dias===undefined) return null;
+  const color = dias>=39 ? C.danger : dias>=30 ? C.warn : C.ok;
+  const bg = dias>=39 ? C.dangerLight : dias>=30 ? C.warnLight : C.okLight;
+  const label = dias>=39 ? "⚠ Reclamar" : dias>=30 ? "Vence pronto" : "Al día";
+  return (
+    <span style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:20,fontSize:11,fontWeight:700,background:bg,color}}>
+      {dias}d · {label}
+    </span>
+  );
+}
+
+// Indicador de progreso de etapas por OC
+function EtapasOC({ oc }) {
+  const etapas = [
+    { key:"compra",   label:"Compra",   ok: (oc.eventos_compra||[]).length>0,            icon:"📦" },
+    { key:"entrega",  label:"Entrega",  ok: oc.estado_entrega==="entregado",              icon:"🚚" },
+    { key:"factura",  label:"Factura",  ok: oc.estado_factura_propia==="emitida",         icon:"🧾" },
+    { key:"cobro",    label:"Cobro",    ok: oc.estado_pago_cliente==="pagado",            icon:"💰" },
+    { key:"financ",   label:"Financ.",  ok: oc.estado_pago_financiamiento==="pagado",     icon:"🏦" },
+  ];
+  const completadas = etapas.filter(e=>e.ok).length;
+  return (
+    <div style={{marginBottom:10}}>
+      <div style={{display:"flex",alignItems:"center",gap:0,marginBottom:6}}>
+        {etapas.map((e,i)=>(
+          <React.Fragment key={e.key}>
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2,flex:1}}>
+              <div style={{
+                width:32,height:32,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",
+                fontSize:15,background:e.ok?C.ok:C.paper,border:`2px solid ${e.ok?C.ok:C.border}`,
+                transition:"all 0.2s"
+              }}>{e.ok?e.icon:<span style={{fontSize:11,color:C.inkFaint}}>{i+1}</span>}</div>
+              <span style={{fontSize:9.5,color:e.ok?C.ok:C.inkFaint,fontWeight:e.ok?700:400,textAlign:"center"}}>{e.label}</span>
+            </div>
+            {i<etapas.length-1&&(
+              <div style={{height:2,flex:0.5,background:etapas[i+1].ok&&e.ok?C.ok:C.border,marginBottom:18,transition:"all 0.2s"}} />
+            )}
+          </React.Fragment>
+        ))}
+      </div>
+      <div style={{fontSize:10.5,color:completadas===5?C.ok:C.inkMuted,textAlign:"right",fontWeight:completadas===5?700:400}}>
+        {completadas===5?"✓ OC completada":`${completadas}/5 etapas completadas`}
+      </div>
+    </div>
+  );
+}
+
+// Panel de links de productos por OC
+function PanelLinksProductos({ oc, onGuardar, onEliminar }) {
+  const [showForm,setShowForm]=useState(false);
+  const [desc,setDesc]=useState(""); const [url,setUrl]=useState(""); const [saving,setSaving]=useState(false);
+  const links=(oc.oc_productos_link||[]).sort((a,b)=>a.orden-b.orden);
+  const handleGuardar=async()=>{
+    if(!desc.trim()||!url.trim()) return;
+    setSaving(true);
+    await onGuardar(oc.id,{descripcion:desc.trim(),url:url.trim(),orden:links.length});
+    setDesc(""); setUrl(""); setShowForm(false); setSaving(false);
+  };
+  return (
+    <div style={{marginBottom:14}}>
+      <div style={{fontSize:11,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>
+        🔗 Links de productos {links.length>0&&<span style={{color:C.teal}}>({links.length})</span>}
+      </div>
+      {links.length===0&&!showForm&&(
+        <div style={{fontSize:12,color:C.inkFaint,marginBottom:8}}>Sin links registrados</div>
+      )}
+      {links.map((l,i)=>(
+        <div key={l.id} style={{display:"flex",alignItems:"center",gap:8,background:C.paper,borderRadius:8,padding:"8px 10px",marginBottom:6}}>
+          <span style={{fontSize:11,color:C.inkMuted,fontWeight:700,minWidth:16}}>{i+1}</span>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:12.5,fontWeight:600,color:C.ink,marginBottom:2}}>{l.descripcion}</div>
+            <a href={l.url} target="_blank" rel="noopener noreferrer"
+              style={{fontSize:11,color:C.teal,wordBreak:"break-all",textDecoration:"none"}}>
+              {l.url.length>50?l.url.slice(0,50)+"…":l.url}
+            </a>
+          </div>
+          <button onClick={()=>window.open(l.url,'_blank')} style={{background:C.tealLight,border:"none",borderRadius:6,padding:"5px 8px",fontSize:12,color:C.teal,cursor:"pointer",flexShrink:0}}>↗</button>
+          <button onClick={()=>onEliminar(l.id)} style={{background:C.dangerLight,border:"none",borderRadius:6,padding:"5px 8px",fontSize:12,color:C.danger,cursor:"pointer",flexShrink:0}}>✕</button>
+        </div>
+      ))}
+      {showForm&&(
+        <div style={{background:C.tealLight,borderRadius:9,padding:"10px 12px",marginBottom:8}}>
+          <Field label="Descripción del producto"><input style={iStyle} value={desc} onChange={e=>setDesc(e.target.value)} placeholder="ej: Silla ergonómica negra" /></Field>
+          <Field label="Link (URL)"><input style={iStyle} value={url} onChange={e=>setUrl(e.target.value)} placeholder="https://..." /></Field>
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={handleGuardar} disabled={saving} style={btnP(C.teal)}>{saving?"Guardando…":"✓ Agregar"}</button>
+            <button onClick={()=>{setShowForm(false);setDesc("");setUrl("");}} style={btnP(C.inkFaint)}>Cancelar</button>
+          </div>
+        </div>
+      )}
+      {!showForm&&(
+        <button onClick={()=>setShowForm(true)} style={{...btnP(C.teal),fontSize:12,padding:"6px 12px"}}>+ Agregar producto</button>
+      )}
+    </div>
   );
 }
 
@@ -756,7 +854,7 @@ function FormEditarEvento({ item, onSave, onCancel }) {
   );
 }
 
-function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo }) {
+function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink }) {
   const evF=(oc.eventos_factura||[])[0];
   const dias=fmt.diasDesde(evF?.fecha);
   const saldo=(oc.monto_facturado||0)-(oc.monto_cobrado||0);
@@ -802,6 +900,10 @@ function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, 
           {oc.ultimo_reclamo_fecha&&<div style={{fontSize:11,color:C.warn,fontWeight:600,marginBottom:8}}>📧 Último reclamo: {fmt.datetime(oc.ultimo_reclamo_fecha)} · {oc.correo_cliente}</div>}
           {oc.vendedor_pagado&&<div style={{fontSize:11,color:C.ok,fontWeight:600,marginBottom:8}}>✓ Vendedor ya pagado por esta venta</div>}
           {oc.ultima_edicion&&<div style={{fontSize:10.5,color:C.inkFaint,marginBottom:8}}>✏️ Datos editados por <Trazabilidad creadoPor={oc.ultimo_editor} creadoEn={oc.ultima_edicion} perfiles={perfiles} /></div>}
+
+          <EtapasOC oc={oc} />
+
+          <PanelLinksProductos oc={oc} onGuardar={onGuardarLink} onEliminar={onEliminarLink} />
 
           <div style={{fontSize:11,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",marginBottom:6,letterSpacing:0.3}}>Marcar etapa</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:12}}>
@@ -884,7 +986,7 @@ function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, 
   );
 }
 
-function PanelCompras({ ocs, perfiles, filtroInicial, contactos, onEnviarReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo }) {
+function PanelCompras({ ocs, perfiles, filtroInicial, contactos, onEnviarReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink }) {
   const [filtros,setFiltros]=useState({}); const [busq,setBusq]=useState(""); const [expId,setExpId]=useState(null);
   const [reclamandoBanner,setReclamandoBanner]=useState(null); const [comunaSel,setComunaSel]=useState("");
   useEffect(()=>{ if(filtroInicial) setFiltros({[filtroInicial]:"pend"}); },[filtroInicial]);
@@ -946,7 +1048,7 @@ function PanelCompras({ ocs, perfiles, filtroInicial, contactos, onEnviarReclamo
         ))}
       </div>
       <div style={{fontSize:11.5,color:C.inkFaint,marginBottom:10}}>{filtered.length} orden{filtered.length!==1?"es":""}</div>
-      {filtered.map(oc=><FilaOC key={oc.id} oc={oc} perfiles={perfiles} expanded={expId===oc.id} onToggle={()=>setExpId(expId===oc.id?null:oc.id)} contactos={contactos} onEnviarReclamo={onEnviarReclamo} onGuardarContacto={onGuardarContacto} onGuardarDatosOC={onGuardarDatosOC} onEditarEvento={onEditarEvento} financiadores={financiadores} onConfirmarEntrega={onConfirmarEntrega} onEmitirFactura={onEmitirFactura} onPagoCliente={onPagoCliente} onPagoFinanciamiento={onPagoFinanciamiento} entidadesCatalogo={entidadesCatalogo} />)}
+      {filtered.map(oc=><FilaOC key={oc.id} oc={oc} perfiles={perfiles} expanded={expId===oc.id} onToggle={()=>setExpId(expId===oc.id?null:oc.id)} contactos={contactos} onEnviarReclamo={onEnviarReclamo} onGuardarContacto={onGuardarContacto} onGuardarDatosOC={onGuardarDatosOC} onEditarEvento={onEditarEvento} financiadores={financiadores} onConfirmarEntrega={onConfirmarEntrega} onEmitirFactura={onEmitirFactura} onPagoCliente={onPagoCliente} onPagoFinanciamiento={onPagoFinanciamiento} entidadesCatalogo={entidadesCatalogo} onGuardarLink={onGuardarLink} onEliminarLink={onEliminarLink} />)}
       {filtered.length===0&&<div style={{textAlign:"center",padding:30,color:C.inkFaint,fontSize:13}}>No hay órdenes con estos filtros.</div>}
     </div>
   );
@@ -1579,7 +1681,37 @@ function PanelDatos({ session, showToast }) {
   );
 }
 
-function PanelUsuarios({ perfiles, ocs, onChangeRol, session, showToast }) {
+function PanelUsuarios({ perfiles, ocs, onChangeRol, session, showToast, entidadesCatalogo, onImportarEntidades }) {
+  const [showImport,setShowImport]=useState(false);
+  const [importFile,setImportFile]=useState(null);
+  const [importMsg,setImportMsg]=useState("");
+
+  const handleImport=async()=>{
+    if(!importFile){setImportMsg("Selecciona un archivo primero");return;}
+    setImportMsg("Procesando…");
+    try {
+      const text=await importFile.text();
+      const lines=text.split('\n').filter(l=>l.trim());
+      const header=lines[0].toLowerCase().split(',');
+      const idxRut=header.findIndex(h=>h.includes('rut'));
+      const idxNombre=header.findIndex(h=>h.includes('nombre')||h.includes('entidad'));
+      const idxComuna=header.findIndex(h=>h.includes('comuna'));
+      const idxContacto=header.findIndex(h=>h.includes('contacto'));
+      const idxCorreo=header.findIndex(h=>h.includes('correo')||h.includes('email'));
+      if(idxRut<0||idxNombre<0){setImportMsg("El archivo debe tener columnas 'rut' y 'nombre' (o 'entidad')");return;}
+      const rows=lines.slice(1).map(l=>l.split(',')).filter(r=>r[idxRut]?.trim());
+      await onImportarEntidades(rows.map(r=>({
+        rut:r[idxRut]?.trim()||"",
+        nombre_entidad:r[idxNombre]?.trim()||"",
+        comuna:idxComuna>=0?r[idxComuna]?.trim()||"":"",
+        contacto:idxContacto>=0?r[idxContacto]?.trim()||"":"",
+        correo:idxCorreo>=0?r[idxCorreo]?.trim()||"":"",
+      })));
+      setImportMsg(`✓ ${rows.length} entidades importadas`);
+      setImportFile(null);
+    } catch(e){setImportMsg("Error: "+e.message);}
+  };
+
   // Calcula la fecha del último evento creado por cada usuario, cruzando todas las tablas de eventos embebidas en ocs
   const ultimaActividad = useMemo(() => {
     const map = {};
@@ -1617,6 +1749,30 @@ function PanelUsuarios({ perfiles, ocs, onChangeRol, session, showToast }) {
         );
       })}
       <PanelDatos session={session} showToast={showToast} />
+
+      {/* Catálogo de entidades */}
+      <div style={{marginTop:20}}>
+        <div style={{fontWeight:800,fontSize:13,color:C.ink,marginBottom:4}}>🏢 Catálogo de entidades</div>
+        <div style={{fontSize:12,color:C.inkMuted,marginBottom:10}}>
+          {(entidadesCatalogo||[]).length} entidades guardadas · Se autocompletan al escribir el RUT en cualquier OC
+        </div>
+        {!showImport?(
+          <button onClick={()=>setShowImport(true)} style={btnP(C.teal)}>⬆ Importar desde CSV/Excel</button>
+        ):(
+          <div style={{background:C.tealLight,borderRadius:10,padding:"12px 14px"}}>
+            <div style={{fontSize:12.5,fontWeight:700,color:C.tealDark,marginBottom:8}}>Importar entidades desde CSV</div>
+            <div style={{fontSize:11.5,color:C.inkMuted,marginBottom:10}}>
+              El archivo debe tener columnas: <b>rut</b>, <b>nombre</b> (o entidad), y opcionalmente <b>comuna</b>, <b>contacto</b>, <b>correo</b>. Primera fila = encabezados.
+            </div>
+            <input type="file" accept=".csv,.txt" onChange={e=>setImportFile(e.target.files[0])} style={{marginBottom:10,fontSize:12}} />
+            {importMsg&&<div style={{fontSize:12,color:importMsg.startsWith("✓")?C.ok:C.danger,marginBottom:8,fontWeight:600}}>{importMsg}</div>}
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={handleImport} style={btnP(C.teal)}>✓ Importar</button>
+              <button onClick={()=>{setShowImport(false);setImportMsg("");setImportFile(null);}} style={btnP(C.inkFaint)}>Cancelar</button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -1769,6 +1925,25 @@ export default function App() {
     showToast("IVA guardado"); await cargarTodo();
   };
   const handleChangeRol=async(uid,rol)=>{ await updRol(session.access_token,uid,rol); showToast("Rol actualizado"); await cargarTodo(); };
+  const handleGuardarLink=async(ocId,{descripcion,url,orden})=>{
+    await ins("oc_productos_link",session.access_token,{id:genId("lnk"),oc_id:ocId,descripcion,url,orden,creado_por:session.user.id});
+    await cargarTodo();
+  };
+  const handleEliminarLink=async(linkId)=>{
+    await fetch(`${SUPABASE_URL}/rest/v1/oc_productos_link?id=eq.${linkId}`,{method:"DELETE",headers:hdrs(session.access_token)});
+    await cargarTodo();
+  };
+  const handleImportarEntidades=async(filas)=>{
+    const t=session.access_token;
+    for(const fila of filas){
+      if(!fila.rut?.trim()) continue;
+      const existente=entidadesCatalogo.find(e=>e.rut===fila.rut.trim());
+      if(existente) await upd("entidades_catalogo",t,existente.id,fila);
+      else await ins("entidades_catalogo",t,{id:genId("ent"),...fila,creado_por:session.user.id});
+    }
+    showToast(`${filas.length} entidades importadas al catálogo`);
+    await cargarTodo();
+  };
   const handleGuardarDatosOC=async(ocId,{cliente,entidad,comuna,contacto,rutCliente,correo})=>{
     await upd("ordenes_compra_v2",session.access_token,ocId,{cliente,entidad,comuna,contacto,rut_cliente:rutCliente,correo_cliente:correo,ultimo_editor:session.user.id,ultima_edicion:new Date().toISOString()});
     // Si hay RUT, también actualizamos/creamos el catálogo de entidades para reutilizar después
@@ -1866,11 +2041,11 @@ export default function App() {
       {/* CONTENIDO */}
       <div style={{padding:16}}>
         {tab==="panel"&&<PanelDashboard ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} onNavigate={(t)=>{setTab(t);}} />}
-        {tab==="compras"&&<PanelCompras ocs={ocs} perfiles={perfiles} filtroInicial={filtroCompras} contactos={contactos} onEnviarReclamo={handleEnviarReclamo} onGuardarContacto={handleGuardarContacto} onGuardarDatosOC={handleGuardarDatosOC} onEditarEvento={handleEditarEvento} financiadores={financiadores} onConfirmarEntrega={handleEntrega} onEmitirFactura={handleFactura} onPagoCliente={handlePagoCliente} onPagoFinanciamiento={handlePagoFin} entidadesCatalogo={entidadesCatalogo} />}
+        {tab==="compras"&&<PanelCompras ocs={ocs} perfiles={perfiles} filtroInicial={filtroCompras} contactos={contactos} onEnviarReclamo={handleEnviarReclamo} onGuardarContacto={handleGuardarContacto} onGuardarDatosOC={handleGuardarDatosOC} onEditarEvento={handleEditarEvento} financiadores={financiadores} onConfirmarEntrega={handleEntrega} onEmitirFactura={handleFactura} onPagoCliente={handlePagoCliente} onPagoFinanciamiento={handlePagoFin} entidadesCatalogo={entidadesCatalogo} onGuardarLink={handleGuardarLink} onEliminarLink={handleEliminarLink} />}
         {tab==="financiamiento"&&<PanelFinanciamiento financiadores={financiadores} ocs={ocs} ajustes={ajustesSaldo} perfiles={perfiles} onAjustar={handleAjusteSaldo} />}
         {tab==="gastos"&&<PanelGastos gastos={gastos} categorias={categoriasGasto} vendedores={vendedores} pagosVendedor={pagosVendedor} ocs={ocs} onNuevoGasto={handleNuevoGasto} onPagoVendedor={handlePagoVendedorSimple} />}
         {tab==="vendedores"&&<PanelVendedores vendedores={vendedores} ocs={ocs} ivaMensual={ivaMensual} pagosVendedor={pagosVendedor} onGuardarIva={handleGuardarIva} onPagoVendedor={handlePagoVendedorSimple} />}
-        {tab==="usuarios"&&perfil?.rol==="admin"&&<PanelUsuarios perfiles={perfiles} ocs={ocs} onChangeRol={handleChangeRol} session={session} showToast={showToast} />}
+        {tab==="usuarios"&&perfil?.rol==="admin"&&<PanelUsuarios perfiles={perfiles} ocs={ocs} onChangeRol={handleChangeRol} session={session} showToast={showToast} entidadesCatalogo={entidadesCatalogo} onImportarEntidades={handleImportarEntidades} />}
       </div>
 
       {/* NAV BOTTOM */}
