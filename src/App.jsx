@@ -57,7 +57,7 @@ async function selPerfiles(t) { const r=await fetch(`${SUPABASE_URL}/rest/v1/per
 async function getPerfil(t, uid) { const r=await fetch(`${SUPABASE_URL}/rest/v1/perfiles?id=eq.${uid}&select=*`,{headers:hdrs(t)}); if(!r.ok) return null; const a=await r.json(); return a[0]||null; }
 async function updRol(t, uid, rol) { const r=await fetch(`${SUPABASE_URL}/rest/v1/perfiles?id=eq.${uid}`,{method:"PATCH",headers:hdrs(t),body:JSON.stringify({rol})}); if(!r.ok) throw new Error("Error actualizando rol"); return r.json(); }
 async function selOCs(t) {
-  const r=await fetch(`${SUPABASE_URL}/rest/v1/ordenes_compra_v2?select=*,vendedores(nombre),financiadores(nombre),eventos_compra(*),eventos_entrega(*),eventos_factura(*),eventos_pago_cliente(*),eventos_pago_financiamiento(*),oc_productos_link(*),oc_comentarios(*)&order=creadoEn.desc`,{headers:hdrs(t)});
+  const r=await fetch(`${SUPABASE_URL}/rest/v1/ordenes_compra_v2?select=*,vendedores(nombre),financiadores(nombre),eventos_compra(*),eventos_entrega(*),eventos_factura(*),eventos_pago_cliente(*),eventos_pago_financiamiento(*),oc_productos_link(*),oc_comentarios(*),oc_reclamos(*)&order=creadoEn.desc`,{headers:hdrs(t)});
   if(!r.ok) throw new Error("Error leyendo OCs"); return r.json();
 }
 const storageGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
@@ -1283,7 +1283,20 @@ function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, 
             {oc.contacto&&<div style={{gridColumn:"1/-1"}}>Contacto: <b style={{color:C.ink}}>{oc.contacto}</b></div>}
             {evF&&<div style={{gridColumn:"1/-1"}}>Factura: <b>{evF.numero_factura}</b> · {fmt.date(evF.fecha)}{dias!==null&&` · ${dias} días`}</div>}
           </div>
-          {oc.ultimo_reclamo_fecha&&<div style={{fontSize:11,color:C.warn,fontWeight:600,marginBottom:8}}>📧 Último reclamo: {fmt.datetime(oc.ultimo_reclamo_fecha)} · {oc.correo_cliente}</div>}
+          {(oc.oc_reclamos||[]).length>0&&(
+            <div style={{marginBottom:10}}>
+              <div style={{fontSize:11,fontWeight:700,color:C.warn,marginBottom:5}}>📧 Historial de reclamos ({(oc.oc_reclamos||[]).length})</div>
+              {(oc.oc_reclamos||[]).slice().sort((a,b)=>b.fecha?.localeCompare(a.fecha)).map((r,i)=>(
+                <div key={r.id} style={{display:"flex",alignItems:"flex-start",gap:8,borderLeft:`2px solid ${C.warn}`,paddingLeft:8,marginBottom:5}}>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:11.5,fontWeight:600,color:C.ink}}>{r.correo}</div>
+                    <div style={{fontSize:10.5,color:C.inkFaint}}>{fmt.datetime(r.fecha)}{r.usuario_nombre?` · ${r.usuario_nombre}`:""}</div>
+                  </div>
+                  {i===0&&<span style={{fontSize:10,background:C.warnLight,color:C.warn,borderRadius:5,padding:"2px 6px",fontWeight:700,flexShrink:0}}>Último</span>}
+                </div>
+              ))}
+            </div>
+          )}
           {oc.vendedor_pagado&&<div style={{fontSize:11,color:C.ok,fontWeight:600,marginBottom:8}}>✓ Vendedor ya pagado por esta venta</div>}
           {oc.ultima_edicion&&<div style={{fontSize:10.5,color:C.inkFaint,marginBottom:8}}>✏️ Datos editados por <Trazabilidad creadoPor={oc.ultimo_editor} creadoEn={oc.ultima_edicion} perfiles={perfiles} /></div>}
 
@@ -2471,14 +2484,23 @@ export default function App() {
   };
   const handleEnviarReclamo=async({correo,asunto,cuerpo,ocId,rut})=>{
     const url=`mailto:${encodeURIComponent(correo)}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
+    const ahora=new Date().toISOString();
+    const t=session.access_token;
+    const oc=ocs.find(o=>o.id===ocId);
     try {
-      await upd("ordenes_compra_v2",session.access_token,ocId,{
+      await upd("ordenes_compra_v2",t,ocId,{
         correo_cliente:correo, rut_cliente:rut||undefined,
-        ultimo_reclamo_fecha:new Date().toISOString(), ultimo_reclamo_por:session.user.id,
+        ultimo_reclamo_fecha:ahora, ultimo_reclamo_por:session.user.id,
+      });
+      // Guardar en historial de reclamos
+      await ins("oc_reclamos",t,{
+        id:genId("rec"),oc_id:ocId,oc_numero:oc?.numero_oc,
+        correo,fecha:ahora,
+        usuario_id:session.user.id,usuario_nombre:perfil?.nombre||"",
       });
     } catch {}
     window.location.href=url;
-    showToast(`Correo abierto para ${correo} — revisa y envía desde tu app de Mail`);
+    showToast(`Correo abierto para ${correo}`);
     await cargarTodo();
   };
 
