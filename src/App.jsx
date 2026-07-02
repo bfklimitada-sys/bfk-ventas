@@ -191,27 +191,98 @@ function DiasBadge({ dias }) {
 }
 
 // Indicador de progreso de etapas por OC
-function EtapasOC({ oc }) {
+function EtapasOC({ oc, perfil, onEditarEvento, onEliminarFactura, onEliminarEvento }) {
+  const [detalle,setDetalle]=useState(null); // key de la etapa activa
+
+  const getEventos=(key)=>{
+    if(key==="compra") return (oc.eventos_compra||[]);
+    if(key==="entrega") return (oc.eventos_entrega||[]);
+    if(key==="factura") return (oc.eventos_factura||[]);
+    if(key==="cobro") return (oc.eventos_pago_cliente||[]);
+    if(key==="financ") return (oc.eventos_pago_financiamiento||[]);
+    return [];
+  };
+
   const etapas = [
-    { key:"compra",   label:"Compra",   ok: (oc.eventos_compra||[]).length>0,            icon:"📦" },
-    { key:"entrega",  label:"Entrega",  ok: oc.estado_entrega==="entregado",              icon:"🚚" },
-    { key:"factura",  label:"Factura",  ok: oc.estado_factura_propia==="emitida",         icon:"🧾" },
-    { key:"cobro",    label:"Cobro",    ok: oc.estado_pago_cliente==="pagado",            icon:"💰" },
-    { key:"financ",   label:"Financ.",  ok: oc.estado_pago_financiamiento==="pagado",     icon:"🏦" },
+    { key:"compra",  label:"Compra",  ok:(oc.eventos_compra||[]).length>0,         icon:"📦", tabla:"eventos_compra" },
+    { key:"entrega", label:"Entrega", ok:oc.estado_entrega==="entregado",           icon:"🚚", tabla:"eventos_entrega" },
+    { key:"factura", label:"Factura", ok:oc.estado_factura_propia==="emitida",      icon:"🧾", tabla:"eventos_factura" },
+    { key:"cobro",   label:"Cobro",   ok:oc.estado_pago_cliente==="pagado",         icon:"💰", tabla:"eventos_pago_cliente" },
+    { key:"financ",  label:"Financ.", ok:oc.estado_pago_financiamiento==="pagado",  icon:"🏦", tabla:"eventos_pago_financiamiento" },
   ];
-  const completadas = etapas.filter(e=>e.ok).length;
+  const completadas=etapas.filter(e=>e.ok).length;
+
+  const renderDetalle=(etapa)=>{
+    const eventos=getEventos(etapa.key);
+    if(!eventos.length) return <div style={{fontSize:12,color:C.inkFaint,padding:"8px 0"}}>Sin registros aún</div>;
+    return eventos.map((ev,i)=>(
+      <div key={ev.id||i} style={{background:C.paper,borderRadius:8,padding:"10px 12px",marginBottom:6}}>
+        {etapa.key==="compra"&&<>
+          <div style={{fontSize:12.5,fontWeight:600}}>📅 {fmt.date(ev.fecha)}</div>
+          {ev.monto_venta&&<div style={{fontSize:11.5,color:C.inkMuted}}>Venta: {fmt.money(ev.monto_venta)} · Costo: {fmt.money(ev.costo_compra)}</div>}
+          {ev.fecha_entrega_estimada&&<div style={{fontSize:11,color:C.inkMuted}}>Entrega est.: {fmt.date(ev.fecha_entrega_estimada)}</div>}
+          {ev.proveedor&&<div style={{fontSize:11,color:C.inkMuted}}>Proveedor: {ev.proveedor}</div>}
+        </>}
+        {etapa.key==="entrega"&&<>
+          <div style={{fontSize:12.5,fontWeight:600}}>✅ Entregado el {fmt.date(ev.fecha)}</div>
+          {ev.persona_recibe&&<div style={{fontSize:11.5,color:C.inkMuted}}>Recibe: {ev.persona_recibe}</div>}
+          {ev.observaciones&&<div style={{fontSize:11,color:C.inkMuted}}>{ev.observaciones}</div>}
+        </>}
+        {etapa.key==="factura"&&<>
+          <div style={{fontSize:12.5,fontWeight:600}}>🧾 Factura N°{ev.numero_factura} · {fmt.money(ev.monto)}</div>
+          <div style={{fontSize:11.5,color:C.inkMuted}}>Emitida el {fmt.date(ev.fecha)}</div>
+          {ev.nota_credito&&<div style={{fontSize:11,color:C.warn}}>NC N°{ev.nota_credito} anula factura N°{ev.factura_anulada_numero}</div>}
+        </>}
+        {etapa.key==="cobro"&&<>
+          <div style={{fontSize:12.5,fontWeight:600}}>💰 {fmt.money(ev.monto)} cobrado</div>
+          <div style={{fontSize:11.5,color:C.inkMuted}}>{fmt.date(ev.fecha)}</div>
+          {ev.referencia&&<div style={{fontSize:11,color:C.inkMuted}}>Ref: {ev.referencia}</div>}
+        </>}
+        {etapa.key==="financ"&&<>
+          <div style={{fontSize:12.5,fontWeight:600}}>🏦 {fmt.money(ev.monto)} pagado</div>
+          <div style={{fontSize:11.5,color:C.inkMuted}}>{fmt.date(ev.fecha)}</div>
+        </>}
+        <div style={{display:"flex",gap:6,marginTop:8}}>
+          <button onClick={()=>onEditarEvento&&onEditarEvento({tipo:etapa.label,e:ev,tabla:etapa.tabla})}
+            style={{fontSize:11,background:C.tealLight,color:C.teal,border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontWeight:600}}>
+            ✏️ Editar
+          </button>
+          {perfil?.rol==="admin"&&etapa.key==="factura"&&(
+            <button onClick={async()=>{
+              if(!window.confirm(`¿Eliminar factura N°${ev.numero_factura}?\nEsto revertirá el estado a pendiente.`)) return;
+              await onEliminarFactura(oc.id, ev.id);
+              setDetalle(null);
+            }} style={{fontSize:11,background:C.dangerLight,color:C.danger,border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontWeight:600}}>
+              🗑 Eliminar
+            </button>
+          )}
+          {perfil?.rol==="admin"&&etapa.key!=="factura"&&(
+            <button onClick={async()=>{
+              if(!window.confirm(`¿Eliminar este registro de ${etapa.label}?`)) return;
+              if(onEliminarEvento) await onEliminarEvento(etapa.tabla, ev.id, oc.id, etapa.key);
+              setDetalle(null);
+            }} style={{fontSize:11,background:C.dangerLight,color:C.danger,border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontWeight:600}}>
+              🗑 Eliminar
+            </button>
+          )}
+        </div>
+      </div>
+    ));
+  };
+
   return (
     <div style={{marginBottom:10}}>
       <div style={{display:"flex",alignItems:"center",gap:0,marginBottom:6}}>
         {etapas.map((e,i)=>(
           <>
             <div key={e.key} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2,flex:1}}>
-              <div style={{
+              <button onClick={()=>setDetalle(detalle===e.key?null:e.key)} style={{
                 width:32,height:32,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",
-                fontSize:15,background:e.ok?C.ok:C.paper,border:`2px solid ${e.ok?C.ok:C.border}`,
-                transition:"all 0.2s"
-              }}>{e.ok?e.icon:<span style={{fontSize:11,color:C.inkFaint}}>{i+1}</span>}</div>
-              <span style={{fontSize:9.5,color:e.ok?C.ok:C.inkFaint,fontWeight:e.ok?700:400,textAlign:"center"}}>{e.label}</span>
+                fontSize:15,background:detalle===e.key?C.teal:e.ok?C.ok:C.paper,
+                border:`2px solid ${detalle===e.key?C.teal:e.ok?C.ok:C.border}`,
+                cursor:"pointer",transition:"all 0.2s",padding:0,
+              }}>{e.ok?e.icon:<span style={{fontSize:11,color:C.inkFaint}}>{i+1}</span>}</button>
+              <span style={{fontSize:9.5,color:detalle===e.key?C.teal:e.ok?C.ok:C.inkFaint,fontWeight:e.ok||detalle===e.key?700:400,textAlign:"center"}}>{e.label}</span>
             </div>
             {i<etapas.length-1&&(
               <div style={{height:2,flex:0.5,background:etapas[i+1].ok&&e.ok?C.ok:C.border,marginBottom:18,transition:"all 0.2s"}} />
@@ -219,6 +290,15 @@ function EtapasOC({ oc }) {
           </>
         ))}
       </div>
+      {detalle&&(
+        <div style={{background:C.tealLight,borderRadius:9,padding:"10px 12px",marginBottom:8}}>
+          <div style={{fontSize:11,fontWeight:700,color:C.teal,textTransform:"uppercase",marginBottom:8}}>
+            {etapas.find(e=>e.key===detalle)?.icon} {etapas.find(e=>e.key===detalle)?.label}
+            <button onClick={()=>setDetalle(null)} style={{float:"right",background:"none",border:"none",color:C.inkFaint,cursor:"pointer",fontSize:14}}>✕</button>
+          </div>
+          {renderDetalle(etapas.find(e=>e.key===detalle))}
+        </div>
+      )}
       <div style={{fontSize:10.5,color:completadas===5?C.ok:C.inkMuted,textAlign:"right",fontWeight:completadas===5?700:400}}>
         {completadas===5?"✓ OC completada":`${completadas}/5 etapas completadas`}
       </div>
@@ -1230,7 +1310,7 @@ function FormEditarEvento({ item, onSave, onCancel }) {
   );
 }
 
-function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, bloqueos, perfil, historialCambios, onAgregarComentario, onEliminarComentario, onBloquear, onLiberar, onEliminarOC, onEliminarFactura }) {
+function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, bloqueos, perfil, historialCambios, onAgregarComentario, onEliminarComentario, onBloquear, onLiberar, onEliminarOC, onEliminarFactura, onEliminarEvento }) {
   const evF=(oc.eventos_factura||[])[0];
   const dias=fmt.diasDesde(evF?.fecha);
   const saldo=(oc.monto_facturado||0)-(oc.monto_cobrado||0);
@@ -1293,7 +1373,7 @@ function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, 
           {oc.ultima_edicion&&<div style={{fontSize:10.5,color:C.inkFaint,marginBottom:8}}>✏️ Datos editados por <Trazabilidad creadoPor={oc.ultimo_editor} creadoEn={oc.ultima_edicion} perfiles={perfiles} /></div>}
 
           {bloqueoActivo&&<BloqueoBanner bloqueo={bloqueoActivo} />}
-          <EtapasOC oc={oc} />
+          <EtapasOC oc={oc} perfil={perfil} onEditarEvento={setEditandoEvento} onEliminarFactura={onEliminarFactura} onEliminarEvento={onEliminarEvento} />
 
           <PanelLinksProductos oc={oc} onGuardar={onGuardarLink} onEliminar={onEliminarLink} onEditar={onEditarLink} />
           <ComentariosOC oc={oc} perfil={perfil} onAgregar={onAgregarComentario} onEliminar={onEliminarComentario} />
@@ -1396,7 +1476,7 @@ function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, 
   );
 }
 
-function PanelCompras({ ocs, perfiles, filtroInicial, contactos, onEnviarReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, bloqueos, perfil, historialCambios, onAgregarComentario, onEliminarComentario, onBloquear, onLiberar, onEliminarOC, onEliminarFactura }) {
+function PanelCompras({ ocs, perfiles, filtroInicial, contactos, onEnviarReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, bloqueos, perfil, historialCambios, onAgregarComentario, onEliminarComentario, onBloquear, onLiberar, onEliminarOC, onEliminarFactura, onEliminarEvento }) {
   const [filtros,setFiltros]=useState({}); const [busq,setBusq]=useState(""); const [expId,setExpId]=useState(null);
   const [reclamandoBanner,setReclamandoBanner]=useState(null); const [comunaSel,setComunaSel]=useState("");
   useEffect(()=>{ if(filtroInicial) setFiltros({[filtroInicial]:"pend"}); },[filtroInicial]);
@@ -1482,7 +1562,7 @@ function PanelCompras({ ocs, perfiles, filtroInicial, contactos, onEnviarReclamo
         ))}
       </div>
       <div style={{fontSize:11.5,color:C.inkFaint,marginBottom:10}}>{filtered.length} orden{filtered.length!==1?"es":""}</div>
-      {filtered.map(oc=><FilaOC key={oc.id} oc={oc} perfiles={perfiles} expanded={expId===oc.id} onToggle={()=>setExpId(expId===oc.id?null:oc.id)} contactos={contactos} onEnviarReclamo={onEnviarReclamo} onGuardarContacto={onGuardarContacto} onGuardarDatosOC={onGuardarDatosOC} onEditarEvento={onEditarEvento} financiadores={financiadores} onConfirmarEntrega={onConfirmarEntrega} onEmitirFactura={onEmitirFactura} onPagoCliente={onPagoCliente} onPagoFinanciamiento={onPagoFinanciamiento} entidadesCatalogo={entidadesCatalogo} onGuardarLink={onGuardarLink} onEliminarLink={onEliminarLink} onEditarLink={onEditarLink} bloqueos={bloqueos} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={onAgregarComentario} onEliminarComentario={onEliminarComentario} onBloquear={onBloquear} onLiberar={onLiberar} onEliminarOC={onEliminarOC} onEliminarFactura={onEliminarFactura} />)}
+      {filtered.map(oc=><FilaOC key={oc.id} oc={oc} perfiles={perfiles} expanded={expId===oc.id} onToggle={()=>setExpId(expId===oc.id?null:oc.id)} contactos={contactos} onEnviarReclamo={onEnviarReclamo} onGuardarContacto={onGuardarContacto} onGuardarDatosOC={onGuardarDatosOC} onEditarEvento={onEditarEvento} financiadores={financiadores} onConfirmarEntrega={onConfirmarEntrega} onEmitirFactura={onEmitirFactura} onPagoCliente={onPagoCliente} onPagoFinanciamiento={onPagoFinanciamiento} entidadesCatalogo={entidadesCatalogo} onGuardarLink={onGuardarLink} onEliminarLink={onEliminarLink} onEditarLink={onEditarLink} bloqueos={bloqueos} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={onAgregarComentario} onEliminarComentario={onEliminarComentario} onBloquear={onBloquear} onLiberar={onLiberar} onEliminarOC={onEliminarOC} onEliminarFactura={onEliminarFactura} onEliminarEvento={onEliminarEvento} />)}
       {filtered.length===0&&<div style={{textAlign:"center",padding:30,color:C.inkFaint,fontSize:13}}>No hay órdenes con estos filtros.</div>}
     </div>
   );
@@ -2412,6 +2492,18 @@ export default function App() {
   };
 
   // ─── HANDLERS MULTIUSUARIO ────────────────────
+  const handleEliminarEvento=async(tabla, eventoId, ocId, etapaKey)=>{
+    const t=session.access_token;
+    await fetch(`${SUPABASE_URL}/rest/v1/${tabla}?id=eq.${eventoId}`,{method:"DELETE",headers:hdrs(t)});
+    // Revertir estado en la OC según la etapa
+    const reversiones={
+      entrega:{estado_entrega:"pendiente"},
+      cobro:{estado_pago_cliente:"pendiente",monto_cobrado:0},
+      financ:{estado_pago_financiamiento:"pendiente"},
+    };
+    if(reversiones[etapaKey]) await upd("ordenes_compra_v2",t,ocId,reversiones[etapaKey]);
+    showToast("Registro eliminado"); await cargarTodo();
+  };
   const handleEliminarFactura=async(ocId, facturaId)=>{
     const t=session.access_token;
     await fetch(`${SUPABASE_URL}/rest/v1/eventos_factura?id=eq.${facturaId}`,{method:"DELETE",headers:hdrs(t)});
@@ -2573,7 +2665,7 @@ export default function App() {
       {/* CONTENIDO */}
       <div style={{padding:16}}>
         {tab==="panel"&&<PanelDashboard ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} onNavigate={(t)=>{setTab(t);}} />}
-        {tab==="compras"&&<PanelCompras ocs={ocs} perfiles={perfiles} filtroInicial={filtroCompras} contactos={contactos} onEnviarReclamo={handleEnviarReclamo} onGuardarContacto={handleGuardarContacto} onGuardarDatosOC={handleGuardarDatosOC} onEditarEvento={handleEditarEvento} financiadores={financiadores} onConfirmarEntrega={handleEntrega} onEmitirFactura={handleFactura} onPagoCliente={handlePagoCliente} onPagoFinanciamiento={handlePagoFin} entidadesCatalogo={entidadesCatalogo} onGuardarLink={handleGuardarLink} onEliminarLink={handleEliminarLink} onEditarLink={handleEditarLink} bloqueos={bloqueos} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={handleAgregarComentario} onEliminarComentario={handleEliminarComentario} onBloquear={handleBloquear} onLiberar={handleLiberar} onEliminarOC={handleEliminarOC} onEliminarFactura={handleEliminarFactura} />}
+        {tab==="compras"&&<PanelCompras ocs={ocs} perfiles={perfiles} filtroInicial={filtroCompras} contactos={contactos} onEnviarReclamo={handleEnviarReclamo} onGuardarContacto={handleGuardarContacto} onGuardarDatosOC={handleGuardarDatosOC} onEditarEvento={handleEditarEvento} financiadores={financiadores} onConfirmarEntrega={handleEntrega} onEmitirFactura={handleFactura} onPagoCliente={handlePagoCliente} onPagoFinanciamiento={handlePagoFin} entidadesCatalogo={entidadesCatalogo} onGuardarLink={handleGuardarLink} onEliminarLink={handleEliminarLink} onEditarLink={handleEditarLink} bloqueos={bloqueos} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={handleAgregarComentario} onEliminarComentario={handleEliminarComentario} onBloquear={handleBloquear} onLiberar={handleLiberar} onEliminarOC={handleEliminarOC} onEliminarFactura={handleEliminarFactura} onEliminarEvento={handleEliminarEvento} />}
         {tab==="notif"&&<PanelNotificaciones notificaciones={notificaciones} onMarcarLeidas={handleMarcarNotificacionesLeidas} />}
         {tab==="financiamiento"&&<PanelFinanciamiento financiadores={financiadores} ocs={ocs} ajustes={ajustesSaldo} perfiles={perfiles} onAjustar={handleAjusteSaldo} />}
         {tab==="gastos"&&<PanelGastos gastos={gastos} categorias={categoriasGasto} vendedores={vendedores} pagosVendedor={pagosVendedor} ocs={ocs} onNuevoGasto={handleNuevoGasto} onPagoVendedor={handlePagoVendedorSimple} />}
