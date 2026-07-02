@@ -1242,6 +1242,11 @@ function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, 
   const [correoFecha,setCorreoFecha]=useState(false);
   const puedeReclamar = oc.estado_pago_cliente!=="pagado" && evF && dias!==null && dias>=30;
 
+  // Indicador de reclamo: último reclamo y si fue hace menos de 24 hrs
+  const ultimoReclamo=(oc.oc_reclamos||[]).slice().sort((a,b)=>b.fecha?.localeCompare(a.fecha))[0];
+  const hrsDesdeReclamo=ultimoReclamo?Math.floor((new Date()-new Date(ultimoReclamo.fecha))/(1000*60*60)):null;
+  const reclamadaHoy=hrsDesdeReclamo!==null&&hrsDesdeReclamo<24;
+
   // Bloqueo: buscar si hay un bloqueo vigente de otro usuario
   const bloqueoActivo=(bloqueos||[]).find(b=>b.oc_id===oc.id&&b.usuario_id!==perfil?.id&&new Date(b.expira_en)>new Date());
 
@@ -1317,7 +1322,18 @@ function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, 
             <button onClick={()=>setCorreoFecha(true)} style={{background:C.ink,border:"none",color:"#fff",borderRadius:9,padding:"9px 8px",fontSize:11.5,fontWeight:700,cursor:"pointer"}}>📅 Fecha de entrega</button>
           </div>
 
-          {puedeReclamar&&<button onClick={()=>setReclamando(true)} style={{...btnP(C.danger),marginBottom:12}}>📧 Reclamar pago de factura</button>}
+          {puedeReclamar&&(
+            reclamadaHoy
+              ? <div style={{background:C.okLight,border:`1px solid ${C.ok}`,borderRadius:9,padding:"10px 14px",marginBottom:12,display:"flex",alignItems:"center",gap:10}}>
+                  <span style={{fontSize:18}}>✅</span>
+                  <div>
+                    <div style={{fontSize:12.5,fontWeight:700,color:C.ok}}>Reclamada hoy</div>
+                    <div style={{fontSize:11,color:C.inkMuted}}>Enviada a {ultimoReclamo.correo} · hace {hrsDesdeReclamo}h</div>
+                    <div style={{fontSize:10.5,color:C.inkMuted}}>Volverá a rojo en {24-hrsDesdeReclamo}h si no hay pago</div>
+                  </div>
+                </div>
+              : <button onClick={()=>setReclamando(true)} style={{...btnP(C.danger),marginBottom:12}}>📧 Reclamar pago de factura</button>
+          )}
           <button onClick={()=>setEditandoDatos(true)} style={{...btnG,marginBottom:8,width:"100%"}}>✏️ Editar entidad / comuna / contacto</button>
           {perfil?.rol==="admin"&&(
             <button onClick={async()=>{
