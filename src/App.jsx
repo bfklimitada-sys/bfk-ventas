@@ -2288,6 +2288,14 @@ export default function App() {
   };
   useEffect(()=>{ if(session) cargarTodo(); },[session]);
 
+  // Recargar datos cuando el usuario vuelve a la app (después de abrir Mail)
+  useEffect(()=>{
+    if(!session) return;
+    const handleVisible=()=>{ if(document.visibilityState==="visible") cargarTodo(); };
+    document.addEventListener("visibilitychange",handleVisible);
+    return()=>document.removeEventListener("visibilitychange",handleVisible);
+  },[session]);
+
   // Polling de bloqueos cada 10 segundos
   useEffect(()=>{
     if(!session) return;
@@ -2522,6 +2530,7 @@ export default function App() {
     } catch {}
     window.location.href=url;
     showToast(`Correo abierto para ${correo}`);
+    setOcs([]);
     await cargarTodo();
   };
 
@@ -2535,7 +2544,7 @@ export default function App() {
       {/* HEADER */}
       <div style={{background:C.night,padding:"14px 16px 12px",color:"#fff"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div><div style={{fontWeight:800,fontSize:16,letterSpacing:-0.3}}>BFK Ltda</div><div style={{fontSize:11,color:"#94A3B8"}}>{perfil?.nombre} · {perfil?.rol==="admin"?"Admin":"Usuario"}</div></div>
+          <div><div style={{fontWeight:800,fontSize:16,letterSpacing:-0.3}}>BFK Ltda <span style={{fontSize:10,color:"#64748B",fontWeight:400}}>v29</span></div><div style={{fontSize:11,color:"#94A3B8"}}>{perfil?.nombre} · {perfil?.rol==="admin"?"Admin":"Usuario"}</div></div>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
             <button onClick={()=>setAccion("compra")} style={{background:C.teal,border:"none",color:"#fff",borderRadius:9,padding:"9px 14px",fontSize:12.5,fontWeight:700,cursor:"pointer"}}>📦 Nueva OC</button>
             <button onClick={handleLogout} style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",color:"#fff",borderRadius:8,padding:"7px 12px",fontSize:12,fontWeight:600,cursor:"pointer"}}>Salir</button>
