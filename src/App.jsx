@@ -1442,14 +1442,46 @@ function PanelCompras({ ocs, perfiles, filtroInicial, contactos, onEnviarReclamo
       {alertas.length>0&&(
         <div style={{background:C.dangerLight,border:`1px solid ${C.danger}`,borderRadius:12,padding:"12px 15px",marginBottom:14}}>
           <div style={{fontWeight:800,color:C.danger,fontSize:13,marginBottom:8}}>⚠ {alertas.length} factura{alertas.length>1?"s":""} vencida{alertas.length>1?"s":""}</div>
-          {alertas.map(o=>{ const evF=(o.eventos_factura||[])[0]; const dias=fmt.diasDesde(evF?.fecha); return (
-            <div key={o.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4,fontSize:12}}>
-              <span style={{fontFamily:MONO,fontWeight:700}}>{o.numero_oc}</span>
-              <button onClick={()=>setReclamandoBanner(o)} style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:20,fontSize:11,fontWeight:700,background:C.danger,color:"#fff",border:"none",cursor:"pointer"}}>
-                {dias}d · ⚠ Reclamar
-              </button>
-            </div>
-          );})}
+          {alertas.map(o=>{
+            const evF=(o.eventos_factura||[])[0];
+            const dias=fmt.diasDesde(evF?.fecha);
+            const reclamos=(o.oc_reclamos||[]).slice().sort((a,b)=>b.fecha?.localeCompare(a.fecha));
+            const ultimoReclamo=reclamos[0];
+            const hrsDesde=ultimoReclamo?Math.floor((new Date()-new Date(ultimoReclamo.fecha))/(1000*60*60)):null;
+            const reclamadaHoy=hrsDesde!==null&&hrsDesde<24;
+            return (
+              <div key={o.id} style={{marginBottom:10,paddingBottom:10,borderBottom:`1px solid ${C.danger}20`}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                  <span style={{fontFamily:MONO,fontWeight:700,fontSize:12}}>{o.numero_oc}</span>
+                  <span style={{fontSize:11,color:C.danger,fontWeight:600}}>{dias}d vencida</span>
+                </div>
+                {/* Historial de reclamos */}
+                {reclamos.length>0&&(
+                  <div style={{marginBottom:6}}>
+                    {reclamos.slice(0,3).map((r,i)=>(
+                      <div key={r.id} style={{fontSize:10.5,color:C.inkMuted,display:"flex",alignItems:"center",gap:6,marginBottom:2}}>
+                        <span style={{color:i===0?C.ok:C.inkFaint}}>●</span>
+                        <span>{r.correo}</span>
+                        <span style={{color:C.inkFaint}}>· {fmt.datetime(r.fecha)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Botón verde o rojo */}
+                {reclamadaHoy
+                  ? <div style={{display:"flex",alignItems:"center",gap:6,background:C.okLight,borderRadius:8,padding:"5px 10px"}}>
+                      <span>✅</span>
+                      <div>
+                        <div style={{fontSize:11,fontWeight:700,color:C.ok}}>Reclamada hace {hrsDesde}h</div>
+                        <div style={{fontSize:10,color:C.inkMuted}}>Vuelve a rojo en {24-hrsDesde}h</div>
+                      </div>
+                    </div>
+                  : <button onClick={()=>setReclamandoBanner(o)} style={{width:"100%",background:C.danger,border:"none",color:"#fff",borderRadius:8,padding:"7px 10px",fontSize:11.5,fontWeight:700,cursor:"pointer"}}>
+                      📧 Reclamar {reclamos.length>0?`(${reclamos.length} reclamo${reclamos.length>1?"s":""} previo${reclamos.length>1?"s":""})`:""}</button>
+                }
+              </div>
+            );
+          })}
         </div>
       )}
       {reclamandoBanner&&(
