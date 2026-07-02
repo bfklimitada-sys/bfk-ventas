@@ -191,8 +191,8 @@ function DiasBadge({ dias }) {
 }
 
 // Indicador de progreso de etapas por OC
-function EtapasOC({ oc, perfil, onEditarEvento, onEliminarFactura, onEliminarEvento }) {
-  const [detalle,setDetalle]=useState(null); // key de la etapa activa
+function EtapasOC({ oc, perfil, onEditarEvento, onEliminarFactura, onEliminarEvento, onAccion, onCorreoFallida, onCorreoFecha }) {
+  const [detalle,setDetalle]=useState(null);
 
   const getEventos=(key)=>{
     if(key==="compra") return (oc.eventos_compra||[]);
@@ -204,90 +204,110 @@ function EtapasOC({ oc, perfil, onEditarEvento, onEliminarFactura, onEliminarEve
   };
 
   const etapas = [
-    { key:"compra",  label:"Compra",  ok:(oc.eventos_compra||[]).length>0,         icon:"📦", tabla:"eventos_compra" },
-    { key:"entrega", label:"Entrega", ok:oc.estado_entrega==="entregado",           icon:"🚚", tabla:"eventos_entrega" },
-    { key:"factura", label:"Factura", ok:oc.estado_factura_propia==="emitida",      icon:"🧾", tabla:"eventos_factura" },
-    { key:"cobro",   label:"Cobro",   ok:oc.estado_pago_cliente==="pagado",         icon:"💰", tabla:"eventos_pago_cliente" },
-    { key:"financ",  label:"Financ.", ok:oc.estado_pago_financiamiento==="pagado",  icon:"🏦", tabla:"eventos_pago_financiamiento" },
+    { key:"compra",  label:"Compra",  ok:(oc.eventos_compra||[]).length>0,        icon:"📦", tabla:"eventos_compra",
+      accion: null, // la compra ya existe al crear la OC
+      correoBtns: null },
+    { key:"entrega", label:"Entrega", ok:oc.estado_entrega==="entregado",          icon:"🚚", tabla:"eventos_entrega",
+      accion: oc.estado_entrega!=="entregado"?{label:"✓ Confirmar entrega",color:C.transit,key:"entrega"}:null,
+      correoBtns: [
+        {label:"⚠️ Entrega fallida",action:onCorreoFallida,color:C.warn},
+        {label:"📅 Fecha de entrega",action:onCorreoFecha,color:C.ink},
+      ]},
+    { key:"factura", label:"Factura", ok:oc.estado_factura_propia==="emitida",     icon:"🧾", tabla:"eventos_factura",
+      accion: oc.estado_factura_propia!=="emitida"
+        ?{label:"🧾 Emitir factura",color:C.info,key:"factura"}
+        :{label:"🧾 Re-emitir (NC)",color:C.inkMuted,key:"factura"},
+      correoBtns: null },
+    { key:"cobro",   label:"Cobro",   ok:oc.estado_pago_cliente==="pagado",        icon:"💰", tabla:"eventos_pago_cliente",
+      accion: oc.estado_factura_propia==="emitida"&&oc.estado_pago_cliente!=="pagado"?{label:"💰 Registrar cobro",color:C.ok,key:"pago_cliente"}:null,
+      correoBtns: null },
+    { key:"financ",  label:"Financ.", ok:oc.estado_pago_financiamiento==="pagado", icon:"🏦", tabla:"eventos_pago_financiamiento",
+      accion: oc.estado_pago_financiamiento!=="pagado"?{label:"🏦 Registrar pago",color:C.purple,key:"pago_financ"}:null,
+      correoBtns: null },
   ];
   const completadas=etapas.filter(e=>e.ok).length;
 
   const renderDetalle=(etapa)=>{
     const eventos=getEventos(etapa.key);
-    if(!eventos.length) return <div style={{fontSize:12,color:C.inkFaint,padding:"8px 0"}}>Sin registros aún</div>;
-    return eventos.map((ev,i)=>(
-      <div key={ev.id||i} style={{background:C.paper,borderRadius:8,padding:"10px 12px",marginBottom:6}}>
-        {etapa.key==="compra"&&<>
-          <div style={{fontSize:12.5,fontWeight:600}}>📅 Fecha: {fmt.date(ev.fecha)||"—"}</div>
-          <div style={{fontSize:11.5,color:C.inkMuted}}>
-            Venta: <b>{fmt.money(ev.monto_venta||oc.monto_total)}</b> · Costo: <b>{fmt.money(ev.costo_compra||oc.costo_total)}</b>
+    return (
+      <div>
+        {eventos.length===0&&<div style={{fontSize:12,color:C.inkFaint,padding:"6px 0"}}>Sin registros aún</div>}
+        {eventos.map((ev,i)=>(
+          <div key={ev.id||i} style={{background:C.card,borderRadius:8,padding:"10px 12px",marginBottom:6}}>
+            {etapa.key==="compra"&&<>
+              <div style={{fontSize:12.5,fontWeight:600}}>📅 {fmt.date(ev.fecha)||"—"}</div>
+              <div style={{fontSize:11.5,color:C.inkMuted}}>Venta: <b>{fmt.money(ev.monto_venta||oc.monto_total)}</b> · Costo: <b>{fmt.money(ev.costo_compra||oc.costo_total)}</b></div>
+              {ev.fecha_entrega_estimada&&<div style={{fontSize:11,color:C.inkMuted}}>Entrega est.: {fmt.date(ev.fecha_entrega_estimada)}</div>}
+              {ev.proveedor&&<div style={{fontSize:11,color:C.inkMuted}}>Proveedor: {ev.proveedor}</div>}
+              <div style={{fontSize:11,color:C.inkMuted}}>Financiador: <b>{oc.financiadores?.nombre||"—"}</b> · Vendedor: <b>{oc.vendedores?.nombre||"—"}</b></div>
+            </>}
+            {etapa.key==="entrega"&&<>
+              <div style={{fontSize:12.5,fontWeight:600}}>✅ Entregado el {fmt.date(ev.fecha)||"—"}</div>
+              {ev.persona_recibe&&<div style={{fontSize:11.5,color:C.inkMuted}}>Recibe: {ev.persona_recibe}</div>}
+              {ev.observaciones&&<div style={{fontSize:11,color:C.inkMuted}}>{ev.observaciones}</div>}
+              {!ev.persona_recibe&&!ev.observaciones&&<div style={{fontSize:11,color:C.inkFaint}}>Sin detalle adicional</div>}
+            </>}
+            {etapa.key==="factura"&&<>
+              <div style={{fontSize:12.5,fontWeight:600}}>🧾 Factura N°{ev.numero_factura||"—"} · {fmt.money(ev.monto||oc.monto_facturado)}</div>
+              <div style={{fontSize:11.5,color:C.inkMuted}}>Emitida el {fmt.date(ev.fecha)||"—"}</div>
+              {ev.nota_credito&&<div style={{fontSize:11,color:C.warn}}>NC N°{ev.nota_credito} · anula factura N°{ev.factura_anulada_numero}</div>}
+            </>}
+            {etapa.key==="cobro"&&<>
+              <div style={{fontSize:12.5,fontWeight:600}}>💰 {fmt.money(ev.monto||oc.monto_cobrado)} cobrado</div>
+              <div style={{fontSize:11.5,color:C.inkMuted}}>{fmt.date(ev.fecha)||"—"}</div>
+              {ev.referencia&&<div style={{fontSize:11,color:C.inkMuted}}>Ref: {ev.referencia}</div>}
+            </>}
+            {etapa.key==="financ"&&<>
+              <div style={{fontSize:12.5,fontWeight:600}}>🏦 {fmt.money(ev.monto||oc.costo_total)} pagado</div>
+              <div style={{fontSize:11.5,color:C.inkMuted}}>{fmt.date(ev.fecha)||"—"}</div>
+              {ev.financiador_id&&<div style={{fontSize:11,color:C.inkMuted}}>A: {oc.financiadores?.nombre||"—"}</div>}
+            </>}
+            <div style={{display:"flex",gap:6,marginTop:8}}>
+              <button onClick={()=>onEditarEvento&&onEditarEvento({tipo:etapa.label,e:ev,tabla:etapa.tabla})}
+                style={{fontSize:11,background:C.tealLight,color:C.teal,border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontWeight:600}}>✏️ Editar</button>
+              {perfil?.rol==="admin"&&etapa.key==="factura"&&(
+                <button onClick={async()=>{
+                  if(!window.confirm(`¿Eliminar factura N°${ev.numero_factura}?\nEsto revertirá el estado a pendiente.`)) return;
+                  await onEliminarFactura(oc.id, ev.id); setDetalle(null);
+                }} style={{fontSize:11,background:C.dangerLight,color:C.danger,border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontWeight:600}}>🗑 Eliminar</button>
+              )}
+              {perfil?.rol==="admin"&&etapa.key!=="factura"&&(
+                <button onClick={async()=>{
+                  if(!window.confirm(`¿Eliminar este registro de ${etapa.label}?`)) return;
+                  if(onEliminarEvento) await onEliminarEvento(etapa.tabla, ev.id, oc.id, etapa.key); setDetalle(null);
+                }} style={{fontSize:11,background:C.dangerLight,color:C.danger,border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontWeight:600}}>🗑 Eliminar</button>
+              )}
+            </div>
           </div>
-          {(ev.fecha_entrega_estimada)&&<div style={{fontSize:11,color:C.inkMuted}}>Entrega est.: {fmt.date(ev.fecha_entrega_estimada)}</div>}
-          {(ev.proveedor)&&<div style={{fontSize:11,color:C.inkMuted}}>Proveedor: {ev.proveedor}</div>}
-          <div style={{fontSize:11,color:C.inkMuted}}>
-            Financiador: <b>{oc.financiadores?.nombre||"—"}</b> · Vendedor: <b>{oc.vendedores?.nombre||"—"}</b>
-          </div>
-        </>}
-        {etapa.key==="entrega"&&<>
-          <div style={{fontSize:12.5,fontWeight:600}}>✅ Entregado el {fmt.date(ev.fecha)||"—"}</div>
-          {ev.persona_recibe&&<div style={{fontSize:11.5,color:C.inkMuted}}>Recibe: {ev.persona_recibe}</div>}
-          {ev.observaciones&&<div style={{fontSize:11,color:C.inkMuted}}>{ev.observaciones}</div>}
-          {!ev.persona_recibe&&!ev.observaciones&&<div style={{fontSize:11,color:C.inkFaint}}>Sin detalle adicional</div>}
-        </>}
-        {etapa.key==="factura"&&<>
-          <div style={{fontSize:12.5,fontWeight:600}}>🧾 Factura N°{ev.numero_factura||"—"} · {fmt.money(ev.monto||oc.monto_facturado)}</div>
-          <div style={{fontSize:11.5,color:C.inkMuted}}>Emitida el {fmt.date(ev.fecha)||"—"}</div>
-          {ev.nota_credito&&<div style={{fontSize:11,color:C.warn}}>NC N°{ev.nota_credito} · anula factura N°{ev.factura_anulada_numero}</div>}
-        </>}
-        {etapa.key==="cobro"&&<>
-          <div style={{fontSize:12.5,fontWeight:600}}>💰 {fmt.money(ev.monto||oc.monto_cobrado)} cobrado</div>
-          <div style={{fontSize:11.5,color:C.inkMuted}}>{fmt.date(ev.fecha)||"—"}</div>
-          {ev.referencia&&<div style={{fontSize:11,color:C.inkMuted}}>Ref: {ev.referencia}</div>}
-        </>}
-        {etapa.key==="financ"&&<>
-          <div style={{fontSize:12.5,fontWeight:600}}>🏦 {fmt.money(ev.monto||oc.costo_total)} pagado</div>
-          <div style={{fontSize:11.5,color:C.inkMuted}}>{fmt.date(ev.fecha)||"—"}</div>
-          {ev.financiador_id&&<div style={{fontSize:11,color:C.inkMuted}}>A: {oc.financiadores?.nombre||"—"}</div>}
-        </>}
-        <div style={{display:"flex",gap:6,marginTop:8}}>
-          <button onClick={()=>onEditarEvento&&onEditarEvento({tipo:etapa.label,e:ev,tabla:etapa.tabla})}
-            style={{fontSize:11,background:C.tealLight,color:C.teal,border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontWeight:600}}>
-            ✏️ Editar
+        ))}
+        {/* Botón de acción de esta etapa */}
+        {etapa.accion&&(
+          <button onClick={()=>{onAccion&&onAccion(etapa.accion.key);}}
+            style={{width:"100%",background:etapa.accion.color,border:"none",color:"#fff",borderRadius:8,padding:"9px 12px",fontSize:12,fontWeight:700,cursor:"pointer",marginTop:4}}>
+            {etapa.accion.label}
           </button>
-          {perfil?.rol==="admin"&&etapa.key==="factura"&&(
-            <button onClick={async()=>{
-              if(!window.confirm(`¿Eliminar factura N°${ev.numero_factura}?\nEsto revertirá el estado a pendiente.`)) return;
-              await onEliminarFactura(oc.id, ev.id);
-              setDetalle(null);
-            }} style={{fontSize:11,background:C.dangerLight,color:C.danger,border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontWeight:600}}>
-              🗑 Eliminar
-            </button>
-          )}
-          {perfil?.rol==="admin"&&etapa.key!=="factura"&&(
-            <button onClick={async()=>{
-              if(!window.confirm(`¿Eliminar este registro de ${etapa.label}?`)) return;
-              if(onEliminarEvento) await onEliminarEvento(etapa.tabla, ev.id, oc.id, etapa.key);
-              setDetalle(null);
-            }} style={{fontSize:11,background:C.dangerLight,color:C.danger,border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontWeight:600}}>
-              🗑 Eliminar
-            </button>
-          )}
-        </div>
+        )}
+        {etapa.correoBtns&&etapa.correoBtns.map((b,i)=>(
+          <button key={i} onClick={b.action}
+            style={{width:"100%",background:b.color,border:"none",color:"#fff",borderRadius:8,padding:"9px 12px",fontSize:12,fontWeight:700,cursor:"pointer",marginTop:4}}>
+            {b.label}
+          </button>
+        ))}
       </div>
-    ));
+    );
   };
 
   return (
-    <div style={{marginBottom:10}}>
+    <div style={{marginBottom:12}}>
       <div style={{display:"flex",alignItems:"center",gap:0,marginBottom:6}}>
         {etapas.map((e,i)=>(
           <>
             <div key={e.key} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2,flex:1}}>
               <button onClick={()=>setDetalle(detalle===e.key?null:e.key)} style={{
-                width:32,height:32,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",
-                fontSize:15,background:detalle===e.key?C.teal:e.ok?C.ok:C.paper,
+                width:34,height:34,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",
+                fontSize:16,background:detalle===e.key?C.teal:e.ok?C.ok:C.paper,
                 border:`2px solid ${detalle===e.key?C.teal:e.ok?C.ok:C.border}`,
-                cursor:"pointer",transition:"all 0.2s",padding:0,
+                cursor:"pointer",transition:"all 0.2s",padding:0,boxShadow:detalle===e.key?"0 2px 8px rgba(20,184,166,0.3)":"none",
               }}>{e.ok?e.icon:<span style={{fontSize:11,color:C.inkFaint}}>{i+1}</span>}</button>
               <span style={{fontSize:9.5,color:detalle===e.key?C.teal:e.ok?C.ok:C.inkFaint,fontWeight:e.ok||detalle===e.key?700:400,textAlign:"center"}}>{e.label}</span>
             </div>
@@ -298,20 +318,23 @@ function EtapasOC({ oc, perfil, onEditarEvento, onEliminarFactura, onEliminarEve
         ))}
       </div>
       {detalle&&(
-        <div style={{background:C.tealLight,borderRadius:9,padding:"10px 12px",marginBottom:8}}>
-          <div style={{fontSize:11,fontWeight:700,color:C.teal,textTransform:"uppercase",marginBottom:8}}>
-            {etapas.find(e=>e.key===detalle)?.icon} {etapas.find(e=>e.key===detalle)?.label}
-            <button onClick={()=>setDetalle(null)} style={{float:"right",background:"none",border:"none",color:C.inkFaint,cursor:"pointer",fontSize:14}}>✕</button>
+        <div style={{background:C.tealLight,borderRadius:10,padding:"10px 12px",marginBottom:8}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+            <span style={{fontSize:11,fontWeight:700,color:C.tealDark,textTransform:"uppercase"}}>
+              {etapas.find(e=>e.key===detalle)?.icon} {etapas.find(e=>e.key===detalle)?.label}
+            </span>
+            <button onClick={()=>setDetalle(null)} style={{background:"none",border:"none",color:C.inkFaint,cursor:"pointer",fontSize:16,lineHeight:1}}>✕</button>
           </div>
           {renderDetalle(etapas.find(e=>e.key===detalle))}
         </div>
       )}
-      <div style={{fontSize:10.5,color:completadas===5?C.ok:C.inkMuted,textAlign:"right",fontWeight:completadas===5?700:400}}>
-        {completadas===5?"✓ OC completada":`${completadas}/5 etapas completadas`}
+      <div style={{fontSize:10,color:completadas===5?C.ok:C.inkFaint,textAlign:"right",fontWeight:completadas===5?700:400}}>
+        {completadas===5?"✓ OC completada":`${completadas}/5 etapas`}
       </div>
     </div>
   );
 }
+
 
 // Panel de links de productos por OC
 function PanelLinksProductos({ oc, onGuardar, onEliminar, onEditar }) {
@@ -1329,13 +1352,34 @@ function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, 
   const [correoFecha,setCorreoFecha]=useState(false);
   const puedeReclamar = oc.estado_pago_cliente!=="pagado" && evF && dias!==null && dias>=30;
 
-  // Indicador de reclamo: último reclamo y si fue hace menos de 24 hrs
   const ultimoReclamo=(oc.oc_reclamos||[]).slice().sort((a,b)=>b.fecha?.localeCompare(a.fecha))[0];
   const hrsDesdeReclamo=ultimoReclamo?Math.floor((new Date()-new Date(ultimoReclamo.fecha))/(1000*60*60)):null;
-  const reclamadaHoy=hrsDesdeReclamo!==null&&hrsDesdeReclamo<24;
 
-  // Bloqueo: buscar si hay un bloqueo vigente de otro usuario
   const bloqueoActivo=(bloqueos||[]).find(b=>b.oc_id===oc.id&&b.usuario_id!==perfil?.id&&new Date(b.expira_en)>new Date());
+
+  // Color de borde izquierdo por estado
+  const completadas=[
+    (oc.eventos_compra||[]).length>0,
+    oc.estado_entrega==="entregado",
+    oc.estado_factura_propia==="emitida",
+    oc.estado_pago_cliente==="pagado",
+    oc.estado_pago_financiamiento==="pagado",
+  ].filter(Boolean).length;
+  const borderColor = oc.estado_pago_cliente==="pagado"&&oc.estado_pago_financiamiento==="pagado" ? C.ok
+    : puedeReclamar ? C.danger
+    : evF ? C.warn
+    : completadas>0 ? C.teal : C.border;
+
+  // Días sin avanzar (estancada)
+  const evFechas=[
+    ...(oc.eventos_compra||[]).map(e=>e.creadoEn||e.fecha),
+    ...(oc.eventos_entrega||[]).map(e=>e.creadoEn||e.fecha),
+    ...(oc.eventos_factura||[]).map(e=>e.creadoEn||e.fecha),
+    ...(oc.eventos_pago_cliente||[]).map(e=>e.creadoEn||e.fecha),
+  ].filter(Boolean).sort();
+  const ultimaActividad=evFechas[evFechas.length-1];
+  const diasEstancada=ultimaActividad?Math.floor((new Date()-new Date(ultimaActividad))/(1000*60*60*24)):null;
+  const estancada=completadas>0&&completadas<5&&diasEstancada!==null&&diasEstancada>=7;
 
   const handleToggle=async()=>{
     if(!expanded && onBloquear) await onBloquear(oc.id);
@@ -1344,90 +1388,89 @@ function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, 
   };
 
   return (
-    <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:13,marginBottom:8,overflow:"hidden"}}>
-      <div onClick={handleToggle} style={{padding:"13px 15px",cursor:"pointer"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
-          <div>
-            <div style={{fontFamily:MONO,fontWeight:800,fontSize:14,color:C.ink}}>{oc.numero_oc}</div>
-            <div style={{fontSize:11.5,color:C.inkMuted}}>{oc.cliente}</div>
-            {/* Solo nombre del financiador, sin monto ni estado */}
-            {oc.financiadores?.nombre&&<div style={{fontSize:11,color:C.inkFaint,marginTop:2}}>Financiador: {oc.financiadores.nombre}</div>}
-            {evF&&<div style={{fontSize:11,color:C.info,marginTop:2,fontWeight:600}}>🧾 Fact. {evF.numero_factura} · {fmt.date(evF.fecha)}{dias!==null?` · ${dias}d`:""}</div>}
+    <div style={{background:C.card,border:`1px solid ${C.border}`,borderLeft:`4px solid ${borderColor}`,borderRadius:13,marginBottom:8,overflow:"hidden"}}>
+      {/* TARJETA COMPRIMIDA */}
+      <div onClick={handleToggle} style={{padding:"12px 14px",cursor:"pointer"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2}}>
+              <span style={{fontFamily:MONO,fontWeight:800,fontSize:13,color:C.ink}}>{oc.numero_oc}</span>
+              {estancada&&<span style={{fontSize:9.5,background:C.warnLight,color:C.warn,borderRadius:5,padding:"1px 5px",fontWeight:700}}>⏸ {diasEstancada}d sin avance</span>}
+              {completadas===5&&<span style={{fontSize:9.5,background:C.okLight,color:C.ok,borderRadius:5,padding:"1px 5px",fontWeight:700}}>✓ Completa</span>}
+            </div>
+            <div style={{fontSize:11.5,color:C.inkMuted,marginBottom:2}}>{oc.cliente}{oc.comuna?` · ${oc.comuna}`:""}</div>
+            <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+              <span style={{fontSize:11,color:C.inkFaint}}>{oc.financiadores?.nombre} · {oc.vendedores?.nombre}</span>
+              {evF&&<span style={{fontSize:10.5,color:C.info,fontWeight:600}}>🧾 {evF.numero_factura}{dias!==null?` · ${dias}d`:""}</span>}
+            </div>
           </div>
-          <div style={{textAlign:"right"}}>
+          <div style={{textAlign:"right",flexShrink:0}}>
             <div style={{fontFamily:MONO,fontWeight:800,fontSize:14,color:C.ok}}>{fmt.money(oc.monto_total)}</div>
-            {(()=>{ const mg=calcMargen(oc.monto_total,oc.costo_total); return (<div style={{fontSize:10.5}}><span style={{color:C.inkFaint}}>costo {fmt.money(oc.costo_total)}</span>{" · "}<span style={{color:mg.color,fontWeight:700,background:mg.bg,padding:"1px 6px",borderRadius:6}}>ganancia {fmt.money(mg.pesos)} ({mg.pct}%)</span></div>); })()}
+            {(()=>{const mg=calcMargen(oc.monto_total,oc.costo_total);return(<span style={{fontSize:10,color:mg.color,fontWeight:700,background:mg.bg,padding:"1px 6px",borderRadius:5}}>{mg.pct}%</span>);})()}
+            <div style={{fontSize:10,color:C.inkFaint,marginTop:2}}>{completadas}/5 etapas</div>
           </div>
         </div>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <EtapasResumen oc={oc} />
-          {evF&&dias!==null&&<DiasBadge dias={dias} />}
-        </div>
+        {evF&&dias!==null&&<div style={{marginTop:4}}><DiasBadge dias={dias} /></div>}
       </div>
+
+      {/* VISTA EXPANDIDA */}
       {expanded&&(
-        <div style={{borderTop:`1px solid ${C.border}`,padding:"13px 15px",background:C.paper}}>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,fontSize:12,color:C.inkMuted,marginBottom:10}}>
-            <div>Vendedor: <b style={{color:C.ink}}>{oc.vendedores?.nombre||"—"}</b></div>
-            <div>Financiador: <b style={{color:C.ink}}>{oc.financiadores?.nombre||"—"}</b></div>
-            <div>Facturado: <b style={{color:C.ink}}>{fmt.money(oc.monto_facturado)}</b></div>
-            <div>Saldo: <b style={{color:saldo>0?C.danger:C.ok}}>{fmt.money(saldo)}</b></div>
-            {oc.entidad&&<div>Entidad: <b style={{color:C.ink}}>{oc.entidad}</b></div>}
-            {oc.comuna&&<div>Comuna: <b style={{color:C.ink}}>{oc.comuna}</b></div>}
-            {oc.contacto&&<div style={{gridColumn:"1/-1"}}>Contacto: <b style={{color:C.ink}}>{oc.contacto}</b></div>}
-            {evF&&<div style={{gridColumn:"1/-1"}}>Factura: <b>{evF.numero_factura}</b> · {fmt.date(evF.fecha)}{dias!==null&&` · ${dias} días`}</div>}
-          </div>
-          {oc.vendedor_pagado&&<div style={{fontSize:11,color:C.ok,fontWeight:600,marginBottom:8}}>✓ Vendedor ya pagado por esta venta</div>}
-          {oc.ultima_edicion&&<div style={{fontSize:10.5,color:C.inkFaint,marginBottom:8}}>✏️ Datos editados por <Trazabilidad creadoPor={oc.ultimo_editor} creadoEn={oc.ultima_edicion} perfiles={perfiles} /></div>}
-
+        <div style={{borderTop:`1px solid ${C.border}`,padding:"12px 14px",background:C.paper}}>
           {bloqueoActivo&&<BloqueoBanner bloqueo={bloqueoActivo} />}
-          <EtapasOC oc={oc} perfil={perfil} onEditarEvento={setEditandoEvento} onEliminarFactura={onEliminarFactura} onEliminarEvento={onEliminarEvento} />
 
+          {/* Datos generales */}
+          <div style={{background:C.card,borderRadius:9,padding:"10px 12px",marginBottom:12,fontSize:12}}>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,color:C.inkMuted}}>
+              <div>Vendedor: <b style={{color:C.ink}}>{oc.vendedores?.nombre||"—"}</b></div>
+              <div>Financiador: <b style={{color:C.ink}}>{oc.financiadores?.nombre||"—"}</b></div>
+              <div>Facturado: <b style={{color:C.ink}}>{fmt.money(oc.monto_facturado)}</b></div>
+              <div>Saldo: <b style={{color:saldo>0?C.danger:C.ok}}>{fmt.money(saldo)}</b></div>
+              {oc.entidad&&<div style={{gridColumn:"1/-1"}}>Entidad: <b style={{color:C.ink}}>{oc.entidad}</b></div>}
+              {oc.contacto&&<div style={{gridColumn:"1/-1"}}>Contacto: <b style={{color:C.ink}}>{oc.contacto}</b></div>}
+            </div>
+            {oc.vendedor_pagado&&<div style={{fontSize:11,color:C.ok,fontWeight:600,marginTop:6}}>✓ Vendedor ya pagado por esta venta</div>}
+            {oc.ultima_edicion&&<div style={{fontSize:10,color:C.inkFaint,marginTop:4}}>✏️ Editado por <Trazabilidad creadoPor={oc.ultimo_editor} creadoEn={oc.ultima_edicion} perfiles={perfiles} /></div>}
+          </div>
+
+          {/* ETAPAS INTERACTIVAS — cada círculo tiene su detalle y acción */}
+          <EtapasOC oc={oc} perfil={perfil}
+            onEditarEvento={setEditandoEvento}
+            onEliminarFactura={onEliminarFactura}
+            onEliminarEvento={onEliminarEvento}
+            onAccion={(key)=>setAccionRapida(key)}
+            onCorreoFallida={()=>setCorreoFallida(true)}
+            onCorreoFecha={()=>setCorreoFecha(true)}
+          />
+
+          {/* Reclamo factura */}
+          {puedeReclamar&&(
+            hrsDesdeReclamo!==null&&hrsDesdeReclamo<24
+              ? <div style={{background:C.okLight,borderRadius:8,padding:"8px 12px",fontSize:11.5,color:C.ok,fontWeight:600,marginBottom:10}}>
+                  ✅ Reclamada hace {hrsDesdeReclamo}h · {ultimoReclamo.correo}
+                </div>
+              : <button onClick={()=>setReclamando(true)} style={{...btnP(C.danger),marginBottom:10}}>
+                  📧 Reclamar pago de factura{(oc.oc_reclamos||[]).length>0?` (${(oc.oc_reclamos||[]).length} reclamo${(oc.oc_reclamos||[]).length>1?"s":""} previo${(oc.oc_reclamos||[]).length>1?"s":""})`:""}</button>
+          )}
+
+          {/* Links de productos y notas */}
           <PanelLinksProductos oc={oc} onGuardar={onGuardarLink} onEliminar={onEliminarLink} onEditar={onEditarLink} />
           <ComentariosOC oc={oc} perfil={perfil} onAgregar={onAgregarComentario} onEliminar={onEliminarComentario} />
           <HistorialCambiosOC ocId={oc.id} historialCambios={historialCambios} />
 
-          <div style={{fontSize:11,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",marginBottom:6,letterSpacing:0.3}}>Marcar etapa</div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:12}}>
-            {oc.estado_entrega!=="confirmada"&&<button onClick={()=>setAccionRapida("entrega")} style={{background:C.transit,border:"none",color:"#fff",borderRadius:9,padding:"9px 8px",fontSize:11.5,fontWeight:700,cursor:"pointer"}}>🚚 Confirmar entrega</button>}
-            {oc.estado_factura_propia!=="emitida"&&<button onClick={()=>setAccionRapida("factura")} style={{background:C.info,border:"none",color:"#fff",borderRadius:9,padding:"9px 8px",fontSize:11.5,fontWeight:700,cursor:"pointer"}}>🧾 Emitir factura</button>}
-            {oc.estado_factura_propia==="emitida"&&<button onClick={()=>setAccionRapida("factura")} style={{background:C.inkMuted,border:"none",color:"#fff",borderRadius:9,padding:"9px 8px",fontSize:11.5,fontWeight:700,cursor:"pointer"}}>🧾 Re-emitir (NC)</button>}
-            {oc.estado_factura_propia==="emitida"&&oc.estado_pago_cliente!=="pagado"&&<button onClick={()=>setAccionRapida("pago_cliente")} style={{background:C.ok,border:"none",color:"#fff",borderRadius:9,padding:"9px 8px",fontSize:11.5,fontWeight:700,cursor:"pointer"}}>💰 Pago de factura</button>}
-            {oc.estado_pago_financiamiento!=="pagado"&&<button onClick={()=>setAccionRapida("pago_financ")} style={{background:C.purple,border:"none",color:"#fff",borderRadius:9,padding:"9px 8px",fontSize:11.5,fontWeight:700,cursor:"pointer"}}>🏦 Pago financiamiento</button>}
-            <button onClick={()=>setCorreoFallida(true)} style={{background:C.warn,border:"none",color:"#fff",borderRadius:9,padding:"9px 8px",fontSize:11.5,fontWeight:700,cursor:"pointer"}}>⚠️ Entrega fallida</button>
-            <button onClick={()=>setCorreoFecha(true)} style={{background:C.ink,border:"none",color:"#fff",borderRadius:9,padding:"9px 8px",fontSize:11.5,fontWeight:700,cursor:"pointer"}}>📅 Fecha de entrega</button>
+          {/* Acciones secundarias */}
+          <div style={{display:"flex",gap:6,marginTop:8,flexWrap:"wrap"}}>
+            <button onClick={()=>setEditandoDatos(true)} style={{...btnG,flex:1}}>✏️ Editar datos</button>
+            <button onClick={()=>setCorreoFallida(true)} style={{...btnG,flex:1}}>⚠️ Entrega fallida</button>
+            <button onClick={()=>setCorreoFecha(true)} style={{...btnG,flex:1}}>📅 Fecha entrega</button>
           </div>
-
-          {puedeReclamar&&<button onClick={()=>setReclamando(true)} style={{...btnP(C.danger),marginBottom:12}}>📧 Reclamar pago de factura</button>}
-          <button onClick={()=>setEditandoDatos(true)} style={{...btnG,marginBottom:8,width:"100%"}}>✏️ Editar entidad / comuna / contacto</button>
           {perfil?.rol==="admin"&&(
             <button onClick={async()=>{
-              if(window.confirm(`¿Eliminar la OC ${oc.numero_oc}?\n\nEsta acción no se puede deshacer.`)) {
+              if(window.confirm(`¿Eliminar la OC ${oc.numero_oc}?\n\nEsta acción no se puede deshacer.`))
                 await onEliminarOC(oc.id);
-              }
-            }} style={{width:"100%",background:"none",border:`1px solid ${C.danger}`,color:C.danger,borderRadius:9,padding:"8px 12px",fontSize:12,fontWeight:600,cursor:"pointer",marginBottom:12}}>
+            }} style={{width:"100%",background:"none",border:`1px solid ${C.danger}`,color:C.danger,borderRadius:9,padding:"8px 12px",fontSize:12,fontWeight:600,cursor:"pointer",marginTop:8}}>
               🗑 Eliminar esta OC
             </button>
           )}
-          <div style={{fontSize:11,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",marginBottom:6,letterSpacing:0.3}}>Historial</div>
-          {[
-            ...(oc.eventos_compra||[]).map(e=>({tipo:"📦 Compra",fecha:e.fecha,extra:"",e,tabla:"eventos_compra"})),
-            ...(oc.eventos_entrega||[]).map(e=>({tipo:"🚚 Entrega",fecha:e.fecha,extra:e.persona_recibe?` · ${e.persona_recibe}`:"",e,tabla:"eventos_entrega"})),
-            ...(oc.eventos_factura||[]).map(e=>({tipo:`🧾 Factura ${e.numero_factura}`,fecha:e.fecha,extra:` · ${fmt.money(e.monto)}${e.nota_credito?` · anula N°${e.factura_anulada_numero} con NC ${e.nota_credito}`:""}`,e,tabla:"eventos_factura"})),
-            ...(oc.eventos_pago_cliente||[]).map(e=>({tipo:`💰 Pago ${fmt.money(e.monto)}`,fecha:e.fecha,extra:"",e,tabla:"eventos_pago_cliente"})),
-            ...(oc.eventos_pago_financiamiento||[]).map(e=>({tipo:`🏦 Pago fin. ${fmt.money(e.monto)}`,fecha:e.fecha,extra:"",e,tabla:"eventos_pago_financiamiento"})),
-          ].sort((a,b)=>a.fecha>b.fecha?1:-1).map((item,i)=>(
-            <div key={i} style={{fontSize:11.5,display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4,gap:6}}>
-              <span style={{color:C.ink,flex:1}}>{item.tipo}{item.extra} · {fmt.date(item.fecha)}</span>
-              <Trazabilidad creadoPor={item.e.creado_por} creadoEn={item.e.creadoEn} perfiles={perfiles} />
-              <button onClick={()=>setEditandoEvento(item)} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,padding:"2px 4px",flexShrink:0}}>✏️</button>
-              {perfil?.rol==="admin"&&item.tabla==="eventos_factura"&&(
-                <button onClick={async()=>{
-                  if(!window.confirm(`¿Eliminar la factura N°${item.e.numero_factura}?\n\nEsto revertirá el estado de factura a "pendiente".`)) return;
-                  await onEliminarFactura(oc.id, item.e.id);
-                }} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,padding:"2px 4px",flexShrink:0,color:C.danger}}>🗑</button>
-              )}
-            </div>
-          ))}
         </div>
       )}
       {reclamando&&(
