@@ -367,9 +367,19 @@ function ComentariosOC({ oc, perfil, onAgregar, onEliminar }) {
           </div>
         </div>
       ))}
-      <div style={{display:"flex",gap:8,marginTop:6}}>
-        <input style={{...iStyle,flex:1,marginBottom:0}} value={texto} onChange={e=>setTexto(e.target.value)} placeholder="Agregar nota interna…" onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&handleAgregar()} />
-        <button onClick={handleAgregar} disabled={saving||!texto.trim()} style={{...btnP(C.teal),flexShrink:0,padding:"8px 14px"}}>✓</button>
+      <div style={{display:"flex",gap:6,marginTop:6,alignItems:"center"}}>
+        <input
+          style={{flex:1,minWidth:0,padding:"8px 10px",borderRadius:8,border:`1px solid ${C.border}`,fontSize:13,fontFamily:SANS,background:C.card,color:C.ink,outline:"none"}}
+          value={texto}
+          onChange={e=>setTexto(e.target.value)}
+          placeholder="Agregar nota…"
+          onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&handleAgregar()}
+        />
+        <button
+          onClick={handleAgregar}
+          disabled={saving||!texto.trim()}
+          style={{flexShrink:0,width:36,height:36,borderRadius:8,border:"none",background:texto.trim()?C.teal:C.inkFaint,color:"#fff",fontSize:16,cursor:texto.trim()?"pointer":"default",display:"flex",alignItems:"center",justifyContent:"center"}}
+        >✓</button>
       </div>
     </div>
   );
@@ -509,15 +519,33 @@ function BuscadorOC({ ocs, ocId, setOcId, permitirNueva, numeroNueva, setNumeroN
 // FORMULARIOS DE EVENTOS RÁPIDOS
 // ═══════════════════════════════════════════════
 function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, entidadesCatalogo }) {
-  const [ocId,setOcId]=useState(null); const [numNueva,setNumNueva]=useState("");
-  const [cliente,setCliente]=useState(""); const [rutCliente,setRutCliente]=useState(""); const [vendedorId,setVendedorId]=useState(vendedores[0]?.id||"");
-  const [entidad,setEntidad]=useState(""); const [comuna,setComuna]=useState(""); const [contacto,setContacto]=useState(""); const [correo,setCorreo]=useState("");
+  const [paso,setPaso]=useState(1);
+  // Paso 1 — Datos OC
+  const [numOC,setNumOC]=useState("");
+  const [vendedorId,setVendedorId]=useState(vendedores[0]?.id||"");
+  const [rutCliente,setRutCliente]=useState("");
+  const [cliente,setCliente]=useState("");
+  const [entidad,setEntidad]=useState("");
+  const [comuna,setComuna]=useState("");
+  const [contacto,setContacto]=useState("");
+  const [correo,setCorreo]=useState("");
   const [autocompletado,setAutocompletado]=useState(false);
-  const [fecha,setFecha]=useState(new Date().toISOString().slice(0,10));
-  const [montoVenta,setMontoVenta]=useState(""); const [costoCompra,setCostoCompra]=useState("");
-  const [fechaEst,setFechaEst]=useState(""); const [financiadorId,setFinanciadorId]=useState(financiadores[0]?.id||"");
-  const [proveedor,setProveedor]=useState(""); const [err,setErr]=useState(""); const [saving,setSaving]=useState(false);
-  const esNueva=!ocId&&numNueva;
+  // Paso 2 — Productos
+  const [productos,setProductos]=useState([{desc:"",cantidad:1,precioCompra:"",precioVenta:"",link:""}]);
+  // Paso 3 — Compra
+  const [financiadorId,setFinanciadorId]=useState(financiadores[0]?.id||"");
+  const [fechaCompra,setFechaCompra]=useState(new Date().toISOString().slice(0,10));
+  const [fechaEst,setFechaEst]=useState("");
+  const [obs,setObs]=useState("");
+  // Control
+  const [err,setErr]=useState(""); const [saving,setSaving]=useState(false);
+
+  // Totales calculados desde productos
+  const costoTotal=productos.reduce((s,p)=>s+(Number(p.precioCompra)||0)*(Number(p.cantidad)||1),0);
+  const ventaTotal=productos.reduce((s,p)=>s+(Number(p.precioVenta)||0)*(Number(p.cantidad)||1),0);
+  const utilidad=ventaTotal-costoTotal;
+  const margen=ventaTotal>0?((utilidad/ventaTotal)*100).toFixed(1):0;
+
   const handleRutChange=(val)=>{
     setRutCliente(val);
     const match=(entidadesCatalogo||[]).find(e=>e.rut===val.trim());
@@ -528,38 +556,243 @@ function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, entidadesC
       if(!correo) setCorreo(match.correo||"");
       if(!cliente) setCliente(match.nombre_entidad||"");
       setAutocompletado(true);
+    } else { setAutocompletado(false); }
+  };
+
+  const addProducto=()=>setProductos(p=>[...p,{desc:"",cantidad:1,precioCompra:"",precioVenta:"",link:""}]);
+  const updProducto=(i,field,val)=>setProductos(p=>p.map((x,idx)=>idx===i?{...x,[field]:val}:x));
+  const delProducto=(i)=>setProductos(p=>p.filter((_,idx)=>idx!==i));
+
+  const validarPaso1=()=>{
+    if(!numOC.trim()){setErr("Ingresa el código de la OC");return false;}
+    if(!cliente.trim()){setErr("Ingresa el nombre del cliente");return false;}
+    setErr(""); return true;
+  };
+  const validarPaso2=()=>{
+    if(productos.length===0){setErr("Agrega al menos un producto");return false;}
+    for(const p of productos){
+      if(!p.desc.trim()){setErr("Todos los productos deben tener descripción");return false;}
+      if(!p.precioCompra||Number(p.precioCompra)<=0){setErr("Todos los productos deben tener precio de compra");return false;}
+      if(!p.precioVenta||Number(p.precioVenta)<=0){setErr("Todos los productos deben tener precio de venta");return false;}
     }
+    setErr(""); return true;
   };
-  const handleSave=async()=>{
-    if(!ocId&&!numNueva){setErr("Busca una OC o crea una nueva");return;}
-    if(esNueva&&!cliente.trim()){setErr("Indica el cliente");return;}
-    if(!montoVenta||Number(montoVenta)<=0){setErr("Indica el monto de venta");return;}
-    if(!costoCompra||Number(costoCompra)<0){setErr("Indica el costo de compra");return;}
-    setErr(""); setSaving(true);
-    try { await onSave({ocId,esNueva,numNueva,cliente:cliente.toUpperCase(),rutCliente,entidad:entidad.toUpperCase(),comuna:comuna.toUpperCase(),contacto,correo,vendedorId,fecha,montoVenta:Number(montoVenta),costoCompra:Number(costoCompra),fechaEst:fechaEst||null,financiadorId,proveedor}); }
-    catch(e){setErr(e.message);} finally{setSaving(false);}
+  const validarPaso3=()=>{
+    if(!financiadorId){setErr("Selecciona el financiador");return false;}
+    setErr(""); return true;
   };
+
+  const handleGuardar=async()=>{
+    if(!validarPaso3()) return;
+    setSaving(true);
+    try {
+      await onSave({
+        esNueva:true, numNueva:numOC.trim(),
+        cliente:cliente.toUpperCase(), rutCliente, entidad:entidad.toUpperCase(),
+        comuna:comuna.toUpperCase(), contacto, correo, vendedorId,
+        montoVenta:ventaTotal, costoCompra:costoTotal,
+        fecha:fechaCompra, fechaEst:fechaEst||null,
+        financiadorId, proveedor:obs,
+        productos:productos.map(p=>({
+          descripcion:p.desc.trim(), cantidad:Number(p.cantidad)||1,
+          precioCompra:Number(p.precioCompra)||0, precioVenta:Number(p.precioVenta)||0,
+          url:p.link.trim(),
+        })),
+      });
+    } catch(e){setErr(e.message);setSaving(false);}
+  };
+
+  // ── UI helpers ─────────────────────────────────
+  const stepStyle=(n)=>({
+    width:28,height:28,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",
+    fontSize:12,fontWeight:800,flexShrink:0,
+    background:paso>n?C.ok:paso===n?C.teal:C.border,
+    color:paso>=n?"#fff":C.inkMuted,
+  });
+  const lineStyle=(n)=>({height:2,flex:1,background:paso>n?C.ok:C.border});
+
   return (
     <div>
-      <Field label="Orden de Compra" required><BuscadorOC ocs={ocs} ocId={ocId} setOcId={setOcId} permitirNueva numNueva={numNueva} setNumeroNueva={setNumNueva} /></Field>
-      {esNueva&&<Field label="RUT del cliente" hint="Si ya existe en el catálogo, autocompleta los demás datos"><input style={iStyle} value={rutCliente} onChange={e=>handleRutChange(e.target.value)} placeholder="ej: 12.345.678-9" /></Field>}
-      {esNueva&&autocompletado&&<div style={{background:C.okLight,borderRadius:8,padding:"8px 12px",fontSize:11.5,color:C.ok,fontWeight:600,marginBottom:12}}>✓ Datos autocompletados desde el catálogo de entidades</div>}
-      {esNueva&&<Field label="Cliente" required hint="Se guarda en mayúscula"><input style={iStyle} value={cliente} onChange={e=>setCliente(e.target.value)} placeholder="Nombre del cliente" /></Field>}
-      {esNueva&&<Field label="Entidad (organismo público)" hint="Se guarda en mayúscula"><input style={iStyle} value={entidad} onChange={e=>setEntidad(e.target.value)} placeholder="ej: I. Municipalidad de..." /></Field>}
-      {esNueva&&<Field label="Comuna" hint="Se guarda en mayúscula"><input style={iStyle} value={comuna} onChange={e=>setComuna(e.target.value)} placeholder="ej: Concepción" /></Field>}
-      {esNueva&&<Field label="Contacto"><input style={iStyle} value={contacto} onChange={e=>setContacto(e.target.value)} placeholder="Nombre y/o teléfono de contacto" /></Field>}
-      {esNueva&&<Field label="Correo del cliente"><input style={iStyle} type="email" value={correo} onChange={e=>setCorreo(e.target.value)} placeholder="contacto@entidad.cl" /></Field>}
-      <Field label="Vendedor"><select style={selStyle} value={vendedorId} onChange={e=>setVendedorId(e.target.value)}>{vendedores.map(v=><option key={v.id} value={v.id}>{v.nombre}</option>)}</select></Field>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-        <Field label="Fecha" required><input style={iStyle} type="date" value={fecha} onChange={e=>setFecha(e.target.value)} /></Field>
-        <Field label="Entrega estimada"><input style={iStyle} type="date" value={fechaEst} onChange={e=>setFechaEst(e.target.value)} /></Field>
-        <Field label="Monto venta ($)" required><input style={iMono} type="number" value={montoVenta} onChange={e=>setMontoVenta(e.target.value)} /></Field>
-        <Field label="Costo compra ($)" required><input style={iMono} type="number" value={costoCompra} onChange={e=>setCostoCompra(e.target.value)} /></Field>
+      {/* Indicador de pasos */}
+      <div style={{display:"flex",alignItems:"center",gap:0,marginBottom:20,padding:"0 4px"}}>
+        <div style={stepStyle(1)}>1</div>
+        <div style={lineStyle(1)} />
+        <div style={stepStyle(2)}>2</div>
+        <div style={lineStyle(2)} />
+        <div style={stepStyle(3)}>3</div>
+        <div style={lineStyle(3)} />
+        <div style={stepStyle(4)}>✓</div>
       </div>
-      <Field label="Financiador" required><select style={selStyle} value={financiadorId} onChange={e=>setFinanciadorId(e.target.value)}>{financiadores.map(f=><option key={f.id} value={f.id}>{f.nombre}</option>)}</select></Field>
-      <Field label="Proveedor"><input style={iStyle} value={proveedor} onChange={e=>setProveedor(e.target.value)} /></Field>
+      <div style={{fontSize:11,color:C.inkMuted,textAlign:"center",marginTop:-14,marginBottom:16}}>
+        {paso===1?"Datos de la OC":paso===2?"Productos":paso===3?"Compra":"Resumen y confirmación"}
+      </div>
+
+      {/* ─── PASO 1: Datos OC ─── */}
+      {paso===1&&(
+        <div>
+          <Field label="Código OC (Mercado Público)" required>
+            <input style={iMono} value={numOC} onChange={e=>setNumOC(e.target.value)} placeholder="ej: 2436-690-AG26" />
+          </Field>
+          <Field label="Vendedor" required>
+            <select style={selStyle} value={vendedorId} onChange={e=>setVendedorId(e.target.value)}>
+              {vendedores.map(v=><option key={v.id} value={v.id}>{v.nombre}</option>)}
+            </select>
+          </Field>
+          <div style={{height:1,background:C.border,margin:"14px 0"}} />
+          <Field label="RUT del cliente" hint="Escribe el RUT para autocompletar">
+            <input style={iStyle} value={rutCliente} onChange={e=>handleRutChange(e.target.value)} placeholder="ej: 69.150.600-2" />
+          </Field>
+          {autocompletado&&<div style={{background:C.okLight,borderRadius:8,padding:"7px 10px",fontSize:11.5,color:C.ok,fontWeight:600,marginBottom:10}}>✓ Datos autocompletados desde el catálogo</div>}
+          <Field label="Institución / Cliente" required>
+            <input style={iStyle} value={cliente} onChange={e=>setCliente(e.target.value)} placeholder="ej: Municipalidad de Concepción" />
+          </Field>
+          <Field label="Entidad (nombre organismo)">
+            <input style={iStyle} value={entidad} onChange={e=>setEntidad(e.target.value)} placeholder="ej: Depto. de Salud" />
+          </Field>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <Field label="Comuna"><input style={iStyle} value={comuna} onChange={e=>setComuna(e.target.value)} placeholder="ej: Concepción" /></Field>
+            <Field label="Contacto"><input style={iStyle} value={contacto} onChange={e=>setContacto(e.target.value)} placeholder="Nombre / teléfono" /></Field>
+          </div>
+          <Field label="Correo">
+            <input style={iStyle} type="email" value={correo} onChange={e=>setCorreo(e.target.value)} placeholder="contacto@entidad.cl" />
+          </Field>
+        </div>
+      )}
+
+      {/* ─── PASO 2: Productos ─── */}
+      {paso===2&&(
+        <div>
+          <div style={{fontSize:12,color:C.inkMuted,marginBottom:12}}>Agrega cada producto con su cantidad, precios y link de compra.</div>
+          {productos.map((p,i)=>(
+            <div key={i} style={{background:C.paper,borderRadius:10,padding:"12px 12px 8px",marginBottom:10,border:`1px solid ${C.border}`}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                <div style={{fontSize:12,fontWeight:700,color:C.teal}}>Producto {i+1}</div>
+                {productos.length>1&&<button onClick={()=>delProducto(i)} style={{background:"none",border:"none",color:C.danger,fontSize:13,cursor:"pointer",padding:"0 4px"}}>✕ Eliminar</button>}
+              </div>
+              <Field label="Descripción" required>
+                <input style={iStyle} value={p.desc} onChange={e=>updProducto(i,"desc",e.target.value)} placeholder="ej: Silla ergonómica negra 3C" />
+              </Field>
+              <Field label="Link de compra (tienda online)">
+                <input style={iStyle} value={p.link} onChange={e=>updProducto(i,"link",e.target.value)} placeholder="https://..." />
+              </Field>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+                <Field label="Cantidad">
+                  <input style={iMono} type="number" min="1" value={p.cantidad} onChange={e=>updProducto(i,"cantidad",e.target.value)} />
+                </Field>
+                <Field label="P. Compra ($)" hint="Lo que pagas">
+                  <input style={iMono} type="number" value={p.precioCompra} onChange={e=>updProducto(i,"precioCompra",e.target.value)} />
+                </Field>
+                <Field label="P. Venta ($)" hint="Lo que cobras">
+                  <input style={iMono} type="number" value={p.precioVenta} onChange={e=>updProducto(i,"precioVenta",e.target.value)} />
+                </Field>
+              </div>
+              {(p.precioCompra||p.precioVenta)&&(
+                <div style={{fontSize:11,color:C.inkMuted,marginTop:4}}>
+                  Subtotal compra: <b>${((Number(p.precioCompra)||0)*(Number(p.cantidad)||1)).toLocaleString("es-CL")}</b>
+                  {" · "}Subtotal venta: <b>${((Number(p.precioVenta)||0)*(Number(p.cantidad)||1)).toLocaleString("es-CL")}</b>
+                </div>
+              )}
+            </div>
+          ))}
+          <button onClick={addProducto} style={{...btnP(C.inkFaint),fontSize:12,marginBottom:14}}>+ Agregar otro producto</button>
+          {ventaTotal>0&&(
+            <div style={{background:C.tealLight,borderRadius:9,padding:"10px 14px",fontSize:12.5}}>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4}}>
+                <div><div style={{color:C.inkMuted,fontSize:10.5}}>Costo total</div><div style={{fontWeight:700,color:C.ink}}>${costoTotal.toLocaleString("es-CL")}</div></div>
+                <div><div style={{color:C.inkMuted,fontSize:10.5}}>Venta total</div><div style={{fontWeight:700,color:C.ink}}>${ventaTotal.toLocaleString("es-CL")}</div></div>
+                <div><div style={{color:C.inkMuted,fontSize:10.5}}>Utilidad ({margen}%)</div><div style={{fontWeight:700,color:utilidad>=0?C.ok:C.danger}}>${utilidad.toLocaleString("es-CL")}</div></div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ─── PASO 3: Compra ─── */}
+      {paso===3&&(
+        <div>
+          <Field label="Financiador" required>
+            <select style={selStyle} value={financiadorId} onChange={e=>setFinanciadorId(e.target.value)}>
+              {financiadores.map(f=><option key={f.id} value={f.id}>{f.nombre}</option>)}
+            </select>
+          </Field>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <Field label="Fecha de compra" required>
+              <input style={iStyle} type="date" value={fechaCompra} onChange={e=>setFechaCompra(e.target.value)} />
+            </Field>
+            <Field label="Entrega estimada">
+              <input style={iStyle} type="date" value={fechaEst} onChange={e=>setFechaEst(e.target.value)} />
+            </Field>
+          </div>
+          <Field label="Observaciones / Proveedor">
+            <input style={iStyle} value={obs} onChange={e=>setObs(e.target.value)} placeholder="ej: MercadoLibre, nota de despacho, etc." />
+          </Field>
+          {/* Resumen de montos */}
+          <div style={{background:C.paper,borderRadius:9,padding:"12px 14px",marginTop:8}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.inkMuted,marginBottom:8,textTransform:"uppercase"}}>Resumen financiero</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4,fontSize:12.5}}>
+              <div><div style={{color:C.inkMuted,fontSize:10.5}}>Costo</div><div style={{fontWeight:700}}>${costoTotal.toLocaleString("es-CL")}</div></div>
+              <div><div style={{color:C.inkMuted,fontSize:10.5}}>Venta</div><div style={{fontWeight:700}}>${ventaTotal.toLocaleString("es-CL")}</div></div>
+              <div><div style={{color:C.inkMuted,fontSize:10.5}}>Utilidad ({margen}%)</div><div style={{fontWeight:700,color:utilidad>=0?C.ok:C.danger}}>${utilidad.toLocaleString("es-CL")}</div></div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── PASO 4: Resumen ─── */}
+      {paso===4&&(
+        <div>
+          <div style={{background:C.paper,borderRadius:10,padding:"12px 14px",marginBottom:12}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:8}}>Datos de la OC</div>
+            <div style={{fontSize:12.5,lineHeight:1.8}}>
+              <b>OC:</b> {numOC}<br/>
+              <b>Vendedor:</b> {vendedores.find(v=>v.id===vendedorId)?.nombre}<br/>
+              <b>Cliente:</b> {cliente}{entidad?` · ${entidad}`:""}<br/>
+              {comuna&&<><b>Comuna:</b> {comuna}<br/></>}
+              {contacto&&<><b>Contacto:</b> {contacto}<br/></>}
+              {correo&&<><b>Correo:</b> {correo}<br/></>}
+            </div>
+          </div>
+          <div style={{background:C.paper,borderRadius:10,padding:"12px 14px",marginBottom:12}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:8}}>{productos.length} Producto{productos.length!==1?"s":""}</div>
+            {productos.map((p,i)=>(
+              <div key={i} style={{borderLeft:`2px solid ${C.teal}`,paddingLeft:10,marginBottom:8}}>
+                <div style={{fontSize:12.5,fontWeight:600}}>{p.desc} × {p.cantidad}</div>
+                <div style={{fontSize:11,color:C.inkMuted}}>Compra: ${(Number(p.precioCompra)*Number(p.cantidad)).toLocaleString("es-CL")} · Venta: ${(Number(p.precioVenta)*Number(p.cantidad)).toLocaleString("es-CL")}</div>
+                {p.link&&<div style={{fontSize:10.5,color:C.teal,wordBreak:"break-all"}}>{p.link.slice(0,60)}{p.link.length>60?"…":""}</div>}
+              </div>
+            ))}
+          </div>
+          <div style={{background:C.tealLight,borderRadius:10,padding:"12px 14px",marginBottom:12}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:8}}>Resumen financiero</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4,fontSize:13}}>
+              <div><div style={{color:C.inkMuted,fontSize:10.5}}>Costo</div><div style={{fontWeight:800}}>${costoTotal.toLocaleString("es-CL")}</div></div>
+              <div><div style={{color:C.inkMuted,fontSize:10.5}}>Venta</div><div style={{fontWeight:800}}>${ventaTotal.toLocaleString("es-CL")}</div></div>
+              <div><div style={{color:C.inkMuted,fontSize:10.5}}>Utilidad</div><div style={{fontWeight:800,color:utilidad>=0?C.ok:C.danger}}>${utilidad.toLocaleString("es-CL")} ({margen}%)</div></div>
+            </div>
+            <div style={{marginTop:8,fontSize:12,color:C.inkMuted}}>
+              <b>Financiador:</b> {financiadores.find(f=>f.id===financiadorId)?.nombre} · <b>Fecha:</b> {fechaCompra}
+              {fechaEst&&<> · <b>Entrega est.:</b> {fechaEst}</>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Error */}
       {err&&<div style={{background:C.dangerLight,color:C.danger,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}
-      <button onClick={handleSave} disabled={saving} style={btnP(saving?C.inkFaint:C.teal)}>{saving?"Guardando…":"✓ Registrar compra"}</button>
+
+      {/* Navegación entre pasos */}
+      <div style={{display:"flex",gap:8,marginTop:8}}>
+        {paso>1&&<button onClick={()=>{setErr("");setPaso(p=>p-1);}} style={{...btnP(C.inkFaint),flex:1}}>← Atrás</button>}
+        {paso<4&&(
+          <button onClick={()=>{
+            const ok=paso===1?validarPaso1():paso===2?validarPaso2():validarPaso3();
+            if(ok) setPaso(p=>p+1);
+          }} style={{...btnP(C.teal),flex:2}}>Siguiente →</button>
+        )}
+        {paso===4&&(
+          <button onClick={handleGuardar} disabled={saving} style={{...btnP(saving?C.inkFaint:C.ok),flex:2}}>{saving?"Guardando…":"✓ Crear OC"}</button>
+        )}
+      </div>
     </div>
   );
 }
@@ -2029,13 +2262,21 @@ export default function App() {
     if(data.esNueva){
       const nOc=await ins("ordenes_compra_v2",t,{id:genId("ocv2"),numero_oc:data.numNueva,cliente:data.cliente,rut_cliente:data.rutCliente||"",correo_cliente:data.correo||"",entidad:data.entidad||"",comuna:data.comuna||"",contacto:data.contacto||"",vendedor_id:data.vendedorId,financiador_id:data.financiadorId,monto_total:data.montoVenta,costo_total:data.costoCompra,estado_compra:"comprado",creado_por:session.user.id});
       ocId=(Array.isArray(nOc)?nOc[0]:nOc).id;
-      if (data.rutCliente?.trim()) {
-        try {
-          const existente = entidadesCatalogo.find(e=>e.rut===data.rutCliente.trim());
-          const datosEnt = { rut: data.rutCliente.trim(), nombre_entidad: data.entidad||data.cliente||"", comuna: data.comuna||"", contacto: data.contacto||"", correo: data.correo||"" };
-          if (existente) await upd("entidades_catalogo", t, existente.id, datosEnt);
-          else await ins("entidades_catalogo", t, { id: genId("ent"), ...datosEnt, creado_por: session.user.id });
-        } catch {}
+      // Guardar productos como links
+      if(data.productos?.length){
+        for(let i=0;i<data.productos.length;i++){
+          const p=data.productos[i];
+          const desc=`${p.descripcion} × ${p.cantidad} | Compra: $${(p.precioCompra*p.cantidad).toLocaleString("es-CL")} | Venta: $${(p.precioVenta*p.cantidad).toLocaleString("es-CL")}`;
+          await ins("oc_productos_link",t,{id:genId("lnk"),oc_id:ocId,descripcion:desc,url:p.url||"sin-link",orden:i,creado_por:session.user.id});
+        }
+      }
+      if(data.rutCliente?.trim()){
+        try{
+          const existente=entidadesCatalogo.find(e=>e.rut===data.rutCliente.trim());
+          const datosEnt={rut:data.rutCliente.trim(),nombre_entidad:data.entidad||data.cliente||"",comuna:data.comuna||"",contacto:data.contacto||"",correo:data.correo||""};
+          if(existente) await upd("entidades_catalogo",t,existente.id,datosEnt);
+          else await ins("entidades_catalogo",t,{id:genId("ent"),...datosEnt,creado_por:session.user.id});
+        }catch{}
       }
     } else {
       await upd("ordenes_compra_v2",t,ocId,{estado_compra:"comprado",monto_total:data.montoVenta,costo_total:data.costoCompra,financiador_id:data.financiadorId});
@@ -2043,7 +2284,7 @@ export default function App() {
     await ins("eventos_compra",t,{id:genId("evc"),oc_id:ocId,fecha:data.fecha,monto_venta:data.montoVenta,costo_compra:data.costoCompra,fecha_entrega_estimada:data.fechaEst,financiador_id:data.financiadorId,proveedor:data.proveedor,creado_por:session.user.id});
     const fin=financiadores.find(f=>f.id===data.financiadorId);
     if(fin) await upd("financiadores",t,fin.id,{saldo_deuda:Number(fin.saldo_deuda)+data.costoCompra});
-    showToast("Compra registrada"); setAccion(null); await cargarTodo();
+    showToast("OC creada correctamente"); setAccion(null); await cargarTodo();
   };
   const handleEntrega=async(data)=>{
     const t=session.access_token;
@@ -2269,7 +2510,7 @@ export default function App() {
       </div>
 
       {/* MODALES DE ACCIONES RÁPIDAS */}
-      {accion==="compra"&&<Modal title="Ingresar compra" onClose={()=>setAccion(null)}><FormIngresarCompra ocs={ocs} financiadores={financiadores} vendedores={vendedores} entidadesCatalogo={entidadesCatalogo} onSave={handleIngresarCompra} /></Modal>}
+      {accion==="compra"&&<Modal title="Nueva OC" onClose={()=>setAccion(null)}><FormIngresarCompra ocs={ocs} financiadores={financiadores} vendedores={vendedores} entidadesCatalogo={entidadesCatalogo} onSave={handleIngresarCompra} /></Modal>}
       {accion==="entrega"&&<Modal title="Confirmar entrega" onClose={()=>setAccion(null)}><FormConfirmarEntrega ocs={ocs} onSave={handleEntrega} /></Modal>}
       {accion==="factura"&&<Modal title="Emitir factura" onClose={()=>setAccion(null)}><FormEmitirFactura ocs={ocs} onSave={handleFactura} /></Modal>}
       {accion==="pago_cliente"&&<Modal title="Pago de factura" onClose={()=>setAccion(null)}><FormPagoCliente ocs={ocs} onSave={handlePagoCliente} /></Modal>}
