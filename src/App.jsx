@@ -218,29 +218,36 @@ function EtapasOC({ oc, perfil, onEditarEvento, onEliminarFactura, onEliminarEve
     return eventos.map((ev,i)=>(
       <div key={ev.id||i} style={{background:C.paper,borderRadius:8,padding:"10px 12px",marginBottom:6}}>
         {etapa.key==="compra"&&<>
-          <div style={{fontSize:12.5,fontWeight:600}}>📅 {fmt.date(ev.fecha)}</div>
-          {ev.monto_venta&&<div style={{fontSize:11.5,color:C.inkMuted}}>Venta: {fmt.money(ev.monto_venta)} · Costo: {fmt.money(ev.costo_compra)}</div>}
-          {ev.fecha_entrega_estimada&&<div style={{fontSize:11,color:C.inkMuted}}>Entrega est.: {fmt.date(ev.fecha_entrega_estimada)}</div>}
-          {ev.proveedor&&<div style={{fontSize:11,color:C.inkMuted}}>Proveedor: {ev.proveedor}</div>}
+          <div style={{fontSize:12.5,fontWeight:600}}>📅 Fecha: {fmt.date(ev.fecha)||"—"}</div>
+          <div style={{fontSize:11.5,color:C.inkMuted}}>
+            Venta: <b>{fmt.money(ev.monto_venta||oc.monto_total)}</b> · Costo: <b>{fmt.money(ev.costo_compra||oc.costo_total)}</b>
+          </div>
+          {(ev.fecha_entrega_estimada)&&<div style={{fontSize:11,color:C.inkMuted}}>Entrega est.: {fmt.date(ev.fecha_entrega_estimada)}</div>}
+          {(ev.proveedor)&&<div style={{fontSize:11,color:C.inkMuted}}>Proveedor: {ev.proveedor}</div>}
+          <div style={{fontSize:11,color:C.inkMuted}}>
+            Financiador: <b>{oc.financiadores?.nombre||"—"}</b> · Vendedor: <b>{oc.vendedores?.nombre||"—"}</b>
+          </div>
         </>}
         {etapa.key==="entrega"&&<>
-          <div style={{fontSize:12.5,fontWeight:600}}>✅ Entregado el {fmt.date(ev.fecha)}</div>
+          <div style={{fontSize:12.5,fontWeight:600}}>✅ Entregado el {fmt.date(ev.fecha)||"—"}</div>
           {ev.persona_recibe&&<div style={{fontSize:11.5,color:C.inkMuted}}>Recibe: {ev.persona_recibe}</div>}
           {ev.observaciones&&<div style={{fontSize:11,color:C.inkMuted}}>{ev.observaciones}</div>}
+          {!ev.persona_recibe&&!ev.observaciones&&<div style={{fontSize:11,color:C.inkFaint}}>Sin detalle adicional</div>}
         </>}
         {etapa.key==="factura"&&<>
-          <div style={{fontSize:12.5,fontWeight:600}}>🧾 Factura N°{ev.numero_factura} · {fmt.money(ev.monto)}</div>
-          <div style={{fontSize:11.5,color:C.inkMuted}}>Emitida el {fmt.date(ev.fecha)}</div>
-          {ev.nota_credito&&<div style={{fontSize:11,color:C.warn}}>NC N°{ev.nota_credito} anula factura N°{ev.factura_anulada_numero}</div>}
+          <div style={{fontSize:12.5,fontWeight:600}}>🧾 Factura N°{ev.numero_factura||"—"} · {fmt.money(ev.monto||oc.monto_facturado)}</div>
+          <div style={{fontSize:11.5,color:C.inkMuted}}>Emitida el {fmt.date(ev.fecha)||"—"}</div>
+          {ev.nota_credito&&<div style={{fontSize:11,color:C.warn}}>NC N°{ev.nota_credito} · anula factura N°{ev.factura_anulada_numero}</div>}
         </>}
         {etapa.key==="cobro"&&<>
-          <div style={{fontSize:12.5,fontWeight:600}}>💰 {fmt.money(ev.monto)} cobrado</div>
-          <div style={{fontSize:11.5,color:C.inkMuted}}>{fmt.date(ev.fecha)}</div>
+          <div style={{fontSize:12.5,fontWeight:600}}>💰 {fmt.money(ev.monto||oc.monto_cobrado)} cobrado</div>
+          <div style={{fontSize:11.5,color:C.inkMuted}}>{fmt.date(ev.fecha)||"—"}</div>
           {ev.referencia&&<div style={{fontSize:11,color:C.inkMuted}}>Ref: {ev.referencia}</div>}
         </>}
         {etapa.key==="financ"&&<>
-          <div style={{fontSize:12.5,fontWeight:600}}>🏦 {fmt.money(ev.monto)} pagado</div>
-          <div style={{fontSize:11.5,color:C.inkMuted}}>{fmt.date(ev.fecha)}</div>
+          <div style={{fontSize:12.5,fontWeight:600}}>🏦 {fmt.money(ev.monto||oc.costo_total)} pagado</div>
+          <div style={{fontSize:11.5,color:C.inkMuted}}>{fmt.date(ev.fecha)||"—"}</div>
+          {ev.financiador_id&&<div style={{fontSize:11,color:C.inkMuted}}>A: {oc.financiadores?.nombre||"—"}</div>}
         </>}
         <div style={{display:"flex",gap:6,marginTop:8}}>
           <button onClick={()=>onEditarEvento&&onEditarEvento({tipo:etapa.label,e:ev,tabla:etapa.tabla})}
