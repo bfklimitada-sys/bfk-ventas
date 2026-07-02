@@ -1288,20 +1288,6 @@ function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, 
             {oc.contacto&&<div style={{gridColumn:"1/-1"}}>Contacto: <b style={{color:C.ink}}>{oc.contacto}</b></div>}
             {evF&&<div style={{gridColumn:"1/-1"}}>Factura: <b>{evF.numero_factura}</b> · {fmt.date(evF.fecha)}{dias!==null&&` · ${dias} días`}</div>}
           </div>
-          {(oc.oc_reclamos||[]).length>0&&(
-            <div style={{marginBottom:10}}>
-              <div style={{fontSize:11,fontWeight:700,color:C.warn,marginBottom:5}}>📧 Historial de reclamos ({(oc.oc_reclamos||[]).length})</div>
-              {(oc.oc_reclamos||[]).slice().sort((a,b)=>b.fecha?.localeCompare(a.fecha)).map((r,i)=>(
-                <div key={r.id} style={{display:"flex",alignItems:"flex-start",gap:8,borderLeft:`2px solid ${C.warn}`,paddingLeft:8,marginBottom:5}}>
-                  <div style={{flex:1}}>
-                    <div style={{fontSize:11.5,fontWeight:600,color:C.ink}}>{r.correo}</div>
-                    <div style={{fontSize:10.5,color:C.inkFaint}}>{fmt.datetime(r.fecha)}{r.usuario_nombre?` · ${r.usuario_nombre}`:""}</div>
-                  </div>
-                  {i===0&&<span style={{fontSize:10,background:C.warnLight,color:C.warn,borderRadius:5,padding:"2px 6px",fontWeight:700,flexShrink:0}}>Último</span>}
-                </div>
-              ))}
-            </div>
-          )}
           {oc.vendedor_pagado&&<div style={{fontSize:11,color:C.ok,fontWeight:600,marginBottom:8}}>✓ Vendedor ya pagado por esta venta</div>}
           {oc.ultima_edicion&&<div style={{fontSize:10.5,color:C.inkFaint,marginBottom:8}}>✏️ Datos editados por <Trazabilidad creadoPor={oc.ultimo_editor} creadoEn={oc.ultima_edicion} perfiles={perfiles} /></div>}
 
@@ -1322,18 +1308,7 @@ function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, 
             <button onClick={()=>setCorreoFecha(true)} style={{background:C.ink,border:"none",color:"#fff",borderRadius:9,padding:"9px 8px",fontSize:11.5,fontWeight:700,cursor:"pointer"}}>📅 Fecha de entrega</button>
           </div>
 
-          {puedeReclamar&&(
-            reclamadaHoy
-              ? <div style={{background:C.okLight,border:`1px solid ${C.ok}`,borderRadius:9,padding:"10px 14px",marginBottom:12,display:"flex",alignItems:"center",gap:10}}>
-                  <span style={{fontSize:18}}>✅</span>
-                  <div>
-                    <div style={{fontSize:12.5,fontWeight:700,color:C.ok}}>Reclamada hoy</div>
-                    <div style={{fontSize:11,color:C.inkMuted}}>Enviada a {ultimoReclamo.correo} · hace {hrsDesdeReclamo}h</div>
-                    <div style={{fontSize:10.5,color:C.inkMuted}}>Volverá a rojo en {24-hrsDesdeReclamo}h si no hay pago</div>
-                  </div>
-                </div>
-              : <button onClick={()=>setReclamando(true)} style={{...btnP(C.danger),marginBottom:12}}>📧 Reclamar pago de factura</button>
-          )}
+          {puedeReclamar&&<button onClick={()=>setReclamando(true)} style={{...btnP(C.danger),marginBottom:12}}>📧 Reclamar pago de factura</button>}
           <button onClick={()=>setEditandoDatos(true)} style={{...btnG,marginBottom:8,width:"100%"}}>✏️ Editar entidad / comuna / contacto</button>
           {perfil?.rol==="admin"&&(
             <button onClick={async()=>{
