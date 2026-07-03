@@ -1497,7 +1497,13 @@ function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, 
               {estancada&&<span style={{fontSize:9.5,background:C.warnLight,color:C.warn,borderRadius:5,padding:"1px 5px",fontWeight:700}}>⏸ {diasEstancada}d sin avance</span>}
               {completadas===5&&<span style={{fontSize:9.5,background:C.okLight,color:C.ok,borderRadius:5,padding:"1px 5px",fontWeight:700}}>✓ Completa</span>}
             </div>
-            <div style={{fontSize:11.5,color:oc.cliente?.toUpperCase().includes("POR COMPLETAR")?C.warn:C.inkMuted,marginBottom:2,fontWeight:oc.cliente?.toUpperCase().includes("POR COMPLETAR")?700:400}}>{oc.cliente}{oc.comuna?` · ${oc.comuna}`:""}</div>
+            {(()=>{
+              const esPorCompletar=oc.cliente?.toUpperCase().includes("POR COMPLETAR");
+              const nombreMostrar=esPorCompletar?(oc.entidad||null):oc.cliente;
+              return nombreMostrar
+                ? <div style={{fontSize:11.5,color:C.inkMuted,marginBottom:2}}>{nombreMostrar}{oc.comuna?` · ${oc.comuna}`:""}</div>
+                : <div style={{fontSize:11.5,color:C.warn,marginBottom:2,fontWeight:700}}>⚠ Agregar entidad{oc.comuna?` · ${oc.comuna}`:""}</div>;
+            })()}
             <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
               <span style={{fontSize:11,color:C.inkFaint}}>{oc.financiadores?.nombre} · {oc.vendedores?.nombre}</span>
               {evF&&<span style={{fontSize:10.5,color:C.info,fontWeight:600}}>🧾 {evF.numero_factura}{oc.estado_pago_cliente!=="pagado"&&dias!==null?` · ${dias}d`:""}</span>}
@@ -1526,7 +1532,12 @@ function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, 
               <div>Saldo: <b style={{color:saldo>0?C.danger:C.ok}}>{fmt.money(saldo)}</b></div>
               {oc.entidad&&<div style={{gridColumn:"1/-1"}}>Entidad: <b style={{color:C.ink}}>{oc.entidad}</b></div>}
               {oc.contacto&&<div style={{gridColumn:"1/-1"}}>Contacto: <b style={{color:C.ink}}>{oc.contacto}</b></div>}
-              {oc.creadoEn&&<div style={{gridColumn:"1/-1"}}>Creada: <b style={{color:C.ink}}>{fmt.datetime(oc.creadoEn)}</b></div>}
+              {(()=>{
+                const esHistorica=oc.id?.startsWith("ocv2_hist");
+                const fechaCompra=(oc.eventos_compra||[])[0]?.fecha;
+                const fechaMostrar=esHistorica&&fechaCompra?fechaCompra:oc.creadoEn;
+                return fechaMostrar?<div style={{gridColumn:"1/-1"}}>Creada: <b style={{color:C.ink}}>{esHistorica&&fechaCompra?fmt.date(fechaCompra):fmt.datetime(fechaMostrar)}</b></div>:null;
+              })()}
             </div>
             {oc.vendedor_pagado&&<div style={{fontSize:11,color:C.ok,fontWeight:600,marginTop:6}}>✓ Vendedor ya pagado por esta venta</div>}
             {oc.ultima_edicion&&<div style={{fontSize:10,color:C.inkFaint,marginTop:4}}>✏️ Editado por <Trazabilidad creadoPor={oc.ultimo_editor} creadoEn={oc.ultima_edicion} perfiles={perfiles} /></div>}
