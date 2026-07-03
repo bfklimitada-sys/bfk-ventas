@@ -1357,6 +1357,8 @@ function FormEditarDatosOC({ oc, onSave, entidadesCatalogo }) {
   const [contacto,setContacto]=useState(oc.contacto||"");
   const [rutCliente,setRutCliente]=useState(oc.rut_cliente||"");
   const [correo,setCorreo]=useState(oc.correo_cliente||"");
+  const fechaActual=(oc.eventos_compra||[])[0]?.fecha||"";
+  const [fechaOC,setFechaOC]=useState(fechaActual?String(fechaActual).slice(0,10):"");
   const [autocompletado,setAutocompletado]=useState(false);
   const [err,setErr]=useState(""); const [saving,setSaving]=useState(false);
   const handleRutChange=(val)=>{
@@ -1372,7 +1374,7 @@ function FormEditarDatosOC({ oc, onSave, entidadesCatalogo }) {
   };
   const handleSave=async()=>{
     setErr(""); setSaving(true);
-    try { await onSave({ cliente:cliente.toUpperCase(), entidad:entidad.toUpperCase(), comuna:comuna.toUpperCase(), contacto, rutCliente, correo }); }
+    try { await onSave({ cliente:cliente.toUpperCase(), entidad:entidad.toUpperCase(), comuna:comuna.toUpperCase(), contacto, rutCliente, correo, fechaOC:fechaOC||null }); }
     catch(e){ setErr(e.message); } finally{ setSaving(false); }
   };
   return (
@@ -1384,6 +1386,7 @@ function FormEditarDatosOC({ oc, onSave, entidadesCatalogo }) {
       <Field label="Comuna" hint="Se guarda en mayúscula"><input style={iStyle} value={comuna} onChange={e=>setComuna(e.target.value)} placeholder="ej: Concepción" /></Field>
       <Field label="Contacto"><input style={iStyle} value={contacto} onChange={e=>setContacto(e.target.value)} placeholder="Nombre y/o teléfono de contacto" /></Field>
       <Field label="Correo del cliente"><input style={iStyle} type="email" value={correo} onChange={e=>setCorreo(e.target.value)} placeholder="contacto@entidad.cl" /></Field>
+      <Field label="Fecha de la OC" hint="Fecha de compra que se muestra como fecha de creación"><input style={iStyle} type="date" value={fechaOC} onChange={e=>setFechaOC(e.target.value)} /></Field>
       {err&&<div style={{background:C.dangerLight,color:C.danger,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}
       <button onClick={handleSave} disabled={saving} style={btnP(saving?C.inkFaint:C.info)}>{saving?"Guardando…":"✓ Guardar datos"}</button>
     </div>
@@ -1528,8 +1531,12 @@ function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, 
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,color:C.inkMuted}}>
               <div>Vendedor: <b style={{color:C.ink}}>{oc.vendedores?.nombre||"—"}</b></div>
               <div>Financiador: <b style={{color:C.ink}}>{oc.financiadores?.nombre||"—"}</b></div>
-              <div>Facturado: <b style={{color:C.ink}}>{fmt.money(oc.monto_facturado)}</b></div>
-              <div>Saldo: <b style={{color:saldo>0?C.danger:C.ok}}>{fmt.money(saldo)}</b></div>
+              {oc.monto_facturado>0&&<div>Facturado: <b style={{color:C.ink}}>{fmt.money(oc.monto_facturado)}</b></div>}
+              {oc.monto_facturado>0&&(
+                saldo>0
+                  ? <div>Por cobrar: <b style={{color:C.danger}}>{fmt.money(saldo)}</b></div>
+                  : <div>Pago cliente: <b style={{color:C.ok}}>✓ Recibido</b></div>
+              )}
               {oc.entidad&&<div style={{gridColumn:"1/-1"}}>Entidad: <b style={{color:C.ink}}>{oc.entidad}</b></div>}
               {oc.contacto&&<div style={{gridColumn:"1/-1"}}>Contacto: <b style={{color:C.ink}}>{oc.contacto}</b></div>}
               {(()=>{
@@ -1656,7 +1663,12 @@ function PanelCompras({ ocs, perfiles, filtroInicial, contactos, onEnviarReclamo
     if(comunaSel&&oc.comuna!==comunaSel) return false;
     for(const f of FILTROS){ const s=filtros[f.key]; if(!s) continue; const ok=oc[f.okField]===f.okValue; if(s==="ok"&&!ok) return false; if(s==="pend"&&ok) return false; }
     return true;
-  }).sort((a,b)=>(b.creadoEn||"").localeCompare(a.creadoEn||"")),[ocs,filtros,busq,comunaSel]);
+  }).sort((a,b)=>{
+    // Fecha efectiva: fecha del evento de compra si existe, si no la fecha de creación
+    const fa=((a.eventos_compra||[])[0]?.fecha)||a.creadoEn||"";
+    const fb=((b.eventos_compra||[])[0]?.fecha)||b.creadoEn||"";
+    return String(fb).localeCompare(String(fa)); // más reciente arriba
+  }),[ocs,filtros,busq,comunaSel]);
 
   // Alertas de vencimiento
   const alertas=useMemo(()=>ocs.filter(o=>{
@@ -2755,8 +2767,15 @@ export default function App() {
     showToast(`${filas.length} entidades importadas al catálogo`);
     await cargarTodo();
   };
-  const handleGuardarDatosOC=async(ocId,{cliente,entidad,comuna,contacto,rutCliente,correo})=>{
-    await upd("ordenes_compra_v2",session.access_token,ocId,{cliente,entidad,comuna,contacto,rut_cliente:rutCliente,correo_cliente:correo,ultimo_editor:session.user.id,ultima_edicion:new Date().toISOString()});
+  const handleGuardarDatosOC=async(ocId,{cliente,entidad,comuna,contacto,rutCliente,correo,fechaOC})=>{
+    const t=session.access_token;
+    await upd("ordenes_compra_v2",t,ocId,{cliente,entidad,comuna,contacto,rut_cliente:rutCliente,correo_cliente:correo,ultimo_editor:session.user.id,ultima_edicion:new Date().toISOString()});
+    // Actualizar fecha de la OC (evento de compra)
+    if(fechaOC){
+      const oc=ocs.find(o=>o.id===ocId);
+      const evC=(oc?.eventos_compra||[])[0];
+      if(evC) await upd("eventos_compra",t,evC.id,{fecha:fechaOC});
+    }
     // Si hay RUT, también actualizamos/creamos el catálogo de entidades para reutilizar después
     if (rutCliente?.trim()) {
       try {
