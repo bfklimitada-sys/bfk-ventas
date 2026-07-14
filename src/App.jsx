@@ -2682,6 +2682,7 @@ const ACCIONES=[
 export default function App() {
   const [session,setSession]=useState(null); const [perfil,setPerfil]=useState(null); const [loadingApp,setLoadingApp]=useState(true);
   const [tab,setTab]=useState("panel"); const [filtroCompras,setFiltroCompras]=useState(null); const [accion,setAccion]=useState(null);
+  const [menuMas,setMenuMas]=useState(false);
   const [toast,setToast]=useState(null);
   const [ocs,setOcs]=useState([]); const [financiadores,setFinanciadores]=useState([]); const [vendedores,setVendedores]=useState([]);
   const [categoriasGasto,setCategoriasGasto]=useState([]); const [gastos,setGastos]=useState([]); const [ivaMensual,setIvaMensual]=useState([]);
@@ -3055,14 +3056,20 @@ export default function App() {
   const visTabs=TABS.filter(t=>!t.adminOnly||perfil?.rol==="admin");
 
   return (
-    <div style={{minHeight:"100vh",background:C.paper,fontFamily:SANS,paddingBottom:72}}>
+    <div style={{minHeight:"100vh",background:C.paper,fontFamily:SANS,paddingBottom:76}}>
       {/* HEADER */}
-      <div style={{background:C.night,padding:"14px 16px 12px",color:"#fff"}}>
+      <div style={{background:`linear-gradient(135deg,${C.night} 0%,#16213E 100%)`,padding:"16px 16px 14px",color:"#fff",boxShadow:"0 2px 12px rgba(11,17,32,0.25)"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div><div style={{fontWeight:800,fontSize:16,letterSpacing:-0.3}}>BFK Ltda <span style={{fontSize:10,color:"#64748B",fontWeight:400}}>v29</span></div><div style={{fontSize:11,color:"#94A3B8"}}>{perfil?.nombre} · {perfil?.rol==="admin"?"Admin":"Usuario"}</div></div>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <div style={{width:38,height:38,background:"rgba(20,184,166,0.15)",border:`1.5px solid ${C.teal}`,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:MONO,color:C.teal,fontWeight:800,fontSize:13}}>BFK</div>
+            <div>
+              <div style={{fontWeight:800,fontSize:15,letterSpacing:-0.3}}>{TABS.find(t=>t.key===tab)?.label==="Panel"?"Torre de Control":TABS.find(t=>t.key===tab)?.label||"BFK Ltda"} <span style={{fontSize:9,color:"#4B5A76",fontWeight:400}}>v37</span></div>
+              <div style={{fontSize:10.5,color:"#8B9AB5"}}>{perfil?.nombre} · {perfil?.rol==="admin"?"Administrador":"Usuario"}</div>
+            </div>
+          </div>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
-            <button onClick={()=>setAccion("compra")} style={{background:C.teal,border:"none",color:"#fff",borderRadius:9,padding:"9px 14px",fontSize:12.5,fontWeight:700,cursor:"pointer"}}>📦 Nueva OC</button>
-            <button onClick={handleLogout} style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",color:"#fff",borderRadius:8,padding:"7px 12px",fontSize:12,fontWeight:600,cursor:"pointer"}}>Salir</button>
+            <button onClick={()=>setAccion("compra")} style={{background:C.teal,border:"none",color:"#fff",borderRadius:10,padding:"9px 14px",fontSize:12.5,fontWeight:700,cursor:"pointer",boxShadow:"0 3px 10px rgba(20,184,166,0.35)"}}>+ Nueva OC</button>
+            <button onClick={handleLogout} style={{background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.12)",color:"#B8C4D9",borderRadius:9,padding:"8px 10px",fontSize:12,fontWeight:600,cursor:"pointer"}}>⏻</button>
           </div>
         </div>
       </div>
@@ -3079,18 +3086,51 @@ export default function App() {
         {tab==="usuarios"&&perfil?.rol==="admin"&&<PanelUsuarios perfiles={perfiles} ocs={ocs} onChangeRol={handleChangeRol} session={session} showToast={showToast} entidadesCatalogo={entidadesCatalogo} onImportarEntidades={handleImportarEntidades} />}
       </div>
 
-      {/* NAV BOTTOM */}
-      <div style={{position:"fixed",bottom:0,left:0,right:0,background:C.card,borderTop:`1px solid ${C.border}`,display:"flex",padding:"6px 4px"}}>
-        {visTabs.map(t=>(
-          <button key={t.key} onClick={()=>{setTab(t.key);setFiltroCompras(null);}} style={{flex:1,background:"none",border:"none",padding:"8px 2px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
-            <span style={{fontSize:17,position:"relative",display:"inline-block"}}>
-              {t.icon}
-              {t.key==="notif"&&<NotifBadge notificaciones={notificaciones} />}
-            </span>
-            <span style={{fontSize:9.5,fontWeight:700,color:tab===t.key?C.teal:C.inkFaint}}>{t.label}</span>
-          </button>
-        ))}
-      </div>
+      {/* NAV BOTTOM — 5 principales + Más */}
+      {(()=>{
+        const principales=visTabs.filter(t=>["panel","compras","agenda","notif"].includes(t.key));
+        const secundarias=visTabs.filter(t=>!["panel","compras","agenda","notif"].includes(t.key));
+        const enMas=secundarias.some(t=>t.key===tab);
+        return (
+          <>
+            {menuMas&&(
+              <div onClick={()=>setMenuMas(false)} style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.35)",zIndex:40}}>
+                <div onClick={e=>e.stopPropagation()} style={{position:"fixed",bottom:"calc(64px + env(safe-area-inset-bottom))",left:12,right:12,background:C.card,borderRadius:16,padding:"12px",boxShadow:"0 -10px 40px rgba(15,23,42,0.2)",zIndex:41}}>
+                  <div style={{width:36,height:4,background:C.border,borderRadius:2,margin:"0 auto 12px"}} />
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
+                    {secundarias.map(t=>(
+                      <button key={t.key} onClick={()=>{setTab(t.key);setFiltroCompras(null);setMenuMas(false);}} style={{background:tab===t.key?C.tealLight:C.paper,border:"none",borderRadius:12,padding:"12px 6px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:5}}>
+                        <span style={{fontSize:20}}>{t.icon}</span>
+                        <span style={{fontSize:10,fontWeight:700,color:tab===t.key?C.tealDark:C.inkMuted}}>{t.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+            <div style={{position:"fixed",bottom:0,left:0,right:0,background:"rgba(255,255,255,0.96)",backdropFilter:"blur(12px)",borderTop:`1px solid ${C.border}`,display:"flex",padding:"6px 4px calc(6px + env(safe-area-inset-bottom))",boxShadow:"0 -4px 20px rgba(15,23,42,0.06)",zIndex:42}}>
+              {principales.map(t=>{
+                const activo=tab===t.key;
+                return (
+                  <button key={t.key} onClick={()=>{setTab(t.key);setFiltroCompras(null);setMenuMas(false);}} style={{flex:1,background:"none",border:"none",padding:"6px 1px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
+                    <span style={{fontSize:17,position:"relative",display:"flex",alignItems:"center",justifyContent:"center",width:44,height:28,borderRadius:14,background:activo?C.tealLight:"transparent",transition:"all 0.18s"}}>
+                      {t.icon}
+                      {t.key==="notif"&&<NotifBadge notificaciones={notificaciones} />}
+                    </span>
+                    <span style={{fontSize:9.5,fontWeight:activo?800:600,color:activo?C.tealDark:C.inkFaint}}>{t.label}</span>
+                  </button>
+                );
+              })}
+              {secundarias.length>0&&(
+                <button onClick={()=>setMenuMas(v=>!v)} style={{flex:1,background:"none",border:"none",padding:"6px 1px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
+                  <span style={{fontSize:17,display:"flex",alignItems:"center",justifyContent:"center",width:44,height:28,borderRadius:14,background:enMas||menuMas?C.tealLight:"transparent",transition:"all 0.18s"}}>☰</span>
+                  <span style={{fontSize:9.5,fontWeight:enMas||menuMas?800:600,color:enMas||menuMas?C.tealDark:C.inkFaint}}>Más</span>
+                </button>
+              )}
+            </div>
+          </>
+        );
+      })()}
 
       {/* MODAL NUEVA OC */}
       {accion==="compra"&&<Modal title="Nueva OC" onClose={()=>setAccion(null)}><FormIngresarCompra ocs={ocs} financiadores={financiadores} vendedores={vendedores} entidadesCatalogo={entidadesCatalogo} onSave={handleIngresarCompra} /></Modal>}
