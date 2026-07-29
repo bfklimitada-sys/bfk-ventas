@@ -191,7 +191,57 @@ function DiasBadge({ dias }) {
 }
 
 // Indicador de progreso de etapas por OC
-function EtapasOC({ oc, perfil, onEditarEvento, onEliminarFactura, onEliminarEvento, onAccion, onCorreoFallida, onCorreoFecha, onGuardarLink, onEliminarLink, onEditarLink }) {
+const TIPOS_PV={falla:"Falla del producto",faltante:"Faltante",cambio:"Cambio / reposición",devolucion:"Devolución",otro:"Otro"};
+
+function FormPostventa({ oc, evento, onSave }) {
+  const [tipo,setTipo]=useState(evento?.tipo||"falla");
+  const [fecha,setFecha]=useState(evento?.fecha||new Date().toISOString().slice(0,10));
+  const [descripcion,setDescripcion]=useState(evento?.descripcion||"");
+  const [estado,setEstado]=useState(evento?.estado||"abierto");
+  const [solucion,setSolucion]=useState(evento?.solucion||"");
+  const [fechaRes,setFechaRes]=useState(evento?.fecha_resolucion||"");
+  const [err,setErr]=useState(""); const [saving,setSaving]=useState(false);
+  const guardar=async()=>{
+    if(!descripcion.trim()){setErr("Describe la incidencia");return;}
+    if(estado==="resuelto"&&!solucion.trim()){setErr("Indica la solución aplicada");return;}
+    setErr("");setSaving(true);
+    try{ await onSave({id:evento?.id,ocId:oc.id,tipo,fecha,descripcion:descripcion.trim(),estado,solucion:solucion.trim()||null,fecha_resolucion:estado==="resuelto"?(fechaRes||new Date().toISOString().slice(0,10)):null}); }
+    catch(e){setErr(e.message);} finally{setSaving(false);}
+  };
+  return (
+    <div>
+      <div style={{background:C.paper,borderRadius:8,padding:"8px 12px",fontSize:12,color:C.inkMuted,marginBottom:12}}>
+        OC <b style={{color:C.ink,fontFamily:MONO}}>{oc.numero_oc}</b> · {oc.cliente}
+      </div>
+      <Field label="Tipo de incidencia" required>
+        <select style={selStyle} value={tipo} onChange={e=>setTipo(e.target.value)}>
+          {Object.entries(TIPOS_PV).map(([k,v])=><option key={k} value={k}>{v}</option>)}
+        </select>
+      </Field>
+      <Field label="Fecha del reclamo" required><input style={iStyle} type="date" value={fecha} onChange={e=>setFecha(e.target.value)} /></Field>
+      <Field label="Descripción" required>
+        <textarea style={{...iStyle,minHeight:70,resize:"vertical"}} value={descripcion} onChange={e=>setDescripcion(e.target.value)} placeholder="Qué informó el cliente" />
+      </Field>
+      <Field label="Estado">
+        <select style={selStyle} value={estado} onChange={e=>setEstado(e.target.value)}>
+          <option value="abierto">Abierto</option>
+          <option value="en_gestion">En gestión</option>
+          <option value="resuelto">Resuelto</option>
+        </select>
+      </Field>
+      {estado==="resuelto"&&<>
+        <Field label="Solución aplicada" required>
+          <textarea style={{...iStyle,minHeight:60,resize:"vertical"}} value={solucion} onChange={e=>setSolucion(e.target.value)} placeholder="Qué se hizo para resolver" />
+        </Field>
+        <Field label="Fecha de resolución"><input style={iStyle} type="date" value={fechaRes} onChange={e=>setFechaRes(e.target.value)} /></Field>
+      </>}
+      {err&&<div style={{background:C.dangerLight,color:C.danger,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}
+      <button onClick={guardar} disabled={saving} style={btnP(saving?C.inkFaint:C.warn)}>{saving?"Guardando…":evento?"✓ Actualizar incidencia":"✓ Registrar incidencia"}</button>
+    </div>
+  );
+}
+
+function EtapasOC({ oc, perfil, perfiles, onEditarEvento, onEliminarFactura, onEliminarEvento, onAccion, onCorreoFallida, onCorreoFecha, onGuardarLink, onEliminarLink, onEditarLink, onAsignarResponsable }) {
   const [detalle,setDetalle]=useState(null);
 
   const getEventos=(key)=>{
@@ -200,6 +250,7 @@ function EtapasOC({ oc, perfil, onEditarEvento, onEliminarFactura, onEliminarEve
     if(key==="factura") return (oc.eventos_factura||[]);
     if(key==="cobro") return (oc.eventos_pago_cliente||[]);
     if(key==="financ") return (oc.eventos_pago_financiamiento||[]);
+    if(key==="postventa") return (oc.eventos_postventa||[]);
     return [];
   };
 
@@ -224,8 +275,12 @@ function EtapasOC({ oc, perfil, onEditarEvento, onEliminarFactura, onEliminarEve
     { key:"financ",  label:"Financ.", ok:oc.estado_pago_financiamiento==="pagado", icon:"🏦", tabla:"eventos_pago_financiamiento",
       accion: oc.estado_pago_financiamiento!=="pagado"?{label:"🏦 Registrar pago",color:C.purple,key:"pago_financ"}:null,
       correoBtns: null },
+    { key:"postventa", label:"Post-venta", ok:(oc.eventos_postventa||[]).some(e=>e.estado==="resuelto"), icon:"🛠", tabla:"eventos_postventa",
+      accion: {label:"🛠 Registrar incidencia",color:C.warn,key:"postventa"},
+      correoBtns: null },
   ];
-  const completadas=etapas.filter(e=>e.ok).length;
+  const principales=etapas.filter(e=>e.key!=="postventa");
+  const completadas=principales.filter(e=>e.ok).length;
 
   const renderDetalle=(etapa)=>{
     const eventos=getEventos(etapa.key);
@@ -334,6 +389,17 @@ function EtapasOC({ oc, perfil, onEditarEvento, onEliminarFactura, onEliminarEve
               <div style={{fontSize:11.5,color:C.inkMuted}}>{fmt.date(ev.fecha)||"—"}</div>
               {ev.financiador_id&&<div style={{fontSize:11,color:C.inkMuted}}>A: {oc.financiadores?.nombre||"—"}</div>}
             </>}
+            {etapa.key==="postventa"&&<>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:6}}>
+                <div style={{fontSize:12.5,fontWeight:600}}>🛠 {TIPOS_PV[ev.tipo]||ev.tipo||"Incidencia"}</div>
+                <span style={{fontSize:9.5,fontWeight:700,borderRadius:5,padding:"2px 6px",background:ev.estado==="resuelto"?C.okLight:ev.estado==="en_gestion"?C.warnLight:C.dangerLight,color:ev.estado==="resuelto"?C.ok:ev.estado==="en_gestion"?C.warn:C.danger}}>
+                  {ev.estado==="resuelto"?"✓ Resuelto":ev.estado==="en_gestion"?"En gestión":"Abierto"}
+                </span>
+              </div>
+              <div style={{fontSize:11.5,color:C.inkMuted}}>{fmt.date(ev.fecha)||"—"}</div>
+              {ev.descripcion&&<div style={{fontSize:11.5,color:C.ink,marginTop:3}}>{ev.descripcion}</div>}
+              {ev.solucion&&<div style={{fontSize:11,color:C.ok,marginTop:3}}>Solución: {ev.solucion}{ev.fecha_resolucion?` · ${fmt.date(ev.fecha_resolucion)}`:""}</div>}
+            </>}
             <div style={{display:"flex",gap:6,marginTop:8}}>
               <button onClick={()=>onEditarEvento&&onEditarEvento({tipo:etapa.label,e:ev,tabla:etapa.tabla})}
                 style={{fontSize:11,background:C.tealLight,color:C.teal,border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontWeight:600}}>✏️ Editar</button>
@@ -365,6 +431,17 @@ function EtapasOC({ oc, perfil, onEditarEvento, onEliminarFactura, onEliminarEve
             {b.label}
           </button>
         ))}
+        {/* Responsable de la etapa */}
+        <div style={{marginTop:10,paddingTop:8,borderTop:`1px solid ${C.border}`}}>
+          <div style={{fontSize:10,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:5}}>Responsable</div>
+          <select
+            value={(oc.oc_responsables||[]).find(r=>r.etapa===etapa.key)?.usuario_id||""}
+            onChange={e=>onAsignarResponsable&&onAsignarResponsable(oc.id,etapa.key,e.target.value)}
+            style={{width:"100%",padding:"7px 10px",borderRadius:8,border:`1px solid ${C.border}`,fontSize:12.5,fontFamily:SANS,background:C.card,color:C.ink}}>
+            <option value="">Sin asignar</option>
+            {(perfiles||[]).map(p=><option key={p.id} value={p.id}>{p.nombre}</option>)}
+          </select>
+        </div>
       </div>
     );
   };
@@ -401,7 +478,8 @@ function EtapasOC({ oc, perfil, onEditarEvento, onEliminarFactura, onEliminarEve
         </div>
       )}
       <div style={{fontSize:10,color:completadas===5?C.ok:C.inkFaint,textAlign:"right",fontWeight:completadas===5?700:400}}>
-        {completadas===5?"✓ OC completada":`${completadas}/5 etapas`}
+        {completadas===5?"✓ Ciclo completo":`${completadas}/5 etapas`}
+        {(oc.eventos_postventa||[]).some(e=>e.estado!=="resuelto")&&<span style={{color:C.warn,fontWeight:700}}> · 🛠 post-venta abierta</span>}
       </div>
     </div>
   );
@@ -1442,7 +1520,7 @@ function FormEditarEvento({ item, onSave, onCancel }) {
   );
 }
 
-function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, bloqueos, perfil, historialCambios, onAgregarComentario, onEliminarComentario, onBloquear, onLiberar, onEliminarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra }) {
+function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, bloqueos, perfil, historialCambios, onAgregarComentario, onEliminarComentario, onBloquear, onLiberar, onEliminarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa }) {
   const evF=(oc.eventos_factura||[])[0];
   const dias=fmt.diasDesde(evF?.fecha);
   const saldo=(oc.monto_facturado||0)-(oc.monto_cobrado||0);
@@ -1551,7 +1629,8 @@ function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, 
           </div>
 
           {/* ETAPAS INTERACTIVAS — cada círculo tiene su detalle y acción */}
-          <EtapasOC oc={oc} perfil={perfil}
+          <EtapasOC oc={oc} perfil={perfil} perfiles={perfiles}
+            onAsignarResponsable={onAsignarResponsable}
             onEditarEvento={setEditandoEvento}
             onEliminarFactura={onEliminarFactura}
             onEliminarEvento={onEliminarEvento}
@@ -1612,6 +1691,11 @@ function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, 
             onSave={async(tabla,eventoOriginal,cambios)=>{ await onEditarEvento(oc, tabla, eventoOriginal, cambios); setEditandoEvento(null); }} />
         </Modal>
       )}
+      {accionRapida==="postventa"&&(
+        <Modal title="Post-venta" onClose={()=>setAccionRapida(null)}>
+          <FormPostventa oc={oc} onSave={async(d)=>{ await onGuardarPostventa(d); setAccionRapida(null); }} />
+        </Modal>
+      )}
       {accionRapida==="compra"&&(
         <Modal title="Registrar compra" onClose={()=>setAccionRapida(null)}>
           <FormIngresarCompra ocs={[]} financiadores={financiadores} vendedores={vendedores} entidadesCatalogo={entidadesCatalogo} ocExistente={oc} onSave={async(data)=>{ await onIngresarCompra(data); setAccionRapida(null); }} />
@@ -1651,7 +1735,7 @@ function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, 
   );
 }
 
-function PanelCompras({ ocs, perfiles, filtroInicial, contactos, onEnviarReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, bloqueos, perfil, historialCambios, onAgregarComentario, onEliminarComentario, onBloquear, onLiberar, onEliminarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra }) {
+function PanelCompras({ ocs, perfiles, filtroInicial, contactos, onEnviarReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, bloqueos, perfil, historialCambios, onAgregarComentario, onEliminarComentario, onBloquear, onLiberar, onEliminarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa }) {
   const [filtros,setFiltros]=useState({}); const [busq,setBusq]=useState(""); const [expId,setExpId]=useState(null);
   const [reclamandoBanner,setReclamandoBanner]=useState(null); const [comunaSel,setComunaSel]=useState("");
   const [bannerAbierto,setBannerAbierto]=useState(false);
@@ -1750,7 +1834,7 @@ function PanelCompras({ ocs, perfiles, filtroInicial, contactos, onEnviarReclamo
         ))}
       </div>
       <div style={{fontSize:11.5,color:C.inkFaint,marginBottom:10}}>{filtered.length} orden{filtered.length!==1?"es":""}</div>
-      {filtered.map(oc=><FilaOC key={oc.id} oc={oc} perfiles={perfiles} expanded={expId===oc.id} onToggle={()=>setExpId(expId===oc.id?null:oc.id)} contactos={contactos} onEnviarReclamo={onEnviarReclamo} onGuardarContacto={onGuardarContacto} onGuardarDatosOC={onGuardarDatosOC} onEditarEvento={onEditarEvento} financiadores={financiadores} onConfirmarEntrega={onConfirmarEntrega} onEmitirFactura={onEmitirFactura} onPagoCliente={onPagoCliente} onPagoFinanciamiento={onPagoFinanciamiento} entidadesCatalogo={entidadesCatalogo} onGuardarLink={onGuardarLink} onEliminarLink={onEliminarLink} onEditarLink={onEditarLink} bloqueos={bloqueos} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={onAgregarComentario} onEliminarComentario={onEliminarComentario} onBloquear={onBloquear} onLiberar={onLiberar} onEliminarOC={onEliminarOC} onEliminarFactura={onEliminarFactura} onEliminarEvento={onEliminarEvento} vendedores={vendedores} onIngresarCompra={onIngresarCompra} />)}
+      {filtered.map(oc=><FilaOC key={oc.id} oc={oc} perfiles={perfiles} expanded={expId===oc.id} onToggle={()=>setExpId(expId===oc.id?null:oc.id)} contactos={contactos} onEnviarReclamo={onEnviarReclamo} onGuardarContacto={onGuardarContacto} onGuardarDatosOC={onGuardarDatosOC} onEditarEvento={onEditarEvento} financiadores={financiadores} onConfirmarEntrega={onConfirmarEntrega} onEmitirFactura={onEmitirFactura} onPagoCliente={onPagoCliente} onPagoFinanciamiento={onPagoFinanciamiento} entidadesCatalogo={entidadesCatalogo} onGuardarLink={onGuardarLink} onEliminarLink={onEliminarLink} onEditarLink={onEditarLink} bloqueos={bloqueos} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={onAgregarComentario} onEliminarComentario={onEliminarComentario} onBloquear={onBloquear} onLiberar={onLiberar} onEliminarOC={onEliminarOC} onEliminarFactura={onEliminarFactura} onEliminarEvento={onEliminarEvento} vendedores={vendedores} onIngresarCompra={onIngresarCompra} onAsignarResponsable={onAsignarResponsable} onGuardarPostventa={onGuardarPostventa} />)}
       {filtered.length===0&&<div style={{textAlign:"center",padding:30,color:C.inkFaint,fontSize:13}}>No hay órdenes con estos filtros.</div>}
     </div>
   );
@@ -2722,7 +2806,7 @@ export default function App() {
     if(!session) return;
     const t=session.access_token;
     try {
-      const [ocsD,finD,vendD,catD,gastD,ivaD,pagVD,ajuD,perfD,contD,entD,pagoFinSueltosD,notifD,histD,reclamosD]=await Promise.all([
+      const [ocsD,finD,vendD,catD,gastD,ivaD,pagVD,ajuD,perfD,contD,entD,pagoFinSueltosD,notifD,histD,reclamosD,respD,pvD]=await Promise.all([
         selOCs(t), sel("financiadores",t,"&order=nombre"), sel("vendedores",t,"&order=nombre"),
         sel("categorias_gasto",t,"&order=nombre"), sel("gastos_indirectos",t,"&order=fecha.desc"),
         sel("iva_mensual",t), sel("pagos_vendedor",t), sel("ajustes_saldo_financiador",t,"&order=creadoEn.desc"),
@@ -2731,11 +2815,15 @@ export default function App() {
         sel("notificaciones",t,`&usuario_id=eq.${session.user.id}&order=creadoEn.desc&limit=50`).catch(()=>[]),
         sel("historial_cambios",t,"&order=creadoEn.desc&limit=200").catch(()=>[]),
         sel("oc_reclamos",t,"&order=fecha.desc").catch(()=>[]),
+        sel("oc_responsables",t).catch(()=>[]),
+        sel("eventos_postventa",t,"&order=creadoEn.desc").catch(()=>[]),
       ]);
-      // Inyectar reclamos en cada OC
-      const reclamosPorOC={};
+      // Inyectar reclamos, responsables y post-venta en cada OC
+      const reclamosPorOC={}, respPorOC={}, pvPorOC={};
       for(const r of reclamosD){ if(!reclamosPorOC[r.oc_id]) reclamosPorOC[r.oc_id]=[]; reclamosPorOC[r.oc_id].push(r); }
-      const ocsConReclamos=ocsD.map(oc=>({...oc,oc_reclamos:reclamosPorOC[oc.id]||[]}));
+      for(const r of respD){ if(!respPorOC[r.oc_id]) respPorOC[r.oc_id]=[]; respPorOC[r.oc_id].push(r); }
+      for(const r of pvD){ if(!pvPorOC[r.oc_id]) pvPorOC[r.oc_id]=[]; pvPorOC[r.oc_id].push(r); }
+      const ocsConReclamos=ocsD.map(oc=>({...oc,oc_reclamos:reclamosPorOC[oc.id]||[],oc_responsables:respPorOC[oc.id]||[],eventos_postventa:pvPorOC[oc.id]||[]}));
       setOcs(ocsConReclamos); setFinanciadores(finD); setVendedores(vendD); setCategoriasGasto(catD);
       setGastos(gastD); setIvaMensual(ivaD); setPagosVendedor(pagVD); setAjustesSaldo(ajuD); setPerfiles(perfD);
       setContactos(contD); setEntidadesCatalogo(entD); setPagoFinSueltos(pagoFinSueltosD);
@@ -2878,6 +2966,32 @@ export default function App() {
   };
 
   // ─── HANDLERS MULTIUSUARIO ────────────────────
+  const handleAsignarResponsable=async(ocId,etapa,usuarioId)=>{
+    const t=session.access_token;
+    const oc=ocs.find(o=>o.id===ocId);
+    const existente=(oc?.oc_responsables||[]).find(r=>r.etapa===etapa);
+    if(!usuarioId){
+      if(existente) await del("oc_responsables",t,existente.id);
+    } else {
+      const p=perfiles.find(x=>x.id===usuarioId);
+      const datos={oc_id:ocId,etapa,usuario_id:usuarioId,usuario_nombre:p?.nombre||"",asignado_por:session.user.id};
+      if(existente) await upd("oc_responsables",t,existente.id,datos);
+      else await ins("oc_responsables",t,{id:genId("resp"),...datos});
+      try{ await crearNotificacion(t,{usuarioId,tipo:"asignacion",ocId,ocNumero:oc?.numero_oc,mensaje:`Te asignaron la etapa ${etapa} de la OC ${oc?.numero_oc}`}); }catch{}
+    }
+    await registrarCambio(t,{ocId,ocNumero:oc?.numero_oc,usuarioId:perfil.id,usuarioNombre:perfil.nombre,accion:`Responsable de ${etapa}`,campo:"responsable",valorAnterior:existente?.usuario_nombre||"—",valorNuevo:perfiles.find(x=>x.id===usuarioId)?.nombre||"—"});
+    showToast("Responsable actualizado"); await cargarTodo();
+  };
+  const handleGuardarPostventa=async(d)=>{
+    const t=session.access_token;
+    const oc=ocs.find(o=>o.id===d.ocId);
+    const fila={oc_id:d.ocId,fecha:d.fecha,tipo:d.tipo,descripcion:d.descripcion,estado:d.estado,solucion:d.solucion,fecha_resolucion:d.fecha_resolucion};
+    if(d.id) await upd("eventos_postventa",t,d.id,fila);
+    else await ins("eventos_postventa",t,{id:genId("pv"),...fila,creado_por:session.user.id});
+    await upd("ordenes_compra_v2",t,d.ocId,{estado_postventa:d.estado==="resuelto"?"resuelta":"con_incidencia"});
+    await registrarCambio(t,{ocId:d.ocId,ocNumero:oc?.numero_oc,usuarioId:perfil.id,usuarioNombre:perfil.nombre,accion:d.id?"Post-venta actualizada":"Post-venta registrada",campo:"estado",valorNuevo:d.estado});
+    showToast(d.estado==="resuelto"?"Incidencia resuelta":"Incidencia registrada"); await cargarTodo();
+  };
   const handleMarcarFecha=async(codigoOC,fecha)=>{
     const t=session.access_token;
     const oc=ocs.find(o=>o.numero_oc.toLowerCase()===codigoOC.toLowerCase());
@@ -3063,7 +3177,7 @@ export default function App() {
           <div style={{display:"flex",alignItems:"center",gap:10}}>
             <div style={{width:38,height:38,background:"rgba(20,184,166,0.15)",border:`1.5px solid ${C.teal}`,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:MONO,color:C.teal,fontWeight:800,fontSize:13}}>BFK</div>
             <div>
-              <div style={{fontWeight:800,fontSize:15,letterSpacing:-0.3}}>{TABS.find(t=>t.key===tab)?.label==="Panel"?"Torre de Control":TABS.find(t=>t.key===tab)?.label||"BFK Ltda"} <span style={{fontSize:9,color:"#4B5A76",fontWeight:400}}>v37</span></div>
+              <div style={{fontWeight:800,fontSize:15,letterSpacing:-0.3}}>{TABS.find(t=>t.key===tab)?.label==="Panel"?"Torre de Control":TABS.find(t=>t.key===tab)?.label||"BFK Ltda"} <span style={{fontSize:9,color:"#4B5A76",fontWeight:400}}>v38</span></div>
               <div style={{fontSize:10.5,color:"#8B9AB5"}}>{perfil?.nombre} · {perfil?.rol==="admin"?"Administrador":"Usuario"}</div>
             </div>
           </div>
@@ -3077,7 +3191,7 @@ export default function App() {
       {/* CONTENIDO */}
       <div style={{padding:16}}>
         {tab==="panel"&&<PanelDashboard ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} onNavigate={(t)=>{setTab(t);}} />}
-        {tab==="compras"&&<PanelCompras ocs={ocs} perfiles={perfiles} filtroInicial={filtroCompras} contactos={contactos} onEnviarReclamo={handleEnviarReclamo} onGuardarContacto={handleGuardarContacto} onGuardarDatosOC={handleGuardarDatosOC} onEditarEvento={handleEditarEvento} financiadores={financiadores} onConfirmarEntrega={handleEntrega} onEmitirFactura={handleFactura} onPagoCliente={handlePagoCliente} onPagoFinanciamiento={handlePagoFin} entidadesCatalogo={entidadesCatalogo} onGuardarLink={handleGuardarLink} onEliminarLink={handleEliminarLink} onEditarLink={handleEditarLink} bloqueos={bloqueos} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={handleAgregarComentario} onEliminarComentario={handleEliminarComentario} onBloquear={handleBloquear} onLiberar={handleLiberar} onEliminarOC={handleEliminarOC} onEliminarFactura={handleEliminarFactura} onEliminarEvento={handleEliminarEvento} vendedores={vendedores} onIngresarCompra={handleIngresarCompra} />}
+        {tab==="compras"&&<PanelCompras ocs={ocs} perfiles={perfiles} filtroInicial={filtroCompras} contactos={contactos} onEnviarReclamo={handleEnviarReclamo} onGuardarContacto={handleGuardarContacto} onGuardarDatosOC={handleGuardarDatosOC} onEditarEvento={handleEditarEvento} financiadores={financiadores} onConfirmarEntrega={handleEntrega} onEmitirFactura={handleFactura} onPagoCliente={handlePagoCliente} onPagoFinanciamiento={handlePagoFin} entidadesCatalogo={entidadesCatalogo} onGuardarLink={handleGuardarLink} onEliminarLink={handleEliminarLink} onEditarLink={handleEditarLink} bloqueos={bloqueos} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={handleAgregarComentario} onEliminarComentario={handleEliminarComentario} onBloquear={handleBloquear} onLiberar={handleLiberar} onEliminarOC={handleEliminarOC} onEliminarFactura={handleEliminarFactura} onEliminarEvento={handleEliminarEvento} vendedores={vendedores} onIngresarCompra={handleIngresarCompra} onAsignarResponsable={handleAsignarResponsable} onGuardarPostventa={handleGuardarPostventa} />}
         {tab==="notif"&&<PanelNotificaciones notificaciones={notificaciones} onMarcarLeidas={handleMarcarNotificacionesLeidas} />}
         {tab==="agenda"&&<PanelCalendario ocs={ocs} onMarcarFecha={handleMarcarFecha} />}
         {tab==="financiamiento"&&<PanelFinanciamiento financiadores={financiadores} ocs={ocs} ajustes={ajustesSaldo} perfiles={perfiles} onAjustar={handleAjusteSaldo} />}
