@@ -319,19 +319,38 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, contactos, onEnviar
   const [filtros,setFiltros]=useState({}); const [busq,setBusq]=useState(""); const [expId,setExpId]=useState(null);
   const [reclamandoBanner,setReclamandoBanner]=useState(null); const [comunaSel,setComunaSel]=useState("");
   const [bannerAbierto,setBannerAbierto]=useState(false);
+  const [vista,setVista]=useState("todas");
+  const [masFiltros,setMasFiltros]=useState(false);
+
+  // Cada vista responde a "¿qué me falta hacer?" en esa etapa
+  const cumpleVista=(oc,v)=>{
+    const comprada=(oc.eventos_compra||[]).length>0;
+    const entregada=oc.estado_entrega==="confirmada"||oc.estado_entrega==="entregado";
+    const facturada=oc.estado_factura_propia==="emitida";
+    const cobrada=oc.estado_pago_cliente==="pagado";
+    const finPagado=oc.estado_pago_financiamiento==="pagado";
+    if(v==="todas")    return true;
+    if(v==="comprar")  return !comprada;
+    if(v==="entregar") return comprada&&!entregada;
+    if(v==="facturar") return entregada&&!facturada;
+    if(v==="cobrar")   return facturada&&!cobrada;
+    if(v==="financ")   return comprada&&!finPagado;
+    return true;
+  };
   useEffect(()=>{ setFiltros(filtroInicial?{[filtroInicial]:"pend"}:{}); },[filtroInicial]);
   const toggle=(key,val)=>setFiltros(prev=>({...prev,[key]:prev[key]===val?undefined:val}));
   const comunas=useMemo(()=>Array.from(new Set(ocs.map(o=>o.comuna).filter(Boolean))).sort(),[ocs]);
   const filtered=useMemo(()=>ocs.filter(oc=>{
     if(busq.trim()){ const q=busq.toLowerCase(); if(!oc.numero_oc.toLowerCase().includes(q)&&!(oc.cliente||"").toLowerCase().includes(q)&&!(oc.comuna||"").toLowerCase().includes(q)&&!(oc.entidad||"").toLowerCase().includes(q)) return false; }
     if(comunaSel&&oc.comuna!==comunaSel) return false;
+    if(!cumpleVista(oc,vista)) return false;
     for(const f of FILTROS){ const s=filtros[f.key]; if(!s) continue; const ok=oc[f.okField]===f.okValue; if(s==="ok"&&!ok) return false; if(s==="pend"&&ok) return false; }
     return true;
   }).sort((a,b)=>{
     const fa=((a.eventos_compra||[])[0]?.fecha)||a.creadoEn||"";
     const fb=((b.eventos_compra||[])[0]?.fecha)||b.creadoEn||"";
     return String(fb).localeCompare(String(fa));
-  }),[ocs,filtros,busq,comunaSel]);
+  }),[ocs,filtros,busq,comunaSel,vista]);
 
   const alertas=useMemo(()=>ocs.filter(o=>{
     if(o.estado_pago_cliente==="pagado") return false;
@@ -343,6 +362,18 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, contactos, onEnviar
     const dB=fmt.diasDesde((b.eventos_factura||[])[0]?.fecha)||0;
     return dB-dA;
   }),[ocs]);
+
+  const VISTAS=useMemo(()=>{
+    const n=(v)=>ocs.filter(o=>cumpleVista(o,v)).length;
+    return [
+      {key:"todas",   label:"Todas",        n:ocs.length,   color:C.teal,    bg:C.tealLight},
+      {key:"comprar", label:"Por comprar",  n:n("comprar"), color:C.transit, bg:C.transitLight},
+      {key:"entregar",label:"Por entregar", n:n("entregar"),color:C.info,    bg:C.infoLight},
+      {key:"facturar",label:"Por facturar", n:n("facturar"),color:C.purple,  bg:C.purpleLight},
+      {key:"cobrar",  label:"Por cobrar",   n:n("cobrar"),  color:C.warn,    bg:C.warnLight},
+      {key:"financ",  label:"Por pagar",    n:n("financ"),  color:C.danger,  bg:C.dangerLight},
+    ];
+  },[ocs]);
 
   return (
     <div>
@@ -402,14 +433,37 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, contactos, onEnviar
           {comunas.map(c=><option key={c} value={c}>{c}</option>)}
         </select>
       )}
-      <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:14}}>
-        {FILTROS.map(f=>(
-          <div key={f.key} style={{display:"flex",gap:3}}>
-            <button onClick={()=>toggle(f.key,"pend")} style={{fontSize:10.5,fontWeight:700,padding:"5px 8px",borderRadius:7,border:`1.5px solid ${filtros[f.key]==="pend"?C.danger:C.border}`,background:filtros[f.key]==="pend"?C.dangerLight:C.card,color:filtros[f.key]==="pend"?C.danger:C.inkMuted,cursor:"pointer"}}>{f.label}: {f.pendLabel}</button>
-            <button onClick={()=>toggle(f.key,"ok")} style={{fontSize:10.5,fontWeight:700,padding:"5px 8px",borderRadius:7,border:`1.5px solid ${filtros[f.key]==="ok"?C.ok:C.border}`,background:filtros[f.key]==="ok"?C.okLight:C.card,color:filtros[f.key]==="ok"?C.ok:C.inkMuted,cursor:"pointer"}}>{f.okLabel}</button>
-          </div>
-        ))}
+      {/* Vista rápida: qué falta hacer. Un toque, una respuesta. */}
+      <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:10}}>
+        {VISTAS.map(v=>{
+          const activa=vista===v.key;
+          return (
+            <button key={v.key} onClick={()=>{setVista(v.key);setFiltros({});}}
+              style={{fontSize:11,fontWeight:700,padding:"6px 11px",borderRadius:9,cursor:"pointer",
+                border:`1.5px solid ${activa?v.color:C.border}`,
+                background:activa?v.bg:C.card, color:activa?v.color:C.inkMuted}}>
+              {v.label}{v.n>0?` ${v.n}`:""}
+            </button>
+          );
+        })}
       </div>
+
+      <button onClick={()=>setMasFiltros(m=>!m)}
+        style={{background:"none",border:"none",color:C.inkFaint,fontSize:11,cursor:"pointer",padding:"2px 0",marginBottom:masFiltros?8:12}}>
+        {masFiltros?"▾":"▸"} Filtros combinados
+      </button>
+
+      {masFiltros&&(
+        <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:12,background:C.paper,borderRadius:10,padding:"10px"}}>
+          {FILTROS.map(f=>(
+            <div key={f.key} style={{display:"flex",gap:3}}>
+              <button onClick={()=>{setVista("todas");toggle(f.key,"pend");}} style={{fontSize:10.5,fontWeight:700,padding:"5px 8px",borderRadius:7,border:`1.5px solid ${filtros[f.key]==="pend"?C.danger:C.border}`,background:filtros[f.key]==="pend"?C.dangerLight:C.card,color:filtros[f.key]==="pend"?C.danger:C.inkMuted,cursor:"pointer"}}>{f.label}: {f.pendLabel}</button>
+              <button onClick={()=>{setVista("todas");toggle(f.key,"ok");}} style={{fontSize:10.5,fontWeight:700,padding:"5px 8px",borderRadius:7,border:`1.5px solid ${filtros[f.key]==="ok"?C.ok:C.border}`,background:filtros[f.key]==="ok"?C.okLight:C.card,color:filtros[f.key]==="ok"?C.ok:C.inkMuted,cursor:"pointer"}}>{f.okLabel}</button>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div style={{fontSize:11.5,color:C.inkFaint,marginBottom:10}}>{filtered.length} orden{filtered.length!==1?"es":""}</div>
       {filtered.map(oc=><FilaOC key={oc.id} oc={oc} perfiles={perfiles} expanded={expId===oc.id} onToggle={()=>setExpId(expId===oc.id?null:oc.id)} contactos={contactos} onEnviarReclamo={onEnviarReclamo} onGuardarContacto={onGuardarContacto} onGuardarDatosOC={onGuardarDatosOC} onEditarEvento={onEditarEvento} financiadores={financiadores} onConfirmarEntrega={onConfirmarEntrega} onEmitirFactura={onEmitirFactura} onPagoCliente={onPagoCliente} onPagoFinanciamiento={onPagoFinanciamiento} entidadesCatalogo={entidadesCatalogo} onGuardarLink={onGuardarLink} onEliminarLink={onEliminarLink} onEditarLink={onEditarLink} bloqueos={bloqueos} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={onAgregarComentario} onEliminarComentario={onEliminarComentario} onBloquear={onBloquear} onLiberar={onLiberar} onEliminarOC={onEliminarOC} onEliminarFactura={onEliminarFactura} onEliminarEvento={onEliminarEvento} vendedores={vendedores} onIngresarCompra={onIngresarCompra} onAsignarResponsable={onAsignarResponsable} onGuardarPostventa={onGuardarPostventa} />)}
       {filtered.length===0&&<div style={{textAlign:"center",padding:30,color:C.inkFaint,fontSize:13}}>No hay órdenes con estos filtros.</div>}
