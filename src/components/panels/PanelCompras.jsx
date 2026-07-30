@@ -328,7 +328,7 @@ export function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarRe
   );
 }
 
-export function PanelCompras({ ocs, perfiles, filtroInicial, contactos, onEnviarReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, bloqueos, perfil, historialCambios, onAgregarComentario, onEliminarComentario, onBloquear, onLiberar, onEliminarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa }) {
+export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, contactos, onEnviarReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, bloqueos, perfil, historialCambios, onAgregarComentario, onEliminarComentario, onBloquear, onLiberar, onEliminarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa }) {
   const [filtros,setFiltros]=useState({}); const [busq,setBusq]=useState(""); const [expId,setExpId]=useState(null);
   const [reclamandoBanner,setReclamandoBanner]=useState(null); const [comunaSel,setComunaSel]=useState("");
   const [bannerAbierto,setBannerAbierto]=useState(false);
@@ -351,6 +351,16 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, contactos, onEnviar
     return true;
   };
   useEffect(()=>{ setFiltros(filtroInicial?{[filtroInicial]:"pend"}:{}); },[filtroInicial]);
+
+  // Si llegamos desde una alerta, abrimos esa OC y quitamos filtros
+  // para que no quede escondida por la vista activa.
+  useEffect(()=>{
+    if(!ocFoco) return;
+    const oc=ocs.find(o=>o.id===ocFoco);
+    setVista("todas"); setFiltros({}); setComunaSel("");
+    setBusq(oc?.numero_oc||"");
+    setExpId(ocFoco);
+  },[ocFoco,ocs]);
   const toggle=(key,val)=>setFiltros(prev=>({...prev,[key]:prev[key]===val?undefined:val}));
   const comunas=useMemo(()=>Array.from(new Set(ocs.map(o=>o.comuna).filter(Boolean))).sort(),[ocs]);
   const filtered=useMemo(()=>ocs.filter(oc=>{
