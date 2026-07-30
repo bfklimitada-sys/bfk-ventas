@@ -5,6 +5,7 @@ import { C, MONO, SANS, btnP, fmt } from "../../lib/theme";
 
 export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, onNavigate, onAccion }) {
   const [expandido,setExpandido]=useState(null);
+  const [verHistorico,setVerHistorico]=useState(false);
 
   const kpis=useMemo(()=>{
     const hoy=new Date(); hoy.setHours(0,0,0,0);
@@ -280,7 +281,8 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
         ))}
       </div>
 
-      {/* ── Ventas y margen del mes, en una sola tarjeta ── */}
+      {/* ── Ventas y margen del mes — solo si hay movimiento ── */}
+      {(ventasChart.totalAct>0||kpis.margenPromPct>0)&&
       <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px",marginBottom:14}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:2}}>
           <div style={{fontSize:11.5,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4}}>Ventas del mes</div>
@@ -312,13 +314,17 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
           <span style={{fontSize:10.5,color:C.inkMuted,display:"flex",alignItems:"center",gap:4}}><span style={{width:8,height:8,borderRadius:"50%",background:C.teal,display:"inline-block"}} />Este mes</span>
           <span style={{fontSize:10.5,color:C.inkMuted,display:"flex",alignItems:"center",gap:4}}><span style={{width:8,height:8,borderRadius:"50%",background:C.border,display:"inline-block"}} />Mes anterior</span>
         </div>
-      </div>
+      </div>}
 
-      <div style={{fontSize:11.5,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:8}}>
-        Detalle · toca para desglosar
-      </div>
+      <button onClick={()=>setVerHistorico(v=>!v)}
+        style={{width:"100%",background:"none",border:"none",cursor:"pointer",textAlign:"left",
+          fontSize:11.5,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,
+          marginBottom:8,padding:"4px 0",display:"flex",alignItems:"center",gap:6}}>
+        <span style={{fontSize:12}}>{verHistorico?"▾":"▸"}</span> Detalle e histórico
+      </button>
 
       {/* 4 KPIs clickeables (detalle expandible) */}
+      {verHistorico&&<>
       <KpiBtn label="Ingresos cobrados" value={fmt.money(kpis.cobrado)} color={C.ok} id="cobrado">
         <div style={{fontSize:11.5,fontWeight:700,color:C.inkMuted,marginBottom:8}}>OC cobradas ({ocsPagadas.length})</div>
         {ocsPagadas.map(o=>(
@@ -375,25 +381,30 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
         </div>
         <div style={{fontSize:11,color:C.inkFaint,marginTop:4}}>Utilidad = Ventas − Costo compras (sin descontar gastos indirectos)</div>
       </KpiBtn>
+      </>}
 
-      {/* DEUDA GENERAL */}
-      <div style={{marginTop:6}}>
-        <div style={{fontSize:12,fontWeight:800,color:C.inkMuted,marginBottom:8,textTransform:"uppercase",letterSpacing:0.4}}>Deuda General</div>
-        {deudaVendedores.map(({vendedor,pagoCalculado,pagado,deuda})=>(
-          <div key={vendedor.id} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 15px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <div><div style={{fontWeight:700,color:C.ink,fontSize:13}}>{vendedor.nombre}</div><div style={{fontSize:11,color:C.inkFaint}}>Calculado {fmt.money(pagoCalculado)} · Pagado {fmt.money(pagado)}</div></div>
-            <div style={{fontFamily:MONO,fontWeight:800,color:deuda>0?C.warn:C.ok}}>{fmt.money(deuda)}</div>
-          </div>
-        ))}
-        <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 15px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div><div style={{fontWeight:700,color:C.ink,fontSize:13}}>Impuesto (F29 proyectado)</div><div style={{fontSize:11,color:C.inkFaint}}>Débito − Crédito fiscal del mes</div></div>
-          <div style={{fontFamily:MONO,fontWeight:800,color:kpis.f29>0?C.warn:C.ok}}>{fmt.money(kpis.f29)}</div>
+      {/* Deuda a terceros — el detalle vive en Vendedores y Financiamiento */}
+      {(kpis.deudaVendedoresMes>0||kpis.f29>0)&&(
+        <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"12px 15px",marginBottom:12}}>
+          <div style={{fontSize:11,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:8}}>Compromisos del mes</div>
+          {kpis.deudaVendedoresMes>0&&(
+            <button onClick={()=>onNavigate&&onNavigate("vendedores",null)}
+              style={{width:"100%",background:"none",border:"none",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",textAlign:"left"}}>
+              <span style={{fontSize:12.5,color:C.ink,fontWeight:600}}>Comisiones a vendedores</span>
+              <span style={{display:"flex",alignItems:"center",gap:6}}>
+                <span style={{fontFamily:MONO,fontWeight:800,fontSize:12.5,color:C.warn}}>{fmt.money(kpis.deudaVendedoresMes)}</span>
+                <span style={{fontSize:13,color:C.inkFaint}}>›</span>
+              </span>
+            </button>
+          )}
+          {kpis.f29>0&&(
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderTop:kpis.deudaVendedoresMes>0?`1px solid ${C.border}`:"none"}}>
+              <span style={{fontSize:12.5,color:C.ink,fontWeight:600}}>Impuesto F29 proyectado</span>
+              <span style={{fontFamily:MONO,fontWeight:800,fontSize:12.5,color:C.warn}}>{fmt.money(kpis.f29)}</span>
+            </div>
+          )}
         </div>
-        <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 15px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div><div style={{fontWeight:700,color:C.ink,fontSize:13}}>Contador (gastos registrados)</div><div style={{fontSize:11,color:C.inkFaint}}>Total acumulado de pagos</div></div>
-          <div style={{fontFamily:MONO,fontWeight:800,color:C.inkMuted}}>{fmt.money(kpis.gastoContador)}</div>
-        </div>
-      </div>
+      )}
 
       <Leyenda titulo="¿Qué significan estos números?" items={[
         {muestra:"Saldo", texto:"Saldo disponible: lo cobrado menos pagos a financiadores, gastos y compras con cuenta BFK."},
