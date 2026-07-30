@@ -146,6 +146,21 @@ export function calcularAlertas(ocs) {
       }
     }
 
+    // 3b. Ciclo fuera de orden: el registro quedó incompleto
+    const facturada = oc.estado_factura_propia === "emitida";
+    if (facturada && !entregada) {
+      alertas.push({ ocId:oc.id, nivel:"medio", icono:"⚠", oc:oc.numero_oc, cliente:oc.cliente,
+        titulo:"Facturada sin registrar la entrega",
+        detalle:"Falta el registro de entrega — la agenda y el historial quedan incompletos",
+        monto:oc.monto_total, tab:"compras", filtro:"entrega", orden:3 });
+    }
+    if (oc.estado_pago_cliente === "pagado" && !facturada) {
+      alertas.push({ ocId:oc.id, nivel:"medio", icono:"⚠", oc:oc.numero_oc, cliente:oc.cliente,
+        titulo:"Cobrada sin registrar la factura",
+        detalle:"Entró la plata pero no hay factura cargada",
+        monto:oc.monto_cobrado||oc.monto_total, tab:"compras", filtro:"factura", orden:3 });
+    }
+
     // 4. OCs a medias y sin movimiento
     const fechas = [
       ...(oc.eventos_compra||[]), ...(oc.eventos_entrega||[]),
