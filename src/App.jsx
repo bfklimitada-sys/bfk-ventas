@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { LoginScreen } from "./components/auth/LoginScreen";
 import { FormIngresarCompra } from "./components/forms/FormIngresarCompra";
 import { NuevaOCRapida } from "./components/forms/NuevaOCRapida";
+import { FormCompraRapida } from "./components/forms/FormCompraRapida";
+import { FormConfirmarEntrega, FormEmitirFactura, FormPagoCliente } from "./components/forms/FormulariosRapidos";
 import { PanelCalendario } from "./components/panels/PanelCalendario";
 import { PanelCompras } from "./components/panels/PanelCompras";
 import { PanelDashboard } from "./components/panels/PanelDashboard";
@@ -281,6 +283,28 @@ export default function App() {
       }catch{ /* si falla una, seguimos con las demás */ }
     }
     return completadas;
+  };
+
+  // ─── COMPRA RÁPIDA sobre una OC ya creada ────────────────────
+  const handleCompraRapida=async({ocId,costoCompra,fecha,fechaEst,financiadorId,proveedor})=>{
+    const t=session.access_token;
+    const oc=ocs.find(o=>o.id===ocId);
+
+    await ins("eventos_compra",t,{id:genId("evc"),oc_id:ocId,fecha,
+      monto_venta:oc?.monto_total||0, costo_compra:costoCompra,
+      fecha_entrega_estimada:fechaEst, financiador_id:financiadorId,
+      proveedor:proveedor||"", creado_por:session.user.id});
+
+    await upd("ordenes_compra_v2",t,ocId,{estado_compra:"comprado",costo_total:costoCompra,financiador_id:financiadorId});
+
+    const fin=financiadores.find(f=>f.id===financiadorId);
+    if(fin) await upd("financiadores",t,fin.id,{saldo_deuda:Number(fin.saldo_deuda||0)+costoCompra});
+
+    await registrarCambio(t,{ocId,ocNumero:oc?.numero_oc,usuarioId:perfil?.id,
+      usuarioNombre:perfil?.nombre,accion:"Compra registrada",campo:"costo_total",
+      valorNuevo:costoCompra});
+
+    showToast("Compra registrada"); setAccion(null); await cargarTodo();
   };
 
   const handleEntrega=async(data)=>{
@@ -570,7 +594,7 @@ export default function App() {
             </div>
           </div>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
-            <button onClick={()=>setAccion("compra")} style={{background:C.teal,border:"none",color:"#fff",borderRadius:10,padding:"9px 14px",fontSize:12.5,fontWeight:700,cursor:"pointer",boxShadow:"0 3px 10px rgba(20,184,166,0.35)"}}>+ Nueva OC</button>
+            <button onClick={()=>setAccion("compra_oc")} style={{background:C.teal,border:"none",color:"#fff",borderRadius:10,padding:"9px 14px",fontSize:12.5,fontWeight:700,cursor:"pointer",boxShadow:"0 3px 10px rgba(20,184,166,0.35)"}}>+ Nueva OC</button>
             <button onClick={handleLogout} style={{background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.12)",color:"#B8C4D9",borderRadius:9,padding:"8px 10px",fontSize:12,fontWeight:600,cursor:"pointer"}}>⏻</button>
           </div>
         </div>
@@ -578,7 +602,7 @@ export default function App() {
 
       {/* CONTENIDO */}
       <div style={{padding:16}}>
-        {tab==="panel"&&<PanelDashboard ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} onNavigate={(t,filtro)=>{setFiltroCompras(filtro||null);setTab(t);}} />}
+        {tab==="panel"&&<PanelDashboard ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} onNavigate={(t,filtro)=>{setFiltroCompras(filtro||null);setTab(t);}} onAccion={(k)=>setAccion(k)} />}
         {tab==="compras"&&<PanelCompras ocs={ocs} perfiles={perfiles} filtroInicial={filtroCompras} contactos={contactos} onEnviarReclamo={handleEnviarReclamo} onGuardarContacto={handleGuardarContacto} onGuardarDatosOC={handleGuardarDatosOC} onEditarEvento={handleEditarEvento} financiadores={financiadores} onConfirmarEntrega={handleEntrega} onEmitirFactura={handleFactura} onPagoCliente={handlePagoCliente} onPagoFinanciamiento={handlePagoFin} entidadesCatalogo={entidadesCatalogo} onGuardarLink={handleGuardarLink} onEliminarLink={handleEliminarLink} onEditarLink={handleEditarLink} bloqueos={bloqueos} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={handleAgregarComentario} onEliminarComentario={handleEliminarComentario} onBloquear={handleBloquear} onLiberar={handleLiberar} onEliminarOC={handleEliminarOC} onEliminarFactura={handleEliminarFactura} onEliminarEvento={handleEliminarEvento} vendedores={vendedores} onIngresarCompra={handleIngresarCompra} onAsignarResponsable={handleAsignarResponsable} onGuardarPostventa={handleGuardarPostventa} />}
         {tab==="notif"&&<PanelNotificaciones notificaciones={notificaciones} onMarcarLeidas={handleMarcarNotificacionesLeidas} />}
         {tab==="agenda"&&<PanelCalendario ocs={ocs} onMarcarFecha={handleMarcarFecha} />}
@@ -635,7 +659,7 @@ export default function App() {
       })()}
 
       {/* MODAL NUEVA OC */}
-      {accion==="compra"&&(
+      {accion==="compra_oc"&&(
         <Modal title="Nueva OC" onClose={()=>setAccion(null)}>
           <NuevaOCRapida perfil={perfil} vendedores={vendedores} entidadesCatalogo={entidadesCatalogo}
             onGuardar={handleNuevaOCRapida} onCerrar={()=>setAccion(null)} />
@@ -645,6 +669,10 @@ export default function App() {
           </button>
         </Modal>
       )}
+      {accion==="compra"&&<Modal title="Ingresar compra" onClose={()=>setAccion(null)}><FormCompraRapida ocs={ocs} financiadores={financiadores} perfil={perfil} onSave={handleCompraRapida} /></Modal>}
+      {accion==="entrega"&&<Modal title="Ingresar entrega" onClose={()=>setAccion(null)}><FormConfirmarEntrega ocs={ocs} onSave={handleEntrega} /></Modal>}
+      {accion==="factura"&&<Modal title="Ingresar factura" onClose={()=>setAccion(null)}><FormEmitirFactura ocs={ocs} onSave={handleFactura} /></Modal>}
+      {accion==="pago_cliente"&&<Modal title="Ingresar pago" onClose={()=>setAccion(null)}><FormPagoCliente ocs={ocs} onSave={handlePagoCliente} /></Modal>}
       {accion==="compra_manual"&&<Modal title="Nueva OC — manual" onClose={()=>setAccion(null)}><FormIngresarCompra ocs={ocs} financiadores={financiadores} vendedores={vendedores} entidadesCatalogo={entidadesCatalogo} onSave={handleIngresarCompra} /></Modal>}
 
       <Toast toast={toast} />
