@@ -32,25 +32,6 @@ export function Toast({ toast }) {
   return <div style={{position:"fixed",bottom:80,left:"50%",transform:"translateX(-50%)",background:toast.type==="error"?C.danger:C.ink,color:"#fff",padding:"11px 20px",borderRadius:10,fontSize:13,fontWeight:600,zIndex:200,boxShadow:"0 8px 24px rgba(0,0,0,0.25)",maxWidth:"90vw",textAlign:"center"}}>{toast.msg}</div>;
 }
 
-export function EtapasResumen({ oc }) {
-  const etapas=[
-    {key:"compra",ok:oc.estado_compra==="comprado",label:"Compra"},
-    {key:"entrega",ok:oc.estado_entrega==="confirmada",label:"Entrega"},
-    {key:"factura",ok:oc.estado_factura_propia==="emitida",label:"Factura"},
-    {key:"cobro",ok:oc.estado_pago_cliente==="pagado",label:"Cobro"},
-    {key:"financ",ok:oc.estado_pago_financiamiento==="pagado",label:"Financ."},
-  ];
-  return (
-    <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-      {etapas.map(e=>(
-        <span key={e.key} style={{fontSize:10,fontWeight:700,padding:"3px 7px",borderRadius:6,background:e.ok?C.okLight:C.dangerLight,color:e.ok?C.ok:C.danger,display:"inline-flex",alignItems:"center",gap:3}}>
-          {e.ok?"✓":"○"} {e.label}
-        </span>
-      ))}
-    </div>
-  );
-}
-
 export function Trazabilidad({ creadoPor, creadoEn, perfiles }) {
   const u=perfiles?.find(p=>p.id===creadoPor);
   return <span style={{fontSize:10.5,color:C.inkFaint}}>{u?u.nombre:"Usuario"} · {fmt.datetime(creadoEn)}</span>;
