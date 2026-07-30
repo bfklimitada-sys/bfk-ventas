@@ -148,6 +148,16 @@ export function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarRe
   const diasEstancada=ultimaActividad?Math.floor((new Date()-new Date(ultimaActividad))/(1000*60*60*24)):null;
   const estancada=completadas>0&&completadas<5&&diasEstancada!==null&&diasEstancada>=7;
 
+  // ¿Qué toca hacer ahora en esta OC?
+  const proxima=(()=>{
+    if((oc.eventos_compra||[]).length===0)                      return {key:"compra",       label:"Registrar compra",     color:C.teal};
+    if(oc.estado_entrega!=="confirmada"&&oc.estado_entrega!=="entregado") return {key:"entrega", label:"Confirmar entrega", color:C.transit};
+    if(oc.estado_factura_propia!=="emitida")                     return {key:"factura",       label:"Emitir factura",       color:C.info};
+    if(oc.estado_pago_cliente!=="pagado")                        return {key:"pago_cliente",  label:"Registrar cobro",      color:C.ok};
+    if(oc.estado_pago_financiamiento!=="pagado")                 return {key:"pago_financ",   label:"Pagar financiamiento", color:C.purple};
+    return null;
+  })();
+
   const handleToggle=async()=>{
     if(!expanded && onBloquear) await onBloquear(oc.id);
     if(expanded && onLiberar) await onLiberar(oc.id);
@@ -172,7 +182,7 @@ export function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarRe
                 : <div style={{fontSize:11.5,color:C.warn,marginBottom:2,fontWeight:700}}>⚠ Agregar entidad{oc.comuna?` · ${oc.comuna}`:""}</div>;
             })()}
             <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-              <span style={{fontSize:11,color:C.inkFaint}}>{oc.financiadores?.nombre} · {oc.vendedores?.nombre}</span>
+              <span style={{fontSize:11,color:C.inkFaint}}>{[oc.financiadores?.nombre,oc.vendedores?.nombre].filter(Boolean).join(" · ")}</span>
               {evF&&<span style={{fontSize:10.5,color:C.info,fontWeight:600}}>🧾 {evF.numero_factura}{oc.estado_pago_cliente!=="pagado"&&dias!==null?` · ${dias}d`:""}</span>}
             </div>
           </div>
@@ -189,27 +199,27 @@ export function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarRe
         <div style={{borderTop:`1px solid ${C.border}`,padding:"12px 14px",background:C.paper}}>
           {bloqueoActivo&&<BloqueoBanner bloqueo={bloqueoActivo} />}
 
-          <div style={{background:C.card,borderRadius:9,padding:"10px 12px",marginBottom:12,fontSize:12}}>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,color:C.inkMuted}}>
-              <div>Vendedor: <b style={{color:C.ink}}>{oc.vendedores?.nombre||"—"}</b></div>
-              <div>Financiador: <b style={{color:C.ink}}>{oc.financiadores?.nombre||"—"}</b></div>
-              {oc.monto_facturado>0&&<div>Facturado: <b style={{color:C.ink}}>{fmt.money(oc.monto_facturado)}</b></div>}
-              {oc.monto_facturado>0&&(
-                saldo>0
-                  ? <div>Por cobrar: <b style={{color:C.danger}}>{fmt.money(saldo)}</b></div>
-                  : <div>Pago cliente: <b style={{color:C.ok}}>✓ Recibido</b></div>
-              )}
-              {oc.entidad&&<div style={{gridColumn:"1/-1"}}>Entidad: <b style={{color:C.ink}}>{oc.entidad}</b></div>}
-              {oc.contacto&&<div style={{gridColumn:"1/-1"}}>Contacto: <b style={{color:C.ink}}>{oc.contacto}</b></div>}
-              {(()=>{
-                const esHistorica=oc.id?.startsWith("ocv2_hist");
-                const fechaCompra=(oc.eventos_compra||[])[0]?.fecha;
-                const fechaMostrar=esHistorica&&fechaCompra?fechaCompra:oc.creadoEn;
-                return fechaMostrar?<div style={{gridColumn:"1/-1"}}>Creada: <b style={{color:C.ink}}>{esHistorica&&fechaCompra?fmt.date(fechaCompra):fmt.datetime(fechaMostrar)}</b></div>:null;
-              })()}
-            </div>
-            {oc.vendedor_pagado&&<div style={{fontSize:11,color:C.ok,fontWeight:600,marginTop:6}}>✓ Vendedor ya pagado por esta venta</div>}
-            {oc.ultima_edicion&&<div style={{fontSize:10,color:C.inkFaint,marginTop:4}}>✏️ Editado por <Trazabilidad creadoPor={oc.ultimo_editor} creadoEn={oc.ultima_edicion} perfiles={perfiles} /></div>}
+          {/* Lo primero: la acción que corresponde */}
+          {proxima&&(
+            <button onClick={()=>setAccionRapida(proxima.key)}
+              style={{width:"100%",background:proxima.color,border:"none",color:"#fff",borderRadius:10,
+                padding:"12px",fontSize:13.5,fontWeight:700,cursor:"pointer",marginBottom:12}}>
+              {proxima.label} →
+            </button>
+          )}
+
+          {/* Datos, en una sola línea y sin repetir lo que ya está arriba */}
+          <div style={{fontSize:11.5,color:C.inkMuted,marginBottom:12,lineHeight:1.6}}>
+            {[oc.entidad,oc.contacto].filter(Boolean).join(" · ")}
+            {(oc.entidad||oc.contacto)&&<br/>}
+            {saldo>0&&oc.monto_facturado>0&&<>Por cobrar <b style={{color:C.danger}}>{fmt.money(saldo)}</b> · </>}
+            {(()=>{
+              const esHist=oc.id?.startsWith("ocv2_hist");
+              const fc=(oc.eventos_compra||[])[0]?.fecha;
+              const f=esHist&&fc?fmt.date(fc):(oc.creadoEn?fmt.date(String(oc.creadoEn).slice(0,10)):null);
+              return f?<>Creada {f}</>:null;
+            })()}
+            {oc.direccion_entrega&&<><br/>📍 {oc.direccion_entrega}</>}
           </div>
 
           <EtapasOC oc={oc} perfil={perfil} perfiles={perfiles}
@@ -237,11 +247,14 @@ export function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarRe
           <ComentariosOC oc={oc} perfil={perfil} onAgregar={onAgregarComentario} onEliminar={onEliminarComentario} />
           <HistorialCambiosOC ocId={oc.id} historialCambios={historialCambios} />
 
-          <div style={{display:"flex",gap:6,marginTop:8,flexWrap:"wrap"}}>
-            <button onClick={()=>setEditandoDatos(true)} style={{...btnG,flex:1}}>✏️ Editar datos</button>
-            <button onClick={()=>setCorreoFallida(true)} style={{...btnG,flex:1}}>⚠️ Entrega fallida</button>
-            <button onClick={()=>setCorreoFecha(true)} style={{...btnG,flex:1}}>📅 Fecha entrega</button>
-          </div>
+          <details style={{marginTop:6}}>
+            <summary style={{fontSize:11.5,color:C.inkFaint,cursor:"pointer",padding:"6px 0",listStyle:"none"}}>⋯ Más acciones</summary>
+            <div style={{display:"flex",gap:6,marginTop:6,flexWrap:"wrap"}}>
+              <button onClick={()=>setEditandoDatos(true)} style={{...btnG,flex:1,fontSize:12}}>Editar datos</button>
+              <button onClick={()=>setCorreoFallida(true)} style={{...btnG,flex:1,fontSize:12}}>Entrega fallida</button>
+              <button onClick={()=>setCorreoFecha(true)} style={{...btnG,flex:1,fontSize:12}}>Fecha entrega</button>
+            </div>
+          </details>
           {perfil?.rol==="admin"&&(
             <button onClick={async()=>{
               if(window.confirm(`¿Eliminar la OC ${oc.numero_oc}?\n\nEsta acción no se puede deshacer.`))
