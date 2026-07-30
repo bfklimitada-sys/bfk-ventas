@@ -104,17 +104,17 @@ export function calcularAlertas(ocs) {
     // 1. Facturas vencidas o por vencer
     if (evF && oc.estado_pago_cliente !== "pagado" && dias !== null) {
       if (dias >= plazo + 9) {
-        alertas.push({ nivel:"alto", icono:"🔴", oc:oc.numero_oc, cliente:oc.cliente,
+        alertas.push({ ocId:oc.id, nivel:"alto", icono:"🔴", oc:oc.numero_oc, cliente:oc.cliente,
           titulo:`Factura ${evF.numero_factura} lleva ${dias} días`,
           detalle:`El plazo era ${plazo} días — corresponde reclamar el pago`,
           monto:saldo, tab:"compras", filtro:"cobro", orden:1 });
       } else if (dias >= plazo) {
-        alertas.push({ nivel:"alto", icono:"🟠", oc:oc.numero_oc, cliente:oc.cliente,
+        alertas.push({ ocId:oc.id, nivel:"alto", icono:"🟠", oc:oc.numero_oc, cliente:oc.cliente,
           titulo:`Factura ${evF.numero_factura} vencida`,
           detalle:`${dias} días de ${plazo} de plazo`,
           monto:saldo, tab:"compras", filtro:"cobro", orden:2 });
       } else if (dias >= plazo - 5) {
-        alertas.push({ nivel:"medio", icono:"🟡", oc:oc.numero_oc, cliente:oc.cliente,
+        alertas.push({ ocId:oc.id, nivel:"medio", icono:"🟡", oc:oc.numero_oc, cliente:oc.cliente,
           titulo:`Factura ${evF.numero_factura} vence pronto`,
           detalle:`Quedan ${plazo - dias} día${plazo - dias === 1 ? "" : "s"}`,
           monto:saldo, tab:"compras", filtro:"cobro", orden:3 });
@@ -127,7 +127,7 @@ export function calcularAlertas(ocs) {
     if (fEst && !entregada) {
       const atraso = fmt.diasDesde(String(fEst).slice(0,10));
       if (atraso !== null && atraso > 0) {
-        alertas.push({ nivel:"alto", icono:"🚚", oc:oc.numero_oc, cliente:oc.cliente,
+        alertas.push({ ocId:oc.id, nivel:"alto", icono:"🚚", oc:oc.numero_oc, cliente:oc.cliente,
           titulo:`Entrega atrasada ${atraso} día${atraso === 1 ? "" : "s"}`,
           detalle:`Estaba estimada para el ${fmt.date(String(fEst).slice(0,10))}`,
           monto:oc.monto_total, tab:"compras", filtro:"entrega", orden:2 });
@@ -139,7 +139,7 @@ export function calcularAlertas(ocs) {
       const fEnt = (oc.eventos_entrega || [])[0]?.fecha;
       const d = fEnt ? fmt.diasDesde(String(fEnt).slice(0,10)) : null;
       if (d !== null && d >= 3) {
-        alertas.push({ nivel:"medio", icono:"🧾", oc:oc.numero_oc, cliente:oc.cliente,
+        alertas.push({ ocId:oc.id, nivel:"medio", icono:"🧾", oc:oc.numero_oc, cliente:oc.cliente,
           titulo:`Entregada hace ${d} días, sin factura`,
           detalle:"Mientras no se facture, no se puede cobrar",
           monto:oc.monto_total, tab:"compras", filtro:"factura", orden:3 });
@@ -160,7 +160,7 @@ export function calcularAlertas(ocs) {
     if (etapas > 0 && etapas < 5 && fechas.length) {
       const quieta = Math.floor((new Date() - new Date(fechas[fechas.length-1])) / 86400000);
       if (quieta >= 14) {
-        alertas.push({ nivel:"bajo", icono:"⏸", oc:oc.numero_oc, cliente:oc.cliente,
+        alertas.push({ ocId:oc.id, nivel:"bajo", icono:"⏸", oc:oc.numero_oc, cliente:oc.cliente,
           titulo:`Sin avance hace ${quieta} días`,
           detalle:`Va en ${etapas} de 5 etapas`,
           monto:oc.monto_total, tab:"compras", filtro:null, orden:4 });
@@ -169,7 +169,7 @@ export function calcularAlertas(ocs) {
 
     // 5. Guardadas antes de ser aceptadas en Mercado Público
     if (oc.sync_pendiente) {
-      alertas.push({ nivel:"bajo", icono:"⏳", oc:oc.numero_oc, cliente:"Por completar",
+      alertas.push({ ocId:oc.id, nivel:"bajo", icono:"⏳", oc:oc.numero_oc, cliente:"Por completar",
         titulo:"Esperando aceptación en Mercado Público",
         detalle:"Se completará sola cuando la acepten",
         monto:0, tab:"compras", filtro:null, orden:5 });
@@ -177,7 +177,7 @@ export function calcularAlertas(ocs) {
 
     // 6. Post-venta abierta
     if ((oc.eventos_postventa||[]).some(e => e.estado !== "resuelto")) {
-      alertas.push({ nivel:"medio", icono:"🛠", oc:oc.numero_oc, cliente:oc.cliente,
+      alertas.push({ ocId:oc.id, nivel:"medio", icono:"🛠", oc:oc.numero_oc, cliente:oc.cliente,
         titulo:"Post-venta sin resolver",
         detalle:"Hay un reclamo del cliente abierto",
         monto:0, tab:"compras", filtro:null, orden:3 });
@@ -231,7 +231,7 @@ export function PanelNotificaciones({ notificaciones, ocs, onMarcarLeidas, onNav
       )}
 
       {visibles.map((a, i) => (
-        <button key={i} onClick={() => onNavigate && onNavigate(a.tab, a.filtro)}
+        <button key={i} onClick={() => onNavigate && onNavigate(a.tab, a.filtro, a.ocId)}
           style={{width:"100%",textAlign:"left",background:C.card,border:`1px solid ${C.border}`,
             borderLeft:`4px solid ${colorNivel(a.nivel)}`,borderRadius:11,padding:"11px 13px",
             marginBottom:7,cursor:"pointer",display:"flex",gap:10,alignItems:"flex-start"}}>
