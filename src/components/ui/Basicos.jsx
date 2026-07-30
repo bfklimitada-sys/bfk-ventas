@@ -85,8 +85,8 @@ export function Leyenda({ items, titulo="¿Qué significan los colores?" }) {
   );
 }
 
-export function NotifBadge({ notificaciones }) {
-  const noLeidas=(notificaciones||[]).filter(n=>!n.leida).length;
+export function NotifBadge({ notificaciones, urgentes=0 }) {
+  const noLeidas=(notificaciones||[]).filter(n=>!n.leida).length + Number(urgentes||0);
   if(!noLeidas) return null;
   return (
     <span style={{background:C.danger,color:"#fff",borderRadius:10,fontSize:9.5,fontWeight:800,padding:"1px 5px",marginLeft:4,verticalAlign:"top"}}>
