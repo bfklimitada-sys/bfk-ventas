@@ -609,14 +609,14 @@ export default function App() {
   return (
     <div style={{minHeight:"100vh",background:C.paper,fontFamily:SANS,paddingBottom:76}}>
       {/* HEADER */}
-      <div style={{background:`linear-gradient(135deg,${C.night} 0%,#16213E 100%)`,padding:"16px 16px 14px",color:"#fff",boxShadow:"0 2px 12px rgba(11,17,32,0.25)"}}>
+      <div style={{background:`linear-gradient(135deg,${C.night} 0%,#16213E 100%)`,padding:"calc(16px + env(safe-area-inset-top)) 16px 14px",color:"#fff",boxShadow:"0 2px 12px rgba(11,17,32,0.25)",position:"sticky",top:0,zIndex:30}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0,flex:1}}>
             <div style={{width:38,height:38,background:"rgba(20,184,166,0.15)",border:`1.5px solid ${C.teal}`,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:MONO,color:C.teal,fontWeight:800,fontSize:13}}>BFK</div>
             <div>
               {tab==="panel"?(
                 <>
-                  <div style={{fontWeight:800,fontSize:15,letterSpacing:-0.3}}>
+                  <div style={{fontWeight:800,fontSize:15,letterSpacing:-0.3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
                     {(()=>{ const h=new Date().getHours(); return h<12?"Buenos días":h<19?"Buenas tardes":"Buenas noches"; })()}, {perfil?.nombre?.split(" ")[0]||""} 👋
                   </div>
                   <div style={{fontSize:10.5,color:"#8B9AB5"}}>
@@ -632,7 +632,7 @@ export default function App() {
             </div>
           </div>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
-            <button onClick={()=>setAccion("compra_oc")} style={{background:C.teal,border:"none",color:"#fff",borderRadius:10,padding:"9px 14px",fontSize:12.5,fontWeight:700,cursor:"pointer",boxShadow:"0 3px 10px rgba(20,184,166,0.35)"}}>+ Nueva OC</button>
+            <button onClick={()=>setAccion("compra_oc")} style={{background:C.teal,border:"none",color:"#fff",borderRadius:10,padding:"9px 14px",fontSize:12.5,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0,boxShadow:"0 3px 10px rgba(20,184,166,0.35)"}}>+ Nueva OC</button>
             <button onClick={handleLogout} style={{background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.12)",color:"#B8C4D9",borderRadius:9,padding:"8px 10px",fontSize:12,fontWeight:600,cursor:"pointer"}}>⏻</button>
           </div>
         </div>
