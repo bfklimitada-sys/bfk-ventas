@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { LoginScreen } from "./components/auth/LoginScreen";
 import { FormIngresarCompra } from "./components/forms/FormIngresarCompra";
+import { NuevaOCRapida } from "./components/forms/NuevaOCRapida";
 import { PanelCalendario } from "./components/panels/PanelCalendario";
 import { PanelCompras } from "./components/panels/PanelCompras";
 import { PanelDashboard } from "./components/panels/PanelDashboard";
@@ -162,6 +163,68 @@ export default function App() {
     if(fin) await upd("financiadores",t,fin.id,{saldo_deuda:Number(fin.saldo_deuda)+data.costoCompra});
     showToast(data.esNueva?"OC creada correctamente":"Compra registrada"); setAccion(null); await cargarTodo();
   };
+  // ─── NUEVA OC RÁPIDA (datos desde Mercado Público) ───────────
+  const handleNuevaOCRapida=async({pendienteSync, oc, links, direccion_entrega, correo_cliente})=>{
+    const t=session.access_token;
+    const numero=oc.numero_oc;
+
+    // No permitir duplicados
+    const yaExiste=ocs.find(o=>String(o.numero_oc).toUpperCase().replace(/[^A-Z0-9]/g,"")===String(numero).toUpperCase().replace(/[^A-Z0-9]/g,""));
+    if(yaExiste) throw new Error(`La OC ${numero} ya está cargada`);
+
+    // Vendedor: el del perfil que está creando, si tiene uno asociado
+    const vendedorId = perfil?.vendedor_id || null;
+
+    const fila = pendienteSync
+      ? { id:genId("ocv2"), numero_oc:numero, cliente:"POR COMPLETAR",
+          vendedor_id:vendedorId, sync_pendiente:true,
+          estado_compra:"pendiente", creado_por:session.user.id }
+      : { id:genId("ocv2"), numero_oc:numero,
+          cliente:oc.cliente||"", entidad:oc.entidad||"", rut_cliente:oc.rut_cliente||"",
+          comuna:oc.comuna||"", contacto:oc.contacto||"", correo_cliente:correo_cliente||"",
+          monto_total:oc.monto_total||0, vendedor_id:vendedorId,
+          tipo_despacho:oc.tipo_despacho||"", direccion_entrega:direccion_entrega||"",
+          dias_pago:oc.dias_pago||30, sync_pendiente:false,
+          estado_compra:"pendiente", creado_por:session.user.id };
+
+    const nueva=await ins("ordenes_compra_v2",t,fila);
+    const ocId=(Array.isArray(nueva)?nueva[0]:nueva).id;
+
+    // Productos: uno por cada ítem de la OC, con su link
+    const productos = (oc.productos||[]);
+    if(productos.length){
+      for(let i=0;i<productos.length;i++){
+        const p=productos[i];
+        const desc=`${p.descripcion} × ${p.cantidad} | Venta: ${fmt.money(p.total_linea)}${p.categoria?` | ${p.categoria}`:""}`;
+        await ins("oc_productos_link",t,{id:genId("lnk"),oc_id:ocId,descripcion:desc,
+          url:links[i]||links[0]||"sin-link",orden:i,creado_por:session.user.id});
+      }
+    } else {
+      // OC pendiente de sincronizar: guardamos solo los links
+      for(let i=0;i<links.length;i++){
+        await ins("oc_productos_link",t,{id:genId("lnk"),oc_id:ocId,
+          descripcion:"Producto por completar",url:links[i],orden:i,creado_por:session.user.id});
+      }
+    }
+
+    // Guardar/actualizar el catálogo de entidades para autocompletar la próxima vez
+    if(!pendienteSync && oc.rut_cliente){
+      try{
+        const existente=entidadesCatalogo.find(e=>e.rut===oc.rut_cliente);
+        const datosEnt={rut:oc.rut_cliente,nombre_entidad:oc.cliente||"",comuna:oc.comuna||"",
+          contacto:oc.contacto||"",correo:correo_cliente||""};
+        if(existente) await upd("entidades_catalogo",t,existente.id,datosEnt);
+        else await ins("entidades_catalogo",t,{id:genId("ent"),...datosEnt,creado_por:session.user.id});
+      }catch{}
+    }
+
+    showToast(pendienteSync
+      ? `OC ${numero} guardada — se completará al ser aceptada`
+      : `OC ${numero} creada con datos de Mercado Público`);
+    setAccion(null);
+    await cargarTodo();
+  };
+
   const handleEntrega=async(data)=>{
     const t=session.access_token;
     await ins("eventos_entrega",t,{id:genId("eve"),oc_id:data.ocId,fecha:data.fecha,persona_recibe:data.personaRecibe,creado_por:session.user.id});
@@ -514,7 +577,17 @@ export default function App() {
       })()}
 
       {/* MODAL NUEVA OC */}
-      {accion==="compra"&&<Modal title="Nueva OC" onClose={()=>setAccion(null)}><FormIngresarCompra ocs={ocs} financiadores={financiadores} vendedores={vendedores} entidadesCatalogo={entidadesCatalogo} onSave={handleIngresarCompra} /></Modal>}
+      {accion==="compra"&&(
+        <Modal title="Nueva OC" onClose={()=>setAccion(null)}>
+          <NuevaOCRapida perfil={perfil} vendedores={vendedores} entidadesCatalogo={entidadesCatalogo}
+            onGuardar={handleNuevaOCRapida} onCerrar={()=>setAccion(null)} />
+          <button onClick={()=>setAccion("compra_manual")}
+            style={{width:"100%",background:"none",border:"none",color:C.inkFaint,fontSize:11.5,cursor:"pointer",marginTop:14,textDecoration:"underline"}}>
+            Ingresar manualmente (formulario completo)
+          </button>
+        </Modal>
+      )}
+      {accion==="compra_manual"&&<Modal title="Nueva OC — manual" onClose={()=>setAccion(null)}><FormIngresarCompra ocs={ocs} financiadores={financiadores} vendedores={vendedores} entidadesCatalogo={entidadesCatalogo} onSave={handleIngresarCompra} /></Modal>}
 
       <Toast toast={toast} />
     </div>
