@@ -315,6 +315,7 @@ export function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarRe
           </span>
           <span style={{fontSize:10.5,color:C.inkFaint,flexShrink:0}}>
             {estancada&&<span style={{color:C.warn,fontWeight:700}}>⏸ {diasEstancada}d · </span>}
+            {oc.vendedores?.nombre&&<>{oc.vendedores.nombre.split(" ")[0]} · </>}
             {completadas}/5
           </span>
         </div>
@@ -628,7 +629,7 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, contactos, 
         {muestra:"🚚 Comprada", color:C.transit, bg:C.transitLight, texto:"Comprada al proveedor, falta entregar al cliente."},
         {muestra:"23%",         color:C.ok,      bg:C.okLight,      texto:"Margen de la OC. Verde sobre 20%, amarillo 10–20%, rojo bajo 10%."},
         {muestra:"⏸ 43d",       color:C.warn,    bg:C.warnLight,    texto:"Días sin avanzar de etapa. La OC quedó detenida."},
-        {muestra:"3/5",         texto:"Etapas completadas de las cinco del ciclo."},
+        {muestra:"Matías · 3/5", texto:"Vendedor a cargo y etapas completadas de las cinco del ciclo."},
       ]} />
     </div>
   );
