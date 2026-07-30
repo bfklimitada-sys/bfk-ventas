@@ -228,7 +228,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
         ))}
       </div>
       <div style={{fontSize:10,color:C.inkFaint,textAlign:"center",marginBottom:14}}>
-        Registra una etapa del ciclo · para crear una OC usa «+ Nueva OC» arriba
+        Registra una etapa del ciclo de una OC existente
       </div>
 
       {/* ── Saldo Proyectado — el número principal, con su desglose ── */}
