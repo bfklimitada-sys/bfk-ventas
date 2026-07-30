@@ -162,17 +162,39 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
 
   // ── Prioridades de hoy (reales, derivadas de las OCs) ──
   const prioridades=useMemo(()=>{
+    const plazo=(o)=>Number(o.dias_pago)>0?Number(o.dias_pago):30;
     const items=[];
-    const vencidas=ocsPorCobrar.filter(o=>(o.diasDesde||0)>=(Number(o.dias_pago)>0?Number(o.dias_pago):30));
-    if(vencidas.length) items.push({label:`${vencidas.length} factura${vencidas.length>1?"s":""} vencida${vencidas.length>1?"s":""}`,monto:vencidas.reduce((s,o)=>s+((o.monto_facturado||0)-(o.monto_cobrado||0)),0),color:C.danger,tab:"compras",filtro:"cobro"});
-    if(ocsPorCobrar.length) items.push({label:`${ocsPorCobrar.length} factura${ocsPorCobrar.length>1?"s":""} por cobrar`,monto:kpis.porCobrar,color:C.warn,tab:"compras",filtro:"cobro"});
+
+    const vencidas=ocsPorCobrar.filter(o=>(o.diasDesde||0)>=plazo(o));
+    if(vencidas.length) items.push({
+      label:`${vencidas.length} factura${vencidas.length>1?"s":""} vencida${vencidas.length>1?"s":""}`,
+      detalle:"Ya se pasó el plazo de pago",
+      monto:vencidas.reduce((s,o)=>s+((o.monto_facturado||0)-(o.monto_cobrado||0)),0),
+      color:C.danger,tab:"compras",filtro:"cobro"});
+
+    const porVencer=ocsPorCobrar.filter(o=>(o.diasDesde||0)<plazo(o)&&(o.diasDesde||0)>=plazo(o)-5);
+    if(porVencer.length) items.push({
+      label:`${porVencer.length} factura${porVencer.length>1?"s":""} por vencer`,
+      detalle:"Vencen dentro de 5 días",
+      monto:porVencer.reduce((s,o)=>s+((o.monto_facturado||0)-(o.monto_cobrado||0)),0),
+      color:C.warn,tab:"compras",filtro:"cobro"});
+
     const sinFacturar=ocs.filter(o=>(o.estado_entrega==="confirmada"||o.estado_entrega==="entregado")&&o.estado_factura_propia!=="emitida");
-    if(sinFacturar.length) items.push({label:`${sinFacturar.length} entregada${sinFacturar.length>1?"s":""} sin facturar`,monto:sinFacturar.reduce((s,o)=>s+(o.monto_total||0),0),color:C.info,tab:"compras",filtro:"factura"});
+    if(sinFacturar.length) items.push({
+      label:`${sinFacturar.length} entregada${sinFacturar.length>1?"s":""} sin facturar`,
+      detalle:"Ya se entregó, falta emitir la factura",
+      monto:sinFacturar.reduce((s,o)=>s+(o.monto_total||0),0),
+      color:C.info,tab:"compras",filtro:"factura"});
+
     const sinEntregar=ocs.filter(o=>(o.eventos_compra||[]).length>0&&o.estado_entrega!=="confirmada"&&o.estado_entrega!=="entregado");
-    if(sinEntregar.length) items.push({label:`${sinEntregar.length} compra${sinEntregar.length>1?"s":""} sin entregar`,monto:sinEntregar.reduce((s,o)=>s+(o.monto_total||0),0),color:C.transit,tab:"compras",filtro:"entrega"});
-    if(kpis.deudaFin>0) items.push({label:"Deuda con financiadores",monto:kpis.deudaFin,color:C.purple,tab:"financiamiento",filtro:null});
-    return items.slice(0,5);
-  },[ocsPorCobrar,ocs,kpis]);
+    if(sinEntregar.length) items.push({
+      label:`${sinEntregar.length} compra${sinEntregar.length>1?"s":""} sin entregar`,
+      detalle:"Comprado, pendiente de entregar",
+      monto:sinEntregar.reduce((s,o)=>s+(o.monto_total||0),0),
+      color:C.transit,tab:"compras",filtro:"entrega"});
+
+    return items;
+  },[ocsPorCobrar,ocs]);
 
   const KpiBtn=({label,value,color,id,children})=>(
     <div style={{background:C.card,border:`1px solid ${expandido===id?color:C.border}`,borderRadius:14,overflow:"hidden",marginBottom:10}}>
@@ -185,24 +207,15 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
     </div>
   );
 
-  const MiniStat=({label,value,color,tab,filtro})=>(
-    <div onClick={()=>tab&&onNavigate&&onNavigate(tab,filtro)}
-      style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"10px 12px",minWidth:118,flex:"0 0 auto",cursor:tab?"pointer":"default"}}>
-      <div style={{fontSize:10,color:C.inkMuted,fontWeight:600,marginBottom:3,whiteSpace:"nowrap"}}>{label}{tab&&<span style={{color:C.inkFaint}}> ›</span>}</div>
-      <div style={{fontSize:14.5,fontWeight:800,color:color||C.ink,fontFamily:MONO,letterSpacing:-0.3}}>{value}</div>
-    </div>
-  );
-
   return (
     <div style={{fontFamily:SANS}}>
-      {/* ── Acciones rápidas ── */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:6,marginBottom:14}}>
+      {/* ── Acciones rápidas — registrar cada etapa del ciclo ── */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginBottom:6}}>
         {[
-          {key:"compra_oc",  icon:"📄", label:"Nueva OC",  color:C.teal},
-          {key:"compra",     icon:"📦", label:"Compra",    color:C.transit},
-          {key:"entrega",    icon:"🚚", label:"Entrega",   color:C.info},
-          {key:"factura",    icon:"🧾", label:"Factura",   color:C.purple},
-          {key:"pago_cliente",icon:"💰",label:"Pago",      color:C.ok},
+          {key:"compra",      icon:"📦", label:"Compra",  color:C.transit},
+          {key:"entrega",     icon:"🚚", label:"Entrega", color:C.info},
+          {key:"factura",     icon:"🧾", label:"Factura", color:C.purple},
+          {key:"pago_cliente",icon:"💰", label:"Pago",    color:C.ok},
         ].map(a=>(
           <button key={a.key} onClick={()=>onAccion&&onAccion(a.key)}
             style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,
@@ -213,25 +226,52 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
           </button>
         ))}
       </div>
+      <div style={{fontSize:10,color:C.inkFaint,textAlign:"center",marginBottom:14}}>
+        Registra una etapa del ciclo · para crear una OC usa «+ Nueva OC» arriba
+      </div>
 
-      {/* ── Fila de KPIs rápidos (scroll horizontal, estilo captura móvil) ── */}
-      <div style={{display:"flex",gap:8,overflowX:"auto",paddingBottom:4,marginBottom:14,WebkitOverflowScrolling:"touch"}}>
-        <MiniStat label="Saldo disponible" value={fmt.money(kpis.saldoCtaCte)} color={kpis.saldoCtaCte>=0?C.ink:C.danger} />
-        <MiniStat label="Proyección total" value={fmt.money(kpis.saldoProyectado)} color={kpis.saldoProyectado>=0?C.teal:C.danger} />
-        <MiniStat label="Órdenes abiertas" value={kpis.ocsAbiertas} color={C.info} tab="compras" filtro={null} />
-        <MiniStat label="Por cobrar" value={fmt.money(kpis.porCobrar)} color={C.warn} tab="compras" filtro="cobro" />
+      {/* ── Saldo Proyectado — el número principal, con su desglose ── */}
+      <div style={{background:`linear-gradient(135deg,${C.night},${C.nightSoft})`,borderRadius:16,padding:"18px 20px",marginBottom:12}}>
+        <div style={{fontSize:11.5,color:C.inkFaint,fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:0.5}}>Saldo Proyectado</div>
+        <div style={{fontFamily:MONO,fontWeight:800,fontSize:28,color:kpis.saldoProyectado>=0?C.teal:C.danger,letterSpacing:-1}}>{fmt.money(kpis.saldoProyectado)}</div>
+        <div style={{fontSize:11,color:C.inkFaint,marginTop:4}}>Cuánto quedaría si se cobra todo lo pendiente y se paga todo lo que se debe</div>
+
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginTop:12,paddingTop:12,borderTop:"1px solid rgba(255,255,255,0.08)"}}>
+          <div>
+            <div style={{fontSize:9.5,color:C.inkFaint,marginBottom:2}}>En la cuenta</div>
+            <div style={{fontFamily:MONO,fontSize:12.5,fontWeight:800,color:kpis.saldoCtaCte>=0?C.teal:C.danger}}>{fmt.money(kpis.saldoCtaCte)}</div>
+          </div>
+          <div>
+            <div style={{fontSize:9.5,color:C.inkFaint,marginBottom:2}}>Por entrar</div>
+            <div style={{fontFamily:MONO,fontSize:12.5,fontWeight:800,color:C.warn}}>{fmt.money(kpis.ingresosPendientes)}</div>
+          </div>
+          <div>
+            <div style={{fontSize:9.5,color:C.inkFaint,marginBottom:2}}>Por pagar</div>
+            <div style={{fontFamily:MONO,fontSize:12.5,fontWeight:800,color:C.danger}}>{fmt.money(kpis.deudaTotal)}</div>
+          </div>
+        </div>
+
+        <button onClick={()=>onNavigate&&onNavigate("compras",null)}
+          style={{marginTop:12,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.12)",
+            borderRadius:9,padding:"7px 12px",color:"#B8C4D9",fontSize:11.5,fontWeight:600,cursor:"pointer",width:"100%"}}>
+          {kpis.ocsAbiertas} órdenes en curso ›
+        </button>
       </div>
 
       {/* ── Prioridades de hoy ── */}
       <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px",marginBottom:12}}>
-        <div style={{fontSize:11.5,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:10}}>Prioridades de hoy</div>
+        <div style={{fontSize:11.5,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:2}}>Prioridades de hoy</div>
+        <div style={{fontSize:10.5,color:C.inkFaint,marginBottom:10}}>Toca cualquiera para ver esas órdenes</div>
         {prioridades.length===0&&<div style={{fontSize:12.5,color:C.inkFaint}}>✓ Sin pendientes urgentes</div>}
         {prioridades.map((p,i)=>(
           <button key={i} onClick={()=>onNavigate&&onNavigate(p.tab,p.filtro)}
             style={{width:"100%",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,
               padding:"9px 0",background:"none",border:"none",cursor:"pointer",textAlign:"left",
               borderBottom:i<prioridades.length-1?`1px solid ${C.border}`:"none"}}>
-            <span style={{fontSize:12.5,color:C.ink,fontWeight:600}}>{p.label}</span>
+            <span style={{minWidth:0}}>
+              <span style={{fontSize:12.5,color:C.ink,fontWeight:600,display:"block"}}>{p.label}</span>
+              {p.detalle&&<span style={{fontSize:10.5,color:C.inkFaint,display:"block",marginTop:1}}>{p.detalle}</span>}
+            </span>
             <span style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
               <span style={{fontSize:12.5,fontWeight:800,color:p.color,fontFamily:MONO}}>{fmt.money(p.monto)}</span>
               <span style={{fontSize:13,color:C.inkFaint}}>›</span>
@@ -240,15 +280,30 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
         ))}
       </div>
 
-      {/* ── Ventas del mes (línea acumulada) ── */}
-      <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px",marginBottom:12}}>
+      {/* ── Ventas y margen del mes, en una sola tarjeta ── */}
+      <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px",marginBottom:14}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:2}}>
           <div style={{fontSize:11.5,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4}}>Ventas del mes</div>
           {ventasChart.variacion!==null&&(
             <span style={{fontSize:11,fontWeight:700,color:ventasChart.variacion>=0?C.ok:C.danger}}>{ventasChart.variacion>=0?"+":""}{ventasChart.variacion}% vs mes ant.</span>
           )}
         </div>
-        <div style={{fontSize:20,fontWeight:800,color:C.ink,fontFamily:MONO,marginBottom:8}}>{fmt.money(ventasChart.totalAct)}</div>
+
+        <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:6}}>
+          <div style={{flex:1}}>
+            <div style={{fontSize:20,fontWeight:800,color:C.ink,fontFamily:MONO}}>{fmt.money(ventasChart.totalAct)}</div>
+            <div style={{fontSize:10,color:C.inkFaint}}>vendido este mes</div>
+          </div>
+          <div style={{width:62,height:62,borderRadius:"50%",flexShrink:0,
+            background:`conic-gradient(${kpis.margenPromPct>=20?C.ok:kpis.margenPromPct>=10?C.warn:C.danger} ${Math.max(0,Math.min(100,kpis.margenPromPct))*3.6}deg, ${C.paper} 0)`,
+            display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <div style={{width:44,height:44,borderRadius:"50%",background:C.card,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
+              <span style={{fontSize:13,fontWeight:800,color:C.ink,fontFamily:MONO}}>{kpis.margenPromPct}%</span>
+              <span style={{fontSize:7,color:C.inkFaint,letterSpacing:0.2}}>MARGEN</span>
+            </div>
+          </div>
+        </div>
+
         <svg viewBox={`0 0 ${CW} ${CH}`} width="100%" height={CH} preserveAspectRatio="none">
           <path d={pathAnt} fill="none" stroke={C.border} strokeWidth="2" />
           <path d={pathAct} fill="none" stroke={C.teal} strokeWidth="2.5" />
@@ -259,29 +314,8 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
         </div>
       </div>
 
-      {/* ── Margen del mes (dona) ── */}
-      <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px",marginBottom:14,display:"flex",alignItems:"center",gap:16}}>
-        <div style={{width:80,height:80,borderRadius:"50%",flexShrink:0,background:`conic-gradient(${kpis.margenPromPct>=20?C.ok:kpis.margenPromPct>=10?C.warn:C.danger} ${Math.max(0,Math.min(100,kpis.margenPromPct))*3.6}deg, ${C.paper} 0)`,display:"flex",alignItems:"center",justifyContent:"center"}}>
-          <div style={{width:56,height:56,borderRadius:"50%",background:C.card,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column"}}>
-            <span style={{fontSize:15,fontWeight:800,color:C.ink,fontFamily:MONO}}>{kpis.margenPromPct}%</span>
-          </div>
-        </div>
-        <div>
-          <div style={{fontSize:11.5,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:4}}>Margen del mes</div>
-          <div style={{fontSize:12.5,color:C.inkMuted}}>Promedio esperado de las OCs compradas este mes</div>
-        </div>
-      </div>
-
-      {/* ── Saldo Proyectado — detalle de la fórmula ── */}
-      <div style={{background:`linear-gradient(135deg,${C.night},${C.nightSoft})`,borderRadius:16,padding:"18px 20px",marginBottom:14}}>
-        <div style={{fontSize:11.5,color:C.inkFaint,fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:0.5}}>Saldo Proyectado</div>
-        <div style={{fontFamily:MONO,fontWeight:800,fontSize:28,color:kpis.saldoProyectado>=0?C.teal:C.danger,letterSpacing:-1}}>{fmt.money(kpis.saldoProyectado)}</div>
-        <div style={{fontSize:11,color:C.inkFaint,marginTop:4}}>Saldo Cta Cte + Ingresos Pendientes − Deuda total</div>
-        <div style={{display:"flex",gap:12,marginTop:8,flexWrap:"wrap"}}>
-          <div style={{fontSize:10.5,color:C.inkFaint}}>Cta Cte: <span style={{color:C.teal,fontWeight:700}}>{fmt.money(kpis.saldoCtaCte)}</span></div>
-          <div style={{fontSize:10.5,color:C.inkFaint}}>Ing. Pendientes: <span style={{color:C.warn,fontWeight:700}}>{fmt.money(kpis.ingresosPendientes)}</span></div>
-          <div style={{fontSize:10.5,color:C.inkFaint}}>Deuda: <span style={{color:C.danger,fontWeight:700}}>{fmt.money(kpis.deudaTotal)}</span></div>
-        </div>
+      <div style={{fontSize:11.5,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:8}}>
+        Detalle · toca para desglosar
       </div>
 
       {/* 4 KPIs clickeables (detalle expandible) */}
