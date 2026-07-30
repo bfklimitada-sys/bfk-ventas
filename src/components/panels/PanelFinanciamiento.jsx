@@ -59,7 +59,11 @@ export function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onA
   return (
     <div>
       <div style={{fontSize:12,color:C.inkFaint,marginBottom:12}}>Toca un financiador para ver su cartola de movimientos.</div>
-      {financiadores.map(f=>(
+      {(()=>{
+        const conDeuda=financiadores.filter(f=>Number(f.saldo_deuda)!==0);
+        const enCero=financiadores.filter(f=>Number(f.saldo_deuda)===0);
+        return (<>
+      {conDeuda.map(f=>(
         <button key={f.id} onClick={()=>setSelFin(f.id)} style={{width:"100%",background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:16,marginBottom:10,textAlign:"left",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div>
             <div style={{fontWeight:800,fontSize:15,color:C.ink}}>{f.nombre}</div>
@@ -68,6 +72,21 @@ export function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onA
           <div style={{fontFamily:MONO,fontWeight:800,fontSize:20,color:Number(f.saldo_deuda)>0?C.danger:C.ok}}>{fmt.money(f.saldo_deuda)}</div>
         </button>
       ))}
+      {enCero.length>0&&(
+        <details style={{marginTop:4}}>
+          <summary style={{fontSize:11,color:C.inkFaint,cursor:"pointer",padding:"6px 0",listStyle:"none"}}>
+            + {enCero.length} financiador{enCero.length>1?"es":""} sin deuda
+          </summary>
+          {enCero.map(f=>(
+            <button key={f.id} onClick={()=>setSelFin(f.id)} style={{width:"100%",background:C.paper,border:`1px solid ${C.border}`,borderRadius:12,padding:"11px 14px",marginTop:6,textAlign:"left",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span style={{fontWeight:600,fontSize:13,color:C.inkMuted}}>{f.nombre}</span>
+              <span style={{fontFamily:MONO,fontWeight:700,fontSize:13,color:C.ok}}>{fmt.money(f.saldo_deuda)}</span>
+            </button>
+          ))}
+        </details>
+      )}
+        </>);
+      })()}
     </div>
   );
 }
