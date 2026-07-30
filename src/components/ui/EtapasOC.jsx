@@ -266,15 +266,15 @@ export function EtapasOC({ oc, perfil, perfiles, onEditarEvento, onEliminarFactu
           <>
             <div key={e.key} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2,flex:1}}>
               <button onClick={()=>setDetalle(detalle===e.key?null:e.key)} style={{
-                width:34,height:34,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",
-                fontSize:16,background:detalle===e.key?C.teal:e.ok?C.ok:C.paper,
+                width:26,height:26,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",
+                fontSize:12,background:detalle===e.key?C.teal:e.ok?C.ok:C.paper,
                 border:`2px solid ${detalle===e.key?C.teal:e.ok?C.ok:C.border}`,
                 cursor:"pointer",transition:"all 0.2s",padding:0,boxShadow:detalle===e.key?"0 2px 8px rgba(20,184,166,0.3)":"none",
-              }}>{e.ok?e.icon:<span style={{fontSize:11,color:C.inkFaint}}>{i+1}</span>}</button>
-              <span style={{fontSize:9.5,color:detalle===e.key?C.teal:e.ok?C.ok:C.inkFaint,fontWeight:e.ok||detalle===e.key?700:400,textAlign:"center"}}>{e.label}</span>
+              }}>{e.ok?<span style={{color:"#fff",fontWeight:800,fontSize:13}}>✓</span>:<span style={{fontSize:10.5,color:C.inkFaint}}>{i+1}</span>}</button>
+              <span style={{fontSize:8.5,color:detalle===e.key?C.teal:e.ok?C.ok:C.inkFaint,fontWeight:e.ok||detalle===e.key?700:400,textAlign:"center",lineHeight:1.1}}>{e.label}</span>
             </div>
             {i<etapas.length-1&&(
-              <div style={{height:2,flex:0.5,background:etapas[i+1].ok&&e.ok?C.ok:C.border,marginBottom:18,transition:"all 0.2s"}} />
+              <div style={{height:2,flex:0.5,background:etapas[i+1].ok&&e.ok?C.ok:C.border,marginBottom:14,transition:"all 0.2s"}} />
             )}
           </>
         ))}
@@ -290,10 +290,9 @@ export function EtapasOC({ oc, perfil, perfiles, onEditarEvento, onEliminarFactu
           {renderDetalle(etapas.find(e=>e.key===detalle))}
         </div>
       )}
-      <div style={{fontSize:10,color:completadas===5?C.ok:C.inkFaint,textAlign:"right",fontWeight:completadas===5?700:400}}>
-        {completadas===5?"✓ Ciclo completo":`${completadas}/5 etapas`}
-        {(oc.eventos_postventa||[]).some(e=>e.estado!=="resuelto")&&<span style={{color:C.warn,fontWeight:700}}> · 🛠 post-venta abierta</span>}
-      </div>
+      {(oc.eventos_postventa||[]).some(e=>e.estado!=="resuelto")&&(
+        <div style={{fontSize:10,color:C.warn,textAlign:"right",fontWeight:700}}>🛠 post-venta abierta</div>
+      )}
     </div>
   );
 }
