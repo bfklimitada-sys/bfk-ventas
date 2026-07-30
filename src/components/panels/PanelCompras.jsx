@@ -251,6 +251,12 @@ export function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarRe
     const finPagado=oc.estado_pago_financiamiento==="pagado";
     const plazo=Number(oc.dias_pago)>0?Number(oc.dias_pago):30;
 
+    // El ciclo saltó una etapa: el registro quedó incompleto
+    if(facturada&&!entregada)
+      return {color:C.warn, bg:C.warnLight, icono:"⚠", texto:"Facturada sin registrar la entrega"};
+    if(cobrada&&!facturada)
+      return {color:C.warn, bg:C.warnLight, icono:"⚠", texto:"Cobrada sin registrar la factura"};
+
     if(cobrada&&finPagado)  return {color:C.ok,      bg:C.okLight,      icono:"✓", texto:"Cerrada"};
     if(cobrada&&!finPagado) return {color:C.purple,  bg:C.purpleLight,  icono:"🏦", texto:"Cobrada · falta pagar financiamiento"};
     if(facturada&&dias!==null){
@@ -628,6 +634,7 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, contactos, 
         {muestra:"📦 Entregada",color:C.info,    bg:C.infoLight,    texto:"Ya se entregó, falta emitir la factura."},
         {muestra:"🚚 Comprada", color:C.transit, bg:C.transitLight, texto:"Comprada al proveedor, falta entregar al cliente."},
         {muestra:"23%",         color:C.ok,      bg:C.okLight,      texto:"Margen de la OC. Verde sobre 20%, amarillo 10–20%, rojo bajo 10%."},
+        {muestra:"⚠",           color:C.warn,    bg:C.warnLight,    texto:"El ciclo saltó una etapa: hay factura sin entrega, o cobro sin factura. El registro quedó incompleto."},
         {muestra:"⏸ 43d",       color:C.warn,    bg:C.warnLight,    texto:"Días sin avanzar de etapa. La OC quedó detenida."},
         {muestra:"Matías · 3/5", texto:"Vendedor a cargo y etapas completadas de las cinco del ciclo."},
       ]} />
