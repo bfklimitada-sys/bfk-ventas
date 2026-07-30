@@ -43,22 +43,36 @@ export default async function handler(req, res) {
   }
 
   const ticket = process.env.MP_TICKET || TICKET_PRUEBAS;
-  const url =
-    "https://api.mercadopublico.cl/servicios/v1/publico/OrdenCompra.json" +
-    `?codigo=${encodeURIComponent(codigo)}&ticket=${encodeURIComponent(ticket)}`;
+
+  // El endpoint real es "ordenesdecompra.json" (plural, minúsculas).
+  // La documentación PDF menciona "OrdenCompra.json", que ya no responde:
+  // lo dejamos como respaldo por si vuelve a habilitarse.
+  const BASES = [
+    "https://api.mercadopublico.cl/servicios/v1/publico/ordenesdecompra.json",
+    "https://api.mercadopublico.cl/servicios/v1/publico/OrdenCompra.json",
+  ];
 
   try {
-    const r = await fetch(url, { headers: { Accept: "application/json" } });
+    let data = null;
+    let ultimoStatus = null;
 
-    if (!r.ok) {
+    for (const base of BASES) {
+      const url = `${base}?codigo=${encodeURIComponent(codigo)}&ticket=${encodeURIComponent(ticket)}`;
+      const r = await fetch(url, { headers: { Accept: "application/json" } });
+      ultimoStatus = r.status;
+      if (!r.ok) continue;
+      try { data = await r.json(); } catch { continue; }
+      if (data) break;
+    }
+
+    if (!data) {
       return res.status(502).json({
         ok: false,
-        error: `Mercado Público respondió ${r.status}`,
+        error: `Mercado Público respondió ${ultimoStatus}`,
         usandoTicketPruebas: !process.env.MP_TICKET,
       });
     }
 
-    const data = await r.json();
     const oc = data?.Listado?.[0];
 
     if (!oc) {
