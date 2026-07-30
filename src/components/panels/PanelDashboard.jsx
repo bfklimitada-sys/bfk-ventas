@@ -164,12 +164,14 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
   const prioridades=useMemo(()=>{
     const items=[];
     const vencidas=ocsPorCobrar.filter(o=>(o.diasDesde||0)>=30);
-    if(vencidas.length) items.push({label:`${vencidas.length} factura${vencidas.length>1?"s":""} vencida${vencidas.length>1?"s":""}`,monto:vencidas.reduce((s,o)=>s+((o.monto_facturado||0)-(o.monto_cobrado||0)),0),color:C.danger});
-    if(ocsPorCobrar.length) items.push({label:`${ocsPorCobrar.length} factura${ocsPorCobrar.length>1?"s":""} por cobrar`,monto:kpis.porCobrar,color:C.warn});
+    if(vencidas.length) items.push({label:`${vencidas.length} factura${vencidas.length>1?"s":""} vencida${vencidas.length>1?"s":""}`,monto:vencidas.reduce((s,o)=>s+((o.monto_facturado||0)-(o.monto_cobrado||0)),0),color:C.danger,tab:"compras",filtro:"cobro"});
+    if(ocsPorCobrar.length) items.push({label:`${ocsPorCobrar.length} factura${ocsPorCobrar.length>1?"s":""} por cobrar`,monto:kpis.porCobrar,color:C.warn,tab:"compras",filtro:"cobro"});
     const sinFacturar=ocs.filter(o=>(o.estado_entrega==="confirmada"||o.estado_entrega==="entregado")&&o.estado_factura_propia!=="emitida");
-    if(sinFacturar.length) items.push({label:`${sinFacturar.length} entregada${sinFacturar.length>1?"s":""} sin facturar`,monto:sinFacturar.reduce((s,o)=>s+(o.monto_total||0),0),color:C.info});
-    if(kpis.deudaFin>0) items.push({label:"Deuda con financiadores",monto:kpis.deudaFin,color:C.purple});
-    return items.slice(0,4);
+    if(sinFacturar.length) items.push({label:`${sinFacturar.length} entregada${sinFacturar.length>1?"s":""} sin facturar`,monto:sinFacturar.reduce((s,o)=>s+(o.monto_total||0),0),color:C.info,tab:"compras",filtro:"factura"});
+    const sinEntregar=ocs.filter(o=>(o.eventos_compra||[]).length>0&&o.estado_entrega!=="confirmada"&&o.estado_entrega!=="entregado");
+    if(sinEntregar.length) items.push({label:`${sinEntregar.length} compra${sinEntregar.length>1?"s":""} sin entregar`,monto:sinEntregar.reduce((s,o)=>s+(o.monto_total||0),0),color:C.transit,tab:"compras",filtro:"entrega"});
+    if(kpis.deudaFin>0) items.push({label:"Deuda con financiadores",monto:kpis.deudaFin,color:C.purple,tab:"financiamiento",filtro:null});
+    return items.slice(0,5);
   },[ocsPorCobrar,ocs,kpis]);
 
   const KpiBtn=({label,value,color,id,children})=>(
@@ -183,9 +185,10 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
     </div>
   );
 
-  const MiniStat=({label,value,color})=>(
-    <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"10px 12px",minWidth:118,flex:"0 0 auto"}}>
-      <div style={{fontSize:10,color:C.inkMuted,fontWeight:600,marginBottom:3,whiteSpace:"nowrap"}}>{label}</div>
+  const MiniStat=({label,value,color,tab,filtro})=>(
+    <div onClick={()=>tab&&onNavigate&&onNavigate(tab,filtro)}
+      style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"10px 12px",minWidth:118,flex:"0 0 auto",cursor:tab?"pointer":"default"}}>
+      <div style={{fontSize:10,color:C.inkMuted,fontWeight:600,marginBottom:3,whiteSpace:"nowrap"}}>{label}{tab&&<span style={{color:C.inkFaint}}> ›</span>}</div>
       <div style={{fontSize:14.5,fontWeight:800,color:color||C.ink,fontFamily:MONO,letterSpacing:-0.3}}>{value}</div>
     </div>
   );
@@ -196,8 +199,8 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
       <div style={{display:"flex",gap:8,overflowX:"auto",paddingBottom:4,marginBottom:14,WebkitOverflowScrolling:"touch"}}>
         <MiniStat label="Saldo disponible" value={fmt.money(kpis.saldoCtaCte)} color={kpis.saldoCtaCte>=0?C.ink:C.danger} />
         <MiniStat label="Proyección total" value={fmt.money(kpis.saldoProyectado)} color={kpis.saldoProyectado>=0?C.teal:C.danger} />
-        <MiniStat label="Órdenes abiertas" value={kpis.ocsAbiertas} color={C.info} />
-        <MiniStat label="Por cobrar" value={fmt.money(kpis.porCobrar)} color={C.warn} />
+        <MiniStat label="Órdenes abiertas" value={kpis.ocsAbiertas} color={C.info} tab="compras" filtro={null} />
+        <MiniStat label="Por cobrar" value={fmt.money(kpis.porCobrar)} color={C.warn} tab="compras" filtro="cobro" />
       </div>
 
       {/* ── Prioridades de hoy ── */}
@@ -205,10 +208,16 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
         <div style={{fontSize:11.5,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:10}}>Prioridades de hoy</div>
         {prioridades.length===0&&<div style={{fontSize:12.5,color:C.inkFaint}}>✓ Sin pendientes urgentes</div>}
         {prioridades.map((p,i)=>(
-          <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:i<prioridades.length-1?`1px solid ${C.border}`:"none"}}>
+          <button key={i} onClick={()=>onNavigate&&onNavigate(p.tab,p.filtro)}
+            style={{width:"100%",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,
+              padding:"9px 0",background:"none",border:"none",cursor:"pointer",textAlign:"left",
+              borderBottom:i<prioridades.length-1?`1px solid ${C.border}`:"none"}}>
             <span style={{fontSize:12.5,color:C.ink,fontWeight:600}}>{p.label}</span>
-            <span style={{fontSize:12.5,fontWeight:800,color:p.color,fontFamily:MONO}}>{fmt.money(p.monto)}</span>
-          </div>
+            <span style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+              <span style={{fontSize:12.5,fontWeight:800,color:p.color,fontFamily:MONO}}>{fmt.money(p.monto)}</span>
+              <span style={{fontSize:13,color:C.inkFaint}}>›</span>
+            </span>
+          </button>
         ))}
       </div>
 
