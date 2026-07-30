@@ -108,6 +108,100 @@ export function FormEditarEvento({ item, onSave, onCancel }) {
   );
 }
 
+// ─── Detalle completo de la OC, plegable ───────────────────
+function DetalleOC({ oc }) {
+  const [abierto,setAbierto]=useState(false);
+  const links=(oc.oc_productos_link||[]).slice().sort((a,b)=>a.orden-b.orden);
+  const evC=(oc.eventos_compra||[])[0];
+  const evE=(oc.eventos_entrega||[])[0];
+  const evF=(oc.eventos_factura||[])[0];
+  const evP=(oc.eventos_pago_cliente||[])[0];
+  const margen=calcMargen(oc.monto_total,oc.costo_total);
+
+  const Dato=({k,v})=> v ? (
+    <div style={{display:"flex",justifyContent:"space-between",gap:10,padding:"5px 0",borderBottom:`1px solid ${C.border}`}}>
+      <span style={{fontSize:11.5,color:C.inkMuted,flexShrink:0}}>{k}</span>
+      <span style={{fontSize:11.5,color:C.ink,fontWeight:600,textAlign:"right",wordBreak:"break-word"}}>{v}</span>
+    </div>
+  ) : null;
+
+  return (
+    <div style={{marginBottom:10}}>
+      <button onClick={()=>setAbierto(v=>!v)}
+        style={{width:"100%",background:C.card,border:`1px solid ${C.border}`,borderRadius:10,
+          padding:"9px 12px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <span style={{fontSize:11.5,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4}}>
+          Detalle de la OC{links.length>0&&<span style={{color:C.teal}}> · {links.length} producto{links.length>1?"s":""}</span>}
+        </span>
+        <span style={{color:C.inkFaint,fontSize:12}}>{abierto?"▲":"▼"}</span>
+      </button>
+
+      {abierto&&(
+        <div style={{background:C.card,border:`1px solid ${C.border}`,borderTop:"none",
+          borderRadius:"0 0 10px 10px",padding:"10px 12px",marginTop:-1}}>
+
+          {/* Productos con su link de compra */}
+          {links.length>0&&(
+            <div style={{marginBottom:12}}>
+              <div style={{fontSize:10,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Productos</div>
+              {links.map((l,i)=>{
+                const tieneUrl=l.url&&l.url!=="sin-link";
+                let dominio="";
+                if(tieneUrl){ try{ dominio=new URL(l.url).hostname.replace(/^www\./,""); }catch{} }
+                return (
+                  <div key={l.id} style={{background:C.paper,borderRadius:8,padding:"8px 10px",marginBottom:5}}>
+                    <div style={{fontSize:11.5,color:C.ink,fontWeight:600,lineHeight:1.45}}>{l.descripcion}</div>
+                    {tieneUrl?(
+                      <a href={l.url} target="_blank" rel="noopener noreferrer"
+                        style={{display:"inline-flex",alignItems:"center",gap:5,marginTop:5,fontSize:11,
+                          color:C.teal,textDecoration:"none",fontWeight:600}}>
+                        🔗 {dominio||"Abrir link"} ↗
+                      </a>
+                    ):(
+                      <div style={{fontSize:10.5,color:C.inkFaint,marginTop:4}}>Sin link de compra</div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Datos comerciales */}
+          <div style={{fontSize:10,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:4}}>Datos</div>
+          <Dato k="Cliente"      v={oc.cliente} />
+          <Dato k="Unidad"       v={oc.entidad} />
+          <Dato k="RUT"          v={oc.rut_cliente} />
+          <Dato k="Comuna"       v={oc.comuna} />
+          <Dato k="Contacto"     v={oc.contacto} />
+          <Dato k="Correo"       v={oc.correo_cliente} />
+          <Dato k="Despacho"     v={oc.tipo_despacho} />
+          <Dato k="Dirección"    v={oc.direccion_entrega} />
+          <Dato k="Plazo de pago" v={oc.dias_pago?`${oc.dias_pago} días`:null} />
+          <Dato k="Vendedor"     v={oc.vendedores?.nombre} />
+          <Dato k="Financiador"  v={oc.financiadores?.nombre} />
+
+          {/* Números */}
+          <div style={{fontSize:10,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,margin:"10px 0 4px"}}>Números</div>
+          <Dato k="Venta"     v={fmt.money(oc.monto_total)} />
+          <Dato k="Costo"     v={oc.costo_total?fmt.money(oc.costo_total):null} />
+          <Dato k="Utilidad"  v={oc.costo_total?`${fmt.money(margen.pesos)} (${margen.pct}%)`:null} />
+          <Dato k="Facturado" v={oc.monto_facturado?fmt.money(oc.monto_facturado):null} />
+          <Dato k="Cobrado"   v={oc.monto_cobrado?fmt.money(oc.monto_cobrado):null} />
+
+          {/* Línea de tiempo */}
+          <div style={{fontSize:10,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,margin:"10px 0 4px"}}>Fechas</div>
+          <Dato k="Compra"           v={evC?.fecha?fmt.date(String(evC.fecha).slice(0,10)):null} />
+          <Dato k="Entrega estimada" v={evC?.fecha_entrega_estimada?fmt.date(String(evC.fecha_entrega_estimada).slice(0,10)):null} />
+          <Dato k="Entrega real"     v={evE?.fecha?fmt.date(String(evE.fecha).slice(0,10)):null} />
+          <Dato k="Factura"          v={evF?.fecha?`N°${evF.numero_factura} · ${fmt.date(String(evF.fecha).slice(0,10))}`:null} />
+          <Dato k="Cobro"            v={evP?.fecha?fmt.date(String(evP.fecha).slice(0,10)):null} />
+          <Dato k="Proveedor"        v={evC?.proveedor} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, bloqueos, perfil, historialCambios, onAgregarComentario, onEliminarComentario, onBloquear, onLiberar, onEliminarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa }) {
   const evF=(oc.eventos_factura||[])[0];
   const dias=fmt.diasDesde(evF?.fecha);
@@ -221,6 +315,8 @@ export function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarRe
             })()}
             {oc.direccion_entrega&&<><br/>📍 {oc.direccion_entrega}</>}
           </div>
+
+          <DetalleOC oc={oc} />
 
           <EtapasOC oc={oc} perfil={perfil} perfiles={perfiles}
             onAsignarResponsable={onAsignarResponsable}
