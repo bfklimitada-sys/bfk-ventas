@@ -97,6 +97,13 @@ export default function App() {
       setGastos(gastD); setIvaMensual(ivaD); setPagosVendedor(pagVD); setAjustesSaldo(ajuD); setPerfiles(perfD);
       setContactos(contD); setEntidadesCatalogo(entD); setPagoFinSueltos(pagoFinSueltosD);
       setNotificaciones(notifD); setHistorialCambios(histD);
+
+      // Reintentar completar las OCs que se guardaron antes de ser aceptadas
+      if(ocsConReclamos.some(o=>o.sync_pendiente)){
+        sincronizarPendientes(ocsConReclamos).then(n=>{
+          if(n>0){ showToast(`${n} OC${n>1?"s":""} completada${n>1?"s":""} desde Mercado Público`); cargarTodo(); }
+        }).catch(()=>{});
+      }
     } catch(e){ showToast(e.message,"error"); }
   };
   useEffect(()=>{ if(session) cargarTodo(); },[session]);
@@ -223,6 +230,57 @@ export default function App() {
       : `OC ${numero} creada con datos de Mercado Público`);
     setAccion(null);
     await cargarTodo();
+  };
+
+  // ─── SINCRONIZAR OCs PENDIENTES ──────────────────────────────
+  // Las OCs guardadas antes de ser aceptadas quedan con sync_pendiente=true.
+  // Cada vez que se cargan los datos, reintentamos completarlas desde la API.
+  const sincronizarPendientes=async(listaOcs)=>{
+    const pend=(listaOcs||[]).filter(o=>o.sync_pendiente).slice(0,5); // máx 5 por vez
+    if(!pend.length) return 0;
+    const t=session.access_token;
+    let completadas=0;
+
+    for(const oc of pend){
+      try{
+        const r=await fetch(`/api/oc?codigo=${encodeURIComponent(oc.numero_oc)}`);
+        if(!r.ok) continue;                 // sigue sin estar aceptada
+        const j=await r.json();
+        if(!j.ok||!j.oc) continue;
+        const d=j.oc;
+
+        await upd("ordenes_compra_v2",t,oc.id,{
+          cliente:d.cliente||"", entidad:d.entidad||"", rut_cliente:d.rut_cliente||"",
+          comuna:d.comuna||"", contacto:d.contacto||"",
+          correo_cliente:oc.correo_cliente||d.correo_cliente||"",
+          monto_total:d.monto_total||0, tipo_despacho:d.tipo_despacho||"",
+          dias_pago:d.dias_pago||30, sync_pendiente:false,
+        });
+
+        // Completar la descripción de los productos que quedaron en blanco
+        const linksExistentes=(oc.oc_productos_link||[]).sort((a,b)=>a.orden-b.orden);
+        for(let i=0;i<(d.productos||[]).length;i++){
+          const p=d.productos[i];
+          const desc=`${p.descripcion} × ${p.cantidad} | Venta: ${fmt.money(p.total_linea)}${p.categoria?` | ${p.categoria}`:""}`;
+          if(linksExistentes[i]) await upd("oc_productos_link",t,linksExistentes[i].id,{descripcion:desc});
+          else await ins("oc_productos_link",t,{id:genId("lnk"),oc_id:oc.id,descripcion:desc,
+            url:linksExistentes[0]?.url||"sin-link",orden:i,creado_por:session.user.id});
+        }
+
+        // Guardar la entidad en el catálogo
+        if(d.rut_cliente){
+          try{
+            const ex=entidadesCatalogo.find(e=>e.rut===d.rut_cliente);
+            const datos={rut:d.rut_cliente,nombre_entidad:d.cliente||"",comuna:d.comuna||"",
+              contacto:d.contacto||"",correo:oc.correo_cliente||""};
+            if(ex) await upd("entidades_catalogo",t,ex.id,datos);
+            else await ins("entidades_catalogo",t,{id:genId("ent"),...datos,creado_por:session.user.id});
+          }catch{}
+        }
+        completadas++;
+      }catch{ /* si falla una, seguimos con las demás */ }
+    }
+    return completadas;
   };
 
   const handleEntrega=async(data)=>{
