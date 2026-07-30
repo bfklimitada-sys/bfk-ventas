@@ -451,36 +451,95 @@ export default function App() {
     showToast(`Entrega estimada de ${oc.numero_oc} marcada para ${fmt.date(fecha)}`);
     await cargarTodo();
   };
+  // Ajusta el saldo de un financiador por un delta (positivo sube la deuda)
+  const ajustarSaldoFin=async(finId,delta)=>{
+    if(!finId||!delta) return;
+    const fin=financiadores.find(f=>f.id===finId);
+    if(!fin) return;
+    await upd("financiadores",session.access_token,finId,
+      {saldo_deuda:Math.max(0,Number(fin.saldo_deuda||0)+delta)});
+  };
+
   const handleEliminarEvento=async(tabla, eventoId, ocId, etapaKey)=>{
     const t=session.access_token;
+    const oc=ocs.find(o=>o.id===ocId);
+    const ev=(oc?.[tabla]||[]).find(e=>e.id===eventoId);
+
     await fetch(`${SUPABASE_URL}/rest/v1/${tabla}?id=eq.${eventoId}`,{method:"DELETE",headers:hdrs(t)});
-    const reversiones={
-      entrega:{estado_entrega:"pendiente"},
-      cobro:{estado_pago_cliente:"pendiente",monto_cobrado:0},
-      financ:{estado_pago_financiamiento:"pendiente"},
-    };
-    if(reversiones[etapaKey]) await upd("ordenes_compra_v2",t,ocId,reversiones[etapaKey]);
-    showToast("Registro eliminado"); await cargarTodo();
+
+    // Revertir el efecto que ese evento había producido
+    if(tabla==="eventos_compra"){
+      const costo=Number(ev?.costo_compra)||0;
+      await ajustarSaldoFin(ev?.financiador_id||oc?.financiador_id, -costo);
+      await upd("ordenes_compra_v2",t,ocId,{estado_compra:"pendiente",costo_total:0});
+    }
+    if(tabla==="eventos_pago_financiamiento"){
+      const monto=Number(ev?.monto)||0;
+      await ajustarSaldoFin(ev?.financiador_id||oc?.financiador_id, +monto); // vuelve a deber
+      await upd("ordenes_compra_v2",t,ocId,{estado_pago_financiamiento:"pendiente"});
+    }
+    if(tabla==="eventos_pago_cliente"){
+      const monto=Number(ev?.monto)||0;
+      const nuevoCobrado=Math.max(0,Number(oc?.monto_cobrado||0)-monto);
+      await upd("ordenes_compra_v2",t,ocId,{monto_cobrado:nuevoCobrado,
+        estado_pago_cliente:nuevoCobrado>=(oc?.monto_facturado||0)&&nuevoCobrado>0?"pagado":(nuevoCobrado>0?"parcial":"pendiente")});
+    }
+    if(tabla==="eventos_entrega"){
+      await upd("ordenes_compra_v2",t,ocId,{estado_entrega:"pendiente"});
+    }
+
+    await registrarCambio(t,{ocId,ocNumero:oc?.numero_oc,usuarioId:perfil?.id,
+      usuarioNombre:perfil?.nombre,accion:`Eliminó registro de ${etapaKey}`});
+    showToast("Registro eliminado y saldos corregidos"); await cargarTodo();
   };
+
   const handleEliminarFactura=async(ocId, facturaId)=>{
     const t=session.access_token;
-    await fetch(`${SUPABASE_URL}/rest/v1/eventos_factura?id=eq.${facturaId}`,{method:"DELETE",headers:hdrs(t)});
     const oc=ocs.find(o=>o.id===ocId);
-    const otrasFacturas=(oc?.eventos_factura||[]).filter(f=>f.id!==facturaId);
-    if(otrasFacturas.length===0){
-      await upd("ordenes_compra_v2",t,ocId,{estado_factura_propia:"pendiente",monto_facturado:0});
-    }
-    showToast("Factura eliminada"); await cargarTodo();
+    const ev=(oc?.eventos_factura||[]).find(f=>f.id===facturaId);
+
+    await fetch(`${SUPABASE_URL}/rest/v1/eventos_factura?id=eq.${facturaId}`,{method:"DELETE",headers:hdrs(t)});
+
+    const otras=(oc?.eventos_factura||[]).filter(f=>f.id!==facturaId);
+    const facturadoRestante=otras.reduce((s,f)=>s+(Number(f.monto)||0),0);
+    await upd("ordenes_compra_v2",t,ocId,{
+      estado_factura_propia: otras.length?"emitida":"pendiente",
+      monto_facturado: facturadoRestante,
+      // si ya no hay factura, tampoco puede haber cobro válido
+      ...(otras.length?{}:{estado_pago_cliente:"pendiente"}),
+    });
+
+    await registrarCambio(t,{ocId,ocNumero:oc?.numero_oc,usuarioId:perfil?.id,
+      usuarioNombre:perfil?.nombre,accion:`Eliminó factura N°${ev?.numero_factura||""}`});
+    showToast("Factura eliminada y montos corregidos"); await cargarTodo();
   };
+
   const handleEliminarOC=async(ocId)=>{
     const t=session.access_token;
-    await fetch(`${SUPABASE_URL}/rest/v1/oc_productos_link?oc_id=eq.${ocId}`,{method:"DELETE",headers:hdrs(t)});
-    await fetch(`${SUPABASE_URL}/rest/v1/oc_comentarios?oc_id=eq.${ocId}`,{method:"DELETE",headers:hdrs(t)});
-    await fetch(`${SUPABASE_URL}/rest/v1/historial_cambios?oc_id=eq.${ocId}`,{method:"DELETE",headers:hdrs(t)});
+    const oc=ocs.find(o=>o.id===ocId);
+
+    // Lo que esta OC le sumó a la deuda del financiador, menos lo que ya se le pagó
+    const sumaCompras=(oc?.eventos_compra||[]).reduce((s,e)=>s+(Number(e.costo_compra)||0),0)
+      || Number(oc?.costo_total)||0;
+    const sumaPagosFin=(oc?.eventos_pago_financiamiento||[]).reduce((s,e)=>s+(Number(e.monto)||0),0);
+    const deltaDeuda=-(sumaCompras-sumaPagosFin); // negativo = baja la deuda
+    if(oc?.financiador_id) await ajustarSaldoFin(oc.financiador_id, deltaDeuda);
+
+    // Borrar todo lo que cuelga de la OC
+    const tablas=["eventos_compra","eventos_entrega","eventos_factura","eventos_pago_cliente",
+      "eventos_pago_financiamiento","eventos_postventa","oc_productos_link","oc_comentarios",
+      "oc_reclamos","oc_responsables","historial_cambios","oc_bloqueos"];
+    for(const tabla of tablas){
+      try{ await fetch(`${SUPABASE_URL}/rest/v1/${tabla}?oc_id=eq.${ocId}`,{method:"DELETE",headers:hdrs(t)}); }catch{}
+    }
     await fetch(`${SUPABASE_URL}/rest/v1/ordenes_compra_v2?id=eq.${ocId}`,{method:"DELETE",headers:hdrs(t)});
-    showToast("OC eliminada");
+
+    showToast(deltaDeuda
+      ? `OC eliminada · se devolvieron ${fmt.money(Math.abs(deltaDeuda))} a ${financiadores.find(f=>f.id===oc?.financiador_id)?.nombre||"el financiador"}`
+      : "OC eliminada");
     await cargarTodo();
   };
+
   const handleBloquear=async(ocId)=>{
     if(!perfil) return;
     await bloquearOC(session.access_token,ocId,perfil.id,perfil.nombre);
