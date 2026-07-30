@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Field } from "../ui/Basicos";
+import { Field, Leyenda } from "../ui/Basicos";
 import { sel } from "../../lib/supabase";
 import { C, MONO, btnP, fmt, iMono } from "../../lib/theme";
 
@@ -168,6 +168,11 @@ export function PanelCalendario({ ocs, onMarcarFecha }) {
           )}
         </div>
       )}
+      <Leyenda titulo="¿Qué significan los puntos?" items={[
+        {muestra:"●", color:C.info, bg:C.infoLight, texto:"Azul: entrega estimada, la fecha que se puso al registrar la compra."},
+        {muestra:"●", color:C.ok, bg:C.okLight, texto:"Verde: entrega realizada, la fecha real en que se confirmó."},
+        {muestra:"▢", texto:"Recuadro negro: hoy. Recuadro verde: el día que tienes seleccionado."},
+      ]} />
     </div>
   );
 }
