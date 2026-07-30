@@ -3,7 +3,7 @@ import { DiasBadge, Leyenda } from "../ui/Basicos";
 import { del } from "../../lib/supabase";
 import { C, MONO, SANS, btnP, fmt } from "../../lib/theme";
 
-export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, onNavigate, onAccion }) {
+export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, onNavigate, onAccion, onSincronizar, sincronizando }) {
   const [expandido,setExpandido]=useState(null);
   const [verHistorico,setVerHistorico]=useState(false);
 
@@ -258,6 +258,28 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
           {kpis.ocsAbiertas} órdenes en curso ›
         </button>
       </div>
+
+      {/* ── OCs sin datos: ofrecer completarlas desde Mercado Público ── */}
+      {(()=>{
+        const sinDatos=ocs.filter(o=>o.sync_pendiente||!o.rut_cliente||String(o.cliente||"").toUpperCase().includes("POR COMPLETAR")).length;
+        if(!sinDatos&&!sincronizando) return null;
+        return (
+          <div style={{background:C.infoLight,border:`1px solid ${C.info}`,borderRadius:12,padding:"12px 14px",marginBottom:12}}>
+            <div style={{fontSize:12.5,fontWeight:700,color:C.info,marginBottom:3}}>
+              {sincronizando?`Completando ${sincronizando.hechas} de ${sincronizando.total}…`:`${sinDatos} OC${sinDatos>1?"s":""} sin datos de cliente`}
+            </div>
+            <div style={{fontSize:11.5,color:C.inkMuted,marginBottom:sincronizando?0:9,lineHeight:1.45}}>
+              Mercado Público tiene el cliente, RUT, comuna y contacto de estas órdenes. Se pueden traer sin escribir nada.
+            </div>
+            {!sincronizando&&(
+              <button onClick={onSincronizar}
+                style={{width:"100%",background:C.info,border:"none",color:"#fff",borderRadius:9,padding:"9px 12px",fontSize:12.5,fontWeight:700,cursor:"pointer"}}>
+                Completar desde Mercado Público
+              </button>
+            )}
+          </div>
+        );
+      })()}
 
       {/* ── Prioridades de hoy ── */}
       <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px",marginBottom:12}}>
