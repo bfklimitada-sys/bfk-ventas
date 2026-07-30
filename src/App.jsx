@@ -27,14 +27,6 @@ export const TABS=[
   {key:"usuarios",label:"Usuarios",icon:"👥",adminOnly:true},
 ];
 
-export const ACCIONES=[
-  {key:"compra",label:"Ingresar compra",icon:"📦",color:C.teal},
-  {key:"entrega",label:"Confirmar entrega",icon:"🚚",color:C.transit},
-  {key:"factura",label:"Emitir factura",icon:"🧾",color:C.info},
-  {key:"pago_cliente",label:"Pago de factura",icon:"💰",color:C.ok},
-  {key:"pago_financ",label:"Pago financiamiento",icon:"🏦",color:C.purple},
-];
-
 export default function App() {
   const [session,setSession]=useState(null); const [perfil,setPerfil]=useState(null); const [loadingApp,setLoadingApp]=useState(true);
   const [tab,setTab]=useState("panel"); const [filtroCompras,setFiltroCompras]=useState(null); const [accion,setAccion]=useState(null);
