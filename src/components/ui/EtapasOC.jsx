@@ -190,6 +190,7 @@ export function EtapasOC({ oc, perfil, perfiles, onEditarEvento, onEliminarFactu
               <div style={{fontSize:12.5,fontWeight:600}}>🧾 Factura N°{ev.numero_factura||"—"} · {fmt.money(ev.monto||oc.monto_facturado)}</div>
               <div style={{fontSize:11.5,color:C.inkMuted}}>Emitida el {fmt.date(ev.fecha)||"—"}</div>
               {ev.nota_credito&&<div style={{fontSize:11,color:C.warn}}>NC N°{ev.nota_credito} · anula factura N°{ev.factura_anulada_numero}</div>}
+              {ev.motivo_diferencia&&<div style={{fontSize:11,color:C.warn,marginTop:3}}>⚠ Difiere de la OC: {ev.motivo_diferencia}</div>}
             </>}
             {etapa.key==="cobro"&&<>
               <div style={{fontSize:12.5,fontWeight:600}}>💰 {fmt.money(ev.monto||oc.monto_cobrado)} cobrado</div>
