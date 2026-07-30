@@ -242,6 +242,29 @@ export function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarRe
   const diasEstancada=ultimaActividad?Math.floor((new Date()-new Date(ultimaActividad))/(1000*60*60*24)):null;
   const estancada=completadas>0&&completadas<5&&diasEstancada!==null&&diasEstancada>=7;
 
+  // Estado único: define color de la franja y la línea de estado
+  const estadoOC=(()=>{
+    const comprada=(oc.eventos_compra||[]).length>0;
+    const entregada=oc.estado_entrega==="confirmada"||oc.estado_entrega==="entregado";
+    const facturada=oc.estado_factura_propia==="emitida";
+    const cobrada=oc.estado_pago_cliente==="pagado";
+    const finPagado=oc.estado_pago_financiamiento==="pagado";
+    const plazo=Number(oc.dias_pago)>0?Number(oc.dias_pago):30;
+
+    if(cobrada&&finPagado)  return {color:C.ok,      bg:C.okLight,      icono:"✓", texto:"Cerrada"};
+    if(cobrada&&!finPagado) return {color:C.purple,  bg:C.purpleLight,  icono:"🏦", texto:"Cobrada · falta pagar financiamiento"};
+    if(facturada&&dias!==null){
+      if(dias>=plazo+9)     return {color:C.danger,  bg:C.dangerLight,  icono:"⚠", texto:`Reclamar pago · ${dias} de ${plazo} días`};
+      if(dias>=plazo)       return {color:C.danger,  bg:C.dangerLight,  icono:"🔴", texto:`Vencida · ${dias} de ${plazo} días`};
+      if(dias>=plazo-5)     return {color:C.warn,    bg:C.warnLight,    icono:"🟡", texto:`Por vencer · quedan ${plazo-dias} días`};
+      return {color:C.warn, bg:C.warnLight, icono:"🧾", texto:`Facturada · ${dias} de ${plazo} días`};
+    }
+    if(facturada)           return {color:C.warn,    bg:C.warnLight,    icono:"🧾", texto:"Facturada · esperando pago"};
+    if(entregada)           return {color:C.info,    bg:C.infoLight,    icono:"📦", texto:"Entregada · falta facturar"};
+    if(comprada)            return {color:C.transit, bg:C.transitLight, icono:"🚚", texto:"Comprada · falta entregar"};
+    return {color:C.inkFaint, bg:C.paper, icono:"○", texto:"Sin compra registrada"};
+  })();
+
   // ¿Qué toca hacer ahora en esta OC?
   const proxima=(()=>{
     if((oc.eventos_compra||[]).length===0)                      return {key:"compra",       label:"Registrar compra",     color:C.teal};
@@ -259,34 +282,42 @@ export function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarRe
   };
 
   return (
-    <div style={{background:C.card,border:`1px solid ${C.border}`,borderLeft:`4px solid ${borderColor}`,borderRadius:13,marginBottom:8,overflow:"hidden"}}>
+    <div style={{background:C.card,border:`1px solid ${C.border}`,borderLeft:`4px solid ${estadoOC.color}`,borderRadius:13,marginBottom:8,overflow:"hidden"}}>
       <div onClick={handleToggle} style={{padding:"12px 14px",cursor:"pointer"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
-          <div style={{flex:1,minWidth:0}}>
-            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2}}>
-              <span style={{fontFamily:MONO,fontWeight:800,fontSize:13,color:C.ink}}>{oc.numero_oc}</span>
-              {estancada&&<span style={{fontSize:9.5,background:C.warnLight,color:C.warn,borderRadius:5,padding:"1px 5px",fontWeight:700}}>⏸ {diasEstancada}d sin avance</span>}
-              {completadas===5&&<span style={{fontSize:9.5,background:C.okLight,color:C.ok,borderRadius:5,padding:"1px 5px",fontWeight:700}}>✓ Completa</span>}
-            </div>
+        {/* Línea 1 — identificador y plata */}
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:10}}>
+          <span style={{fontFamily:MONO,fontWeight:800,fontSize:13.5,color:C.ink}}>{oc.numero_oc}</span>
+          <span style={{fontFamily:MONO,fontWeight:800,fontSize:14.5,color:C.ink,flexShrink:0}}>{fmt.money(oc.monto_total)}</span>
+        </div>
+
+        {/* Línea 2 — quién */}
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:10,marginTop:3}}>
+          <span style={{fontSize:11.5,color:C.inkMuted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
             {(()=>{
               const esPorCompletar=oc.cliente?.toUpperCase().includes("POR COMPLETAR");
-              const nombreMostrar=esPorCompletar?(oc.entidad||null):oc.cliente;
-              return nombreMostrar
-                ? <div style={{fontSize:11.5,color:C.inkMuted,marginBottom:2}}>{nombreMostrar}{oc.comuna?` · ${oc.comuna}`:""}</div>
-                : <div style={{fontSize:11.5,color:C.warn,marginBottom:2,fontWeight:700}}>⚠ Agregar entidad{oc.comuna?` · ${oc.comuna}`:""}</div>;
+              const nombre=esPorCompletar?(oc.entidad||null):oc.cliente;
+              return nombre
+                ? [nombre,oc.comuna].filter(Boolean).join(" · ")
+                : <span style={{color:C.warn,fontWeight:700}}>⚠ Falta la entidad</span>;
             })()}
-            <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-              <span style={{fontSize:11,color:C.inkFaint}}>{[oc.financiadores?.nombre,oc.vendedores?.nombre].filter(Boolean).join(" · ")}</span>
-              {evF&&<span style={{fontSize:10.5,color:C.info,fontWeight:600}}>🧾 {evF.numero_factura}{oc.estado_pago_cliente!=="pagado"&&dias!==null?` · ${dias}d`:""}</span>}
-            </div>
-          </div>
-          <div style={{textAlign:"right",flexShrink:0}}>
-            <div style={{fontFamily:MONO,fontWeight:800,fontSize:14,color:C.ok}}>{fmt.money(oc.monto_total)}</div>
-            {(()=>{const mg=calcMargen(oc.monto_total,oc.costo_total);return(<span style={{fontSize:10,color:mg.color,fontWeight:700,background:mg.bg,padding:"1px 6px",borderRadius:5}}>{mg.pct}%</span>);})()}
-            <div style={{fontSize:10,color:C.inkFaint,marginTop:2}}>{completadas}/5 etapas</div>
-          </div>
+          </span>
+          {(()=>{const mg=calcMargen(oc.monto_total,oc.costo_total);
+            return oc.costo_total?(
+              <span style={{fontSize:10.5,color:mg.color,fontWeight:700,background:mg.bg,padding:"1px 6px",borderRadius:5,flexShrink:0}}>{mg.pct}%</span>
+            ):null;})()}
         </div>
-        {evF&&dias!==null&&oc.estado_pago_cliente!=="pagado"&&<div style={{marginTop:4}}><DiasBadge dias={dias} diasPago={oc.dias_pago} /></div>}
+
+        {/* Línea 3 — un solo estado, con el progreso al lado */}
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,marginTop:7}}>
+          <span style={{display:"inline-flex",alignItems:"center",gap:5,background:estadoOC.bg,color:estadoOC.color,
+            padding:"3px 9px",borderRadius:20,fontSize:11,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+            {estadoOC.icono} {estadoOC.texto}
+          </span>
+          <span style={{fontSize:10.5,color:C.inkFaint,flexShrink:0}}>
+            {estancada&&<span style={{color:C.warn,fontWeight:700}}>⏸ {diasEstancada}d · </span>}
+            {completadas}/5
+          </span>
+        </div>
       </div>
 
       {expanded&&(
@@ -587,15 +618,17 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, contactos, 
       {filtered.map(oc=><FilaOC key={oc.id} oc={oc} perfiles={perfiles} expanded={expId===oc.id} onToggle={()=>setExpId(expId===oc.id?null:oc.id)} contactos={contactos} onEnviarReclamo={onEnviarReclamo} onGuardarContacto={onGuardarContacto} onGuardarDatosOC={onGuardarDatosOC} onEditarEvento={onEditarEvento} financiadores={financiadores} onConfirmarEntrega={onConfirmarEntrega} onEmitirFactura={onEmitirFactura} onPagoCliente={onPagoCliente} onPagoFinanciamiento={onPagoFinanciamiento} entidadesCatalogo={entidadesCatalogo} onGuardarLink={onGuardarLink} onEliminarLink={onEliminarLink} onEditarLink={onEditarLink} bloqueos={bloqueos} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={onAgregarComentario} onEliminarComentario={onEliminarComentario} onBloquear={onBloquear} onLiberar={onLiberar} onEliminarOC={onEliminarOC} onEliminarFactura={onEliminarFactura} onEliminarEvento={onEliminarEvento} vendedores={vendedores} onIngresarCompra={onIngresarCompra} onAsignarResponsable={onAsignarResponsable} onGuardarPostventa={onGuardarPostventa} />)}
       {filtered.length===0&&<div style={{textAlign:"center",padding:30,color:C.inkFaint,fontSize:13}}>No hay órdenes con estos filtros.</div>}
       <Leyenda items={[
-        {muestra:"12d / 30d", color:C.ok, bg:C.okLight, texto:"Días desde que se emitió la factura sobre el plazo de pago de esa OC. Verde: al día."},
-        {muestra:"Por vencer", color:C.warn, bg:C.warnLight, texto:"Faltan 5 días o menos para cumplirse el plazo."},
-        {muestra:"Vencida", color:C.danger, bg:C.dangerLight, texto:"Se pasó el plazo. A los 9 días de vencida cambia a «Reclamar» y se habilita el correo de cobranza."},
-        {muestra:"23%", color:C.ok, bg:C.okLight, texto:"Margen de la OC. Verde sobre 20%, amarillo entre 10% y 20%, rojo bajo 10%."},
-        {muestra:"⏸", texto:"Sin avance hace 7 días o más: la OC quedó estancada entre una etapa y otra."},
-        {muestra:"✓", texto:"Ciclo completo: compra, entrega, factura, cobro y financiamiento cerrados."},
-        {muestra:"⚠", texto:"Falta completar la entidad del cliente."},
-        {muestra:"🔒", texto:"Otra persona está editando esta OC en este momento."},
-        {muestra:"▎", texto:"La franja de color a la izquierda resume el estado: verde cerrada, rojo por reclamar, amarillo facturada, celeste en curso."},
+        {muestra:"✓ Cerrada",   color:C.ok,      bg:C.okLight,      texto:"Cobrada al cliente y pagada al financiador. Ciclo terminado."},
+        {muestra:"🏦 Cobrada",  color:C.purple,  bg:C.purpleLight,  texto:"El cliente ya pagó, falta devolverle la plata al financiador."},
+        {muestra:"⚠ Reclamar",  color:C.danger,  bg:C.dangerLight,  texto:"Pasaron 9 días o más del plazo. Se habilita el correo de cobranza."},
+        {muestra:"🔴 Vencida",  color:C.danger,  bg:C.dangerLight,  texto:"Se cumplió el plazo de pago de esa OC y no ha entrado."},
+        {muestra:"🟡 Por vencer",color:C.warn,   bg:C.warnLight,    texto:"Quedan 5 días o menos para que se cumpla el plazo."},
+        {muestra:"🧾 Facturada",color:C.warn,    bg:C.warnLight,    texto:"Factura emitida, dentro de plazo, esperando el pago."},
+        {muestra:"📦 Entregada",color:C.info,    bg:C.infoLight,    texto:"Ya se entregó, falta emitir la factura."},
+        {muestra:"🚚 Comprada", color:C.transit, bg:C.transitLight, texto:"Comprada al proveedor, falta entregar al cliente."},
+        {muestra:"23%",         color:C.ok,      bg:C.okLight,      texto:"Margen de la OC. Verde sobre 20%, amarillo 10–20%, rojo bajo 10%."},
+        {muestra:"⏸ 43d",       color:C.warn,    bg:C.warnLight,    texto:"Días sin avanzar de etapa. La OC quedó detenida."},
+        {muestra:"3/5",         texto:"Etapas completadas de las cinco del ciclo."},
       ]} />
     </div>
   );
