@@ -3,7 +3,7 @@ import { DiasBadge } from "../ui/Basicos";
 import { del } from "../../lib/supabase";
 import { C, MONO, SANS, btnP, fmt } from "../../lib/theme";
 
-export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, onNavigate }) {
+export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, onNavigate, onAccion }) {
   const [expandido,setExpandido]=useState(null);
 
   const kpis=useMemo(()=>{
@@ -195,6 +195,25 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
 
   return (
     <div style={{fontFamily:SANS}}>
+      {/* ── Acciones rápidas ── */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:6,marginBottom:14}}>
+        {[
+          {key:"compra_oc",  icon:"📄", label:"Nueva OC",  color:C.teal},
+          {key:"compra",     icon:"📦", label:"Compra",    color:C.transit},
+          {key:"entrega",    icon:"🚚", label:"Entrega",   color:C.info},
+          {key:"factura",    icon:"🧾", label:"Factura",   color:C.purple},
+          {key:"pago_cliente",icon:"💰",label:"Pago",      color:C.ok},
+        ].map(a=>(
+          <button key={a.key} onClick={()=>onAccion&&onAccion(a.key)}
+            style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,
+              padding:"10px 4px",cursor:"pointer",display:"flex",flexDirection:"column",
+              alignItems:"center",gap:4}}>
+            <span style={{fontSize:19}}>{a.icon}</span>
+            <span style={{fontSize:9.5,fontWeight:700,color:a.color,textAlign:"center",lineHeight:1.2}}>{a.label}</span>
+          </button>
+        ))}
+      </div>
+
       {/* ── Fila de KPIs rápidos (scroll horizontal, estilo captura móvil) ── */}
       <div style={{display:"flex",gap:8,overflowX:"auto",paddingBottom:4,marginBottom:14,WebkitOverflowScrolling:"touch"}}>
         <MiniStat label="Saldo disponible" value={fmt.money(kpis.saldoCtaCte)} color={kpis.saldoCtaCte>=0?C.ink:C.danger} />
