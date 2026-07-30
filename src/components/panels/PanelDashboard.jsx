@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { DiasBadge } from "../ui/Basicos";
+import { DiasBadge, Leyenda } from "../ui/Basicos";
 import { del } from "../../lib/supabase";
 import { C, MONO, SANS, btnP, fmt } from "../../lib/theme";
 
@@ -163,7 +163,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
   // ── Prioridades de hoy (reales, derivadas de las OCs) ──
   const prioridades=useMemo(()=>{
     const items=[];
-    const vencidas=ocsPorCobrar.filter(o=>(o.diasDesde||0)>=30);
+    const vencidas=ocsPorCobrar.filter(o=>(o.diasDesde||0)>=(Number(o.dias_pago)>0?Number(o.dias_pago):30));
     if(vencidas.length) items.push({label:`${vencidas.length} factura${vencidas.length>1?"s":""} vencida${vencidas.length>1?"s":""}`,monto:vencidas.reduce((s,o)=>s+((o.monto_facturado||0)-(o.monto_cobrado||0)),0),color:C.danger,tab:"compras",filtro:"cobro"});
     if(ocsPorCobrar.length) items.push({label:`${ocsPorCobrar.length} factura${ocsPorCobrar.length>1?"s":""} por cobrar`,monto:kpis.porCobrar,color:C.warn,tab:"compras",filtro:"cobro"});
     const sinFacturar=ocs.filter(o=>(o.estado_entrega==="confirmada"||o.estado_entrega==="entregado")&&o.estado_factura_propia!=="emitida");
@@ -305,7 +305,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
             </div>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:3}}>
               <div style={{fontSize:11,color:C.inkMuted}}>{o.cliente} · Factura {fmt.date(o.fechaFactura)}</div>
-              {o.diasDesde!==null&&<DiasBadge dias={o.diasDesde} />}
+              {o.diasDesde!==null&&<DiasBadge dias={o.diasDesde} diasPago={o.dias_pago} />}
             </div>
           </div>
         ))}
@@ -360,6 +360,14 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
           <div style={{fontFamily:MONO,fontWeight:800,color:C.inkMuted}}>{fmt.money(kpis.gastoContador)}</div>
         </div>
       </div>
+
+      <Leyenda titulo="¿Qué significan estos números?" items={[
+        {muestra:"Saldo", texto:"Saldo disponible: lo cobrado menos pagos a financiadores, gastos y compras con cuenta BFK."},
+        {muestra:"Proy.", texto:"Proyección total: saldo disponible + ingresos pendientes − deuda total. Es cuánto quedaría si todo se cobra y se paga."},
+        {muestra:"18%", color:C.ok, bg:C.okLight, texto:"Margen del mes: promedio esperado de las OCs compradas este mes. Verde sobre 20%, amarillo 10–20%, rojo bajo 10%."},
+        {muestra:"›", texto:"Las prioridades y los recuadros con flecha te llevan al listado ya filtrado."},
+        {muestra:"—", texto:"La línea gris del gráfico es el mes anterior a la misma altura del mes, para comparar parejo."},
+      ]} />
     </div>
   );
 }
