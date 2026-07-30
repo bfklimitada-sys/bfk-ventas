@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { FormIngresarCompra } from "../forms/FormIngresarCompra";
 import { FormEntregaFallida, FormFechaEntrega, FormReclamarFactura } from "../forms/FormulariosCorreo";
 import { FormConfirmarEntrega, FormEmitirFactura, FormPagoCliente, FormPagoFinanciamiento } from "../forms/FormulariosRapidos";
-import { DiasBadge, Field, Modal, Trazabilidad } from "../ui/Basicos";
+import { DiasBadge, Field, Leyenda, Modal, Trazabilidad } from "../ui/Basicos";
 import { EtapasOC, FormPostventa } from "../ui/EtapasOC";
 import { BloqueoBanner, ComentariosOC, HistorialCambiosOC } from "../ui/Multiusuario";
 import { del } from "../../lib/supabase";
@@ -118,7 +118,8 @@ export function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarRe
   const [accionRapida,setAccionRapida]=useState(null);
   const [correoFallida,setCorreoFallida]=useState(false);
   const [correoFecha,setCorreoFecha]=useState(false);
-  const puedeReclamar = oc.estado_pago_cliente!=="pagado" && evF && dias!==null && dias>=30;
+  const plazoOC = Number(oc.dias_pago)>0?Number(oc.dias_pago):30;
+  const puedeReclamar = oc.estado_pago_cliente!=="pagado" && evF && dias!==null && dias>=plazoOC;
 
   const ultimoReclamo=(oc.oc_reclamos||[]).slice().sort((a,b)=>b.fecha?.localeCompare(a.fecha))[0];
   const hrsDesdeReclamo=ultimoReclamo?Math.floor((new Date()-new Date(ultimoReclamo.fecha))/(1000*60*60)):null;
@@ -181,7 +182,7 @@ export function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarRe
             <div style={{fontSize:10,color:C.inkFaint,marginTop:2}}>{completadas}/5 etapas</div>
           </div>
         </div>
-        {evF&&dias!==null&&oc.estado_pago_cliente!=="pagado"&&<div style={{marginTop:4}}><DiasBadge dias={dias} /></div>}
+        {evF&&dias!==null&&oc.estado_pago_cliente!=="pagado"&&<div style={{marginTop:4}}><DiasBadge dias={dias} diasPago={oc.dias_pago} /></div>}
       </div>
 
       {expanded&&(
@@ -335,7 +336,8 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, contactos, onEnviar
   const alertas=useMemo(()=>ocs.filter(o=>{
     if(o.estado_pago_cliente==="pagado") return false;
     const evF=(o.eventos_factura||[])[0]; if(!evF) return false;
-    return (fmt.diasDesde(evF.fecha)||0)>=30;
+    const plazo=Number(o.dias_pago)>0?Number(o.dias_pago):30;
+    return (fmt.diasDesde(evF.fecha)||0)>=plazo;
   }).sort((a,b)=>{
     const dA=fmt.diasDesde((a.eventos_factura||[])[0]?.fecha)||0;
     const dB=fmt.diasDesde((b.eventos_factura||[])[0]?.fecha)||0;
@@ -411,6 +413,17 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, contactos, onEnviar
       <div style={{fontSize:11.5,color:C.inkFaint,marginBottom:10}}>{filtered.length} orden{filtered.length!==1?"es":""}</div>
       {filtered.map(oc=><FilaOC key={oc.id} oc={oc} perfiles={perfiles} expanded={expId===oc.id} onToggle={()=>setExpId(expId===oc.id?null:oc.id)} contactos={contactos} onEnviarReclamo={onEnviarReclamo} onGuardarContacto={onGuardarContacto} onGuardarDatosOC={onGuardarDatosOC} onEditarEvento={onEditarEvento} financiadores={financiadores} onConfirmarEntrega={onConfirmarEntrega} onEmitirFactura={onEmitirFactura} onPagoCliente={onPagoCliente} onPagoFinanciamiento={onPagoFinanciamiento} entidadesCatalogo={entidadesCatalogo} onGuardarLink={onGuardarLink} onEliminarLink={onEliminarLink} onEditarLink={onEditarLink} bloqueos={bloqueos} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={onAgregarComentario} onEliminarComentario={onEliminarComentario} onBloquear={onBloquear} onLiberar={onLiberar} onEliminarOC={onEliminarOC} onEliminarFactura={onEliminarFactura} onEliminarEvento={onEliminarEvento} vendedores={vendedores} onIngresarCompra={onIngresarCompra} onAsignarResponsable={onAsignarResponsable} onGuardarPostventa={onGuardarPostventa} />)}
       {filtered.length===0&&<div style={{textAlign:"center",padding:30,color:C.inkFaint,fontSize:13}}>No hay órdenes con estos filtros.</div>}
+      <Leyenda items={[
+        {muestra:"12d / 30d", color:C.ok, bg:C.okLight, texto:"Días desde que se emitió la factura sobre el plazo de pago de esa OC. Verde: al día."},
+        {muestra:"Por vencer", color:C.warn, bg:C.warnLight, texto:"Faltan 5 días o menos para cumplirse el plazo."},
+        {muestra:"Vencida", color:C.danger, bg:C.dangerLight, texto:"Se pasó el plazo. A los 9 días de vencida cambia a «Reclamar» y se habilita el correo de cobranza."},
+        {muestra:"23%", color:C.ok, bg:C.okLight, texto:"Margen de la OC. Verde sobre 20%, amarillo entre 10% y 20%, rojo bajo 10%."},
+        {muestra:"⏸", texto:"Sin avance hace 7 días o más: la OC quedó estancada entre una etapa y otra."},
+        {muestra:"✓", texto:"Ciclo completo: compra, entrega, factura, cobro y financiamiento cerrados."},
+        {muestra:"⚠", texto:"Falta completar la entidad del cliente."},
+        {muestra:"🔒", texto:"Otra persona está editando esta OC en este momento."},
+        {muestra:"▎", texto:"La franja de color a la izquierda resume el estado: verde cerrada, rojo por reclamar, amarillo facturada, celeste en curso."},
+      ]} />
     </div>
   );
 }
