@@ -56,15 +56,51 @@ export function Trazabilidad({ creadoPor, creadoEn, perfiles }) {
   return <span style={{fontSize:10.5,color:C.inkFaint}}>{u?u.nombre:"Usuario"} · {fmt.datetime(creadoEn)}</span>;
 }
 
-export function DiasBadge({ dias }) {
+export function DiasBadge({ dias, diasPago }) {
   if(dias===null||dias===undefined) return null;
-  const color = dias>=39 ? C.danger : dias>=30 ? C.warn : C.ok;
-  const bg = dias>=39 ? C.dangerLight : dias>=30 ? C.warnLight : C.okLight;
-  const label = dias>=39 ? "⚠ Reclamar" : dias>=30 ? "Vence pronto" : "Al día";
+  // Plazo real de la OC (15, 30, 50 o 60 días según Mercado Público). 30 por defecto.
+  const plazo = Number(diasPago) > 0 ? Number(diasPago) : 30;
+  const vencida  = dias >= plazo;
+  const reclamar = dias >= plazo + 9;
+  const porVencer= !vencida && dias >= plazo - 5;
+
+  const color = reclamar ? C.danger : vencida ? C.danger : porVencer ? C.warn : C.ok;
+  const bg    = reclamar ? C.dangerLight : vencida ? C.dangerLight : porVencer ? C.warnLight : C.okLight;
+  const label = reclamar ? "⚠ Reclamar" : vencida ? "Vencida" : porVencer ? "Por vencer" : "Al día";
+
   return (
-    <span style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:20,fontSize:11,fontWeight:700,background:bg,color}}>
-      {dias}d · {label}
+    <span title={`Plazo de pago: ${plazo} días`}
+      style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:20,fontSize:11,fontWeight:700,background:bg,color}}>
+      {dias}d / {plazo}d · {label}
     </span>
+  );
+}
+
+// ─── Leyenda de colores y símbolos ───────────────────────────
+// Plegada por defecto: explica la simbología sin estorbar.
+export function Leyenda({ items, titulo="¿Qué significan los colores?" }) {
+  const [abierta,setAbierta]=useState(false);
+  return (
+    <div style={{marginTop:14,marginBottom:6}}>
+      <button onClick={()=>setAbierta(v=>!v)}
+        style={{background:"none",border:"none",color:C.inkFaint,fontSize:11,cursor:"pointer",padding:"4px 0",display:"flex",alignItems:"center",gap:5}}>
+        <span style={{fontSize:12}}>{abierta?"▾":"▸"}</span> {titulo}
+      </button>
+      {abierta&&(
+        <div style={{background:C.paper,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 12px",marginTop:4}}>
+          {items.map((it,i)=>(
+            <div key={i} style={{display:"flex",alignItems:"flex-start",gap:8,marginBottom:i<items.length-1?7:0}}>
+              <span style={{flexShrink:0,minWidth:58,textAlign:"center"}}>
+                {it.color
+                  ? <span style={{display:"inline-block",padding:"2px 7px",borderRadius:12,fontSize:10,fontWeight:700,background:it.bg,color:it.color}}>{it.muestra}</span>
+                  : <span style={{fontSize:13}}>{it.muestra}</span>}
+              </span>
+              <span style={{fontSize:11.5,color:C.inkMuted,lineHeight:1.45}}>{it.texto}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
