@@ -802,6 +802,16 @@ export default function App() {
   const visTabs=TABS.filter(t=>!t.adminOnly||perfil?.rol==="admin");
   const alertasUrgentes=calcularAlertas(ocs).filter(a=>a.nivel==="alto").length;
 
+  // Todo lo que ya está registrado, para que la cartola no lo duplique
+  const movimientosRegistrados=[
+    ...ocs.flatMap(o=>(o.eventos_pago_cliente||[]).map(e=>({fecha:e.fecha,monto:e.monto}))),
+    ...ocs.flatMap(o=>(o.eventos_pago_financiamiento||[]).map(e=>({fecha:e.fecha,monto:e.monto}))),
+    ...(pagoFinSueltos||[]).map(e=>({fecha:e.fecha,monto:e.monto})),
+    ...(gastos||[]).map(g=>({fecha:g.fecha,monto:g.monto})),
+    ...(pagosVendedor||[]).map(p=>({fecha:p.fecha,monto:p.monto_pagado})),
+    ...(aportes||[]).map(a=>({fecha:a.fecha,monto:a.monto})),
+  ].filter(m=>m.fecha&&m.monto);
+
   return (
     <div style={{minHeight:"100vh",background:C.paper,fontFamily:SANS,paddingBottom:76}}>
       {/* HEADER */}
@@ -906,7 +916,7 @@ export default function App() {
       {accion==="compra"&&<Modal title="Ingresar compra" onClose={()=>setAccion(null)}><FormCompraRapida ocs={ocs} financiadores={financiadores} perfil={perfil} onSave={handleCompraRapida} /></Modal>}
       {accion==="entrega"&&<Modal title="Ingresar entrega" onClose={()=>setAccion(null)}><FormConfirmarEntrega ocs={ocs} onSave={handleEntrega} /></Modal>}
       {accion==="factura"&&<Modal title="Ingresar factura" onClose={()=>setAccion(null)}><FormEmitirFactura ocs={ocs} onSave={handleFactura} /></Modal>}
-      {accion==="cartola"&&<Modal title="Conciliar con el banco" onClose={()=>setAccion(null)}><ImportarCartola ocs={ocs} financiadores={financiadores} vendedores={vendedores} categorias={categoriasGasto} onRegistrar={handleCobrosDesdeCartola} onRegistrarEgresos={handleEgresosDesdeCartola} /></Modal>}
+      {accion==="cartola"&&<Modal title="Conciliar con el banco" onClose={()=>setAccion(null)}><ImportarCartola ocs={ocs} financiadores={financiadores} vendedores={vendedores} categorias={categoriasGasto} registrados={movimientosRegistrados} onRegistrar={handleCobrosDesdeCartola} onRegistrarEgresos={handleEgresosDesdeCartola} /></Modal>}
       {accion==="abono_fin"&&<Modal title="Abonar a financiador" onClose={()=>setAccion(null)}><FormAbonoFinanciador ocs={ocs} financiadores={financiadores} onSave={handleAbonoFinanciador} /></Modal>}
       {accion==="pago_cliente"&&<Modal title="Ingresar pago" onClose={()=>setAccion(null)}><FormPagoCliente ocs={ocs} onSave={handlePagoCliente} /></Modal>}
       {accion==="compra_manual"&&<Modal title="Nueva OC — manual" onClose={()=>setAccion(null)}><FormIngresarCompra ocs={ocs} financiadores={financiadores} vendedores={vendedores} entidadesCatalogo={entidadesCatalogo} onSave={handleIngresarCompra} /></Modal>}
