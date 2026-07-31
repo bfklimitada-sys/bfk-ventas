@@ -141,7 +141,21 @@ export function clasificarCargo(mov, financiadores, vendedores) {
   return { tipo: "gasto", categoriaId: "cat_otros", nombre: "Por clasificar", seguro: false };
 }
 
-export function ImportarCartola({ ocs, financiadores, vendedores, categorias, onRegistrar, onRegistrarEgresos }) {
+// ── Detección de movimientos ya registrados ────────────────
+// Compara fecha y monto contra lo que ya existe en la base para
+// no volver a cargar un pago que ya está. Acepta una holgura de
+// unos días, porque la fecha contable no siempre calza con la
+// del banco.
+function yaRegistrado(mov, registrados, tolerancia = 3) {
+  const monto = mov.cargo || mov.abono;
+  const f = new Date(mov.fecha).getTime();
+  return registrados.find(r =>
+    Number(r.monto) === Number(monto) &&
+    Math.abs(new Date(r.fecha).getTime() - f) <= tolerancia * 86400000
+  );
+}
+
+export function ImportarCartola({ ocs, financiadores, vendedores, categorias, registrados = [], onRegistrar, onRegistrarEgresos }) {
   const [movs, setMovs] = useState([]);
   const [items, setItems] = useState([]);      // un item por abono con calce posible
   const [elegido, setElegido] = useState({});  // idx -> ocId seleccionado ("" = ninguno)
@@ -170,7 +184,9 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, on
       calzar(unicos);
       setEgresos(unicos.filter(m => m.cargo > 0).map(m => {
         const c = clasificarCargo(m, financiadores, vendedores);
-        return { mov: m, ...c, incluir: c.seguro };
+        const dup = yaRegistrado(m, registrados);
+        return { mov: m, ...c, duplicado: dup || null,
+                 incluir: dup ? false : c.seguro };
       }));
     } catch (e) {
       setErr("No se pudo leer el archivo: " + e.message);
@@ -195,6 +211,7 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, on
         .sort((a, b) => b.puntos - a.puntos);
 
       if (!candidatos.length) continue;
+      if (yaRegistrado(mov, registrados)) continue;   // ese cobro ya está en la base
 
       const mejor = candidatos[0];
       const segundo = candidatos[1];
@@ -351,6 +368,11 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, on
           </div>
         ) : (
           <>
+            {egresos.filter(e => e.duplicado).length > 0 && (
+              <div style={{ background: C.infoLight, borderRadius: 9, padding: "9px 12px", marginBottom: 10, fontSize: 11.5, color: C.info, fontWeight: 600 }}>
+                {egresos.filter(e => e.duplicado).length} movimiento(s) ya estaban registrados — vienen desmarcados
+              </div>
+            )}
             <div style={{ fontSize: 11.5, color: C.inkFaint, marginBottom: 10, lineHeight: 1.5 }}>
               Plata que salió de la cuenta. Las devoluciones a financistas se reparten
               entre sus OCs pendientes; el resto queda como gasto.
@@ -369,7 +391,11 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, on
                     <span style={{ display: "block", fontSize: 11.5, color: C.inkMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {fmt.date(e.mov.fecha)} · {e.mov.descripcion}
                     </span>
-                    {!e.seguro && (
+                    {e.duplicado ? (
+                      <span style={{ display: "block", fontSize: 10.5, color: C.info, fontWeight: 700, marginTop: 2 }}>
+                        Ya registrado el {fmt.date(String(e.duplicado.fecha).slice(0, 10))} — no se volverá a cargar
+                      </span>
+                    ) : !e.seguro && (
                       <span style={{ display: "block", fontSize: 10.5, color: C.warn, fontWeight: 700, marginTop: 2 }}>
                         ⚠ No se pudo identificar — revisa el destino
                       </span>
