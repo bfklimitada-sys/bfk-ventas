@@ -803,13 +803,14 @@ export default function App() {
   const alertasUrgentes=calcularAlertas(ocs).filter(a=>a.nivel==="alto").length;
 
   // Todo lo que ya está registrado, para que la cartola no lo duplique
+  // El destino permite sumar los fragmentos de un abono repartido
   const movimientosRegistrados=[
-    ...ocs.flatMap(o=>(o.eventos_pago_cliente||[]).map(e=>({fecha:e.fecha,monto:e.monto}))),
-    ...ocs.flatMap(o=>(o.eventos_pago_financiamiento||[]).map(e=>({fecha:e.fecha,monto:e.monto}))),
-    ...(pagoFinSueltos||[]).map(e=>({fecha:e.fecha,monto:e.monto})),
-    ...(gastos||[]).map(g=>({fecha:g.fecha,monto:g.monto})),
-    ...(pagosVendedor||[]).map(p=>({fecha:p.fecha,monto:p.monto_pagado})),
-    ...(aportes||[]).map(a=>({fecha:a.fecha,monto:a.monto})),
+    ...ocs.flatMap(o=>(o.eventos_pago_cliente||[]).map(e=>({fecha:e.fecha,monto:e.monto,destino:`cli_${o.id}`}))),
+    ...ocs.flatMap(o=>(o.eventos_pago_financiamiento||[]).map(e=>({fecha:e.fecha,monto:e.monto,destino:`fin_${e.financiador_id||o.financiador_id}`}))),
+    ...(pagoFinSueltos||[]).map(e=>({fecha:e.fecha,monto:e.monto,destino:`fin_${e.financiador_id}`})),
+    ...(gastos||[]).map(g=>({fecha:g.fecha,monto:g.monto,destino:`gas_${g.categoria_id}`})),
+    ...(pagosVendedor||[]).map(p=>({fecha:p.fecha,monto:p.monto_pagado,destino:`ven_${p.vendedor_id}`})),
+    ...(aportes||[]).map(a=>({fecha:a.fecha,monto:a.monto,destino:`ap_${a.socio}`})),
   ].filter(m=>m.fecha&&m.monto);
 
   return (
