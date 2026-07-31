@@ -34,8 +34,14 @@ export function FormEmitirFactura({ ocs, onSave, ocPreseleccionada }) {
   const hayDif=selected&&montoFact>0&&Math.abs(dif)>0;
   const difGrande=Math.abs(dif)>Math.max(1000,montoOC*0.02); // >2% o >$1.000
 
+  const entregada=selected&&(selected.estado_entrega==="confirmada"||selected.estado_entrega==="entregado");
+  const [confirmoSinEntrega,setConfirmoSinEntrega]=useState(false);
+
   const handleSave=async()=>{
-    if(!ocId){setErr("Selecciona la OC");return;} if(!numFact.trim()){setErr("Indica el número de factura");return;}
+    if(!ocId){setErr("Selecciona la OC");return;}
+    if(selected&&!entregada&&!confirmoSinEntrega){
+      setErr("Esta OC no tiene la entrega registrada. Regístrala primero, o marca la casilla para continuar igual.");return;}
+    if(!numFact.trim()){setErr("Indica el número de factura");return;}
     if(!monto||montoFact<=0){setErr("Indica el monto");return;}
     if(esReemision&&!notaCredito.trim()){setErr("Esta OC ya tiene una factura — indica el N° de nota de crédito que la anula");return;}
     if(difGrande&&!motivoDif.trim()){setErr("La diferencia con la OC es grande — explica el motivo");return;}
@@ -49,6 +55,19 @@ export function FormEmitirFactura({ ocs, onSave, ocPreseleccionada }) {
       {esReemision&&(
         <div style={{background:C.warnLight,borderRadius:9,padding:"10px 12px",fontSize:12,color:C.warn,fontWeight:600,marginBottom:14}}>
           Esta OC ya tiene la factura N°{facturaAnterior.numero_factura} ({fmt.date(facturaAnterior.fecha)}). Si la estás reemplazando, indica la nota de crédito que la anula — el pago al vendedor solo contará esta venta una vez.
+        </div>
+      )}
+      {selected&&!entregada&&(
+        <div style={{background:C.warnLight,border:`1px solid ${C.warn}`,borderRadius:9,padding:"10px 12px",marginBottom:14}}>
+          <div style={{fontSize:12,fontWeight:700,color:C.warn,marginBottom:6}}>⚠ Sin entrega registrada</div>
+          <div style={{fontSize:11.5,color:C.inkMuted,lineHeight:1.45,marginBottom:8}}>
+            Lo normal es registrar la entrega antes de facturar. Si ya se entregó y solo faltó anotarlo,
+            puedes continuar — pero conviene registrarla para que quede la fecha y el respaldo.
+          </div>
+          <label style={{display:"flex",alignItems:"flex-start",gap:7,cursor:"pointer"}}>
+            <input type="checkbox" checked={confirmoSinEntrega} onChange={e=>{setConfirmoSinEntrega(e.target.checked);setErr("");}} style={{marginTop:2}} />
+            <span style={{fontSize:11.5,color:C.ink,fontWeight:600}}>Facturar igual, la entrega se registra después</span>
+          </label>
         </div>
       )}
       <Field label="Fecha de emisión" required><input style={iStyle} type="date" value={fecha} onChange={e=>setFecha(e.target.value)} /></Field>
@@ -81,14 +100,23 @@ export function FormPagoCliente({ ocs, onSave, ocPreseleccionada }) {
   const selected=ocs.find(o=>o.id===ocId);
   const saldo=(selected?.monto_facturado||0)-(selected?.monto_cobrado||0);
   useEffect(()=>{ if(selected&&!monto) setMonto(String(saldo||"")); },[selected]);
+  const sinFactura=selected&&selected.estado_factura_propia!=="emitida";
+
   const handleSave=async()=>{
-    if(!ocId){setErr("Selecciona la OC");return;} if(!monto||Number(monto)<=0){setErr("Indica el monto");return;}
+    if(!ocId){setErr("Selecciona la OC");return;}
+    if(sinFactura){setErr("Esta OC no tiene factura emitida. Registra primero la factura.");return;}
+    if(!monto||Number(monto)<=0){setErr("Indica el monto");return;}
     setErr(""); setSaving(true); try{await onSave({ocId,fecha,monto:Number(monto)});}catch(e){setErr(e.message);}finally{setSaving(false);};
   };
   return (
     <div>
       {!ocPreseleccionada&&<Field label="Orden de Compra" required><BuscadorOC ocs={ocs} ocId={ocId} setOcId={setOcId} /></Field>}
-      {selected&&<div style={{background:C.paper,borderRadius:8,padding:"8px 12px",fontSize:12,color:C.inkMuted,marginBottom:12}}>Facturado: <b style={{color:C.ink}}>{fmt.money(selected.monto_facturado)}</b> · Cobrado: <b style={{color:C.ok}}>{fmt.money(selected.monto_cobrado)}</b> · Saldo: <b style={{color:C.danger}}>{fmt.money(saldo)}</b></div>}
+      {sinFactura&&(
+        <div style={{background:C.dangerLight,border:`1px solid ${C.danger}`,borderRadius:9,padding:"10px 12px",marginBottom:14,fontSize:12,color:C.danger,fontWeight:600}}>
+          ⚠ Sin factura emitida — no se puede registrar el cobro. Emite la factura primero.
+        </div>
+      )}
+      {selected&&!sinFactura&&<div style={{background:C.paper,borderRadius:8,padding:"8px 12px",fontSize:12,color:C.inkMuted,marginBottom:12}}>Facturado: <b style={{color:C.ink}}>{fmt.money(selected.monto_facturado)}</b> · Cobrado: <b style={{color:C.ok}}>{fmt.money(selected.monto_cobrado)}</b> · Saldo: <b style={{color:C.danger}}>{fmt.money(saldo)}</b></div>}
       <Field label="Fecha de pago" required><input style={iStyle} type="date" value={fecha} onChange={e=>setFecha(e.target.value)} /></Field>
       <Field label="Monto pagado ($)" required><input style={iMono} type="number" value={monto} onChange={e=>setMonto(e.target.value)} /></Field>
       {err&&<div style={{background:C.dangerLight,color:C.danger,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}
