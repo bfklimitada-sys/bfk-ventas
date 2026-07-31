@@ -29,7 +29,7 @@ export function FormCompraRapida({ ocs, financiadores, perfil, onSave, ocPresele
 
   const guardar = async () => {
     if (!ocId) { setErr("Selecciona la OC"); return; }
-    if (!costo || c <= 0) { setErr("Indica cuánto costó la compra"); return; }
+    if (!costo || c <= 0) { setErr("Indica cuánto costó la compra — sin costo el margen queda mal calculado"); return; }
     if (!financiadorId) { setErr("Indica quién financió"); return; }
     setErr(""); setSaving(true);
     try {
