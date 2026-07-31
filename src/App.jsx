@@ -3,7 +3,7 @@ import { LoginScreen } from "./components/auth/LoginScreen";
 import { FormIngresarCompra } from "./components/forms/FormIngresarCompra";
 import { NuevaOCRapida } from "./components/forms/NuevaOCRapida";
 import { FormCompraRapida } from "./components/forms/FormCompraRapida";
-import { FormAbonoFinanciador } from "./components/forms/FormAbonoFinanciador";
+import { FormAbonoFinanciador, repartirFIFO } from "./components/forms/FormAbonoFinanciador";
 import { ImportarCartola } from "./components/forms/ImportarCartola";
 import { FormConfirmarEntrega, FormEmitirFactura, FormPagoCliente } from "./components/forms/FormulariosRapidos";
 import { PanelCalendario } from "./components/panels/PanelCalendario";
@@ -361,6 +361,64 @@ export default function App() {
     }
     const total=cobros.reduce((s,c)=>s+c.monto,0);
     showToast(`${cobros.length} cobro${cobros.length!==1?"s":""} registrado${cobros.length!==1?"s":""} · ${fmt.money(total)}`);
+    setAccion(null); await cargarTodo();
+  };
+
+  // ─── EGRESOS DE LA CARTOLA ───────────────────────────────────
+  // Cada cargo del banco se registra según lo que sea: devolución
+  // a un financista (con reparto FIFO), pago a vendedor o gasto.
+  const handleEgresosDesdeCartola=async(egresos)=>{
+    const t=session.access_token;
+    let nFin=0,nVen=0,nGas=0;
+
+    for(const e of egresos){
+      if(e.tipo==="financiador"){
+        const pendientes=ocs
+          .filter(o=>o.financiador_id===e.destinoId&&o.estado_pago_financiamiento!=="pagado")
+          .sort((a,b)=>{
+            const fa=(a.eventos_compra||[])[0]?.fecha||a.creadoEn||"";
+            const fb=(b.eventos_compra||[])[0]?.fecha||b.creadoEn||"";
+            return String(fa).localeCompare(String(fb));
+          });
+        const {reparto,sobrante}=repartirFIFO(e.monto,pendientes);
+        for(const r of reparto){
+          await ins("eventos_pago_financiamiento",t,{id:genId("evpf"),financiador_id:e.destinoId,
+            oc_id:r.oc.id,fecha:e.fecha,monto:r.asignado,creado_por:session.user.id});
+          await upd("ordenes_compra_v2",t,r.oc.id,{
+            monto_pagado_fin:Number(r.oc.monto_pagado_fin||0)+r.asignado,
+            estado_pago_financiamiento:r.completa?"pagado":"parcial"});
+        }
+        if(sobrante>0){
+          await ins("eventos_pago_financiamiento",t,{id:genId("evpf"),financiador_id:e.destinoId,
+            oc_id:null,fecha:e.fecha,monto:sobrante,creado_por:session.user.id});
+        }
+        const fin=financiadores.find(f=>f.id===e.destinoId);
+        if(fin) await upd("financiadores",t,fin.id,{saldo_deuda:Math.max(0,Number(fin.saldo_deuda||0)-e.monto)});
+        nFin++;
+      }
+
+      if(e.tipo==="vendedor"){
+        const d=new Date(e.fecha);
+        await ins("pagos_vendedor",t,{id:genId("pv"),vendedor_id:e.destinoId,
+          anio:d.getFullYear(),mes:d.getMonth()+1,monto_calculado:e.monto,monto_pagado:e.monto,
+          fecha:e.fecha,estado:"pagado",notas:`Desde cartola: ${e.descripcion}`,creado_por:session.user.id});
+        nVen++;
+      }
+
+      if(e.tipo==="gasto"){
+        const d=new Date(e.fecha);
+        await ins("gastos_indirectos",t,{id:genId("gas"),categoria_id:e.categoriaId,
+          subcategoria:null,monto:e.monto,mes:d.getMonth()+1,anio:d.getFullYear(),
+          fecha:e.fecha,detalle:`Desde cartola: ${e.descripcion}`,creado_por:session.user.id});
+        nGas++;
+      }
+    }
+
+    const partes=[];
+    if(nFin) partes.push(`${nFin} a financistas`);
+    if(nVen) partes.push(`${nVen} a vendedores`);
+    if(nGas) partes.push(`${nGas} gastos`);
+    showToast(`Egresos registrados: ${partes.join(" · ")}`);
     setAccion(null); await cargarTodo();
   };
 
@@ -848,7 +906,7 @@ export default function App() {
       {accion==="compra"&&<Modal title="Ingresar compra" onClose={()=>setAccion(null)}><FormCompraRapida ocs={ocs} financiadores={financiadores} perfil={perfil} onSave={handleCompraRapida} /></Modal>}
       {accion==="entrega"&&<Modal title="Ingresar entrega" onClose={()=>setAccion(null)}><FormConfirmarEntrega ocs={ocs} onSave={handleEntrega} /></Modal>}
       {accion==="factura"&&<Modal title="Ingresar factura" onClose={()=>setAccion(null)}><FormEmitirFactura ocs={ocs} onSave={handleFactura} /></Modal>}
-      {accion==="cartola"&&<Modal title="Conciliar con el banco" onClose={()=>setAccion(null)}><ImportarCartola ocs={ocs} onRegistrar={handleCobrosDesdeCartola} /></Modal>}
+      {accion==="cartola"&&<Modal title="Conciliar con el banco" onClose={()=>setAccion(null)}><ImportarCartola ocs={ocs} financiadores={financiadores} vendedores={vendedores} categorias={categoriasGasto} onRegistrar={handleCobrosDesdeCartola} onRegistrarEgresos={handleEgresosDesdeCartola} /></Modal>}
       {accion==="abono_fin"&&<Modal title="Abonar a financiador" onClose={()=>setAccion(null)}><FormAbonoFinanciador ocs={ocs} financiadores={financiadores} onSave={handleAbonoFinanciador} /></Modal>}
       {accion==="pago_cliente"&&<Modal title="Ingresar pago" onClose={()=>setAccion(null)}><FormPagoCliente ocs={ocs} onSave={handlePagoCliente} /></Modal>}
       {accion==="compra_manual"&&<Modal title="Nueva OC — manual" onClose={()=>setAccion(null)}><FormIngresarCompra ocs={ocs} financiadores={financiadores} vendedores={vendedores} entidadesCatalogo={entidadesCatalogo} onSave={handleIngresarCompra} /></Modal>}
