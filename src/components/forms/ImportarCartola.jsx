@@ -95,10 +95,58 @@ function puntuar(abono, oc) {
   return puntos;
 }
 
-export function ImportarCartola({ ocs, onRegistrar }) {
+// ── Clasificación de un cargo (plata que sale) ──────────────
+// Compara el texto del banco con los nombres de financiadores y
+// vendedores. Exige al menos dos palabras en común para no
+// confundir, por ejemplo, a Byron Vegas con Matías Vegas.
+const PALABRAS_IGNORADAS = new Set(["TEF", "BANCOESTADO", "RUT", "PAGO", "PAGOS", "GIRO", "CAJERO"]);
+
+function coincidencias(nombre, descripcion) {
+  const desc = descripcion.toUpperCase();
+  const palabras = String(nombre || "").toUpperCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .split(/[^A-Z]+/).filter(p => p.length >= 4 && !PALABRAS_IGNORADAS.has(p));
+  const descSinTilde = desc.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  return palabras.filter(p => descSinTilde.includes(p)).length;
+}
+
+export function clasificarCargo(mov, financiadores, vendedores) {
+  const desc = mov.descripcion.toUpperCase();
+
+  let mejorFin = null, puntosFin = 0;
+  for (const f of financiadores || []) {
+    const n = coincidencias(f.nombre, desc);
+    if (n > puntosFin) { puntosFin = n; mejorFin = f; }
+  }
+  let mejorVen = null, puntosVen = 0;
+  for (const v of vendedores || []) {
+    const n = coincidencias(v.nombre, desc);
+    if (n > puntosVen) { puntosVen = n; mejorVen = v; }
+  }
+
+  // Si la persona figura como financista Y como vendedor, no se puede
+  // saber si el pago es devolución o comisión: queda para revisión.
+  if (puntosFin >= 2 && puntosVen >= 2)
+    return { tipo: "vendedor", destinoId: mejorVen.id, nombre: mejorVen.nombre, seguro: false };
+
+  // Dos o más palabras en común es una coincidencia confiable
+  if (puntosFin >= 2)
+    return { tipo: "financiador", destinoId: mejorFin.id, nombre: mejorFin.nombre, seguro: true };
+  if (puntosVen >= 2)
+    return { tipo: "vendedor", destinoId: mejorVen.id, nombre: mejorVen.nombre, seguro: true };
+
+  if (/COMISION|IMPUESTO|MANTENCION|CARGO POR/.test(desc))
+    return { tipo: "gasto", categoriaId: "cat_otros", nombre: "Comisión bancaria", seguro: true };
+
+  return { tipo: "gasto", categoriaId: "cat_otros", nombre: "Por clasificar", seguro: false };
+}
+
+export function ImportarCartola({ ocs, financiadores, vendedores, categorias, onRegistrar, onRegistrarEgresos }) {
   const [movs, setMovs] = useState([]);
   const [items, setItems] = useState([]);      // un item por abono con calce posible
   const [elegido, setElegido] = useState({});  // idx -> ocId seleccionado ("" = ninguno)
+  const [egresos, setEgresos] = useState([]);   // cargos clasificados
+  const [vista, setVista] = useState("cobros"); // cobros | egresos
   const [leyendo, setLeyendo] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [err, setErr] = useState("");
@@ -120,6 +168,10 @@ export function ImportarCartola({ ocs, onRegistrar }) {
       }).sort((a, b) => a.fecha.localeCompare(b.fecha));
       setMovs(unicos);
       calzar(unicos);
+      setEgresos(unicos.filter(m => m.cargo > 0).map(m => {
+        const c = clasificarCargo(m, financiadores, vendedores);
+        return { mov: m, ...c, incluir: c.seguro };
+      }));
     } catch (e) {
       setErr("No se pudo leer el archivo: " + e.message);
     } finally { setLeyendo(false); }
@@ -174,6 +226,21 @@ export function ImportarCartola({ ocs, onRegistrar }) {
     catch (e) { setErr(e.message); setGuardando(false); }
   };
 
+  const registrarEgresos = async () => {
+    const sel = egresos.filter(e => e.incluir);
+    if (!sel.length) { setErr("No hay ningún egreso marcado"); return; }
+    if (sel.some(e => e.tipo !== "gasto" && !e.destinoId)) {
+      setErr("Falta elegir el destino en alguno de los egresos"); return;
+    }
+    setErr(""); setGuardando(true);
+    try {
+      await onRegistrarEgresos(sel.map(e => ({
+        tipo: e.tipo, destinoId: e.destinoId, categoriaId: e.categoriaId || "cat_otros",
+        monto: e.mov.cargo, fecha: e.mov.fecha, descripcion: e.mov.descripcion,
+      })));
+    } catch (er) { setErr(er.message); setGuardando(false); }
+  };
+
   const nSel = Object.values(elegido).filter(Boolean).length;
   const totalSel = items.reduce((s, it, i) => {
     const c = it.candidatos.find(c => c.oc.id === elegido[i]);
@@ -206,10 +273,25 @@ export function ImportarCartola({ ocs, onRegistrar }) {
 
   return (
     <div style={{ fontFamily: SANS }}>
-      <div style={{ background: C.paper, borderRadius: 10, padding: "10px 13px", marginBottom: 14, fontSize: 12, color: C.inkMuted }}>
-        {movs.length} movimientos · {movs.filter(m => m.abono > 0).length} abonos · {items.length} con calce posible
+      <div style={{ background: C.paper, borderRadius: 10, padding: "10px 13px", marginBottom: 12, fontSize: 12, color: C.inkMuted }}>
+        {movs.length} movimientos leídos
       </div>
 
+      <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+        {[
+          { k: "cobros", t: `Entra · ${items.length}`, c: C.ok },
+          { k: "egresos", t: `Sale · ${egresos.length}`, c: C.danger },
+        ].map(b => (
+          <button key={b.k} onClick={() => setVista(b.k)}
+            style={{ flex: 1, padding: "8px", borderRadius: 9, cursor: "pointer", fontSize: 12, fontWeight: 700,
+              border: `1.5px solid ${vista === b.k ? b.c : C.border}`,
+              background: vista === b.k ? C.paper : C.card, color: vista === b.k ? b.c : C.inkMuted }}>
+            {b.t}
+          </button>
+        ))}
+      </div>
+
+      {vista === "cobros" && (<>
       {items.length === 0 ? (
         <div style={{ textAlign: "center", padding: "24px 0", color: C.inkFaint, fontSize: 13 }}>
           Ningún abono calza con una factura pendiente
@@ -260,8 +342,86 @@ export function ImportarCartola({ ocs, onRegistrar }) {
           </button>
         </>
       )}
+      </>)}
 
-      <button onClick={() => { setMovs([]); setItems([]); setElegido({}); setErr(""); }}
+      {vista === "egresos" && (
+        egresos.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "24px 0", color: C.inkFaint, fontSize: 13 }}>
+            No hay cargos en estas cartolas
+          </div>
+        ) : (
+          <>
+            <div style={{ fontSize: 11.5, color: C.inkFaint, marginBottom: 10, lineHeight: 1.5 }}>
+              Plata que salió de la cuenta. Las devoluciones a financistas se reparten
+              entre sus OCs pendientes; el resto queda como gasto.
+            </div>
+
+            {egresos.map((e, i) => (
+              <div key={i} style={{
+                background: e.incluir ? C.card : C.paper,
+                border: `1px solid ${e.incluir ? (e.seguro ? C.border : C.warn) : C.border}`,
+                borderRadius: 10, padding: "10px 12px", marginBottom: 7, opacity: e.incluir ? 1 : 0.6,
+              }}>
+                <label style={{ display: "flex", alignItems: "flex-start", gap: 8, cursor: "pointer" }}>
+                  <input type="checkbox" checked={e.incluir} style={{ marginTop: 3 }}
+                    onChange={ev => setEgresos(l => l.map((x, ix) => ix === i ? { ...x, incluir: ev.target.checked } : x))} />
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ display: "block", fontSize: 11.5, color: C.inkMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {fmt.date(e.mov.fecha)} · {e.mov.descripcion}
+                    </span>
+                    {!e.seguro && (
+                      <span style={{ display: "block", fontSize: 10.5, color: C.warn, fontWeight: 700, marginTop: 2 }}>
+                        ⚠ No se pudo identificar — revisa el destino
+                      </span>
+                    )}
+                  </span>
+                  <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: 12.5, color: C.danger, flexShrink: 0 }}>
+                    −{fmt.money(e.mov.cargo)}
+                  </span>
+                </label>
+
+                {e.incluir && (
+                  <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                    <select value={e.tipo}
+                      onChange={ev => setEgresos(l => l.map((x, ix) => ix === i ? { ...x, tipo: ev.target.value, destinoId: "" } : x))}
+                      style={{ flex: 1, padding: "6px 8px", borderRadius: 8, fontSize: 11.5, border: `1px solid ${C.border}`, background: C.card, color: C.ink, fontFamily: SANS }}>
+                      <option value="financiador">Devolución a financista</option>
+                      <option value="vendedor">Pago a vendedor</option>
+                      <option value="gasto">Gasto</option>
+                    </select>
+
+                    {e.tipo === "gasto" ? (
+                      <select value={e.categoriaId || "cat_otros"}
+                        onChange={ev => setEgresos(l => l.map((x, ix) => ix === i ? { ...x, categoriaId: ev.target.value } : x))}
+                        style={{ flex: 1, padding: "6px 8px", borderRadius: 8, fontSize: 11.5, border: `1px solid ${C.border}`, background: C.card, color: C.ink, fontFamily: SANS }}>
+                        {(categorias || []).map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                      </select>
+                    ) : (
+                      <select value={e.destinoId || ""}
+                        onChange={ev => setEgresos(l => l.map((x, ix) => ix === i ? { ...x, destinoId: ev.target.value } : x))}
+                        style={{ flex: 1, padding: "6px 8px", borderRadius: 8, fontSize: 11.5, border: `1px solid ${C.border}`, background: C.card, color: C.ink, fontFamily: SANS }}>
+                        <option value="">Elige…</option>
+                        {(e.tipo === "financiador" ? (financiadores || []) : (vendedores || []))
+                          .map(x => <option key={x.id} value={x.id}>{x.nombre}</option>)}
+                      </select>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+
+            <button onClick={registrarEgresos} disabled={guardando}
+              style={{ ...btnP(guardando ? C.inkFaint : C.danger), marginTop: 8 }}>
+              {guardando ? "Registrando…" :
+                `✓ Registrar ${egresos.filter(e => e.incluir).length} egreso(s) · ${fmt.money(egresos.filter(e => e.incluir).reduce((s, e) => s + e.mov.cargo, 0))}`}
+            </button>
+          </>
+        )
+      )}
+
+      {err && <div style={{ background: C.dangerLight, color: C.danger, borderRadius: 8, padding: "8px 12px", fontSize: 12.5, marginTop: 10, fontWeight: 600 }}>{err}</div>}
+
+      <button onClick={() => { setMovs([]); setItems([]); setElegido({}); setEgresos([]); setVista("cobros"); setErr(""); }}
         style={{ ...btnG, width: "100%", marginTop: 12, fontSize: 12 }}>
         Subir otra cartola
       </button>
