@@ -96,6 +96,8 @@ export function calcularAlertas(ocs) {
   const plazoDe = (o) => Number(o.dias_pago) > 0 ? Number(o.dias_pago) : 30;
 
   for (const oc of (ocs || [])) {
+    // Aportes de socios y ventas externas no generan alertas de gestión
+    if ((oc.tipo_registro || "venta") !== "venta") continue;
     const evF = (oc.eventos_factura || [])[0];
     const dias = evF ? fmt.diasDesde(evF.fecha) : null;
     const plazo = plazoDe(oc);
