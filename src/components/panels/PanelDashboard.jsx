@@ -11,14 +11,22 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
     const hoy=new Date(); hoy.setHours(0,0,0,0);
     const mesActual=hoy.getMonth()+1; const anioActual=hoy.getFullYear();
 
-    let cobrado=0, ingresos=0, costos=0;
+    // Separar por tipo: solo 'venta' cuenta como venta y utilidad.
+    // 'aporte_socio' entra a caja pero no es venta. 'externa' queda fuera de todo.
+    const esVenta =(o)=>(o.tipo_registro||"venta")==="venta";
+    const esAporte=(o)=>o.tipo_registro==="aporte_socio";
+    const enCaja  =(o)=>esVenta(o)||esAporte(o);
+
+    let cobrado=0, ingresos=0, costos=0, aportes=0;
     let creditoPendienteTotal=0;
     let creditoPagadoTotal=0;
     let costoBFK=0;
 
     for(const oc of ocs){
-      cobrado+=oc.monto_cobrado||0;
-      ingresos+=oc.monto_total||0;
+      if(!enCaja(oc)) continue;                    // externa: fuera de todo
+      cobrado+=oc.monto_cobrado||0;                // caja: ventas + aportes
+      if(esAporte(oc)){ aportes+=oc.monto_cobrado||0; continue; }
+      ingresos+=oc.monto_total||0;                 // solo ventas reales
       costos+=oc.costo_total||0;
       if(oc.estado_pago_financiamiento!=="pagado") creditoPendienteTotal+=oc.costo_total||0;
       creditoPagadoTotal+=(oc.eventos_pago_financiamiento||[]).reduce((s,e)=>s+(e.monto||0),0);
@@ -36,6 +44,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
 
     let ingresosPendientes=0;
     for(const oc of ocs){
+      if(!esVenta(oc)) continue;
       if(oc.estado_pago_cliente!=="pagado") ingresosPendientes+=oc.monto_total||0;
     }
 
@@ -62,13 +71,15 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
 
     let porCobrar=0;
     for(const oc of ocs){
+      if(!esVenta(oc)) continue;
       if(oc.estado_factura_propia==="emitida") porCobrar+=(oc.monto_facturado||0)-(oc.monto_cobrado||0);
     }
 
-    const ocsDelMes=ocs.filter(o=>{ const evC=(o.eventos_compra||[])[0]; if(!evC) return false; const f=new Date(evC.fecha); return f.getMonth()+1===mesActual&&f.getFullYear()===anioActual; });
+    const ocsDelMes=ocs.filter(o=>{ if(!esVenta(o)) return false; const evC=(o.eventos_compra||[])[0]; if(!evC) return false; const f=new Date(evC.fecha); return f.getMonth()+1===mesActual&&f.getFullYear()===anioActual; });
     const margenPromPct=ocsDelMes.length>0?Math.round(ocsDelMes.reduce((s,o)=>{ const v=o.monto_total||0; if(v<=0) return s; return s+((v-(o.costo_total||0))/v)*100; },0)/ocsDelMes.length):0;
 
     const ocsAbiertas=ocs.filter(o=>{
+      if(!esVenta(o)) return false;
       const completas=[
         (o.eventos_compra||[]).length>0,
         o.estado_entrega==="confirmada"||o.estado_entrega==="entregado",
@@ -80,14 +91,14 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
     }).length;
 
     const utilidad=ingresos-costos;
-    return {cobrado,porCobrar,deudaFin,utilidad,saldoProyectado,saldoCtaCte,ingresosPendientes,deudaTotal,gastoContador,gastosVendedores,gastoImpuesto,f29,margenPromPct,deudaVendedoresMes,ocsAbiertas};
+    return {aportes,cobrado,porCobrar,deudaFin,utilidad,saldoProyectado,saldoCtaCte,ingresosPendientes,deudaTotal,gastoContador,gastosVendedores,gastoImpuesto,f29,margenPromPct,deudaVendedoresMes,ocsAbiertas};
   },[ocs,financiadores,gastos,pagosVendedor,ivaMensual,vendedores,pagoFinSueltos]);
 
   const ocsPagadas=useMemo(()=>ocs.filter(o=>o.estado_pago_cliente==="pagado").map(o=>{
     const evF=(o.eventos_factura||[])[0]; return {...o,fechaFactura:evF?.fecha};
   }),[ocs]);
 
-  const ocsPorCobrar=useMemo(()=>ocs.filter(o=>o.estado_factura_propia==="emitida"&&o.estado_pago_cliente!=="pagado").map(o=>{
+  const ocsPorCobrar=useMemo(()=>ocs.filter(o=>(o.tipo_registro||"venta")==="venta"&&o.estado_factura_propia==="emitida"&&o.estado_pago_cliente!=="pagado").map(o=>{
     const evF=(o.eventos_factura||[])[0]; const dias=fmt.diasDesde(evF?.fecha);
     return {...o,fechaFactura:evF?.fecha,diasDesde:dias};
   }),[ocs]);
@@ -98,6 +109,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
     const calcUtil=(meses)=>{
       const limite=new Date(); limite.setMonth(limite.getMonth()-meses);
       return ocs.filter(o=>{
+        if((o.tipo_registro||"venta")!=="venta") return false;
         const evC=(o.eventos_compra||[])[0]; if(!evC) return false;
         return new Date(evC.fecha)>=limite;
       }).reduce((s,o)=>s+(o.monto_total||0)-(o.costo_total||0),0);
@@ -136,6 +148,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
     const porDiaAct=Array(diaHoy).fill(0);
     const porDiaAnt=Array(Math.min(diaHoy,diasMesAnt)).fill(0);
     for(const oc of ocs){
+      if((oc.tipo_registro||"venta")!=="venta") continue;
       const evC=(oc.eventos_compra||[])[0]; if(!evC||!evC.fecha) continue;
       const f=new Date(String(evC.fecha).slice(0,10)+"T00:00:00");
       const monto=oc.monto_total||0;
@@ -180,14 +193,14 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
       monto:porVencer.reduce((s,o)=>s+((o.monto_facturado||0)-(o.monto_cobrado||0)),0),
       color:C.warn,tab:"compras",filtro:"cobro"});
 
-    const sinFacturar=ocs.filter(o=>(o.estado_entrega==="confirmada"||o.estado_entrega==="entregado")&&o.estado_factura_propia!=="emitida");
+    const sinFacturar=ocs.filter(o=>(o.tipo_registro||"venta")==="venta"&&(o.estado_entrega==="confirmada"||o.estado_entrega==="entregado")&&o.estado_factura_propia!=="emitida");
     if(sinFacturar.length) items.push({
       label:`${sinFacturar.length} entregada${sinFacturar.length>1?"s":""} sin facturar`,
       detalle:"Ya se entregó, falta emitir la factura",
       monto:sinFacturar.reduce((s,o)=>s+(o.monto_total||0),0),
       color:C.info,tab:"compras",filtro:"factura"});
 
-    const sinEntregar=ocs.filter(o=>(o.eventos_compra||[]).length>0&&o.estado_entrega!=="confirmada"&&o.estado_entrega!=="entregado");
+    const sinEntregar=ocs.filter(o=>(o.tipo_registro||"venta")==="venta"&&(o.eventos_compra||[]).length>0&&o.estado_entrega!=="confirmada"&&o.estado_entrega!=="entregado");
     if(sinEntregar.length) items.push({
       label:`${sinEntregar.length} compra${sinEntregar.length>1?"s":""} sin entregar`,
       detalle:"Comprado, pendiente de entregar",
