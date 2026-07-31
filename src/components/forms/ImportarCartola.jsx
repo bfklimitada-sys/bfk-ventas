@@ -147,12 +147,29 @@ export function clasificarCargo(mov, financiadores, vendedores) {
 // unos días, porque la fecha contable no siempre calza con la
 // del banco.
 function yaRegistrado(mov, registrados, tolerancia = 3) {
-  const monto = mov.cargo || mov.abono;
+  const monto = Number(mov.cargo || mov.abono);
   const f = new Date(mov.fecha).getTime();
-  return registrados.find(r =>
-    Number(r.monto) === Number(monto) &&
-    Math.abs(new Date(r.fecha).getTime() - f) <= tolerancia * 86400000
-  );
+  const cerca = (r) => Math.abs(new Date(r.fecha).getTime() - f) <= tolerancia * 86400000;
+
+  // 1) Un movimiento registrado con el mismo monto
+  const exacto = registrados.find(r => Number(r.monto) === monto && cerca(r));
+  if (exacto) return exacto;
+
+  // 2) Un abono repartido entre varias OCs no deja un evento por el
+  //    total, sino varios fragmentos. Sumamos lo registrado de ese
+  //    día por cada destino: si ya cubre el monto, está registrado.
+  const porDestino = {};
+  for (const r of registrados) {
+    if (!cerca(r)) continue;
+    const k = r.destino || "sin_destino";
+    porDestino[k] = (porDestino[k] || 0) + Number(r.monto || 0);
+  }
+  for (const [destino, total] of Object.entries(porDestino)) {
+    if (Math.abs(total - monto) <= 1) {
+      return { fecha: mov.fecha, monto, destino, agrupado: true };
+    }
+  }
+  return null;
 }
 
 export function ImportarCartola({ ocs, financiadores, vendedores, categorias, registrados = [], onRegistrar, onRegistrarEgresos }) {
@@ -393,7 +410,9 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, re
                     </span>
                     {e.duplicado ? (
                       <span style={{ display: "block", fontSize: 10.5, color: C.info, fontWeight: 700, marginTop: 2 }}>
-                        Ya registrado el {fmt.date(String(e.duplicado.fecha).slice(0, 10))} — no se volverá a cargar
+                        {e.duplicado.agrupado
+                          ? "Ya registrado (repartido entre varias OCs) — no se volverá a cargar"
+                          : `Ya registrado el ${fmt.date(String(e.duplicado.fecha).slice(0, 10))} — no se volverá a cargar`}
                       </span>
                     ) : !e.seguro && (
                       <span style={{ display: "block", fontSize: 10.5, color: C.warn, fontWeight: 700, marginTop: 2 }}>
