@@ -3,6 +3,7 @@ import { LoginScreen } from "./components/auth/LoginScreen";
 import { FormIngresarCompra } from "./components/forms/FormIngresarCompra";
 import { NuevaOCRapida } from "./components/forms/NuevaOCRapida";
 import { FormCompraRapida } from "./components/forms/FormCompraRapida";
+import { FormAbonoFinanciador } from "./components/forms/FormAbonoFinanciador";
 import { FormConfirmarEntrega, FormEmitirFactura, FormPagoCliente } from "./components/forms/FormulariosRapidos";
 import { PanelCalendario } from "./components/panels/PanelCalendario";
 import { PanelCompras } from "./components/panels/PanelCompras";
@@ -329,6 +330,43 @@ export default function App() {
       medio:medio||null,notas:notas||null,creado_por:session.user.id});
     showToast(tipo==="retiro"?"Retiro registrado":"Aporte registrado");
     await cargarTodo();
+  };
+
+  // ─── ABONO A FINANCIADOR con reparto FIFO ────────────────────
+  const handleAbonoFinanciador=async({financiadorId,fecha,referencia,montoTotal,sobrante,asignaciones})=>{
+    const t=session.access_token;
+    const fin=financiadores.find(f=>f.id===financiadorId);
+
+    for(const a of asignaciones){
+      const oc=ocs.find(o=>o.id===a.ocId);
+      await ins("eventos_pago_financiamiento",t,{id:genId("evpf"),financiador_id:financiadorId,
+        oc_id:a.ocId,fecha,monto:a.monto,creado_por:session.user.id});
+
+      const pagadoAntes=Number(oc?.monto_pagado_fin||0);
+      const nuevoPagado=pagadoAntes+a.monto;
+      await upd("ordenes_compra_v2",t,a.ocId,{
+        monto_pagado_fin:nuevoPagado,
+        estado_pago_financiamiento:a.completa?"pagado":"parcial",
+      });
+
+      await registrarCambio(t,{ocId:a.ocId,ocNumero:a.numeroOc,usuarioId:perfil?.id,
+        usuarioNombre:perfil?.nombre,
+        accion:a.completa?`Financiamiento saldado (abono a ${fin?.nombre||""})`
+                         :`Abono parcial de financiamiento (${fmt.money(a.monto)})`,
+        campo:"monto_pagado_fin",valorAnterior:pagadoAntes,valorNuevo:nuevoPagado});
+    }
+
+    // Si el abono supera lo adeudado, el resto queda sin OC asociada
+    if(sobrante>0){
+      await ins("eventos_pago_financiamiento",t,{id:genId("evpf"),financiador_id:financiadorId,
+        oc_id:null,fecha,monto:sobrante,creado_por:session.user.id});
+    }
+
+    if(fin) await upd("financiadores",t,fin.id,{saldo_deuda:Math.max(0,Number(fin.saldo_deuda||0)-montoTotal)});
+
+    const completas=asignaciones.filter(a=>a.completa).length;
+    showToast(`Abono de ${fmt.money(montoTotal)} · ${completas} OC${completas!==1?"s":""} saldada${completas!==1?"s":""}`);
+    setAccion(null); await cargarTodo();
   };
 
   // ─── COMPRA RÁPIDA sobre una OC ya creada ────────────────────
@@ -712,7 +750,7 @@ export default function App() {
         {tab==="compras"&&<PanelCompras ocs={ocs} perfiles={perfiles} filtroInicial={filtroCompras} ocFoco={ocFoco} contactos={contactos} onEnviarReclamo={handleEnviarReclamo} onGuardarContacto={handleGuardarContacto} onGuardarDatosOC={handleGuardarDatosOC} onEditarEvento={handleEditarEvento} financiadores={financiadores} onConfirmarEntrega={handleEntrega} onEmitirFactura={handleFactura} onPagoCliente={handlePagoCliente} onPagoFinanciamiento={handlePagoFin} entidadesCatalogo={entidadesCatalogo} onGuardarLink={handleGuardarLink} onEliminarLink={handleEliminarLink} onEditarLink={handleEditarLink} bloqueos={bloqueos} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={handleAgregarComentario} onEliminarComentario={handleEliminarComentario} onBloquear={handleBloquear} onLiberar={handleLiberar} onEliminarOC={handleEliminarOC} onEliminarFactura={handleEliminarFactura} onEliminarEvento={handleEliminarEvento} vendedores={vendedores} onIngresarCompra={handleIngresarCompra} onAsignarResponsable={handleAsignarResponsable} onGuardarPostventa={handleGuardarPostventa} />}
         {tab==="notif"&&<PanelNotificaciones notificaciones={notificaciones} ocs={ocs} onMarcarLeidas={handleMarcarNotificacionesLeidas} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setTab(t);}} />}
         {tab==="agenda"&&<PanelCalendario ocs={ocs} onMarcarFecha={handleMarcarFecha} />}
-        {tab==="financiamiento"&&<PanelFinanciamiento financiadores={financiadores} ocs={ocs} ajustes={ajustesSaldo} perfiles={perfiles} onAjustar={handleAjusteSaldo} aportes={aportes} onGuardarAporte={handleGuardarAporte} />}
+        {tab==="financiamiento"&&<PanelFinanciamiento financiadores={financiadores} ocs={ocs} ajustes={ajustesSaldo} perfiles={perfiles} onAjustar={handleAjusteSaldo} aportes={aportes} onGuardarAporte={handleGuardarAporte} onAbonar={()=>setAccion("abono_fin")} />}
         {tab==="gastos"&&<PanelGastos gastos={gastos} categorias={categoriasGasto} vendedores={vendedores} pagosVendedor={pagosVendedor} ocs={ocs} onNuevoGasto={handleNuevoGasto} onPagoVendedor={handlePagoVendedorSimple} />}
         {tab==="vendedores"&&<PanelVendedores vendedores={vendedores} ocs={ocs} ivaMensual={ivaMensual} pagosVendedor={pagosVendedor} onGuardarIva={handleGuardarIva} onPagoVendedor={handlePagoVendedorSimple} />}
         {tab==="usuarios"&&perfil?.rol==="admin"&&<PanelUsuarios perfiles={perfiles} ocs={ocs} onChangeRol={handleChangeRol} session={session} showToast={showToast} entidadesCatalogo={entidadesCatalogo} onImportarEntidades={handleImportarEntidades} />}
@@ -778,6 +816,7 @@ export default function App() {
       {accion==="compra"&&<Modal title="Ingresar compra" onClose={()=>setAccion(null)}><FormCompraRapida ocs={ocs} financiadores={financiadores} perfil={perfil} onSave={handleCompraRapida} /></Modal>}
       {accion==="entrega"&&<Modal title="Ingresar entrega" onClose={()=>setAccion(null)}><FormConfirmarEntrega ocs={ocs} onSave={handleEntrega} /></Modal>}
       {accion==="factura"&&<Modal title="Ingresar factura" onClose={()=>setAccion(null)}><FormEmitirFactura ocs={ocs} onSave={handleFactura} /></Modal>}
+      {accion==="abono_fin"&&<Modal title="Abonar a financiador" onClose={()=>setAccion(null)}><FormAbonoFinanciador ocs={ocs} financiadores={financiadores} onSave={handleAbonoFinanciador} /></Modal>}
       {accion==="pago_cliente"&&<Modal title="Ingresar pago" onClose={()=>setAccion(null)}><FormPagoCliente ocs={ocs} onSave={handlePagoCliente} /></Modal>}
       {accion==="compra_manual"&&<Modal title="Nueva OC — manual" onClose={()=>setAccion(null)}><FormIngresarCompra ocs={ocs} financiadores={financiadores} vendedores={vendedores} entidadesCatalogo={entidadesCatalogo} onSave={handleIngresarCompra} /></Modal>}
 
