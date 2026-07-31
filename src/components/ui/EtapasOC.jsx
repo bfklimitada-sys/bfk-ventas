@@ -183,8 +183,8 @@ export function EtapasOC({ oc, perfil, perfiles, onEditarEvento, onEliminarFactu
             {etapa.key==="entrega"&&<>
               <div style={{fontSize:12.5,fontWeight:600}}>✅ Entregado el {fmt.date(ev.fecha)||"—"}</div>
               {ev.persona_recibe&&<div style={{fontSize:11.5,color:C.inkMuted}}>Recibe: {ev.persona_recibe}</div>}
-              {ev.observaciones&&<div style={{fontSize:11,color:C.inkMuted}}>{ev.observaciones}</div>}
-              {!ev.persona_recibe&&!ev.observaciones&&<div style={{fontSize:11,color:C.inkFaint}}>Sin detalle adicional</div>}
+              {ev.notas&&<div style={{fontSize:11,color:C.inkMuted}}>{ev.notas}</div>}
+              {!ev.persona_recibe&&!ev.notas&&<div style={{fontSize:11,color:C.inkFaint}}>Sin detalle adicional</div>}
             </>}
             {etapa.key==="factura"&&<>
               <div style={{fontSize:12.5,fontWeight:600}}>🧾 Factura N°{ev.numero_factura||"—"} · {fmt.money(ev.monto||oc.monto_facturado)}</div>
