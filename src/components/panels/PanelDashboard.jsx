@@ -228,7 +228,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
   return (
     <div style={{fontFamily:SANS}}>
       {/* ── Acciones rápidas — registrar cada etapa del ciclo ── */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginBottom:6}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:6,marginBottom:6}}>
         {[
           {key:"compra",      icon:"📦", label:"Compra",  color:C.transit},
           {key:"entrega",     icon:"🚚", label:"Entrega", color:C.info},
