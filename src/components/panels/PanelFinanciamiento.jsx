@@ -42,7 +42,7 @@ function FormAporte({ onSave }) {
   );
 }
 
-export function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onAjustar, aportes, onGuardarAporte }) {
+export function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onAjustar, aportes, onGuardarAporte, onAbonar }) {
   const [nuevoAporte,setNuevoAporte]=useState(false);
   const [selFin,setSelFin]=useState(null);
   const [ajustando,setAjustando]=useState(null);
@@ -99,6 +99,7 @@ export function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onA
 
   return (
     <div>
+      <button onClick={onAbonar} style={{...btnP(C.purple),marginBottom:12}}>💸 Abonar a un financiador</button>
       <div style={{fontSize:12,color:C.inkFaint,marginBottom:12}}>Toca un financiador para ver su cartola de movimientos.</div>
       {(()=>{
         const conDeuda=financiadores.filter(f=>Number(f.saldo_deuda)!==0);
