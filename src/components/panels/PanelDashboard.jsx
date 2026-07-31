@@ -3,7 +3,7 @@ import { DiasBadge, Leyenda } from "../ui/Basicos";
 import { del } from "../../lib/supabase";
 import { C, MONO, SANS, btnP, fmt } from "../../lib/theme";
 
-export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, onNavigate, onAccion, onSincronizar, sincronizando }) {
+export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, aportes: aportesLista, onNavigate, onAccion, onSincronizar, sincronizando }) {
   const [expandido,setExpandido]=useState(null);
   const [verHistorico,setVerHistorico]=useState(false);
 
@@ -17,7 +17,11 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
     const esAporte=(o)=>o.tipo_registro==="aporte_socio";
     const enCaja  =(o)=>esVenta(o)||esAporte(o);
 
-    let cobrado=0, ingresos=0, costos=0, aportes=0;
+    // Aportes de socios: vienen de su propia tabla
+    const totalAportes=(aportesLista||[]).reduce((s,a)=>
+      s+(a.tipo==="retiro"?-(Number(a.monto)||0):(Number(a.monto)||0)),0);
+
+    let cobrado=0, ingresos=0, costos=0;
     let creditoPendienteTotal=0;
     let creditoPagadoTotal=0;
     let costoBFK=0;
@@ -25,7 +29,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
     for(const oc of ocs){
       if(!enCaja(oc)) continue;                    // externa: fuera de todo
       cobrado+=oc.monto_cobrado||0;                // caja: ventas + aportes
-      if(esAporte(oc)){ aportes+=oc.monto_cobrado||0; continue; }
+      if(esAporte(oc)) continue;   // los aportes viven en aportes_socios
       ingresos+=oc.monto_total||0;                 // solo ventas reales
       costos+=oc.costo_total||0;
       if(oc.estado_pago_financiamiento!=="pagado") creditoPendienteTotal+=oc.costo_total||0;
@@ -40,7 +44,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
     const gastoImpuesto=gastos.filter(g=>g.categoria_id==="cat_impuesto").reduce((s,g)=>s+(g.monto||0),0);
     const gastosVendedores=pagosVendedor.reduce((s,p)=>s+(p.monto_pagado||0),0);
 
-    const saldoCtaCte = cobrado - creditoPagadoTotal - gastosTotal - costoBFK;
+    const saldoCtaCte = cobrado + totalAportes - creditoPagadoTotal - gastosTotal - costoBFK;
 
     let ingresosPendientes=0;
     for(const oc of ocs){
@@ -91,8 +95,8 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
     }).length;
 
     const utilidad=ingresos-costos;
-    return {aportes,cobrado,porCobrar,deudaFin,utilidad,saldoProyectado,saldoCtaCte,ingresosPendientes,deudaTotal,gastoContador,gastosVendedores,gastoImpuesto,f29,margenPromPct,deudaVendedoresMes,ocsAbiertas};
-  },[ocs,financiadores,gastos,pagosVendedor,ivaMensual,vendedores,pagoFinSueltos]);
+    return {aportes:totalAportes,cobrado,porCobrar,deudaFin,utilidad,saldoProyectado,saldoCtaCte,ingresosPendientes,deudaTotal,gastoContador,gastosVendedores,gastoImpuesto,f29,margenPromPct,deudaVendedoresMes,ocsAbiertas};
+  },[ocs,financiadores,gastos,pagosVendedor,ivaMensual,vendedores,pagoFinSueltos,aportesLista]);
 
   const ocsPagadas=useMemo(()=>ocs.filter(o=>o.estado_pago_cliente==="pagado").map(o=>{
     const evF=(o.eventos_factura||[])[0]; return {...o,fechaFactura:evF?.fecha};
