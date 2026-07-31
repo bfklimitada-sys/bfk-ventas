@@ -4,6 +4,7 @@ import { FormIngresarCompra } from "./components/forms/FormIngresarCompra";
 import { NuevaOCRapida } from "./components/forms/NuevaOCRapida";
 import { FormCompraRapida } from "./components/forms/FormCompraRapida";
 import { FormAbonoFinanciador } from "./components/forms/FormAbonoFinanciador";
+import { ImportarCartola } from "./components/forms/ImportarCartola";
 import { FormConfirmarEntrega, FormEmitirFactura, FormPagoCliente } from "./components/forms/FormulariosRapidos";
 import { PanelCalendario } from "./components/panels/PanelCalendario";
 import { PanelCompras } from "./components/panels/PanelCompras";
@@ -342,6 +343,25 @@ export default function App() {
     await del("aportes_socios",session.access_token,id);
     showToast("Movimiento eliminado");
     await cargarTodo();
+  };
+
+  // ─── CONCILIACIÓN BANCARIA: registrar cobros detectados ──────
+  const handleCobrosDesdeCartola=async(cobros)=>{
+    const t=session.access_token;
+    for(const c of cobros){
+      const oc=ocs.find(o=>o.id===c.ocId);
+      await ins("eventos_pago_cliente",t,{id:genId("evp"),oc_id:c.ocId,fecha:c.fecha,
+        monto:c.monto,creado_por:session.user.id});
+      const nuevoCobrado=Number(oc?.monto_cobrado||0)+c.monto;
+      await upd("ordenes_compra_v2",t,c.ocId,{monto_cobrado:nuevoCobrado,
+        estado_pago_cliente:nuevoCobrado>=(Number(oc?.monto_facturado)||0)?"pagado":"parcial"});
+      await registrarCambio(t,{ocId:c.ocId,ocNumero:c.numeroOc,usuarioId:perfil?.id,
+        usuarioNombre:perfil?.nombre,accion:"Cobro registrado desde la cartola del banco",
+        campo:"estado_pago_cliente",valorAnterior:"pendiente",valorNuevo:"pagado"});
+    }
+    const total=cobros.reduce((s,c)=>s+c.monto,0);
+    showToast(`${cobros.length} cobro${cobros.length!==1?"s":""} registrado${cobros.length!==1?"s":""} · ${fmt.money(total)}`);
+    setAccion(null); await cargarTodo();
   };
 
   // ─── ABONO A FINANCIADOR con reparto FIFO ────────────────────
@@ -828,6 +848,7 @@ export default function App() {
       {accion==="compra"&&<Modal title="Ingresar compra" onClose={()=>setAccion(null)}><FormCompraRapida ocs={ocs} financiadores={financiadores} perfil={perfil} onSave={handleCompraRapida} /></Modal>}
       {accion==="entrega"&&<Modal title="Ingresar entrega" onClose={()=>setAccion(null)}><FormConfirmarEntrega ocs={ocs} onSave={handleEntrega} /></Modal>}
       {accion==="factura"&&<Modal title="Ingresar factura" onClose={()=>setAccion(null)}><FormEmitirFactura ocs={ocs} onSave={handleFactura} /></Modal>}
+      {accion==="cartola"&&<Modal title="Conciliar con el banco" onClose={()=>setAccion(null)}><ImportarCartola ocs={ocs} onRegistrar={handleCobrosDesdeCartola} /></Modal>}
       {accion==="abono_fin"&&<Modal title="Abonar a financiador" onClose={()=>setAccion(null)}><FormAbonoFinanciador ocs={ocs} financiadores={financiadores} onSave={handleAbonoFinanciador} /></Modal>}
       {accion==="pago_cliente"&&<Modal title="Ingresar pago" onClose={()=>setAccion(null)}><FormPagoCliente ocs={ocs} onSave={handlePagoCliente} /></Modal>}
       {accion==="compra_manual"&&<Modal title="Nueva OC — manual" onClose={()=>setAccion(null)}><FormIngresarCompra ocs={ocs} financiadores={financiadores} vendedores={vendedores} entidadesCatalogo={entidadesCatalogo} onSave={handleIngresarCompra} /></Modal>}
