@@ -2,7 +2,48 @@ import { useState } from "react";
 import { Field, Modal, Trazabilidad } from "../ui/Basicos";
 import { C, MONO, btnP, fmt, iMono, iStyle } from "../../lib/theme";
 
-export function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onAjustar }) {
+function FormAporte({ onSave }) {
+  const [socio,setSocio]=useState("");
+  const [tipo,setTipo]=useState("aporte");
+  const [monto,setMonto]=useState("");
+  const [fecha,setFecha]=useState(new Date().toISOString().slice(0,10));
+  const [medio,setMedio]=useState("");
+  const [notas,setNotas]=useState("");
+  const [err,setErr]=useState(""); const [saving,setSaving]=useState(false);
+  const guardar=async()=>{
+    if(!socio.trim()){setErr("Indica el socio");return;}
+    if(!monto||Number(monto)<=0){setErr("Indica el monto");return;}
+    setErr("");setSaving(true);
+    try{ await onSave({socio:socio.trim(),tipo,monto:Number(monto),fecha,medio:medio.trim(),notas:notas.trim()}); }
+    catch(e){setErr(e.message);setSaving(false);}
+  };
+  return (
+    <div>
+      <Field label="Socio" required>
+        <input style={iStyle} value={socio} onChange={e=>setSocio(e.target.value)} placeholder="ej: Kevin Vergara" />
+      </Field>
+      <Field label="Tipo">
+        <div style={{display:"flex",gap:8}}>
+          <button onClick={()=>setTipo("aporte")} style={{flex:1,padding:"9px",borderRadius:9,cursor:"pointer",fontWeight:700,fontSize:12.5,
+            border:`1.5px solid ${tipo==="aporte"?C.ok:C.border}`,background:tipo==="aporte"?C.okLight:C.card,color:tipo==="aporte"?C.ok:C.inkMuted}}>+ Aporte</button>
+          <button onClick={()=>setTipo("retiro")} style={{flex:1,padding:"9px",borderRadius:9,cursor:"pointer",fontWeight:700,fontSize:12.5,
+            border:`1.5px solid ${tipo==="retiro"?C.danger:C.border}`,background:tipo==="retiro"?C.dangerLight:C.card,color:tipo==="retiro"?C.danger:C.inkMuted}}>− Retiro</button>
+        </div>
+      </Field>
+      <Field label="Monto ($)" required><input style={iMono} type="number" value={monto} onChange={e=>setMonto(e.target.value)} /></Field>
+      <Field label="Fecha" required><input style={iStyle} type="date" value={fecha} onChange={e=>setFecha(e.target.value)} /></Field>
+      <Field label="Medio" hint="Opcional"><input style={iStyle} value={medio} onChange={e=>setMedio(e.target.value)} placeholder="transferencia, efectivo…" /></Field>
+      <Field label="Notas" hint="Opcional"><input style={iStyle} value={notas} onChange={e=>setNotas(e.target.value)} /></Field>
+      {err&&<div style={{background:C.dangerLight,color:C.danger,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}
+      <button onClick={guardar} disabled={saving} style={btnP(saving?C.inkFaint:tipo==="retiro"?C.danger:C.ok)}>
+        {saving?"Guardando…":tipo==="retiro"?"✓ Registrar retiro":"✓ Registrar aporte"}
+      </button>
+    </div>
+  );
+}
+
+export function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onAjustar, aportes, onGuardarAporte }) {
+  const [nuevoAporte,setNuevoAporte]=useState(false);
   const [selFin,setSelFin]=useState(null);
   const [ajustando,setAjustando]=useState(null);
 
@@ -87,6 +128,61 @@ export function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onA
       )}
         </>);
       })()}
+
+      {/* ── Aportes de socios ── */}
+      <div style={{marginTop:20}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+          <span style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4}}>Aportes de socios</span>
+          <button onClick={()=>setNuevoAporte(true)} style={{fontSize:11,background:C.okLight,color:C.ok,border:"none",borderRadius:7,padding:"5px 10px",fontWeight:700,cursor:"pointer"}}>+ Registrar</button>
+        </div>
+        <div style={{fontSize:11.5,color:C.inkFaint,marginBottom:10,lineHeight:1.45}}>
+          Capital que entra o sale de la empresa. Suma a la caja pero no cuenta como venta ni utilidad.
+        </div>
+
+        {(()=>{
+          const lista=aportes||[];
+          if(!lista.length) return <div style={{fontSize:12,color:C.inkFaint,padding:"10px 0"}}>Sin aportes registrados</div>;
+          const porSocio={};
+          for(const a of lista){
+            const m=a.tipo==="retiro"?-(Number(a.monto)||0):(Number(a.monto)||0);
+            porSocio[a.socio]=(porSocio[a.socio]||0)+m;
+          }
+          const total=Object.values(porSocio).reduce((s,v)=>s+v,0);
+          return (<>
+            <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 15px",marginBottom:10}}>
+              {Object.entries(porSocio).sort((a,b)=>b[1]-a[1]).map(([soc,m])=>(
+                <div key={soc} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:`1px solid ${C.border}`}}>
+                  <span style={{fontSize:12.5,color:soc==="Por asignar"?C.warn:C.ink,fontWeight:600}}>
+                    {soc==="Por asignar"?"⚠ Por asignar":soc}
+                  </span>
+                  <span style={{fontFamily:MONO,fontWeight:800,fontSize:12.5,color:m>=0?C.ok:C.danger}}>{fmt.money(m)}</span>
+                </div>
+              ))}
+              <div style={{display:"flex",justifyContent:"space-between",paddingTop:8,marginTop:4}}>
+                <span style={{fontSize:12.5,fontWeight:800,color:C.ink}}>Total en caja</span>
+                <span style={{fontFamily:MONO,fontWeight:800,fontSize:14,color:C.ok}}>{fmt.money(total)}</span>
+              </div>
+            </div>
+            {lista.slice(0,8).map(a=>(
+              <div key={a.id} style={{background:C.paper,borderRadius:9,padding:"8px 12px",marginBottom:5,display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+                <span style={{minWidth:0}}>
+                  <span style={{display:"block",fontSize:12,fontWeight:600,color:C.ink}}>{a.socio}{a.medio?` · ${a.medio}`:""}</span>
+                  <span style={{display:"block",fontSize:10.5,color:C.inkFaint}}>{fmt.date(String(a.fecha).slice(0,10))}{a.notas?` · ${a.notas.slice(0,50)}`:""}</span>
+                </span>
+                <span style={{fontFamily:MONO,fontWeight:800,fontSize:12.5,color:a.tipo==="retiro"?C.danger:C.ok,flexShrink:0}}>
+                  {a.tipo==="retiro"?"−":"+"}{fmt.money(a.monto)}
+                </span>
+              </div>
+            ))}
+          </>);
+        })()}
+      </div>
+
+      {nuevoAporte&&(
+        <Modal title="Aporte o retiro de socio" onClose={()=>setNuevoAporte(false)}>
+          <FormAporte onSave={async(d)=>{ await onGuardarAporte(d); setNuevoAporte(false); }} />
+        </Modal>
+      )}
     </div>
   );
 }
