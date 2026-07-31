@@ -325,10 +325,22 @@ export default function App() {
     await cargarTodo();
   };
 
-  const handleGuardarAporte=async({socio,tipo,monto,fecha,medio,notas})=>{
-    await ins("aportes_socios",session.access_token,{id:genId("ap"),socio,tipo,monto,fecha,
-      medio:medio||null,notas:notas||null,creado_por:session.user.id});
-    showToast(tipo==="retiro"?"Retiro registrado":"Aporte registrado");
+  const handleGuardarAporte=async({id,socio,tipo,monto,fecha,medio,notas})=>{
+    const t=session.access_token;
+    const fila={socio,tipo,monto,fecha,medio:medio||null,notas:notas||null};
+    if(id){
+      await upd("aportes_socios",t,id,fila);
+      showToast("Movimiento actualizado");
+    } else {
+      await ins("aportes_socios",t,{id:genId("ap"),...fila,creado_por:session.user.id});
+      showToast(tipo==="retiro"?"Retiro registrado":"Aporte registrado");
+    }
+    await cargarTodo();
+  };
+
+  const handleEliminarAporte=async(id)=>{
+    await del("aportes_socios",session.access_token,id);
+    showToast("Movimiento eliminado");
     await cargarTodo();
   };
 
@@ -750,7 +762,7 @@ export default function App() {
         {tab==="compras"&&<PanelCompras ocs={ocs} perfiles={perfiles} filtroInicial={filtroCompras} ocFoco={ocFoco} contactos={contactos} onEnviarReclamo={handleEnviarReclamo} onGuardarContacto={handleGuardarContacto} onGuardarDatosOC={handleGuardarDatosOC} onEditarEvento={handleEditarEvento} financiadores={financiadores} onConfirmarEntrega={handleEntrega} onEmitirFactura={handleFactura} onPagoCliente={handlePagoCliente} onPagoFinanciamiento={handlePagoFin} entidadesCatalogo={entidadesCatalogo} onGuardarLink={handleGuardarLink} onEliminarLink={handleEliminarLink} onEditarLink={handleEditarLink} bloqueos={bloqueos} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={handleAgregarComentario} onEliminarComentario={handleEliminarComentario} onBloquear={handleBloquear} onLiberar={handleLiberar} onEliminarOC={handleEliminarOC} onEliminarFactura={handleEliminarFactura} onEliminarEvento={handleEliminarEvento} vendedores={vendedores} onIngresarCompra={handleIngresarCompra} onAsignarResponsable={handleAsignarResponsable} onGuardarPostventa={handleGuardarPostventa} />}
         {tab==="notif"&&<PanelNotificaciones notificaciones={notificaciones} ocs={ocs} onMarcarLeidas={handleMarcarNotificacionesLeidas} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setTab(t);}} />}
         {tab==="agenda"&&<PanelCalendario ocs={ocs} onMarcarFecha={handleMarcarFecha} />}
-        {tab==="financiamiento"&&<PanelFinanciamiento financiadores={financiadores} ocs={ocs} ajustes={ajustesSaldo} perfiles={perfiles} onAjustar={handleAjusteSaldo} aportes={aportes} onGuardarAporte={handleGuardarAporte} onAbonar={()=>setAccion("abono_fin")} />}
+        {tab==="financiamiento"&&<PanelFinanciamiento financiadores={financiadores} ocs={ocs} ajustes={ajustesSaldo} perfiles={perfiles} onAjustar={handleAjusteSaldo} aportes={aportes} onGuardarAporte={handleGuardarAporte} onEliminarAporte={handleEliminarAporte} onAbonar={()=>setAccion("abono_fin")} />}
         {tab==="gastos"&&<PanelGastos gastos={gastos} categorias={categoriasGasto} vendedores={vendedores} pagosVendedor={pagosVendedor} ocs={ocs} onNuevoGasto={handleNuevoGasto} onPagoVendedor={handlePagoVendedorSimple} />}
         {tab==="vendedores"&&<PanelVendedores vendedores={vendedores} ocs={ocs} ivaMensual={ivaMensual} pagosVendedor={pagosVendedor} onGuardarIva={handleGuardarIva} onPagoVendedor={handlePagoVendedorSimple} />}
         {tab==="usuarios"&&perfil?.rol==="admin"&&<PanelUsuarios perfiles={perfiles} ocs={ocs} onChangeRol={handleChangeRol} session={session} showToast={showToast} entidadesCatalogo={entidadesCatalogo} onImportarEntidades={handleImportarEntidades} />}
