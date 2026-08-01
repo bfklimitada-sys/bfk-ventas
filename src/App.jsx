@@ -713,9 +713,38 @@ export default function App() {
     showToast(`${filas.length} entidades importadas al catálogo`);
     await cargarTodo();
   };
-  const handleGuardarDatosOC=async(ocId,{cliente,entidad,comuna,contacto,rutCliente,correo,fechaOC})=>{
+  const handleGuardarDatosOC=async(ocId,{numeroOc,resincronizar,cliente,entidad,comuna,contacto,rutCliente,correo,fechaOC})=>{
     const t=session.access_token;
-    await upd("ordenes_compra_v2",t,ocId,{cliente,entidad,comuna,contacto,rut_cliente:rutCliente,correo_cliente:correo,ultimo_editor:session.user.id,ultima_edicion:new Date().toISOString()});
+    const oc=ocs.find(o=>o.id===ocId);
+
+    // Si cambió el código, dejarlo en el historial: es un dato sensible
+    if(numeroOc&&numeroOc!==oc?.numero_oc){
+      await registrarCambio(t,{ocId,ocNumero:numeroOc,usuarioId:perfil?.id,usuarioNombre:perfil?.nombre,
+        accion:"Código de OC corregido",campo:"numero_oc",
+        valorAnterior:oc?.numero_oc,valorNuevo:numeroOc});
+    }
+
+    await upd("ordenes_compra_v2",t,ocId,{...(numeroOc?{numero_oc:numeroOc}:{}),cliente,entidad,comuna,contacto,rut_cliente:rutCliente,correo_cliente:correo,ultimo_editor:session.user.id,ultima_edicion:new Date().toISOString()});
+
+    // Volver a traer los datos con el código corregido
+    if(resincronizar&&numeroOc){
+      try{
+        const r=await fetch(`/api/oc?codigo=${encodeURIComponent(numeroOc)}`);
+        const j=await r.json();
+        if(j.ok&&j.oc){
+          const d=j.oc;
+          await upd("ordenes_compra_v2",t,ocId,{
+            cliente:d.cliente||cliente, entidad:d.entidad||entidad,
+            rut_cliente:d.rut_cliente||rutCliente, comuna:d.comuna||comuna,
+            contacto:d.contacto||contacto, correo_cliente:correo||d.correo_cliente||"",
+            monto_total:d.monto_total||oc?.monto_total, tipo_despacho:d.tipo_despacho||"",
+            dias_pago:d.dias_pago||30, sync_pendiente:false});
+          showToast(`Datos actualizados desde Mercado Público`);
+        } else {
+          showToast("El código no se encontró en Mercado Público","error");
+        }
+      }catch{ showToast("No se pudo consultar Mercado Público","error"); }
+    }
     if(fechaOC){
       const oc=ocs.find(o=>o.id===ocId);
       const evC=(oc?.eventos_compra||[])[0];
