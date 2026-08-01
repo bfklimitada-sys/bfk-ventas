@@ -16,7 +16,9 @@ export const FILTROS=[
   {key:"financ",label:"Financ.",okField:"estado_pago_financiamiento",okValue:"pagado",okLabel:"Pagado",pendLabel:"Con deuda"},
 ];
 
-export function FormEditarDatosOC({ oc, onSave, entidadesCatalogo }) {
+export function FormEditarDatosOC({ oc, onSave, entidadesCatalogo, perfil, ocs }) {
+  const [numeroOc,setNumeroOc]=useState(oc.numero_oc||"");
+  const [resincronizar,setResincronizar]=useState(false);
   const [cliente,setCliente]=useState(oc.cliente||"");
   const [entidad,setEntidad]=useState(oc.entidad||"");
   const [comuna,setComuna]=useState(oc.comuna||"");
@@ -38,13 +40,40 @@ export function FormEditarDatosOC({ oc, onSave, entidadesCatalogo }) {
       setAutocompletado(true);
     }
   };
+  const norm=(v)=>String(v||"").toUpperCase().replace(/[^A-Z0-9]/g,"").replace(/^N(?=\d)/,"");
+  const codigoCambio = norm(numeroOc)!==norm(oc.numero_oc);
+  const codigoRepetido = codigoCambio && (ocs||[]).some(o=>o.id!==oc.id&&norm(o.numero_oc)===norm(numeroOc));
+
   const handleSave=async()=>{
+    if(!numeroOc.trim()){ setErr("El código no puede quedar vacío"); return; }
+    if(codigoRepetido){ setErr("Ya existe otra OC con ese código"); return; }
     setErr(""); setSaving(true);
-    try { await onSave({ cliente:cliente.toUpperCase(), entidad:entidad.toUpperCase(), comuna:comuna.toUpperCase(), contacto, rutCliente, correo, fechaOC:fechaOC||null }); }
+    try { await onSave({ numeroOc:numeroOc.trim(), resincronizar:resincronizar&&codigoCambio,
+      cliente:cliente.toUpperCase(), entidad:entidad.toUpperCase(), comuna:comuna.toUpperCase(), contacto, rutCliente, correo, fechaOC:fechaOC||null }); }
     catch(e){ setErr(e.message); } finally{ setSaving(false); }
   };
   return (
     <div>
+      {perfil?.rol==="admin"&&(
+        <Field label="Código de la OC" hint="Corrígelo si se ingresó mal. Debe ser único.">
+          <input style={iMono} value={numeroOc} onChange={e=>{setNumeroOc(e.target.value);setErr("");}} />
+          {codigoRepetido&&(
+            <div style={{fontSize:11.5,color:C.danger,fontWeight:700,marginTop:5}}>
+              ⚠ Ya hay otra OC con ese código
+            </div>
+          )}
+          {codigoCambio&&!codigoRepetido&&(
+            <label style={{display:"flex",alignItems:"flex-start",gap:7,marginTop:8,cursor:"pointer",
+              background:C.tealLight,borderRadius:8,padding:"8px 10px"}}>
+              <input type="checkbox" checked={resincronizar} onChange={e=>setResincronizar(e.target.checked)} style={{marginTop:2}} />
+              <span style={{fontSize:11.5,color:C.tealDark,fontWeight:600}}>
+                Traer de nuevo los datos desde Mercado Público con el código corregido
+              </span>
+            </label>
+          )}
+        </Field>
+      )}
+
       <Field label="RUT del cliente" hint="Si ya existe en el catálogo, autocompleta los demás datos"><input style={iStyle} value={rutCliente} onChange={e=>handleRutChange(e.target.value)} placeholder="ej: 12.345.678-9" /></Field>
       {autocompletado&&<div style={{background:C.okLight,borderRadius:8,padding:"8px 12px",fontSize:11.5,color:C.ok,fontWeight:600,marginBottom:12}}>✓ Datos autocompletados desde el catálogo de entidades</div>}
       <Field label="Nombre del cliente" hint="Se guarda en mayúscula"><input style={iStyle} value={cliente} onChange={e=>setCliente(e.target.value)} placeholder="Nombre del cliente" /></Field>
@@ -202,7 +231,7 @@ function DetalleOC({ oc }) {
   );
 }
 
-export function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, bloqueos, perfil, historialCambios, onAgregarComentario, onEliminarComentario, onBloquear, onLiberar, onEliminarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa }) {
+export function FilaOC({ oc, perfiles, todasLasOcs, expanded, onToggle, contactos, onEnviarReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, bloqueos, perfil, historialCambios, onAgregarComentario, onEliminarComentario, onBloquear, onLiberar, onEliminarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa }) {
   const evF=(oc.eventos_factura||[])[0];
   const dias=fmt.diasDesde(evF?.fecha);
   const saldo=(oc.monto_facturado||0)-(oc.monto_cobrado||0);
@@ -408,7 +437,7 @@ export function FilaOC({ oc, perfiles, expanded, onToggle, contactos, onEnviarRe
       )}
       {editandoDatos&&(
         <Modal title="Editar datos de la OC" onClose={()=>setEditandoDatos(false)}>
-          <FormEditarDatosOC oc={oc} entidadesCatalogo={entidadesCatalogo} onSave={async(data)=>{ await onGuardarDatosOC(oc.id,data); setEditandoDatos(false); }} />
+          <FormEditarDatosOC oc={oc} entidadesCatalogo={entidadesCatalogo} perfil={perfil} ocs={todasLasOcs} onSave={async(data)=>{ await onGuardarDatosOC(oc.id,data); setEditandoDatos(false); }} />
         </Modal>
       )}
       {editandoEvento&&(
@@ -622,7 +651,7 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, contactos, 
       )}
 
       <div style={{fontSize:11.5,color:C.inkFaint,marginBottom:10}}>{filtered.length} orden{filtered.length!==1?"es":""}</div>
-      {filtered.map(oc=><FilaOC key={oc.id} oc={oc} perfiles={perfiles} expanded={expId===oc.id} onToggle={()=>setExpId(expId===oc.id?null:oc.id)} contactos={contactos} onEnviarReclamo={onEnviarReclamo} onGuardarContacto={onGuardarContacto} onGuardarDatosOC={onGuardarDatosOC} onEditarEvento={onEditarEvento} financiadores={financiadores} onConfirmarEntrega={onConfirmarEntrega} onEmitirFactura={onEmitirFactura} onPagoCliente={onPagoCliente} onPagoFinanciamiento={onPagoFinanciamiento} entidadesCatalogo={entidadesCatalogo} onGuardarLink={onGuardarLink} onEliminarLink={onEliminarLink} onEditarLink={onEditarLink} bloqueos={bloqueos} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={onAgregarComentario} onEliminarComentario={onEliminarComentario} onBloquear={onBloquear} onLiberar={onLiberar} onEliminarOC={onEliminarOC} onEliminarFactura={onEliminarFactura} onEliminarEvento={onEliminarEvento} vendedores={vendedores} onIngresarCompra={onIngresarCompra} onAsignarResponsable={onAsignarResponsable} onGuardarPostventa={onGuardarPostventa} />)}
+      {filtered.map(oc=><FilaOC key={oc.id} oc={oc} perfiles={perfiles} todasLasOcs={ocs} expanded={expId===oc.id} onToggle={()=>setExpId(expId===oc.id?null:oc.id)} contactos={contactos} onEnviarReclamo={onEnviarReclamo} onGuardarContacto={onGuardarContacto} onGuardarDatosOC={onGuardarDatosOC} onEditarEvento={onEditarEvento} financiadores={financiadores} onConfirmarEntrega={onConfirmarEntrega} onEmitirFactura={onEmitirFactura} onPagoCliente={onPagoCliente} onPagoFinanciamiento={onPagoFinanciamiento} entidadesCatalogo={entidadesCatalogo} onGuardarLink={onGuardarLink} onEliminarLink={onEliminarLink} onEditarLink={onEditarLink} bloqueos={bloqueos} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={onAgregarComentario} onEliminarComentario={onEliminarComentario} onBloquear={onBloquear} onLiberar={onLiberar} onEliminarOC={onEliminarOC} onEliminarFactura={onEliminarFactura} onEliminarEvento={onEliminarEvento} vendedores={vendedores} onIngresarCompra={onIngresarCompra} onAsignarResponsable={onAsignarResponsable} onGuardarPostventa={onGuardarPostventa} />)}
       {filtered.length===0&&<div style={{textAlign:"center",padding:30,color:C.inkFaint,fontSize:13}}>No hay órdenes con estos filtros.</div>}
       <Leyenda items={[
         {muestra:"✓ Cerrada",   color:C.ok,      bg:C.okLight,      texto:"Cobrada al cliente y pagada al financiador. Ciclo terminado."},
