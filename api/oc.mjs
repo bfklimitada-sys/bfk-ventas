@@ -35,14 +35,75 @@ const FORMA_PAGO = {
 const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
 const txt = (v) => (v === null || v === undefined ? "" : String(v).trim());
 
-export default async function handler(req, res) {
-  const codigo = txt(req.query?.codigo);
+// ── Modo listado: OCs de BFK por estado y fecha ─────────────
+// GET /api/oc?listar=enviadaproveedor&dias=30
+// Devuelve las OCs de nuestro RUT en ese estado, para avisar
+// de las que están esperando aceptación en Mercado Público.
+const RUT_BFK = "77.322.317-3";
 
+async function buscarCodigoProveedor(ticket) {
+  const r = await fetch(
+    `https://api.mercadopublico.cl/servicios/v1/Publico/Empresas/BuscarProveedor` +
+    `?rutempresaproveedor=${encodeURIComponent(RUT_BFK)}&ticket=${encodeURIComponent(ticket)}`,
+    { headers: { Accept: "application/json" } });
+  if (!r.ok) return null;
+  const d = await r.json();
+  return d?.listaEmpresas?.[0]?.CodigoEmpresa ?? d?.Listado?.[0]?.CodigoEmpresa ?? null;
+}
+
+async function listarOCs(req, res, ticket) {
+  const estado = txt(req.query?.listar) || "enviadaproveedor";
+  const dias = Math.min(Number(req.query?.dias) || 30, 90);
+
+  const codigo = await buscarCodigoProveedor(ticket);
   if (!codigo) {
-    return res.status(400).json({ ok: false, error: "Falta el parámetro 'codigo'" });
+    return res.status(502).json({ ok: false, error: "No se pudo obtener el código de proveedor" });
   }
 
+  const encontradas = [];
+  const hoy = new Date();
+  for (let i = 0; i < dias; i++) {
+    const d = new Date(hoy); d.setDate(d.getDate() - i);
+    const f = `${String(d.getDate()).padStart(2,"0")}${String(d.getMonth()+1).padStart(2,"0")}${d.getFullYear()}`;
+    const url = "https://api.mercadopublico.cl/servicios/v1/publico/ordenesdecompra.json" +
+      `?fecha=${f}&estado=${encodeURIComponent(estado)}&CodigoProveedor=${codigo}` +
+      `&ticket=${encodeURIComponent(ticket)}`;
+    try {
+      const r = await fetch(url, { headers: { Accept: "application/json" } });
+      if (!r.ok) continue;
+      const j = await r.json();
+      for (const oc of (j?.Listado || [])) {
+        encontradas.push({
+          numero_oc: txt(oc.Codigo),
+          nombre: txt(oc.Nombre),
+          estado: txt(oc.Estado) || estado,
+          fecha: txt(oc.FechaEnvio) || txt(oc.FechaCreacion),
+        });
+      }
+    } catch { /* un día que falle no debe cortar la búsqueda */ }
+  }
+
+  res.setHeader("Cache-Control", "s-maxage=900, stale-while-revalidate");
+  return res.status(200).json({
+    ok: true, estado, dias, codigoProveedor: codigo,
+    total: encontradas.length, ocs: encontradas,
+  });
+}
+
+export default async function handler(req, res) {
+
   const ticket = process.env.MP_TICKET || TICKET_PRUEBAS;
+
+  // Modo listado
+  if (req.query?.listar) {
+    try { return await listarOCs(req, res, ticket); }
+    catch (e) { return res.status(500).json({ ok: false, error: String(e?.message || e) }); }
+  }
+
+  const codigo = txt(req.query?.codigo);
+  if (!codigo) {
+    return res.status(400).json({ ok: false, error: "Falta el parámetro 'codigo' o 'listar'" });
+  }
 
   // El endpoint real es "ordenesdecompra.json" (plural, minúsculas).
   // La documentación PDF menciona "OrdenCompra.json", que ya no responde:
