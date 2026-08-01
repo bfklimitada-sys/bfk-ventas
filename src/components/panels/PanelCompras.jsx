@@ -169,7 +169,7 @@ function DetalleOC({ oc }) {
         <div style={{background:C.card,border:`1px solid ${C.border}`,borderTop:"none",
           borderRadius:"0 0 10px 10px",padding:"10px 12px",marginTop:-1}}>
 
-          {/* Productos con su link de compra */}
+          {/* Productos: cantidad y precio separados del nombre */}
           {links.length>0&&(
             <div style={{marginBottom:12}}>
               <div style={{fontSize:10,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Productos</div>
@@ -177,17 +177,42 @@ function DetalleOC({ oc }) {
                 const tieneUrl=l.url&&l.url!=="sin-link";
                 let dominio="";
                 if(tieneUrl){ try{ dominio=new URL(l.url).hostname.replace(/^www\./,""); }catch{} }
+                // La descripción viene como "Nombre × 3 | Compra: $X | Venta: $Y | Categoría"
+                const partes=String(l.descripcion||"").split("|").map(x=>x.trim());
+                const cabecera=partes[0]||"";
+                const m=cabecera.match(/^(.*?)\s*[×x]\s*(\d+)\s*$/);
+                const nombre=m?m[1].trim():cabecera;
+                const cantidad=m?m[2]:null;
+                const montos=partes.slice(1).filter(x=>/^(Compra|Venta):/i.test(x));
+                const categoria=partes.slice(1).find(x=>!/^(Compra|Venta):/i.test(x));
                 return (
-                  <div key={l.id} style={{background:C.paper,borderRadius:8,padding:"8px 10px",marginBottom:5}}>
-                    <div style={{fontSize:11.5,color:C.ink,fontWeight:600,lineHeight:1.45}}>{l.descripcion}</div>
+                  <div key={l.id} style={{background:C.paper,borderRadius:9,padding:"9px 11px",marginBottom:6}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+                      <span style={{fontSize:12,color:C.ink,fontWeight:600,lineHeight:1.45,minWidth:0}}>{nombre}</span>
+                      {cantidad&&(
+                        <span style={{flexShrink:0,background:C.tealLight,color:C.tealDark,borderRadius:6,
+                          padding:"2px 8px",fontSize:11.5,fontWeight:800,fontFamily:MONO}}>×{cantidad}</span>
+                      )}
+                    </div>
+                    {montos.length>0&&(
+                      <div style={{fontSize:11,color:C.inkMuted,marginTop:4}}>{montos.join(" · ")}</div>
+                    )}
+                    {categoria&&(
+                      <div style={{fontSize:10.5,color:C.inkFaint,marginTop:3,lineHeight:1.4}}>{categoria}</div>
+                    )}
+                    {oc.direccion_entrega&&(
+                      <div style={{fontSize:10.5,color:C.info,marginTop:5,lineHeight:1.4}}>
+                        Entregar en: {oc.direccion_entrega}
+                      </div>
+                    )}
                     {tieneUrl?(
                       <a href={l.url} target="_blank" rel="noopener noreferrer"
-                        style={{display:"inline-flex",alignItems:"center",gap:5,marginTop:5,fontSize:11,
+                        style={{display:"inline-flex",alignItems:"center",gap:5,marginTop:6,fontSize:11,
                           color:C.teal,textDecoration:"none",fontWeight:600}}>
                         🔗 {dominio||"Abrir link"} ↗
                       </a>
                     ):(
-                      <div style={{fontSize:10.5,color:C.inkFaint,marginTop:4}}>Sin link de compra</div>
+                      <div style={{fontSize:10.5,color:C.inkFaint,marginTop:5}}>Sin link de compra</div>
                     )}
                   </div>
                 );
@@ -380,8 +405,15 @@ export function FilaOC({ oc, perfiles, todasLasOcs, expanded, onToggle, contacto
               const f=esHist&&fc?fmt.date(fc):(oc.creadoEn?fmt.date(String(oc.creadoEn).slice(0,10)):null);
               return f?<>Creada {f}</>:null;
             })()}
-            {oc.direccion_entrega&&<><br/>📍 {oc.direccion_entrega}</>}
           </div>
+
+          {oc.direccion_entrega&&(
+            <div style={{background:C.infoLight,border:`1px solid ${C.info}33`,borderRadius:9,
+              padding:"9px 11px",marginBottom:12}}>
+              <div style={{fontSize:10,fontWeight:800,color:C.info,textTransform:"uppercase",letterSpacing:0.4,marginBottom:3}}>Dirección de despacho</div>
+              <div style={{fontSize:12,color:C.ink,lineHeight:1.45}}>{oc.direccion_entrega}</div>
+            </div>
+          )}
 
           <DetalleOC oc={oc} />
 
