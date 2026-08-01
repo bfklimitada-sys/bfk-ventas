@@ -244,6 +244,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
           {key:"entrega",     icon:"🚚", label:"Entrega", color:C.info},
           {key:"factura",     icon:"🧾", label:"Factura", color:C.purple},
           {key:"pago_cliente",icon:"💰", label:"Pago",    color:C.ok},
+          {key:"cartola",     icon:"🏦", label:"Banco",   color:C.info},
         ].map(a=>(
           <button key={a.key} onClick={()=>onAccion&&onAccion(a.key)}
             style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,
@@ -362,7 +363,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
 
       <Seccion titulo="Este mes">
       {/* ── Ventas y margen ── */}
-      {(ventasChart.totalAct>0||kpis.margenPromPct>0)&&
+      {(ventasChart.totalAct>0||kpis.margenPromPct>0)&&(()=>{ const hayCurva=ventasChart.acumAct.length>=3; return (
       <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px",marginBottom:14}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:2}}>
           <div style={{fontSize:11.5,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4}}>Ventas del mes</div>
@@ -380,21 +381,26 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
             background:`conic-gradient(${kpis.margenPromPct>=20?C.ok:kpis.margenPromPct>=10?C.warn:C.danger} ${Math.max(0,Math.min(100,kpis.margenPromPct))*3.6}deg, ${C.paper} 0)`,
             display:"flex",alignItems:"center",justifyContent:"center"}}>
             <div style={{width:44,height:44,borderRadius:"50%",background:C.card,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
-              <span style={{fontSize:13,fontWeight:800,color:C.ink,fontFamily:MONO}}>{kpis.margenPromPct}%</span>
+              <span style={{fontSize:13,fontWeight:800,color:C.ink,fontFamily:MONO}}>{kpis.margenPromPct>0?`${kpis.margenPromPct}%`:"—"}</span>
               <span style={{fontSize:7,color:C.inkFaint,letterSpacing:0.2}}>MARGEN</span>
             </div>
           </div>
         </div>
 
-        <svg viewBox={`0 0 ${CW} ${CH}`} width="100%" height={CH} preserveAspectRatio="none">
+        {hayCurva&&<svg viewBox={`0 0 ${CW} ${CH}`} width="100%" height={CH} preserveAspectRatio="none">
           <path d={pathAnt} fill="none" stroke={C.border} strokeWidth="2" />
           <path d={pathAct} fill="none" stroke={C.teal} strokeWidth="2.5" />
-        </svg>
-        <div style={{display:"flex",gap:14,marginTop:4}}>
+        </svg>}
+        {!hayCurva&&(
+          <div style={{fontSize:11.5,color:C.inkFaint,padding:"14px 0 4px",lineHeight:1.5}}>
+            Recién empieza el mes — la curva aparece con unos días de ventas.
+          </div>
+        )}
+        {hayCurva&&<div style={{display:"flex",gap:14,marginTop:4}}>
           <span style={{fontSize:10.5,color:C.inkMuted,display:"flex",alignItems:"center",gap:4}}><span style={{width:8,height:8,borderRadius:"50%",background:C.teal,display:"inline-block"}} />Este mes</span>
           <span style={{fontSize:10.5,color:C.inkMuted,display:"flex",alignItems:"center",gap:4}}><span style={{width:8,height:8,borderRadius:"50%",background:C.border,display:"inline-block"}} />Mes anterior</span>
-        </div>
-      </div>}
+        </div>}
+      </div>); })()}
 
       <button onClick={()=>setVerHistorico(v=>!v)}
         style={{width:"100%",background:"none",border:"none",cursor:"pointer",textAlign:"left",
