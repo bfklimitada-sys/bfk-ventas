@@ -172,6 +172,10 @@ function yaRegistrado(mov, registrados, tolerancia = 3) {
   return null;
 }
 
+// Los movimientos anteriores a esta fecha ya estaban contabilizados
+// en la planilla, así que no deben cargarse: duplicarían los saldos.
+const CORTE_EGRESOS = "2026-08-01";
+
 export function ImportarCartola({ ocs, financiadores, vendedores, categorias, registrados = [], onRegistrar, onRegistrarEgresos }) {
   const [movs, setMovs] = useState([]);
   const [items, setItems] = useState([]);      // un item por abono con calce posible
@@ -202,8 +206,9 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, re
       setEgresos(unicos.filter(m => m.cargo > 0).map(m => {
         const c = clasificarCargo(m, financiadores, vendedores);
         const dup = yaRegistrado(m, registrados);
-        return { mov: m, ...c, duplicado: dup || null,
-                 incluir: dup ? false : c.seguro };
+        const antiguo = m.fecha < CORTE_EGRESOS;
+        return { mov: m, ...c, duplicado: dup || null, antiguo,
+                 incluir: (dup || antiguo) ? false : c.seguro };
       }));
     } catch (e) {
       setErr("No se pudo leer el archivo: " + e.message);
@@ -385,6 +390,12 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, re
           </div>
         ) : (
           <>
+            {egresos.filter(e => e.antiguo).length > 0 && (
+              <div style={{ background: C.warnLight, border: `1px solid ${C.warn}`, borderRadius: 9, padding: "10px 12px", marginBottom: 10, fontSize: 11.5, color: C.warn, fontWeight: 600, lineHeight: 1.45 }}>
+                {egresos.filter(e => e.antiguo).length} movimiento(s) anteriores al {fmt.date(CORTE_EGRESOS)} vienen desmarcados.
+                Los saldos de los financistas ya los incluyen — cargarlos los descuadraría.
+              </div>
+            )}
             {egresos.filter(e => e.duplicado).length > 0 && (
               <div style={{ background: C.infoLight, borderRadius: 9, padding: "9px 12px", marginBottom: 10, fontSize: 11.5, color: C.info, fontWeight: 600 }}>
                 {egresos.filter(e => e.duplicado).length} movimiento(s) ya estaban registrados — vienen desmarcados
@@ -408,7 +419,11 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, re
                     <span style={{ display: "block", fontSize: 11.5, color: C.inkMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {fmt.date(e.mov.fecha)} · {e.mov.descripcion}
                     </span>
-                    {e.duplicado ? (
+                    {e.antiguo ? (
+                      <span style={{ display: "block", fontSize: 10.5, color: C.inkFaint, fontWeight: 600, marginTop: 2 }}>
+                        Anterior al {fmt.date(CORTE_EGRESOS)} — ya está en los saldos históricos
+                      </span>
+                    ) : e.duplicado ? (
                       <span style={{ display: "block", fontSize: 10.5, color: C.info, fontWeight: 700, marginTop: 2 }}>
                         {e.duplicado.agrupado
                           ? "Ya registrado (repartido entre varias OCs) — no se volverá a cargar"
