@@ -3,7 +3,7 @@ import { DiasBadge, Leyenda } from "../ui/Basicos";
 import { del } from "../../lib/supabase";
 import { C, MONO, SANS, btnP, fmt } from "../../lib/theme";
 
-export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, aportes: aportesLista, onNavigate, onAccion, onSincronizar, sincronizando }) {
+export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, aportes: aportesLista, onNavigate, onAccion, onSincronizar, sincronizando, porAceptar }) {
   const [expandido,setExpandido]=useState(null);
   const [verHistorico,setVerHistorico]=useState(false);
 
@@ -214,6 +214,16 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
     return items;
   },[ocsPorCobrar,ocs]);
 
+  // Agrupa el contenido bajo un título discreto
+  const Seccion=({titulo,children,sub})=>(
+    <div style={{marginBottom:18}}>
+      <div style={{fontSize:10.5,fontWeight:800,color:C.inkFaint,textTransform:"uppercase",
+        letterSpacing:0.6,marginBottom:8,paddingLeft:2}}>{titulo}</div>
+      {sub&&<div style={{fontSize:11.5,color:C.inkFaint,marginBottom:8,paddingLeft:2}}>{sub}</div>}
+      {children}
+    </div>
+  );
+
   const KpiBtn=({label,value,color,id,children})=>(
     <div style={{background:C.card,border:`1px solid ${expandido===id?color:C.border}`,borderRadius:14,overflow:"hidden",marginBottom:10}}>
       <button onClick={()=>setExpandido(expandido===id?null:id)} style={{width:"100%",background:"none",border:"none",padding:"14px 16px",textAlign:"left",cursor:"pointer"}}>
@@ -227,7 +237,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
 
   return (
     <div style={{fontFamily:SANS}}>
-      {/* ── Acciones rápidas — registrar cada etapa del ciclo ── */}
+      <Seccion titulo="Registrar">
       <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:6,marginBottom:6}}>
         {[
           {key:"compra",      icon:"📦", label:"Compra",  color:C.transit},
@@ -247,8 +257,10 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
       <div style={{fontSize:10,color:C.inkFaint,textAlign:"center",marginBottom:14}}>
         Registra una etapa del ciclo de una OC existente
       </div>
+      </Seccion>
 
-      {/* ── Saldo Proyectado — el número principal, con su desglose ── */}
+      <Seccion titulo="Situación">
+      {/* ── Saldo Proyectado ── */}
       <div style={{background:`linear-gradient(135deg,${C.night},${C.nightSoft})`,borderRadius:16,padding:"18px 20px",marginBottom:12}}>
         <div style={{fontSize:11.5,color:C.inkFaint,fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:0.5}}>Saldo Proyectado</div>
         <div style={{fontFamily:MONO,fontWeight:800,fontSize:28,color:kpis.saldoProyectado>=0?C.teal:C.danger,letterSpacing:-1}}>{fmt.money(kpis.saldoProyectado)}</div>
@@ -275,6 +287,32 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
           {kpis.ocsAbiertas} órdenes en curso ›
         </button>
       </div>
+
+      </Seccion>
+
+      <Seccion titulo="Requiere atención">
+      {/* ── OCs esperando aceptación en Mercado Público ── */}
+      {(porAceptar||[]).length>0&&(
+        <div style={{background:C.warnLight,border:`1px solid ${C.warn}`,borderRadius:12,padding:"12px 14px",marginBottom:12}}>
+          <div style={{fontSize:12.5,fontWeight:700,color:C.warn,marginBottom:3}}>
+            {porAceptar.length} OC{porAceptar.length>1?"s":""} esperando aceptación
+          </div>
+          <div style={{fontSize:11.5,color:C.inkMuted,marginBottom:9,lineHeight:1.45}}>
+            Están enviadas en Mercado Público pero nadie las ha aceptado. Hasta que se acepten no se pueden cargar acá.
+          </div>
+          {porAceptar.slice(0,5).map((o,i)=>(
+            <div key={i} style={{display:"flex",justifyContent:"space-between",gap:8,padding:"5px 0",
+              borderBottom:i<Math.min(porAceptar.length,5)-1?`1px solid ${C.warn}33`:"none"}}>
+              <span style={{fontFamily:MONO,fontSize:11.5,fontWeight:700,color:C.ink}}>{o.numero_oc}</span>
+              <span style={{fontSize:10.5,color:C.inkMuted,textAlign:"right",minWidth:0,
+                overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{o.nombre||""}</span>
+            </div>
+          ))}
+          {porAceptar.length>5&&(
+            <div style={{fontSize:10.5,color:C.inkFaint,marginTop:5}}>y {porAceptar.length-5} más</div>
+          )}
+        </div>
+      )}
 
       {/* ── OCs sin datos: ofrecer completarlas desde Mercado Público ── */}
       {(()=>{
@@ -320,7 +358,10 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
         ))}
       </div>
 
-      {/* ── Ventas y margen del mes — solo si hay movimiento ── */}
+      </Seccion>
+
+      <Seccion titulo="Este mes">
+      {/* ── Ventas y margen ── */}
       {(ventasChart.totalAct>0||kpis.margenPromPct>0)&&
       <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px",marginBottom:14}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:2}}>
@@ -421,6 +462,8 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
         <div style={{fontSize:11,color:C.inkFaint,marginTop:4}}>Utilidad = Ventas − Costo compras (sin descontar gastos indirectos)</div>
       </KpiBtn>
       </>}
+
+      </Seccion>
 
       {/* Deuda a terceros — el detalle vive en Vendedores y Financiamiento */}
       {(kpis.deudaVendedoresMes>0||kpis.f29>0)&&(
