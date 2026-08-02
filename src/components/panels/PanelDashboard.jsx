@@ -81,6 +81,8 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
 
     const ocsDelMes=ocs.filter(o=>{ if(!esVenta(o)) return false; const evC=(o.eventos_compra||[])[0]; if(!evC) return false; const f=new Date(evC.fecha); return f.getMonth()+1===mesActual&&f.getFullYear()===anioActual; });
     const margenPromPct=ocsDelMes.length>0?Math.round(ocsDelMes.reduce((s,o)=>{ const v=o.monto_total||0; if(v<=0) return s; return s+((v-(o.costo_total||0))/v)*100; },0)/ocsDelMes.length):0;
+    const gananciaMes=ocsDelMes.reduce((s,o)=>s+((Number(o.monto_total)||0)-(Number(o.costo_total)||0)),0);
+    const ventaMes=ocsDelMes.reduce((s,o)=>s+(Number(o.monto_total)||0),0);
 
     const ocsAbiertas=ocs.filter(o=>{
       if(!esVenta(o)) return false;
@@ -95,7 +97,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
     }).length;
 
     const utilidad=ingresos-costos;
-    return {aportes:totalAportes,cobrado,porCobrar,deudaFin,utilidad,saldoProyectado,saldoCtaCte,ingresosPendientes,deudaTotal,gastoContador,gastosVendedores,gastoImpuesto,f29,margenPromPct,deudaVendedoresMes,ocsAbiertas};
+    return {gananciaMes,ventaMes,aportes:totalAportes,cobrado,porCobrar,deudaFin,utilidad,saldoProyectado,saldoCtaCte,ingresosPendientes,deudaTotal,gastoContador,gastosVendedores,gastoImpuesto,f29,margenPromPct,deudaVendedoresMes,ocsAbiertas};
   },[ocs,financiadores,gastos,pagosVendedor,ivaMensual,vendedores,pagoFinSueltos,aportesLista]);
 
   const ocsPagadas=useMemo(()=>ocs.filter(o=>o.estado_pago_cliente==="pagado").map(o=>{
@@ -523,7 +525,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
           ].map(({label,v})=>(
             <div key={label} style={{background:C.card,borderRadius:10,padding:"10px 12px",border:`1px solid ${C.border}`}}>
               <div style={{fontSize:10.5,color:C.inkFaint,marginBottom:3}}>{label}</div>
-              <div style={{fontFamily:MONO,fontWeight:800,fontSize:14,color:v>=0?C.teal:C.danger}}>{fmt.money(v)}</div>
+              <div style={{fontFamily:MONO,fontWeight:800,fontSize:15,color:v>=0?C.teal:C.danger}}>{fmt.money(v)}</div>
             </div>
           ))}
         </div>
