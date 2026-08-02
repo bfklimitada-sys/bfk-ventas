@@ -686,12 +686,16 @@ export default function App() {
   const handleGuardarPostventa=async(d)=>{
     const t=session.access_token;
     const oc=ocs.find(o=>o.id===d.ocId);
-    const fila={oc_id:d.ocId,fecha:d.fecha,tipo:d.tipo,descripcion:d.descripcion,estado:d.estado,solucion:d.solucion,fecha_resolucion:d.fecha_resolucion};
+    const fila={oc_id:d.ocId,fecha:d.fecha,tipo:d.tipo,descripcion:d.descripcion,estado:d.estado,
+      solucion:d.solucion,fecha_resolucion:d.fecha_resolucion,
+      costo_extra:d.costo_extra||0,detalle_costo:d.detalle_costo||null};
     if(d.id) await upd("eventos_postventa",t,d.id,fila);
     else await ins("eventos_postventa",t,{id:genId("pv"),...fila,creado_por:session.user.id});
     await upd("ordenes_compra_v2",t,d.ocId,{estado_postventa:d.estado==="resuelto"?"resuelta":"con_incidencia"});
     await registrarCambio(t,{ocId:d.ocId,ocNumero:oc?.numero_oc,usuarioId:perfil.id,usuarioNombre:perfil.nombre,accion:d.id?"Post-venta actualizada":"Post-venta registrada",campo:"estado",valorNuevo:d.estado});
-    showToast(d.estado==="resuelto"?"Incidencia resuelta":"Incidencia registrada"); await cargarTodo();
+    showToast(Number(d.costo_extra)>0
+      ? `Incidencia registrada · ${fmt.money(d.costo_extra)} de costo extra`
+      : (d.estado==="resuelto"?"Incidencia resuelta":"Incidencia registrada")); await cargarTodo();
   };
   const handleMarcarFecha=async(codigoOC,fecha)=>{
     const t=session.access_token;
