@@ -553,17 +553,73 @@ export default function App() {
     showToast("IVA guardado"); await cargarTodo();
   };
   const handleChangeRol=async(uid,rol)=>{ await updRol(session.access_token,uid,rol); showToast("Rol actualizado"); await cargarTodo(); };
-  const handleGuardarLink=async(ocId,{descripcion,url,orden})=>{
-    await ins("oc_productos_link",session.access_token,{id:genId("lnk"),oc_id:ocId,descripcion,url,orden,creado_por:session.user.id});
-    await cargarTodo();
+  const handleGuardarLink=async(ocId,{descripcion,url,orden,direccion_entrega},oc)=>{
+    const t=session.access_token;
+    await ins("oc_productos_link",t,{id:genId("lnk"),oc_id:ocId,descripcion,url,orden,direccion_entrega:direccion_entrega||null,creado_por:session.user.id});
+    await registrarCambio(t,{ocId,ocNumero:oc?.numero_oc,usuarioId:perfil?.id,usuarioNombre:perfil?.nombre,
+      accion:"Producto agregado",campo:"producto",valorNuevo:descripcion});
+    showToast("Producto agregado"); await cargarTodo();
   };
-  const handleEliminarLink=async(linkId)=>{
-    await fetch(`${SUPABASE_URL}/rest/v1/oc_productos_link?id=eq.${linkId}`,{method:"DELETE",headers:hdrs(session.access_token)});
-    await cargarTodo();
+  const handleEliminarLink=async(linkId,oc)=>{
+    const t=session.access_token;
+    const l=(oc?.oc_productos_link||[]).find(x=>x.id===linkId);
+    await fetch(`${SUPABASE_URL}/rest/v1/oc_productos_link?id=eq.${linkId}`,{method:"DELETE",headers:hdrs(t)});
+    if(oc) await registrarCambio(t,{ocId:oc.id,ocNumero:oc.numero_oc,usuarioId:perfil?.id,
+      usuarioNombre:perfil?.nombre,accion:"Producto eliminado",campo:"producto",
+      valorAnterior:l?.descripcion||""});
+    showToast("Producto eliminado"); await cargarTodo();
   };
-  const handleEditarLink=async(linkId,{descripcion,url})=>{
-    await upd("oc_productos_link",session.access_token,linkId,{descripcion,url});
-    await cargarTodo();
+  const handleEditarLink=async(linkId,{descripcion,url,direccion_entrega},oc)=>{
+    const t=session.access_token;
+    const antes=(oc?.oc_productos_link||[]).find(x=>x.id===linkId);
+    await upd("oc_productos_link",t,linkId,{descripcion,url,direccion_entrega:direccion_entrega||null});
+    if(oc&&(antes?.direccion_entrega||"")!==(direccion_entrega||""))
+      await registrarCambio(t,{ocId:oc.id,ocNumero:oc.numero_oc,usuarioId:perfil?.id,
+        usuarioNombre:perfil?.nombre,accion:"Dirección de despacho del producto",campo:"dirección",
+        valorAnterior:antes?.direccion_entrega||"(la de la OC)",valorNuevo:direccion_entrega||"(la de la OC)"});
+    if(oc){
+      if(antes?.descripcion!==descripcion)
+        await registrarCambio(t,{ocId:oc.id,ocNumero:oc.numero_oc,usuarioId:perfil?.id,
+          usuarioNombre:perfil?.nombre,accion:"Producto editado",campo:"descripción",
+          valorAnterior:antes?.descripcion||"",valorNuevo:descripcion});
+      if(antes?.url!==url)
+        await registrarCambio(t,{ocId:oc.id,ocNumero:oc.numero_oc,usuarioId:perfil?.id,
+          usuarioNombre:perfil?.nombre,accion:"Link de compra cambiado",campo:"link",
+          valorAnterior:antes?.url||"",valorNuevo:url});
+    }
+    showToast("Producto actualizado"); await cargarTodo();
+  };
+
+  // ─── Traer fecha y datos reales desde Mercado Público ────────
+  const handleSincronizarFecha=async(oc)=>{
+    const t=session.access_token;
+    try{
+      const r=await fetch(`/api/oc?codigo=${encodeURIComponent(oc.numero_oc)}`);
+      const j=await r.json();
+      if(!j.ok||!j.oc){ showToast("No se encontró en Mercado Público","error"); return; }
+      const d=j.oc;
+      const fechaMP=String(d.fecha_creacion||"").slice(0,10);
+
+      // La fecha de la OC vive en su evento de compra
+      const evC=(oc.eventos_compra||[])[0];
+      if(fechaMP&&evC&&String(evC.fecha).slice(0,10)!==fechaMP){
+        await upd("eventos_compra",t,evC.id,{fecha:fechaMP});
+        await registrarCambio(t,{ocId:oc.id,ocNumero:oc.numero_oc,usuarioId:perfil?.id,
+          usuarioNombre:perfil?.nombre,accion:"Fecha actualizada desde Mercado Público",
+          campo:"fecha",valorAnterior:String(evC.fecha).slice(0,10),valorNuevo:fechaMP});
+      }
+
+      await upd("ordenes_compra_v2",t,oc.id,{
+        cliente:d.cliente||oc.cliente, entidad:d.entidad||oc.entidad,
+        rut_cliente:d.rut_cliente||oc.rut_cliente, comuna:d.comuna||oc.comuna,
+        contacto:d.contacto||oc.contacto,
+        correo_cliente:oc.correo_cliente||d.correo_cliente||"",
+        tipo_despacho:d.tipo_despacho||oc.tipo_despacho,
+        dias_pago:d.dias_pago||oc.dias_pago||30});
+
+      showToast(fechaMP?`Actualizado · fecha ${fmt.date(fechaMP)}`:"Datos actualizados");
+      await cargarTodo();
+    }catch{ showToast("No se pudo consultar Mercado Público","error"); }
   };
 
   // ─── HANDLERS MULTIUSUARIO ────────────────────
@@ -895,7 +951,7 @@ export default function App() {
       {/* CONTENIDO */}
       <div style={{padding:16}}>
         {tab==="panel"&&<PanelDashboard ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} aportes={aportes} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setTab(t);}} onAccion={(k)=>setAccion(k)} onSincronizar={completarTodasDesdeMP} sincronizando={sincronizando} porAceptar={porAceptar} />}
-        {tab==="compras"&&<PanelCompras ocs={ocs} perfiles={perfiles} filtroInicial={filtroCompras} ocFoco={ocFoco} contactos={contactos} onEnviarReclamo={handleEnviarReclamo} onGuardarContacto={handleGuardarContacto} onGuardarDatosOC={handleGuardarDatosOC} onEditarEvento={handleEditarEvento} financiadores={financiadores} onConfirmarEntrega={handleEntrega} onEmitirFactura={handleFactura} onPagoCliente={handlePagoCliente} onPagoFinanciamiento={handlePagoFin} entidadesCatalogo={entidadesCatalogo} onGuardarLink={handleGuardarLink} onEliminarLink={handleEliminarLink} onEditarLink={handleEditarLink} bloqueos={bloqueos} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={handleAgregarComentario} onEliminarComentario={handleEliminarComentario} onBloquear={handleBloquear} onLiberar={handleLiberar} onEliminarOC={handleEliminarOC} onEliminarFactura={handleEliminarFactura} onEliminarEvento={handleEliminarEvento} vendedores={vendedores} onIngresarCompra={handleIngresarCompra} onAsignarResponsable={handleAsignarResponsable} onGuardarPostventa={handleGuardarPostventa} />}
+        {tab==="compras"&&<PanelCompras ocs={ocs} perfiles={perfiles} filtroInicial={filtroCompras} ocFoco={ocFoco} contactos={contactos} onEnviarReclamo={handleEnviarReclamo} onGuardarContacto={handleGuardarContacto} onGuardarDatosOC={handleGuardarDatosOC} onEditarEvento={handleEditarEvento} financiadores={financiadores} onConfirmarEntrega={handleEntrega} onEmitirFactura={handleFactura} onPagoCliente={handlePagoCliente} onPagoFinanciamiento={handlePagoFin} entidadesCatalogo={entidadesCatalogo} onGuardarLink={handleGuardarLink} onEliminarLink={handleEliminarLink} onEditarLink={handleEditarLink} onSincronizarFecha={handleSincronizarFecha} bloqueos={bloqueos} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={handleAgregarComentario} onEliminarComentario={handleEliminarComentario} onBloquear={handleBloquear} onLiberar={handleLiberar} onEliminarOC={handleEliminarOC} onEliminarFactura={handleEliminarFactura} onEliminarEvento={handleEliminarEvento} vendedores={vendedores} onIngresarCompra={handleIngresarCompra} onAsignarResponsable={handleAsignarResponsable} onGuardarPostventa={handleGuardarPostventa} />}
         {tab==="notif"&&<PanelNotificaciones notificaciones={notificaciones} ocs={ocs} onMarcarLeidas={handleMarcarNotificacionesLeidas} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setTab(t);}} />}
         {tab==="agenda"&&<PanelCalendario ocs={ocs} onMarcarFecha={handleMarcarFecha} />}
         {tab==="financiamiento"&&<PanelFinanciamiento financiadores={financiadores} ocs={ocs} ajustes={ajustesSaldo} perfiles={perfiles} onAjustar={handleAjusteSaldo} aportes={aportes} onGuardarAporte={handleGuardarAporte} onEliminarAporte={handleEliminarAporte} onAbonar={()=>setAccion("abono_fin")} />}
