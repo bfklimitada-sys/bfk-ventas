@@ -190,7 +190,7 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
         style={{width:"100%",background:C.card,border:`1px solid ${C.border}`,borderRadius:10,
           padding:"9px 12px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         <span style={{fontSize:11.5,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4}}>
-          Detalle de la OC{links.length>0&&<span style={{color:C.teal}}> · {links.length} producto{links.length>1?"s":""}</span>}
+          Detalle de la OC{vendidos.length>0&&<span style={{color:C.teal}}> · {vendidos.length} producto{vendidos.length>1?"s":""}</span>}
         </span>
         <span style={{color:C.inkFaint,fontSize:12}}>{abierto?"▲":"▼"}</span>
       </button>
