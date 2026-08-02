@@ -5,6 +5,7 @@ import { NuevaOCRapida } from "./components/forms/NuevaOCRapida";
 import { FormCompraRapida } from "./components/forms/FormCompraRapida";
 import { FormAbonoFinanciador, repartirFIFO } from "./components/forms/FormAbonoFinanciador";
 import { ImportarCartola } from "./components/forms/ImportarCartola";
+import { FormSaldoBanco } from "./components/forms/FormSaldoBanco";
 import { FormConfirmarEntrega, FormEmitirFactura, FormPagoCliente } from "./components/forms/FormulariosRapidos";
 import { PanelCalendario } from "./components/panels/PanelCalendario";
 import { PanelCompras } from "./components/panels/PanelCompras";
@@ -49,6 +50,8 @@ export default function App() {
   const [aportes,setAportes]=useState([]);
   const [porAceptar,setPorAceptar]=useState([]); // OCs enviadas y sin aceptar en MP
   const [ultimaCartola,setUltimaCartola]=useState(null);
+  const [saldoBanco,setSaldoBanco]=useState(null);
+  const [bancoMensual,setBancoMensual]=useState([]);
 
   const showToast=(msg,type="success")=>{ setToast({msg,type}); setTimeout(()=>setToast(null),3000); };
 
@@ -78,7 +81,7 @@ export default function App() {
     if(!session) return;
     const t=session.access_token;
     try {
-      const [ocsD,finD,vendD,catD,gastD,ivaD,pagVD,ajuD,perfD,contD,entD,pagoFinSueltosD,notifD,histD,reclamosD,respD,pvD,aporD,cartD]=await Promise.all([
+      const [ocsD,finD,vendD,catD,gastD,ivaD,pagVD,ajuD,perfD,contD,entD,pagoFinSueltosD,notifD,histD,reclamosD,respD,pvD,aporD,cartD,sbD,bmD]=await Promise.all([
         selOCs(t), sel("financiadores",t,"&order=nombre"), sel("vendedores",t,"&order=nombre"),
         sel("categorias_gasto",t,"&order=nombre"), sel("gastos_indirectos",t,"&order=fecha.desc"),
         sel("iva_mensual",t), sel("pagos_vendedor",t), sel("ajustes_saldo_financiador",t,"&order=creadoEn.desc"),
@@ -91,6 +94,8 @@ export default function App() {
         sel("eventos_postventa",t,"&order=creadoEn.desc").catch(()=>[]),
         sel("aportes_socios",t,"&order=fecha.desc").catch(()=>[]),
         sel("cartolas_importadas",t,"&order=fecha_hasta.desc&limit=1").catch(()=>[]),
+        sel("saldo_banco",t,"&id=eq.actual").catch(()=>[]),
+        sel("banco_mensual",t,"&order=id.desc&limit=24").catch(()=>[]),
       ]);
       const reclamosPorOC={}, respPorOC={}, pvPorOC={};
       for(const r of reclamosD){ if(!reclamosPorOC[r.oc_id]) reclamosPorOC[r.oc_id]=[]; reclamosPorOC[r.oc_id].push(r); }
@@ -100,7 +105,7 @@ export default function App() {
       setOcs(ocsConReclamos); setFinanciadores(finD); setVendedores(vendD); setCategoriasGasto(catD);
       setGastos(gastD); setIvaMensual(ivaD); setPagosVendedor(pagVD); setAjustesSaldo(ajuD); setPerfiles(perfD);
       setContactos(contD); setEntidadesCatalogo(entD); setPagoFinSueltos(pagoFinSueltosD);
-      setNotificaciones(notifD); setHistorialCambios(histD); setAportes(aporD); setUltimaCartola((cartD||[])[0]||null);
+      setNotificaciones(notifD); setHistorialCambios(histD); setAportes(aporD); setUltimaCartola((cartD||[])[0]||null); setSaldoBanco((sbD||[])[0]||null); setBancoMensual(bmD||[]);
 
       // Reintentar completar las OCs que se guardaron antes de ser aceptadas
       const faltanDatos=ocsConReclamos.some(o=>esCodigoMP(o.numero_oc)&&!o.no_en_mp&&(o.sync_pendiente||!o.rut_cliente||!o.fecha_emision_mp||String(o.cliente||"").toUpperCase().includes("POR COMPLETAR")));
@@ -391,6 +396,11 @@ export default function App() {
   // Deja constancia del período importado y su saldo de cierre
   const registrarCartola=async(info,{cobros=0,egresos=0}={})=>{
     if(!info) return;
+    // Totales del banco por mes: son la base de la conciliación
+    for(const m of (info.meses||[])){
+      try{ await upd("banco_mensual",session.access_token,m.id,{...m,actualizado:new Date().toISOString()}); }
+      catch{ try{ await ins("banco_mensual",session.access_token,{...m,actualizado:new Date().toISOString()}); }catch{} }
+    }
     try{
       await ins("cartolas_importadas",session.access_token,{
         id:genId("cart"), fecha_desde:info.desde, fecha_hasta:info.hasta,
@@ -414,7 +424,9 @@ export default function App() {
     }
     const total=cobros.reduce((s,c)=>s+c.monto,0);
     await registrarCartola(infoCartola,{cobros:cobros.length});
-    showToast(`${cobros.length} cobro${cobros.length!==1?"s":""} registrado${cobros.length!==1?"s":""} · ${fmt.money(total)}`);
+    showToast(cobros.length
+      ? `${cobros.length} cobro${cobros.length!==1?"s":""} registrado${cobros.length!==1?"s":""} · ${fmt.money(total)}`
+      : `Totales del banco guardados · ${(infoCartola?.meses||[]).length} mes(es)`);
     setAccion(null); await cargarTodo();
   };
 
@@ -528,6 +540,15 @@ export default function App() {
 
     const completas=asignaciones.filter(a=>a.completa).length;
     showToast(`Abono de ${fmt.money(montoTotal)} · ${completas} OC${completas!==1?"s":""} saldada${completas!==1?"s":""}`);
+    setAccion(null); await cargarTodo();
+  };
+
+  const handleGuardarSaldoBanco=async({saldo,fecha,nota})=>{
+    const t=session.access_token;
+    const fila={saldo:Number(saldo),fecha_corte:fecha,nota:nota||null,actualizado_por:session.user.id};
+    try{ await upd("saldo_banco",t,"actual",fila); }
+    catch{ await ins("saldo_banco",t,{id:"actual",...fila}); }
+    showToast(`Saldo del banco fijado en ${fmt.money(saldo)}`);
     setAccion(null); await cargarTodo();
   };
 
@@ -1013,7 +1034,7 @@ export default function App() {
 
       {/* CONTENIDO */}
       <div style={{padding:16}}>
-        {tab==="panel"&&<PanelDashboard ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} aportes={aportes} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setTab(t);}} onAccion={(k)=>setAccion(k)} onSincronizar={completarTodasDesdeMP} sincronizando={sincronizando} porAceptar={porAceptar} esCodigoMP={esCodigoMP} ultimaCartola={ultimaCartola} />}
+        {tab==="panel"&&<PanelDashboard ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} aportes={aportes} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setTab(t);}} onAccion={(k)=>setAccion(k)} onSincronizar={completarTodasDesdeMP} sincronizando={sincronizando} porAceptar={porAceptar} esCodigoMP={esCodigoMP} ultimaCartola={ultimaCartola} saldoBanco={saldoBanco} bancoMensual={bancoMensual} onEditarSaldo={()=>setAccion("saldo_banco")} />}
         {tab==="compras"&&<PanelCompras ocs={ocs} perfiles={perfiles} filtroInicial={filtroCompras} ocFoco={ocFoco} contactos={contactos} onEnviarReclamo={handleEnviarReclamo} onGuardarContacto={handleGuardarContacto} onGuardarDatosOC={handleGuardarDatosOC} onEditarEvento={handleEditarEvento} financiadores={financiadores} onConfirmarEntrega={handleEntrega} onEmitirFactura={handleFactura} onPagoCliente={handlePagoCliente} onPagoFinanciamiento={handlePagoFin} entidadesCatalogo={entidadesCatalogo} onGuardarLink={handleGuardarLink} onEliminarLink={handleEliminarLink} onEditarLink={handleEditarLink} onSincronizarFecha={handleSincronizarFecha} bloqueos={bloqueos} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={handleAgregarComentario} onEliminarComentario={handleEliminarComentario} onBloquear={handleBloquear} onLiberar={handleLiberar} onEliminarOC={handleEliminarOC} onEliminarFactura={handleEliminarFactura} onEliminarEvento={handleEliminarEvento} vendedores={vendedores} onIngresarCompra={handleIngresarCompra} onAsignarResponsable={handleAsignarResponsable} onGuardarPostventa={handleGuardarPostventa} />}
         {tab==="notif"&&<PanelNotificaciones notificaciones={notificaciones} ocs={ocs} onMarcarLeidas={handleMarcarNotificacionesLeidas} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setTab(t);}} />}
         {tab==="agenda"&&<PanelCalendario ocs={ocs} onMarcarFecha={handleMarcarFecha} />}
@@ -1083,6 +1104,11 @@ export default function App() {
       {accion==="compra"&&<Modal title="Ingresar compra" onClose={()=>setAccion(null)}><FormCompraRapida ocs={ocs} financiadores={financiadores} perfil={perfil} onSave={handleCompraRapida} /></Modal>}
       {accion==="entrega"&&<Modal title="Ingresar entrega" onClose={()=>setAccion(null)}><FormConfirmarEntrega ocs={ocs} onSave={handleEntrega} /></Modal>}
       {accion==="factura"&&<Modal title="Ingresar factura" onClose={()=>setAccion(null)}><FormEmitirFactura ocs={ocs} onSave={handleFactura} /></Modal>}
+      {accion==="saldo_banco"&&(
+        <Modal title="Saldo real del banco" onClose={()=>setAccion(null)}>
+          <FormSaldoBanco actual={saldoBanco} onSave={handleGuardarSaldoBanco} />
+        </Modal>
+      )}
       {accion==="cartola"&&<Modal title="Conciliar con el banco" onClose={()=>setAccion(null)}><ImportarCartola ocs={ocs} financiadores={financiadores} vendedores={vendedores} categorias={categoriasGasto} registrados={movimientosRegistrados} onRegistrar={handleCobrosDesdeCartola} onRegistrarEgresos={handleEgresosDesdeCartola} /></Modal>}
       {accion==="abono_fin"&&<Modal title="Abonar a financiador" onClose={()=>setAccion(null)}><FormAbonoFinanciador ocs={ocs} financiadores={financiadores} onSave={handleAbonoFinanciador} /></Modal>}
       {accion==="pago_cliente"&&<Modal title="Ingresar pago" onClose={()=>setAccion(null)}><FormPagoCliente ocs={ocs} onSave={handlePagoCliente} /></Modal>}
