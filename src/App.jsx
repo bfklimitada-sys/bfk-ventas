@@ -309,7 +309,7 @@ export default function App() {
         for(let i=0;i<(d.productos||[]).length;i++){
           const p=d.productos[i];
           const fila={descripcion:p.descripcion,cantidad:p.cantidad||null,
-            precio_venta:p.total_linea||null,categoria:p.categoria||null};
+            precio_venta:p.total_linea||null,categoria:p.categoria||null,origen:"venta"};
           if(links[i]){
             if(!links[i].descripcion||links[i].descripcion==="Producto por completar"||!links[i].cantidad)
               await upd("oc_productos_link",t,links[i].id,fila);
@@ -585,11 +585,12 @@ export default function App() {
     showToast("IVA guardado"); await cargarTodo();
   };
   const handleChangeRol=async(uid,rol)=>{ await updRol(session.access_token,uid,rol); showToast("Rol actualizado"); await cargarTodo(); };
-  const handleGuardarLink=async(ocId,{descripcion,url,orden,direccion_entrega,cantidad,precio_compra,precio_venta},oc)=>{
+  const handleGuardarLink=async(ocId,{descripcion,url,orden,direccion_entrega,cantidad,precio_compra,precio_venta,origen},oc)=>{
     const t=session.access_token;
     await ins("oc_productos_link",t,{id:genId("lnk"),oc_id:ocId,descripcion,url,orden,
       direccion_entrega:direccion_entrega||null,cantidad:cantidad??null,
-      precio_compra:precio_compra??null,precio_venta:precio_venta??null,creado_por:session.user.id});
+      precio_compra:precio_compra??null,precio_venta:precio_venta??null,
+      origen:origen||"compra",creado_por:session.user.id});
     await registrarCambio(t,{ocId,ocNumero:oc?.numero_oc,usuarioId:perfil?.id,usuarioNombre:perfil?.nombre,
       accion:"Producto agregado",campo:"producto",valorNuevo:descripcion});
     showToast("Producto agregado"); await cargarTodo();
