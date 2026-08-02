@@ -138,8 +138,35 @@ export function FormEditarEvento({ item, onSave, onCancel }) {
 }
 
 // ─── Detalle completo de la OC, plegable ───────────────────
-function DetalleOC({ oc }) {
+function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, onSincronizarFecha }) {
   const [abierto,setAbierto]=useState(false);
+  const [editando,setEditando]=useState(null);   // id del link en edición
+  const [dNom,setDNom]=useState(""); const [dCant,setDCant]=useState(""); const [dUrl,setDUrl]=useState(""); const [dDir,setDDir]=useState("");
+  const [nuevo,setNuevo]=useState(false);
+  const [sincronizando,setSincronizando]=useState(false);
+  const esAdmin=perfil?.rol==="admin";
+
+  // La descripción se guarda como "Nombre × 3 | Compra: $X | Venta: $Y"
+  const partirDesc=(desc)=>{
+    const partes=String(desc||"").split("|").map(x=>x.trim());
+    const m=(partes[0]||"").match(/^(.*?)\s*[×x]\s*(\d+)\s*$/);
+    return { nombre:m?m[1].trim():(partes[0]||""), cantidad:m?m[2]:"", resto:partes.slice(1) };
+  };
+  const armarDesc=(nombre,cantidad,resto)=>
+    [`${nombre}${cantidad?` × ${cantidad}`:""}`, ...resto].filter(Boolean).join(" | ");
+
+  const abrirEdicion=(l)=>{
+    const {nombre,cantidad}=partirDesc(l.descripcion);
+    setEditando(l.id); setDNom(nombre); setDCant(cantidad);
+    setDUrl(l.url&&l.url!=="sin-link"?l.url:"");
+    setDDir(l.direccion_entrega||"");
+  };
+  const guardarEdicion=async(l)=>{
+    const {resto}=partirDesc(l.descripcion);
+    await onEditarLink(l.id,{descripcion:armarDesc(dNom.trim(),dCant.trim(),resto),
+      url:dUrl.trim()||"sin-link", direccion_entrega:dDir.trim()||null},oc);
+    setEditando(null);
+  };
   const links=(oc.oc_productos_link||[]).slice().sort((a,b)=>a.orden-b.orden);
   const evC=(oc.eventos_compra||[])[0];
   const evE=(oc.eventos_entrega||[])[0];
@@ -169,6 +196,16 @@ function DetalleOC({ oc }) {
         <div style={{background:C.card,border:`1px solid ${C.border}`,borderTop:"none",
           borderRadius:"0 0 10px 10px",padding:"10px 12px",marginTop:-1}}>
 
+          {/* Traer la fecha real desde Mercado Público */}
+          {esAdmin&&(
+            <button onClick={async()=>{ setSincronizando(true); await onSincronizarFecha(oc); setSincronizando(false); }}
+              disabled={sincronizando}
+              style={{width:"100%",background:C.infoLight,border:`1px solid ${C.info}44`,color:C.info,
+                borderRadius:9,padding:"8px 12px",fontSize:11.5,fontWeight:700,cursor:"pointer",marginBottom:12}}>
+              {sincronizando?"Consultando…":"Actualizar fecha y datos desde Mercado Público"}
+            </button>
+          )}
+
           {/* Productos: cantidad y precio separados del nombre */}
           {links.length>0&&(
             <div style={{marginBottom:12}}>
@@ -185,6 +222,22 @@ function DetalleOC({ oc }) {
                 const cantidad=m?m[2]:null;
                 const montos=partes.slice(1).filter(x=>/^(Compra|Venta):/i.test(x));
                 const categoria=partes.slice(1).find(x=>!/^(Compra|Venta):/i.test(x));
+                if(editando===l.id){
+                  return (
+                    <div key={l.id} style={{background:C.tealLight,borderRadius:9,padding:"10px 11px",marginBottom:6}}>
+                      <Field label="Producto"><input style={iStyle} value={dNom} onChange={e=>setDNom(e.target.value)} /></Field>
+                      <Field label="Cantidad"><input style={iMono} type="number" value={dCant} onChange={e=>setDCant(e.target.value)} /></Field>
+                      <Field label="Link de compra"><input style={iStyle} value={dUrl} onChange={e=>setDUrl(e.target.value)} placeholder="https://…" /></Field>
+                      <Field label="Dirección de despacho" hint="Solo si este producto va a otra dirección">
+                        <input style={iStyle} value={dDir} onChange={e=>setDDir(e.target.value)} placeholder={oc.direccion_entrega||"Misma que la OC"} />
+                      </Field>
+                      <div style={{display:"flex",gap:6}}>
+                        <button onClick={()=>guardarEdicion(l)} style={btnP(C.teal)}>Guardar</button>
+                        <button onClick={()=>setEditando(null)} style={btnP(C.inkFaint)}>Cancelar</button>
+                      </div>
+                    </div>
+                  );
+                }
                 return (
                   <div key={l.id} style={{background:C.paper,borderRadius:9,padding:"9px 11px",marginBottom:6}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
@@ -200,23 +253,63 @@ function DetalleOC({ oc }) {
                     {categoria&&(
                       <div style={{fontSize:10.5,color:C.inkFaint,marginTop:3,lineHeight:1.4}}>{categoria}</div>
                     )}
-                    {oc.direccion_entrega&&(
-                      <div style={{fontSize:10.5,color:C.info,marginTop:5,lineHeight:1.4}}>
-                        Entregar en: {oc.direccion_entrega}
+                    {(l.direccion_entrega||oc.direccion_entrega)&&(
+                      <div style={{fontSize:10.5,marginTop:5,lineHeight:1.4,
+                        color:l.direccion_entrega?C.warn:C.info,
+                        fontWeight:l.direccion_entrega?700:400}}>
+                        {l.direccion_entrega?"Despacho distinto: ":"Entregar en: "}
+                        {l.direccion_entrega||oc.direccion_entrega}
                       </div>
                     )}
-                    {tieneUrl?(
-                      <a href={l.url} target="_blank" rel="noopener noreferrer"
-                        style={{display:"inline-flex",alignItems:"center",gap:5,marginTop:6,fontSize:11,
-                          color:C.teal,textDecoration:"none",fontWeight:600}}>
-                        🔗 {dominio||"Abrir link"} ↗
-                      </a>
-                    ):(
-                      <div style={{fontSize:10.5,color:C.inkFaint,marginTop:5}}>Sin link de compra</div>
-                    )}
+                    <div style={{display:"flex",alignItems:"center",gap:10,marginTop:6,flexWrap:"wrap"}}>
+                      {tieneUrl?(
+                        <a href={l.url} target="_blank" rel="noopener noreferrer"
+                          style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:11,
+                            color:C.teal,textDecoration:"none",fontWeight:600}}>
+                          🔗 {dominio||"Abrir link"} ↗
+                        </a>
+                      ):(
+                        <span style={{fontSize:10.5,color:C.inkFaint}}>Sin link de compra</span>
+                      )}
+                      <button onClick={()=>abrirEdicion(l)}
+                        style={{background:"none",border:"none",color:C.inkMuted,fontSize:11,cursor:"pointer",fontWeight:600,padding:0}}>
+                        Editar
+                      </button>
+                      {esAdmin&&(
+                        <button onClick={async()=>{ if(window.confirm("¿Eliminar este producto?")) await onEliminarLink(l.id,oc); }}
+                          style={{background:"none",border:"none",color:C.danger,fontSize:11,cursor:"pointer",fontWeight:600,padding:0}}>
+                          Eliminar
+                        </button>
+                      )}
+                    </div>
                   </div>
                 );
               })}
+              {nuevo?(
+                <div style={{background:C.tealLight,borderRadius:9,padding:"10px 11px",marginBottom:6}}>
+                  <Field label="Producto"><input style={iStyle} value={dNom} onChange={e=>setDNom(e.target.value)} /></Field>
+                  <Field label="Cantidad"><input style={iMono} type="number" value={dCant} onChange={e=>setDCant(e.target.value)} /></Field>
+                  <Field label="Link de compra"><input style={iStyle} value={dUrl} onChange={e=>setDUrl(e.target.value)} placeholder="https://…" /></Field>
+                  <Field label="Dirección de despacho" hint="Solo si va a otra dirección">
+                    <input style={iStyle} value={dDir} onChange={e=>setDDir(e.target.value)} placeholder={oc.direccion_entrega||"Misma que la OC"} />
+                  </Field>
+                  <div style={{display:"flex",gap:6}}>
+                    <button onClick={async()=>{
+                      if(!dNom.trim()) return;
+                      await onGuardarLink(oc.id,{descripcion:armarDesc(dNom.trim(),dCant.trim(),[]),
+                        url:dUrl.trim()||"sin-link",orden:links.length,direccion_entrega:dDir.trim()||null},oc);
+                      setNuevo(false); setDNom(""); setDCant(""); setDUrl(""); setDDir("");
+                    }} style={btnP(C.teal)}>Agregar</button>
+                    <button onClick={()=>setNuevo(false)} style={btnP(C.inkFaint)}>Cancelar</button>
+                  </div>
+                </div>
+              ):(
+                <button onClick={()=>{setNuevo(true);setDNom("");setDCant("");setDUrl("");setDDir("");}}
+                  style={{fontSize:11,background:"none",border:`1px dashed ${C.border}`,borderRadius:8,
+                    padding:"6px 12px",color:C.teal,cursor:"pointer",width:"100%"}}>
+                  + Agregar producto
+                </button>
+              )}
             </div>
           )}
 
@@ -256,7 +349,7 @@ function DetalleOC({ oc }) {
   );
 }
 
-export function FilaOC({ oc, perfiles, todasLasOcs, expanded, onToggle, contactos, onEnviarReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, bloqueos, perfil, historialCambios, onAgregarComentario, onEliminarComentario, onBloquear, onLiberar, onEliminarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa }) {
+export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded, onToggle, contactos, onEnviarReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, bloqueos, perfil, historialCambios, onAgregarComentario, onEliminarComentario, onBloquear, onLiberar, onEliminarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa }) {
   const evF=(oc.eventos_factura||[])[0];
   const dias=fmt.diasDesde(evF?.fecha);
   const saldo=(oc.monto_facturado||0)-(oc.monto_cobrado||0);
@@ -415,7 +508,7 @@ export function FilaOC({ oc, perfiles, todasLasOcs, expanded, onToggle, contacto
             </div>
           )}
 
-          <DetalleOC oc={oc} />
+          <DetalleOC oc={oc} perfil={perfil} onEditarLink={onEditarLink} onEliminarLink={onEliminarLink} onGuardarLink={onGuardarLink} onSincronizarFecha={onSincronizarFecha} />
 
           <EtapasOC oc={oc} perfil={perfil} perfiles={perfiles}
             onAsignarResponsable={onAsignarResponsable}
@@ -523,7 +616,7 @@ export function FilaOC({ oc, perfiles, todasLasOcs, expanded, onToggle, contacto
   );
 }
 
-export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, contactos, onEnviarReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, bloqueos, perfil, historialCambios, onAgregarComentario, onEliminarComentario, onBloquear, onLiberar, onEliminarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa }) {
+export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, onSincronizarFecha, contactos, onEnviarReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, bloqueos, perfil, historialCambios, onAgregarComentario, onEliminarComentario, onBloquear, onLiberar, onEliminarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa }) {
   const [filtros,setFiltros]=useState({}); const [busq,setBusq]=useState(""); const [expId,setExpId]=useState(null);
   const [reclamandoBanner,setReclamandoBanner]=useState(null); const [comunaSel,setComunaSel]=useState("");
   const [bannerAbierto,setBannerAbierto]=useState(false);
@@ -683,7 +776,7 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, contactos, 
       )}
 
       <div style={{fontSize:11.5,color:C.inkFaint,marginBottom:10}}>{filtered.length} orden{filtered.length!==1?"es":""}</div>
-      {filtered.map(oc=><FilaOC key={oc.id} oc={oc} perfiles={perfiles} todasLasOcs={ocs} expanded={expId===oc.id} onToggle={()=>setExpId(expId===oc.id?null:oc.id)} contactos={contactos} onEnviarReclamo={onEnviarReclamo} onGuardarContacto={onGuardarContacto} onGuardarDatosOC={onGuardarDatosOC} onEditarEvento={onEditarEvento} financiadores={financiadores} onConfirmarEntrega={onConfirmarEntrega} onEmitirFactura={onEmitirFactura} onPagoCliente={onPagoCliente} onPagoFinanciamiento={onPagoFinanciamiento} entidadesCatalogo={entidadesCatalogo} onGuardarLink={onGuardarLink} onEliminarLink={onEliminarLink} onEditarLink={onEditarLink} bloqueos={bloqueos} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={onAgregarComentario} onEliminarComentario={onEliminarComentario} onBloquear={onBloquear} onLiberar={onLiberar} onEliminarOC={onEliminarOC} onEliminarFactura={onEliminarFactura} onEliminarEvento={onEliminarEvento} vendedores={vendedores} onIngresarCompra={onIngresarCompra} onAsignarResponsable={onAsignarResponsable} onGuardarPostventa={onGuardarPostventa} />)}
+      {filtered.map(oc=><FilaOC key={oc.id} oc={oc} perfiles={perfiles} todasLasOcs={ocs} onSincronizarFecha={onSincronizarFecha} expanded={expId===oc.id} onToggle={()=>setExpId(expId===oc.id?null:oc.id)} contactos={contactos} onEnviarReclamo={onEnviarReclamo} onGuardarContacto={onGuardarContacto} onGuardarDatosOC={onGuardarDatosOC} onEditarEvento={onEditarEvento} financiadores={financiadores} onConfirmarEntrega={onConfirmarEntrega} onEmitirFactura={onEmitirFactura} onPagoCliente={onPagoCliente} onPagoFinanciamiento={onPagoFinanciamiento} entidadesCatalogo={entidadesCatalogo} onGuardarLink={onGuardarLink} onEliminarLink={onEliminarLink} onEditarLink={onEditarLink} bloqueos={bloqueos} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={onAgregarComentario} onEliminarComentario={onEliminarComentario} onBloquear={onBloquear} onLiberar={onLiberar} onEliminarOC={onEliminarOC} onEliminarFactura={onEliminarFactura} onEliminarEvento={onEliminarEvento} vendedores={vendedores} onIngresarCompra={onIngresarCompra} onAsignarResponsable={onAsignarResponsable} onGuardarPostventa={onGuardarPostventa} />)}
       {filtered.length===0&&<div style={{textAlign:"center",padding:30,color:C.inkFaint,fontSize:13}}>No hay órdenes con estos filtros.</div>}
       <Leyenda items={[
         {muestra:"✓ Cerrada",   color:C.ok,      bg:C.okLight,      texto:"Cobrada al cliente y pagada al financiador. Ciclo terminado."},
