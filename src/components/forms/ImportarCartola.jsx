@@ -31,6 +31,7 @@ export function leerCartola(workbook) {
         descripcion: String(f[3] || "").trim(),
         cargo: aNumero(f[4]),
         abono: aNumero(f[5]),
+        saldo: aNumero(f[6]),
       });
     }
     return movimientos;
@@ -261,7 +262,7 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, re
     const ids = cobros.map(c => c.ocId);
     if (new Set(ids).size !== ids.length) { setErr("Hay una OC asignada a dos abonos distintos"); return; }
     setErr(""); setGuardando(true);
-    try { await onRegistrar(cobros); }
+    try { await onRegistrar(cobros, resumenCartola()); }
     catch (e) { setErr(e.message); setGuardando(false); }
   };
 
@@ -276,8 +277,20 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, re
       await onRegistrarEgresos(sel.map(e => ({
         tipo: e.tipo, destinoId: e.destinoId, categoriaId: e.categoriaId || "cat_otros",
         monto: e.mov.cargo, fecha: e.mov.fecha, descripcion: e.mov.descripcion,
-      })));
+      })), resumenCartola());
     } catch (er) { setErr(er.message); setGuardando(false); }
+  };
+
+  // Datos de la cartola para dejar registro de qué se subió
+  const resumenCartola = () => {
+    if (!movs.length) return null;
+    const ultimo = movs[movs.length - 1];
+    return {
+      desde: movs[0].fecha,
+      hasta: ultimo.fecha,
+      movimientos: movs.length,
+      saldoFinal: ultimo.saldo ?? null,
+    };
   };
 
   const nSel = Object.values(elegido).filter(Boolean).length;
@@ -312,8 +325,15 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, re
 
   return (
     <div style={{ fontFamily: SANS }}>
-      <div style={{ background: C.paper, borderRadius: 10, padding: "10px 13px", marginBottom: 12, fontSize: 12, color: C.inkMuted }}>
-        {movs.length} movimientos leídos
+      <div style={{ background: C.paper, borderRadius: 10, padding: "10px 13px", marginBottom: 12 }}>
+        <div style={{ fontSize: 12, color: C.inkMuted }}>
+          {movs.length} movimientos · {fmt.date(movs[0].fecha)} a {fmt.date(movs[movs.length-1].fecha)}
+        </div>
+        {movs[movs.length-1].saldo != null && (
+          <div style={{ fontSize: 12.5, color: C.ink, fontWeight: 700, marginTop: 3 }}>
+            Saldo al cierre: <span style={{ fontFamily: MONO }}>{fmt.money(movs[movs.length-1].saldo)}</span>
+          </div>
+        )}
       </div>
 
       <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
