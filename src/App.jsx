@@ -48,6 +48,7 @@ export default function App() {
   const [historialCambios,setHistorialCambios]=useState([]);
   const [aportes,setAportes]=useState([]);
   const [porAceptar,setPorAceptar]=useState([]); // OCs enviadas y sin aceptar en MP
+  const [ultimaCartola,setUltimaCartola]=useState(null);
 
   const showToast=(msg,type="success")=>{ setToast({msg,type}); setTimeout(()=>setToast(null),3000); };
 
@@ -77,7 +78,7 @@ export default function App() {
     if(!session) return;
     const t=session.access_token;
     try {
-      const [ocsD,finD,vendD,catD,gastD,ivaD,pagVD,ajuD,perfD,contD,entD,pagoFinSueltosD,notifD,histD,reclamosD,respD,pvD,aporD]=await Promise.all([
+      const [ocsD,finD,vendD,catD,gastD,ivaD,pagVD,ajuD,perfD,contD,entD,pagoFinSueltosD,notifD,histD,reclamosD,respD,pvD,aporD,cartD]=await Promise.all([
         selOCs(t), sel("financiadores",t,"&order=nombre"), sel("vendedores",t,"&order=nombre"),
         sel("categorias_gasto",t,"&order=nombre"), sel("gastos_indirectos",t,"&order=fecha.desc"),
         sel("iva_mensual",t), sel("pagos_vendedor",t), sel("ajustes_saldo_financiador",t,"&order=creadoEn.desc"),
@@ -89,6 +90,7 @@ export default function App() {
         sel("oc_responsables",t).catch(()=>[]),
         sel("eventos_postventa",t,"&order=creadoEn.desc").catch(()=>[]),
         sel("aportes_socios",t,"&order=fecha.desc").catch(()=>[]),
+        sel("cartolas_importadas",t,"&order=fecha_hasta.desc&limit=1").catch(()=>[]),
       ]);
       const reclamosPorOC={}, respPorOC={}, pvPorOC={};
       for(const r of reclamosD){ if(!reclamosPorOC[r.oc_id]) reclamosPorOC[r.oc_id]=[]; reclamosPorOC[r.oc_id].push(r); }
@@ -98,7 +100,7 @@ export default function App() {
       setOcs(ocsConReclamos); setFinanciadores(finD); setVendedores(vendD); setCategoriasGasto(catD);
       setGastos(gastD); setIvaMensual(ivaD); setPagosVendedor(pagVD); setAjustesSaldo(ajuD); setPerfiles(perfD);
       setContactos(contD); setEntidadesCatalogo(entD); setPagoFinSueltos(pagoFinSueltosD);
-      setNotificaciones(notifD); setHistorialCambios(histD); setAportes(aporD);
+      setNotificaciones(notifD); setHistorialCambios(histD); setAportes(aporD); setUltimaCartola((cartD||[])[0]||null);
 
       // Reintentar completar las OCs que se guardaron antes de ser aceptadas
       const faltanDatos=ocsConReclamos.some(o=>esCodigoMP(o.numero_oc)&&!o.no_en_mp&&(o.sync_pendiente||!o.rut_cliente||!o.fecha_emision_mp||String(o.cliente||"").toUpperCase().includes("POR COMPLETAR")));
@@ -386,7 +388,18 @@ export default function App() {
   };
 
   // ─── CONCILIACIÓN BANCARIA: registrar cobros detectados ──────
-  const handleCobrosDesdeCartola=async(cobros)=>{
+  // Deja constancia del período importado y su saldo de cierre
+  const registrarCartola=async(info,{cobros=0,egresos=0}={})=>{
+    if(!info) return;
+    try{
+      await ins("cartolas_importadas",session.access_token,{
+        id:genId("cart"), fecha_desde:info.desde, fecha_hasta:info.hasta,
+        n_movimientos:info.movimientos, n_cobros:cobros, n_egresos:egresos,
+        saldo_final:info.saldoFinal, creado_por:session.user.id});
+    }catch{}
+  };
+
+  const handleCobrosDesdeCartola=async(cobros,infoCartola)=>{
     const t=session.access_token;
     for(const c of cobros){
       const oc=ocs.find(o=>o.id===c.ocId);
@@ -400,6 +413,7 @@ export default function App() {
         campo:"estado_pago_cliente",valorAnterior:"pendiente",valorNuevo:"pagado"});
     }
     const total=cobros.reduce((s,c)=>s+c.monto,0);
+    await registrarCartola(infoCartola,{cobros:cobros.length});
     showToast(`${cobros.length} cobro${cobros.length!==1?"s":""} registrado${cobros.length!==1?"s":""} · ${fmt.money(total)}`);
     setAccion(null); await cargarTodo();
   };
@@ -424,7 +438,7 @@ export default function App() {
   // ─── EGRESOS DE LA CARTOLA ───────────────────────────────────
   // Cada cargo del banco se registra según lo que sea: devolución
   // a un financista (con reparto FIFO), pago a vendedor o gasto.
-  const handleEgresosDesdeCartola=async(egresos)=>{
+  const handleEgresosDesdeCartola=async(egresos,infoCartola)=>{
     const t=session.access_token;
     let nFin=0,nVen=0,nGas=0;
 
@@ -475,6 +489,7 @@ export default function App() {
     if(nFin) partes.push(`${nFin} a financistas`);
     if(nVen) partes.push(`${nVen} a vendedores`);
     if(nGas) partes.push(`${nGas} gastos`);
+    await registrarCartola(infoCartola,{egresos:egresos.length});
     showToast(`Egresos registrados: ${partes.join(" · ")}`);
     setAccion(null); await cargarTodo();
   };
@@ -998,7 +1013,7 @@ export default function App() {
 
       {/* CONTENIDO */}
       <div style={{padding:16}}>
-        {tab==="panel"&&<PanelDashboard ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} aportes={aportes} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setTab(t);}} onAccion={(k)=>setAccion(k)} onSincronizar={completarTodasDesdeMP} sincronizando={sincronizando} porAceptar={porAceptar} esCodigoMP={esCodigoMP} />}
+        {tab==="panel"&&<PanelDashboard ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} aportes={aportes} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setTab(t);}} onAccion={(k)=>setAccion(k)} onSincronizar={completarTodasDesdeMP} sincronizando={sincronizando} porAceptar={porAceptar} esCodigoMP={esCodigoMP} ultimaCartola={ultimaCartola} />}
         {tab==="compras"&&<PanelCompras ocs={ocs} perfiles={perfiles} filtroInicial={filtroCompras} ocFoco={ocFoco} contactos={contactos} onEnviarReclamo={handleEnviarReclamo} onGuardarContacto={handleGuardarContacto} onGuardarDatosOC={handleGuardarDatosOC} onEditarEvento={handleEditarEvento} financiadores={financiadores} onConfirmarEntrega={handleEntrega} onEmitirFactura={handleFactura} onPagoCliente={handlePagoCliente} onPagoFinanciamiento={handlePagoFin} entidadesCatalogo={entidadesCatalogo} onGuardarLink={handleGuardarLink} onEliminarLink={handleEliminarLink} onEditarLink={handleEditarLink} onSincronizarFecha={handleSincronizarFecha} bloqueos={bloqueos} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={handleAgregarComentario} onEliminarComentario={handleEliminarComentario} onBloquear={handleBloquear} onLiberar={handleLiberar} onEliminarOC={handleEliminarOC} onEliminarFactura={handleEliminarFactura} onEliminarEvento={handleEliminarEvento} vendedores={vendedores} onIngresarCompra={handleIngresarCompra} onAsignarResponsable={handleAsignarResponsable} onGuardarPostventa={handleGuardarPostventa} />}
         {tab==="notif"&&<PanelNotificaciones notificaciones={notificaciones} ocs={ocs} onMarcarLeidas={handleMarcarNotificacionesLeidas} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setTab(t);}} />}
         {tab==="agenda"&&<PanelCalendario ocs={ocs} onMarcarFecha={handleMarcarFecha} />}
