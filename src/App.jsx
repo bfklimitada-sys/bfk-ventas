@@ -194,6 +194,7 @@ export default function App() {
           comuna:oc.comuna||"", contacto:oc.contacto||"", correo_cliente:correo_cliente||"",
           monto_total:oc.monto_total||0, vendedor_id:vendedorId,
           tipo_despacho:oc.tipo_despacho||"", direccion_entrega:direccion_entrega||"",
+          fecha_emision_mp:String(oc.fecha_creacion||"").slice(0,10)||null,
           dias_pago:oc.dias_pago||30, sync_pendiente:false,
           estado_compra:"pendiente", creado_por:session.user.id };
 
@@ -273,6 +274,7 @@ export default function App() {
         if(vacio(oc.contacto))       cambios.contacto=d.contacto||"";
         if(vacio(oc.correo_cliente)) cambios.correo_cliente=d.correo_cliente||"";
         if(vacio(oc.tipo_despacho))  cambios.tipo_despacho=d.tipo_despacho||"";
+        if(!oc.fecha_emision_mp&&d.fecha_creacion) cambios.fecha_emision_mp=String(d.fecha_creacion).slice(0,10);
         if(!oc.dias_pago)            cambios.dias_pago=d.dias_pago||30;
         if(!Number(oc.monto_total))  cambios.monto_total=d.monto_total||0;
 
@@ -615,6 +617,7 @@ export default function App() {
         contacto:d.contacto||oc.contacto,
         correo_cliente:oc.correo_cliente||d.correo_cliente||"",
         tipo_despacho:d.tipo_despacho||oc.tipo_despacho,
+        fecha_emision_mp:fechaMP||oc.fecha_emision_mp,
         dias_pago:d.dias_pago||oc.dias_pago||30});
 
       showToast(fechaMP?`Actualizado · fecha ${fmt.date(fechaMP)}`:"Datos actualizados");
