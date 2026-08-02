@@ -845,13 +845,16 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, onSincroniz
             onEnviar={async(data)=>{ await onEnviarReclamo(data); setReclamandoBanner(null); }} />
         </Modal>
       )}
-      <input style={{...iStyle,marginBottom:10}} placeholder="Buscar por N° OC, cliente, entidad o comuna…" value={busq} onChange={e=>setBusq(e.target.value)} />
-      {comunas.length>0&&(
-        <select style={{...selStyle,marginBottom:12}} value={comunaSel} onChange={e=>setComunaSel(e.target.value)}>
-          <option value="">Todas las comunas</option>
-          {comunas.map(c=><option key={c} value={c}>{c}</option>)}
-        </select>
-      )}
+      <div style={{display:"flex",gap:6,marginBottom:10}}>
+        <input style={{...iStyle,flex:1,fontSize:13,padding:"9px 11px"}} placeholder="Buscar OC, cliente o comuna…"
+          value={busq} onChange={e=>setBusq(e.target.value)} />
+        {comunas.length>0&&(
+          <select style={{...selStyle,width:110,fontSize:12,padding:"9px 8px"}} value={comunaSel} onChange={e=>setComunaSel(e.target.value)}>
+            <option value="">Comuna</option>
+            {comunas.map(c=><option key={c} value={c}>{c}</option>)}
+          </select>
+        )}
+      </div>
       {/* Vista rápida: qué falta hacer. Un toque, una respuesta. */}
       <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:10}}>
         {VISTAS.map(v=>{
@@ -867,6 +870,29 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, onSincroniz
         })}
       </div>
 
+      {/* Período — visible, no escondido tras un desplegable */}
+      <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:10,alignItems:"center"}}>
+        {[
+          {t:"Este mes",d:()=>{const h=new Date();return [`${h.getFullYear()}-${String(h.getMonth()+1).padStart(2,"0")}-01`,h.toISOString().slice(0,10)];}},
+          {t:"Mes pasado",d:()=>{const h=new Date();const i=new Date(h.getFullYear(),h.getMonth()-1,1);const f=new Date(h.getFullYear(),h.getMonth(),0);return [i.toISOString().slice(0,10),f.toISOString().slice(0,10)];}},
+          {t:"90 días",d:()=>{const h=new Date();const i=new Date();i.setDate(i.getDate()-90);return [i.toISOString().slice(0,10),h.toISOString().slice(0,10)];}},
+          {t:"Este año",d:()=>{const h=new Date();return [`${h.getFullYear()}-01-01`,h.toISOString().slice(0,10)];}},
+        ].map(b=>{
+          const [i,f]=b.d(); const activo=desde===i&&hasta===f;
+          return (
+            <button key={b.t} onClick={()=>{ if(activo){setDesde("");setHasta("");} else {setDesde(i);setHasta(f);} }}
+              style={{fontSize:10.5,fontWeight:700,padding:"5px 10px",borderRadius:8,cursor:"pointer",
+                border:`1.5px solid ${activo?C.info:C.border}`,
+                background:activo?C.infoLight:C.card, color:activo?C.info:C.inkMuted}}>{b.t}</button>
+          );
+        })}
+        {(desde||hasta)&&(
+          <button onClick={()=>{setDesde("");setHasta("");}}
+            style={{fontSize:10.5,fontWeight:700,padding:"5px 9px",borderRadius:8,cursor:"pointer",
+              border:"none",background:"none",color:C.danger}}>✕ quitar</button>
+        )}
+      </div>
+
       <button onClick={()=>setMasFiltros(m=>!m)}
         style={{background:"none",border:"none",color:C.inkFaint,fontSize:11,cursor:"pointer",padding:"2px 0",marginBottom:masFiltros?8:12}}>
         {masFiltros?"▾":"▸"} Filtros combinados
@@ -874,7 +900,7 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, onSincroniz
 
       {masFiltros&&(
         <div style={{background:C.paper,borderRadius:10,padding:"10px",marginBottom:12}}>
-          <div style={{fontSize:10.5,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Rango de fechas</div>
+          <div style={{fontSize:10.5,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Fechas exactas</div>
           <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:6}}>
             <input type="date" value={desde} onChange={e=>setDesde(e.target.value)}
               style={{...iStyle,flex:1,fontSize:12,padding:"7px 9px"}} />
@@ -882,24 +908,6 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, onSincroniz
             <input type="date" value={hasta} onChange={e=>setHasta(e.target.value)}
               style={{...iStyle,flex:1,fontSize:12,padding:"7px 9px"}} />
           </div>
-          <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:10}}>
-            {[
-              {t:"Este mes",d:()=>{const h=new Date();return [`${h.getFullYear()}-${String(h.getMonth()+1).padStart(2,"0")}-01`,h.toISOString().slice(0,10)];}},
-              {t:"Mes pasado",d:()=>{const h=new Date();const i=new Date(h.getFullYear(),h.getMonth()-1,1);const f=new Date(h.getFullYear(),h.getMonth(),0);return [i.toISOString().slice(0,10),f.toISOString().slice(0,10)];}},
-              {t:"Últimos 90 días",d:()=>{const h=new Date();const i=new Date();i.setDate(i.getDate()-90);return [i.toISOString().slice(0,10),h.toISOString().slice(0,10)];}},
-              {t:"Este año",d:()=>{const h=new Date();return [`${h.getFullYear()}-01-01`,h.toISOString().slice(0,10)];}},
-            ].map(b=>(
-              <button key={b.t} onClick={()=>{const [i,f]=b.d();setDesde(i);setHasta(f);}}
-                style={{fontSize:10.5,fontWeight:700,padding:"5px 9px",borderRadius:7,cursor:"pointer",
-                  border:`1px solid ${C.border}`,background:C.card,color:C.inkMuted}}>{b.t}</button>
-            ))}
-            {(desde||hasta)&&(
-              <button onClick={()=>{setDesde("");setHasta("");}}
-                style={{fontSize:10.5,fontWeight:700,padding:"5px 9px",borderRadius:7,cursor:"pointer",
-                  border:`1px solid ${C.danger}`,background:C.dangerLight,color:C.danger}}>Quitar fechas</button>
-            )}
-          </div>
-
           <div style={{fontSize:10.5,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Por etapa</div>
           <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
           {FILTROS.map(f=>(
@@ -913,14 +921,16 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, onSincroniz
       )}
 
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:10}}>
-        <span style={{fontSize:11.5,color:C.inkFaint,minWidth:0}}>
-          {filtered.length} orden{filtered.length!==1?"es":""}
+        <span style={{fontSize:11,color:C.inkFaint,minWidth:0,lineHeight:1.5}}>
           {(()=>{
             const gan=filtered.reduce((s,o)=>s+gananciaReal(o).pesos,0);
             const ven=filtered.reduce((s,o)=>s+(Number(o.monto_total)||0),0);
-            return gan>0?(
-              <> · vende <b style={{color:C.ink}}>{fmt.money(ven)}</b> · deja <b style={{color:C.ok}}>{fmt.money(gan)}</b></>
-            ):null;
+            return (
+              <>
+                <span style={{display:"block"}}>{filtered.length} órdenes · {fmt.money(ven)}</span>
+                {gan>0&&<span style={{display:"block",color:C.ok,fontWeight:700}}>deja {fmt.money(gan)}</span>}
+              </>
+            );
           })()}
         </span>
         <button onClick={()=>setOrden(o=>o==="fecha"?"ganancia":"fecha")}
@@ -928,7 +938,7 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, onSincroniz
             border:`1px solid ${orden==="ganancia"?C.ok:C.border}`,
             background:orden==="ganancia"?C.okLight:C.card,
             color:orden==="ganancia"?C.ok:C.inkMuted}}>
-          {orden==="ganancia"?"Por ganancia":"Por fecha"}
+          {orden==="ganancia"?"↓ Ganancia":"↓ Fecha"}
         </button>
       </div>
       {filtered.map(oc=><FilaOC key={oc.id} oc={oc} perfiles={perfiles} todasLasOcs={ocs} onSincronizarFecha={onSincronizarFecha} expanded={expId===oc.id} onToggle={()=>setExpId(expId===oc.id?null:oc.id)} contactos={contactos} onEnviarReclamo={onEnviarReclamo} onGuardarContacto={onGuardarContacto} onGuardarDatosOC={onGuardarDatosOC} onEditarEvento={onEditarEvento} financiadores={financiadores} onConfirmarEntrega={onConfirmarEntrega} onEmitirFactura={onEmitirFactura} onPagoCliente={onPagoCliente} onPagoFinanciamiento={onPagoFinanciamiento} entidadesCatalogo={entidadesCatalogo} onGuardarLink={onGuardarLink} onEliminarLink={onEliminarLink} onEditarLink={onEditarLink} bloqueos={bloqueos} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={onAgregarComentario} onEliminarComentario={onEliminarComentario} onBloquear={onBloquear} onLiberar={onLiberar} onEliminarOC={onEliminarOC} onEliminarFactura={onEliminarFactura} onEliminarEvento={onEliminarEvento} vendedores={vendedores} onIngresarCompra={onIngresarCompra} onAsignarResponsable={onAsignarResponsable} onGuardarPostventa={onGuardarPostventa} />)}
