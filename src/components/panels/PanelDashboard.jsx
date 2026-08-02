@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { DiasBadge, Leyenda } from "../ui/Basicos";
+import { gananciaReal, costoPostventa } from "../../lib/theme";
 import { del } from "../../lib/supabase";
 import { C, MONO, SANS, btnP, fmt } from "../../lib/theme";
 
@@ -31,7 +32,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
       cobrado+=oc.monto_cobrado||0;                // caja: ventas + aportes
       if(esAporte(oc)) continue;   // los aportes viven en aportes_socios
       ingresos+=oc.monto_total||0;                 // solo ventas reales
-      costos+=oc.costo_total||0;
+      costos+=(Number(oc.costo_total)||0)+costoPostventa(oc);
       if(oc.estado_pago_financiamiento!=="pagado") creditoPendienteTotal+=oc.costo_total||0;
       creditoPagadoTotal+=(oc.eventos_pago_financiamiento||[]).reduce((s,e)=>s+(e.monto||0),0);
       const finNombre=oc.financiadores?.nombre||"";
@@ -81,7 +82,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
 
     const ocsDelMes=ocs.filter(o=>{ if(!esVenta(o)) return false; const evC=(o.eventos_compra||[])[0]; if(!evC) return false; const f=new Date(evC.fecha); return f.getMonth()+1===mesActual&&f.getFullYear()===anioActual; });
     const margenPromPct=ocsDelMes.length>0?Math.round(ocsDelMes.reduce((s,o)=>{ const v=o.monto_total||0; if(v<=0) return s; return s+((v-(o.costo_total||0))/v)*100; },0)/ocsDelMes.length):0;
-    const gananciaMes=ocsDelMes.reduce((s,o)=>s+((Number(o.monto_total)||0)-(Number(o.costo_total)||0)),0);
+    const gananciaMes=ocsDelMes.reduce((s,o)=>s+gananciaReal(o).pesos,0);
     const ventaMes=ocsDelMes.reduce((s,o)=>s+(Number(o.monto_total)||0),0);
 
     const ocsAbiertas=ocs.filter(o=>{
@@ -118,13 +119,13 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
         if((o.tipo_registro||"venta")!=="venta") return false;
         const evC=(o.eventos_compra||[])[0]; if(!evC) return false;
         return new Date(evC.fecha)>=limite;
-      }).reduce((s,o)=>s+(o.monto_total||0)-(o.costo_total||0),0);
+      }).reduce((s,o)=>s+gananciaReal(o).pesos,0);
     };
     const mesAntOcs=ocs.filter(o=>{
       const evC=(o.eventos_compra||[])[0]; if(!evC) return false;
       const f=new Date(evC.fecha); return f.getMonth()+1===mesAnterior&&f.getFullYear()===anioMA;
     });
-    const utilMesAnt=mesAntOcs.reduce((s,o)=>s+(o.monto_total||0)-(o.costo_total||0),0);
+    const utilMesAnt=mesAntOcs.reduce((s,o)=>s+gananciaReal(o).pesos,0);
     return { mesAnterior:utilMesAnt, m3:calcUtil(3), m6:calcUtil(6), m9:calcUtil(9), m12:calcUtil(12), historico:ocs.reduce((s,o)=>s+(o.monto_total||0)-(o.costo_total||0),0), nombreMesAnt:fmt.monthYear(mesAnterior,anioMA) };
   },[ocs]);
 
