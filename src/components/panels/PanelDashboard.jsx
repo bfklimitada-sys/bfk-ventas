@@ -3,7 +3,7 @@ import { DiasBadge, Leyenda } from "../ui/Basicos";
 import { del } from "../../lib/supabase";
 import { C, MONO, SANS, btnP, fmt } from "../../lib/theme";
 
-export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, aportes: aportesLista, onNavigate, onAccion, onSincronizar, sincronizando, porAceptar }) {
+export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, aportes: aportesLista, onNavigate, onAccion, onSincronizar, sincronizando, porAceptar, esCodigoMP }) {
   const [expandido,setExpandido]=useState(null);
   const [verHistorico,setVerHistorico]=useState(false);
 
@@ -317,7 +317,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
 
       {/* ── OCs sin datos: ofrecer completarlas desde Mercado Público ── */}
       {(()=>{
-        const sinDatos=ocs.filter(o=>o.sync_pendiente||!o.rut_cliente||!o.fecha_emision_mp||String(o.cliente||"").toUpperCase().includes("POR COMPLETAR")).length;
+        const sinDatos=ocs.filter(o=>esCodigoMP&&esCodigoMP(o.numero_oc)&&!o.no_en_mp&&(o.sync_pendiente||!o.rut_cliente||!o.fecha_emision_mp||String(o.cliente||"").toUpperCase().includes("POR COMPLETAR"))).length;
         if(!sinDatos&&!sincronizando) return null;
         return (
           <div style={{background:C.infoLight,border:`1px solid ${C.info}`,borderRadius:12,padding:"12px 14px",marginBottom:12}}>
@@ -325,7 +325,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
               {sincronizando?`Completando ${sincronizando.hechas} de ${sincronizando.total}…`:`${sinDatos} OC${sinDatos>1?"s":""} sin datos de cliente`}
             </div>
             <div style={{fontSize:11.5,color:C.inkMuted,marginBottom:sincronizando?0:9,lineHeight:1.45}}>
-              Mercado Público tiene el cliente, RUT, comuna, contacto y la fecha de emisión de estas órdenes. Se pueden traer sin escribir nada.
+              Mercado Público tiene el cliente, RUT, comuna, contacto, fecha de emisión y productos de estas órdenes. Solo se consultan las que tienen código de Mercado Público; las ventas directas quedan fuera.
             </div>
             {!sincronizando&&(
               <button onClick={onSincronizar}
