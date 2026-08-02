@@ -281,6 +281,22 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, re
     } catch (er) { setErr(er.message); setGuardando(false); }
   };
 
+  // Totales por mes: la base de la conciliación
+  const totalesPorMes = () => {
+    const meses = {};
+    for (const m of movs) {
+      const k = String(m.fecha).slice(0, 7);   // AAAA-MM
+      if (!meses[k]) meses[k] = { entro: 0, salio: 0, saldo: null };
+      meses[k].entro += m.abono || 0;
+      meses[k].salio += m.cargo || 0;
+      if (m.saldo != null) meses[k].saldo = m.saldo;   // el último del mes
+    }
+    return Object.entries(meses).map(([k, v]) => ({
+      id: k, anio: Number(k.slice(0, 4)), mes: Number(k.slice(5, 7)),
+      entro: v.entro, salio: v.salio, saldo_cierre: v.saldo,
+    }));
+  };
+
   // Datos de la cartola para dejar registro de qué se subió
   const resumenCartola = () => {
     if (!movs.length) return null;
@@ -290,6 +306,7 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, re
       hasta: ultimo.fecha,
       movimientos: movs.length,
       saldoFinal: ultimo.saldo ?? null,
+      meses: totalesPorMes(),
     };
   };
 
@@ -500,6 +517,17 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, re
       )}
 
       {err && <div style={{ background: C.dangerLight, color: C.danger, borderRadius: 8, padding: "8px 12px", fontSize: 12.5, marginTop: 10, fontWeight: 600 }}>{err}</div>}
+
+      <button onClick={async () => {
+          setGuardando(true);
+          try { await onRegistrar([], resumenCartola()); }
+          catch (e) { setErr(e.message); }
+          finally { setGuardando(false); }
+        }}
+        disabled={guardando}
+        style={{ ...btnG, width: "100%", marginTop: 12, fontSize: 12, borderColor: C.info, color: C.info }}>
+        Guardar solo los totales del banco
+      </button>
 
       <button onClick={() => { setMovs([]); setItems([]); setElegido({}); setEgresos([]); setVista("cobros"); setErr(""); }}
         style={{ ...btnG, width: "100%", marginTop: 12, fontSize: 12 }}>
