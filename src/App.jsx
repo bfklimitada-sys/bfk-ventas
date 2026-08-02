@@ -293,12 +293,13 @@ export default function App() {
         const links=(oc.oc_productos_link||[]).slice().sort((a,b)=>a.orden-b.orden);
         for(let i=0;i<(d.productos||[]).length;i++){
           const p=d.productos[i];
-          const desc=`${p.descripcion} × ${p.cantidad} | Venta: ${fmt.money(p.total_linea)}${p.categoria?` | ${p.categoria}`:""}`;
+          const fila={descripcion:p.descripcion,cantidad:p.cantidad||null,
+            precio_venta:p.total_linea||null,categoria:p.categoria||null};
           if(links[i]){
-            if(!links[i].descripcion||links[i].descripcion==="Producto por completar")
-              await upd("oc_productos_link",t,links[i].id,{descripcion:desc});
-          } else if(oc.sync_pendiente){
-            await ins("oc_productos_link",t,{id:genId("lnk"),oc_id:oc.id,descripcion:desc,
+            if(!links[i].descripcion||links[i].descripcion==="Producto por completar"||!links[i].cantidad)
+              await upd("oc_productos_link",t,links[i].id,fila);
+          } else {
+            await ins("oc_productos_link",t,{id:genId("lnk"),oc_id:oc.id,...fila,
               url:links[0]?.url||"sin-link",orden:i,creado_por:session.user.id});
           }
         }
@@ -565,9 +566,11 @@ export default function App() {
     showToast("IVA guardado"); await cargarTodo();
   };
   const handleChangeRol=async(uid,rol)=>{ await updRol(session.access_token,uid,rol); showToast("Rol actualizado"); await cargarTodo(); };
-  const handleGuardarLink=async(ocId,{descripcion,url,orden,direccion_entrega},oc)=>{
+  const handleGuardarLink=async(ocId,{descripcion,url,orden,direccion_entrega,cantidad,precio_compra,precio_venta},oc)=>{
     const t=session.access_token;
-    await ins("oc_productos_link",t,{id:genId("lnk"),oc_id:ocId,descripcion,url,orden,direccion_entrega:direccion_entrega||null,creado_por:session.user.id});
+    await ins("oc_productos_link",t,{id:genId("lnk"),oc_id:ocId,descripcion,url,orden,
+      direccion_entrega:direccion_entrega||null,cantidad:cantidad??null,
+      precio_compra:precio_compra??null,precio_venta:precio_venta??null,creado_por:session.user.id});
     await registrarCambio(t,{ocId,ocNumero:oc?.numero_oc,usuarioId:perfil?.id,usuarioNombre:perfil?.nombre,
       accion:"Producto agregado",campo:"producto",valorNuevo:descripcion});
     showToast("Producto agregado"); await cargarTodo();
@@ -581,10 +584,11 @@ export default function App() {
       valorAnterior:l?.descripcion||""});
     showToast("Producto eliminado"); await cargarTodo();
   };
-  const handleEditarLink=async(linkId,{descripcion,url,direccion_entrega},oc)=>{
+  const handleEditarLink=async(linkId,{descripcion,url,direccion_entrega,cantidad,precio_compra,precio_venta},oc)=>{
     const t=session.access_token;
     const antes=(oc?.oc_productos_link||[]).find(x=>x.id===linkId);
-    await upd("oc_productos_link",t,linkId,{descripcion,url,direccion_entrega:direccion_entrega||null});
+    await upd("oc_productos_link",t,linkId,{descripcion,url,direccion_entrega:direccion_entrega||null,
+      cantidad:cantidad??null,precio_compra:precio_compra??null,precio_venta:precio_venta??null});
     if(oc&&(antes?.direccion_entrega||"")!==(direccion_entrega||""))
       await registrarCambio(t,{ocId:oc.id,ocNumero:oc.numero_oc,usuarioId:perfil?.id,
         usuarioNombre:perfil?.nombre,accion:"Dirección de despacho del producto",campo:"dirección",
