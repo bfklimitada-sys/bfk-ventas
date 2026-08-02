@@ -215,14 +215,17 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
   },[ocsPorCobrar,ocs]);
 
   // Agrupa el contenido bajo un título discreto
-  const Seccion=({titulo,children,sub})=>(
+  const Seccion=({titulo,children,sub,ocultarSiVacio})=>{
+    if(ocultarSiVacio) return null;
+    return (
     <div style={{marginBottom:18}}>
       <div style={{fontSize:10.5,fontWeight:800,color:C.inkFaint,textTransform:"uppercase",
         letterSpacing:0.6,marginBottom:8,paddingLeft:2}}>{titulo}</div>
       {sub&&<div style={{fontSize:11.5,color:C.inkFaint,marginBottom:8,paddingLeft:2}}>{sub}</div>}
       {children}
     </div>
-  );
+    );
+  };
 
   const KpiBtn=({label,value,color,id,children})=>(
     <div style={{background:C.card,border:`1px solid ${expandido===id?color:C.border}`,borderRadius:14,overflow:"hidden",marginBottom:10}}>
@@ -361,7 +364,66 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
 
       </Seccion>
 
-      <Seccion titulo="Este mes">
+      <Seccion titulo="Este mes" ocultarSiVacio={ventasChart.totalAct<=0&&kpis.margenPromPct<=0}>
+      {/* Resultado del mes cerrado: dato estable que no depende del día */}
+      {(()=>{
+        const h=new Date();
+        const mAnt=h.getMonth()===0?12:h.getMonth();
+        const aAnt=h.getMonth()===0?h.getFullYear()-1:h.getFullYear();
+        const delMes=ocs.filter(o=>{
+          if((o.tipo_registro||"venta")!=="venta") return false;
+          const f=o.fecha_emision_mp||(o.eventos_compra||[])[0]?.fecha;
+          if(!f) return false;
+          const d=new Date(String(f).slice(0,10)+"T00:00:00");
+          return d.getMonth()+1===mAnt&&d.getFullYear()===aAnt;
+        });
+        if(!delMes.length) return null;
+        const venta=delMes.reduce((s,o)=>s+(Number(o.monto_total)||0),0);
+        const costo=delMes.reduce((s,o)=>s+(Number(o.costo_total)||0),0);
+        const util=venta-costo, pct=venta>0?Math.round(util/venta*100):0;
+        const col=pct>=20?C.ok:pct>=10?C.warn:C.danger;
+        const nombreMes=new Date(aAnt,mAnt-1,1).toLocaleDateString("es-CL",{month:"long"});
+        return (
+          <div style={{marginBottom:18}}>
+            <div style={{fontSize:10.5,fontWeight:800,color:C.inkFaint,textTransform:"uppercase",
+              letterSpacing:0.6,marginBottom:8,paddingLeft:2}}>{nombreMes} · mes cerrado</div>
+            <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:10}}>
+                <span style={{fontSize:11.5,color:C.inkMuted}}>{delMes.length} órdenes</span>
+                <span style={{fontFamily:MONO,fontWeight:800,fontSize:19,color:C.ink}}>{fmt.money(venta)}</span>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,
+                paddingTop:10,borderTop:`1px solid ${C.border}`}}>
+                <div>
+                  <div style={{fontSize:10,color:C.inkFaint,fontWeight:700,textTransform:"uppercase"}}>Costo</div>
+                  <div style={{fontFamily:MONO,fontWeight:800,fontSize:13.5,color:C.inkMuted}}>{fmt.money(costo)}</div>
+                </div>
+                <div style={{textAlign:"right"}}>
+                  <div style={{fontSize:10,color:C.inkFaint,fontWeight:700,textTransform:"uppercase"}}>Utilidad</div>
+                  <div style={{fontFamily:MONO,fontWeight:800,fontSize:13.5,color:col}}>
+                    {fmt.money(util)} <span style={{fontSize:11}}>{pct}%</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Resumen del mes, incluso sin curva todavía */}
+      {ventasChart.totalAct<=0&&kpis.margenPromPct<=0&&(
+        <div style={{marginBottom:18}}>
+          <div style={{fontSize:10.5,fontWeight:800,color:C.inkFaint,textTransform:"uppercase",
+            letterSpacing:0.6,marginBottom:8,paddingLeft:2}}>Este mes</div>
+          <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px"}}>
+            <div style={{fontSize:12.5,color:C.inkMuted,lineHeight:1.5}}>
+              Todavía no hay compras registradas en {new Date().toLocaleDateString("es-CL",{month:"long"})}.
+              Las ventas y el margen del mes aparecen aquí cuando se registre la primera.
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Ventas y margen ── */}
       {(ventasChart.totalAct>0||kpis.margenPromPct>0)&&(()=>{ const hayCurva=ventasChart.acumAct.length>=3; return (
       <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px",marginBottom:14}}>
