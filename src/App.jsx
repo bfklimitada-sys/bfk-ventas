@@ -314,8 +314,15 @@ export default function App() {
             if(!links[i].descripcion||links[i].descripcion==="Producto por completar"||!links[i].cantidad)
               await upd("oc_productos_link",t,links[i].id,fila);
           } else {
-            await ins("oc_productos_link",t,{id:genId("lnk"),oc_id:oc.id,...fila,
-              url:links[0]?.url||"sin-link",orden:i,creado_por:session.user.id});
+            // No duplicar: si ya existe uno igual, no se inserta de nuevo
+            const yaEsta=(oc.oc_productos_link||[]).some(x=>
+              (x.origen||"venta")==="venta" &&
+              x.descripcion===p.descripcion &&
+              Number(x.cantidad||0)===Number(p.cantidad||0));
+            if(!yaEsta){
+              await ins("oc_productos_link",t,{id:genId("lnk"),oc_id:oc.id,...fila,
+                url:"sin-link",orden:i,creado_por:session.user.id});
+            }
           }
         }
 
