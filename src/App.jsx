@@ -101,7 +101,7 @@ export default function App() {
       setNotificaciones(notifD); setHistorialCambios(histD); setAportes(aporD);
 
       // Reintentar completar las OCs que se guardaron antes de ser aceptadas
-      const faltanDatos=ocsConReclamos.some(o=>o.sync_pendiente||!o.rut_cliente||!o.fecha_emision_mp||String(o.cliente||"").toUpperCase().includes("POR COMPLETAR"));
+      const faltanDatos=ocsConReclamos.some(o=>esCodigoMP(o.numero_oc)&&!o.no_en_mp&&(o.sync_pendiente||!o.rut_cliente||!o.fecha_emision_mp||String(o.cliente||"").toUpperCase().includes("POR COMPLETAR")));
       if(faltanDatos){
         sincronizarPendientes(ocsConReclamos).then(n=>{
           if(n>0){ showToast(`${n} OC${n>1?"s":""} completada${n>1?"s":""} desde Mercado Público`); cargarTodo(); }
@@ -241,26 +241,41 @@ export default function App() {
   //  · las guardadas antes de ser aceptadas (sync_pendiente)
   //  · las históricas que quedaron sin datos de cliente
   // Nunca pisa un dato que ya tenga contenido: solo rellena vacíos.
-  const sincronizarPendientes=async(listaOcs)=>{
-    const sinDatos=(o)=>
-      o.sync_pendiente ||
-      !o.rut_cliente ||
-      !o.fecha_emision_mp ||
-      String(o.cliente||"").toUpperCase().includes("POR COMPLETAR");
+  // Los códigos de Mercado Público tienen forma 1234-567-AG26.
+  // Todo lo demás (ventas directas, otras plataformas) no existe allá.
+  const esCodigoMP=(numero)=>
+    /^\s*N?[ºo°]?\s*\d+\s*-\s*\d+\s*-\s*[A-Za-z]{2}\d{2}\s*$/.test(String(numero||""));
 
-    const candidatas=(listaOcs||[])
-      .filter(o=>sinDatos(o)&&!intentadas.current.has(o.id))
-      .slice(0,6); // de a poco, para no demorar el arranque
+  const sincronizarPendientes=async(listaOcs,forzar=false)=>{
+    const sinDatos=(o)=>
+      esCodigoMP(o.numero_oc) && !o.no_en_mp && (
+        o.sync_pendiente ||
+        !o.rut_cliente ||
+        !o.fecha_emision_mp ||
+        String(o.cliente||"").toUpperCase().includes("POR COMPLETAR"));
+
+    // Si viene una lista explícita se procesa tal cual (sincronización manual).
+    // Si no, se eligen las que faltan, de a pocas, para no demorar el arranque.
+    const candidatas = forzar
+      ? (listaOcs||[])
+      : (listaOcs||[]).filter(o=>sinDatos(o)&&!intentadas.current.has(o.id)).slice(0,6);
 
     if(!candidatas.length) return 0;
     const t=session.access_token;
     let completadas=0;
 
     for(const oc of candidatas){
-      intentadas.current.add(oc.id); // no reintentar en esta sesión
+      if(!forzar) intentadas.current.add(oc.id); // en modo automático, no reintentar
       try{
         const r=await fetch(`/api/oc?codigo=${encodeURIComponent(oc.numero_oc)}`);
-        if(!r.ok) continue;             // no aceptada o inexistente en la API
+        if(!r.ok){
+          // La API no la tiene: sin código de Mercado Público o no aceptada.
+          // Se marca para dejar de reintentarla en cada carga.
+          if(r.status===404&&!oc.sync_pendiente){
+            try{ await upd("ordenes_compra_v2",t,oc.id,{sync_pendiente:false,no_en_mp:true}); }catch{}
+          }
+          continue;
+        }
         const j=await r.json();
         if(!j.ok||!j.oc) continue;
         const d=j.oc;
@@ -324,19 +339,23 @@ export default function App() {
   const [sincronizando,setSincronizando]=useState(null); // {hechas,total}
   const completarTodasDesdeMP=async()=>{
     const pendientes=ocs.filter(o=>
-      o.sync_pendiente||!o.rut_cliente||!o.fecha_emision_mp||
-      String(o.cliente||"").toUpperCase().includes("POR COMPLETAR"));
+      esCodigoMP(o.numero_oc) && !o.no_en_mp &&
+      (o.sync_pendiente||!o.rut_cliente||!o.fecha_emision_mp||
+       String(o.cliente||"").toUpperCase().includes("POR COMPLETAR")));
     if(!pendientes.length){ showToast("No hay OCs por completar"); return; }
     intentadas.current.clear();
     setSincronizando({hechas:0,total:pendientes.length});
     let ok=0;
-    for(let i=0;i<pendientes.length;i+=6){
-      const lote=pendientes.slice(i,i+6);
-      ok+=await sincronizarPendientes(lote);
-      setSincronizando({hechas:Math.min(i+6,pendientes.length),total:pendientes.length});
+    for(let i=0;i<pendientes.length;i+=4){
+      const lote=pendientes.slice(i,i+4);
+      ok+=await sincronizarPendientes(lote,true);   // forzar: procesa el lote completo
+      setSincronizando({hechas:Math.min(i+4,pendientes.length),total:pendientes.length,ok});
     }
     setSincronizando(null);
-    showToast(`${ok} de ${pendientes.length} OCs completadas desde Mercado Público`);
+    const fallaron=pendientes.length-ok;
+    showToast(fallaron>0
+      ? `${ok} completadas · ${fallaron} no están en Mercado Público`
+      : `${ok} OCs completadas`);
     await cargarTodo();
   };
 
@@ -967,7 +986,7 @@ export default function App() {
 
       {/* CONTENIDO */}
       <div style={{padding:16}}>
-        {tab==="panel"&&<PanelDashboard ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} aportes={aportes} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setTab(t);}} onAccion={(k)=>setAccion(k)} onSincronizar={completarTodasDesdeMP} sincronizando={sincronizando} porAceptar={porAceptar} />}
+        {tab==="panel"&&<PanelDashboard ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} aportes={aportes} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setTab(t);}} onAccion={(k)=>setAccion(k)} onSincronizar={completarTodasDesdeMP} sincronizando={sincronizando} porAceptar={porAceptar} esCodigoMP={esCodigoMP} />}
         {tab==="compras"&&<PanelCompras ocs={ocs} perfiles={perfiles} filtroInicial={filtroCompras} ocFoco={ocFoco} contactos={contactos} onEnviarReclamo={handleEnviarReclamo} onGuardarContacto={handleGuardarContacto} onGuardarDatosOC={handleGuardarDatosOC} onEditarEvento={handleEditarEvento} financiadores={financiadores} onConfirmarEntrega={handleEntrega} onEmitirFactura={handleFactura} onPagoCliente={handlePagoCliente} onPagoFinanciamiento={handlePagoFin} entidadesCatalogo={entidadesCatalogo} onGuardarLink={handleGuardarLink} onEliminarLink={handleEliminarLink} onEditarLink={handleEditarLink} onSincronizarFecha={handleSincronizarFecha} bloqueos={bloqueos} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={handleAgregarComentario} onEliminarComentario={handleEliminarComentario} onBloquear={handleBloquear} onLiberar={handleLiberar} onEliminarOC={handleEliminarOC} onEliminarFactura={handleEliminarFactura} onEliminarEvento={handleEliminarEvento} vendedores={vendedores} onIngresarCompra={handleIngresarCompra} onAsignarResponsable={handleAsignarResponsable} onGuardarPostventa={handleGuardarPostventa} />}
         {tab==="notif"&&<PanelNotificaciones notificaciones={notificaciones} ocs={ocs} onMarcarLeidas={handleMarcarNotificacionesLeidas} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setTab(t);}} />}
         {tab==="agenda"&&<PanelCalendario ocs={ocs} onMarcarFecha={handleMarcarFecha} />}
