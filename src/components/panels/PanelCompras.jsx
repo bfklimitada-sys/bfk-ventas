@@ -167,7 +167,10 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
     setEditando(null);
   };
   const limpiar=()=>{setDNom("");setDCant("");setDCompra("");setDVenta("");setDUrl("");setDDir("");};
-  const links=(oc.oc_productos_link||[]).slice().sort((a,b)=>a.orden-b.orden);
+  const todos=(oc.oc_productos_link||[]).slice().sort((a,b)=>a.orden-b.orden);
+  const vendidos=todos.filter(l=>(l.origen||"venta")==="venta");
+  const comprados=todos.filter(l=>l.origen==="compra");
+  const links=todos;
   const evC=(oc.eventos_compra||[])[0];
   const evE=(oc.eventos_entrega||[])[0];
   const evF=(oc.eventos_factura||[])[0];
@@ -210,167 +213,201 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
           {links.length>0&&(
             <div style={{marginBottom:12}}>
               <div style={{fontSize:10,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Productos</div>
-              {/* Encabezado de la tabla */}
-              <div style={{display:"flex",gap:8,padding:"0 11px 5px",fontSize:9.5,fontWeight:800,
-                color:C.inkFaint,textTransform:"uppercase",letterSpacing:0.4}}>
-                <span style={{flex:1}}>Producto</span>
-                <span style={{width:34,textAlign:"center"}}>Cant</span>
-                <span style={{width:76,textAlign:"right"}}>Total</span>
-              </div>
+              {/* ═══ LO QUE VENDEMOS — viene de la OC de Mercado Público ═══ */}
+              {vendidos.length>0&&(
+                <>
+                  <div style={{fontSize:9.5,fontWeight:800,color:C.inkFaint,textTransform:"uppercase",
+                    letterSpacing:0.5,marginBottom:6}}>Lo que vendemos · según la OC</div>
 
-              {links.map((l)=>{
-                const tieneUrl=l.url&&l.url!=="sin-link";
-                let dominio="";
-                if(tieneUrl){ try{ dominio=new URL(l.url).hostname.replace(/^www\./,""); }catch{} }
-                const cant=Number(l.cantidad)||null;
-                const venta=Number(l.precio_venta)||0;
-                const compra=Number(l.precio_compra)||0;
+                  {vendidos.map(l=>{
+                    const cant=Number(l.cantidad)||null;
+                    const venta=Number(l.precio_venta)||0;
+                    return (
+                      <div key={l.id} style={{background:C.paper,borderRadius:9,padding:"9px 11px",marginBottom:5}}>
+                        <div style={{display:"flex",gap:8,alignItems:"flex-start"}}>
+                          <span style={{flex:1,minWidth:0,fontSize:12,color:C.ink,fontWeight:600,lineHeight:1.4}}>
+                            {l.descripcion}
+                          </span>
+                          <span style={{width:34,flexShrink:0,textAlign:"center",fontFamily:MONO,
+                            fontSize:11.5,fontWeight:800,color:cant?C.tealDark:C.inkFaint}}>
+                            {cant?`×${cant}`:"—"}
+                          </span>
+                          <span style={{width:76,flexShrink:0,textAlign:"right",fontFamily:MONO,
+                            fontSize:11.5,fontWeight:800,color:C.ink}}>
+                            {venta?fmt.money(venta):"—"}
+                          </span>
+                        </div>
+                        {cant>1&&venta>0&&(
+                          <div style={{fontSize:10.5,color:C.inkMuted,marginTop:3}}>Unit. {fmt.money(Math.round(venta/cant))}</div>
+                        )}
+                        {l.categoria&&(
+                          <div style={{fontSize:10,color:C.inkFaint,marginTop:2,lineHeight:1.35}}>{l.categoria}</div>
+                        )}
+                        {(l.direccion_entrega||oc.direccion_entrega)&&(
+                          <div style={{fontSize:10.5,marginTop:4,lineHeight:1.4,
+                            color:l.direccion_entrega?C.warn:C.info,fontWeight:l.direccion_entrega?700:400}}>
+                            {l.direccion_entrega?"Despacho distinto: ":"Entregar en: "}
+                            {l.direccion_entrega||oc.direccion_entrega}
+                          </div>
+                        )}
+                        {esAdmin&&(
+                          <div style={{marginTop:5}}>
+                            <button onClick={()=>abrirEdicion(l)}
+                              style={{background:"none",border:"none",color:C.inkFaint,fontSize:10.5,cursor:"pointer",fontWeight:600,padding:0}}>Corregir</button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
 
-                if(editando===l.id){
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",
+                    padding:"6px 11px 10px"}}>
+                    <span style={{fontSize:10.5,color:C.inkMuted}}>Total vendido</span>
+                    <span style={{textAlign:"right"}}>
+                      <span style={{fontFamily:MONO,fontWeight:800,fontSize:12.5,color:C.ink}}>
+                        {fmt.money(vendidos.reduce((s,l)=>s+(Number(l.precio_venta)||0),0))}
+                      </span>
+                      {(()=>{
+                        const tv=vendidos.reduce((s,l)=>s+(Number(l.precio_venta)||0),0);
+                        const neto=Math.round((Number(oc.monto_total)||0)/1.19);
+                        return Math.abs(tv-neto)>1&&Math.abs(tv-(Number(oc.monto_total)||0))>1?(
+                          <span style={{display:"block",fontSize:10,color:C.warn,fontWeight:700}}>
+                            ⚠ la OC dice {fmt.money(oc.monto_total)}
+                          </span>
+                        ):(
+                          <span style={{display:"block",fontSize:10,color:C.inkFaint}}>
+                            con IVA {fmt.money(oc.monto_total)}
+                          </span>
+                        );
+                      })()}
+                    </span>
+                  </div>
+                </>
+              )}
+
+              {/* ═══ LO QUE COMPRAMOS — lo carga el vendedor ═══ */}
+              <div style={{borderTop:`1px solid ${C.border}`,paddingTop:11,marginTop:4}}>
+                <div style={{fontSize:9.5,fontWeight:800,color:C.inkFaint,textTransform:"uppercase",
+                  letterSpacing:0.5,marginBottom:6}}>Lo que compramos · proveedor y link</div>
+
+                {comprados.length===0&&!nuevo&&(
+                  <div style={{fontSize:11,color:C.inkFaint,marginBottom:7,lineHeight:1.45}}>
+                    Sin productos comprados registrados.
+                    {Number(oc.costo_total)>0&&<> El costo total de la OC es <b>{fmt.money(oc.costo_total)}</b>.</>}
+                  </div>
+                )}
+
+                {comprados.map(l=>{
+                  const tieneUrl=l.url&&l.url!=="sin-link";
+                  let dominio="";
+                  if(tieneUrl){ try{ dominio=new URL(l.url).hostname.replace(/^www\./,""); }catch{} }
+                  const cant=Number(l.cantidad)||null;
+                  const costo=Number(l.precio_compra)||0;
+
+                  if(editando===l.id) return null;   // el formulario se muestra más abajo
+
                   return (
-                    <div key={l.id} style={{background:C.tealLight,borderRadius:9,padding:"11px",marginBottom:6}}>
-                      <Field label="Producto"><input style={iStyle} value={dNom} onChange={e=>setDNom(e.target.value)} /></Field>
-                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:7}}>
-                        <Field label="Cantidad"><input style={iMono} type="number" value={dCant} onChange={e=>setDCant(e.target.value)} /></Field>
-                        <Field label="Costo"><input style={iMono} type="number" value={dCompra} onChange={e=>setDCompra(e.target.value)} /></Field>
-                        <Field label="Venta"><input style={iMono} type="number" value={dVenta} onChange={e=>setDVenta(e.target.value)} /></Field>
+                    <div key={l.id} style={{background:C.paper,borderRadius:9,padding:"9px 11px",marginBottom:5}}>
+                      <div style={{display:"flex",gap:8,alignItems:"flex-start"}}>
+                        <span style={{flex:1,minWidth:0,fontSize:12,color:C.ink,fontWeight:600,lineHeight:1.4}}>
+                          {l.descripcion}
+                        </span>
+                        <span style={{width:34,flexShrink:0,textAlign:"center",fontFamily:MONO,
+                          fontSize:11.5,fontWeight:800,color:cant?C.tealDark:C.inkFaint}}>
+                          {cant?`×${cant}`:"—"}
+                        </span>
+                        <span style={{width:76,flexShrink:0,textAlign:"right",fontFamily:MONO,
+                          fontSize:11.5,fontWeight:800,color:C.danger}}>
+                          {costo?fmt.money(costo):"—"}
+                        </span>
                       </div>
-                      <Field label="Link de compra"><input style={iStyle} value={dUrl} onChange={e=>setDUrl(e.target.value)} placeholder="https://…" /></Field>
-                      <Field label="Dirección de despacho" hint="Solo si este producto va a otra dirección">
-                        <input style={iStyle} value={dDir} onChange={e=>setDDir(e.target.value)} placeholder={oc.direccion_entrega||"Misma que la OC"} />
-                      </Field>
-                      <div style={{display:"flex",gap:6}}>
-                        <button onClick={()=>guardarEdicion(l)} style={btnP(C.teal)}>Guardar</button>
-                        <button onClick={()=>setEditando(null)} style={btnP(C.inkFaint)}>Cancelar</button>
-                      </div>
-                    </div>
-                  );
-                }
+                      {l.proveedor&&<div style={{fontSize:10.5,color:C.inkMuted,marginTop:3}}>{l.proveedor}</div>}
 
-                return (
-                  <div key={l.id} style={{background:C.paper,borderRadius:9,padding:"9px 11px",marginBottom:6}}>
-                    {/* Fila principal alineada con el encabezado */}
-                    <div style={{display:"flex",gap:8,alignItems:"flex-start"}}>
-                      <span style={{flex:1,minWidth:0,fontSize:12,color:C.ink,fontWeight:600,lineHeight:1.4}}>
-                        {l.descripcion}
-                      </span>
-                      <span style={{width:34,flexShrink:0,textAlign:"center",fontFamily:MONO,
-                        fontSize:11.5,fontWeight:800,color:cant?C.tealDark:C.inkFaint}}>
-                        {cant?`×${cant}`:"—"}
-                      </span>
-                      <span style={{width:76,flexShrink:0,textAlign:"right",fontFamily:MONO,
-                        fontSize:11.5,fontWeight:800,color:C.ink}}>
-                        {venta?fmt.money(venta):"—"}
-                      </span>
-                    </div>
-
-                    {/* Segunda línea: costo, unitario, proveedor */}
-                    {(compra>0||l.proveedor||(cant&&venta))&&(
-                      <div style={{fontSize:10.5,color:C.inkMuted,marginTop:3}}>
-                        {compra>0&&<>Costo {fmt.money(compra)} · </>}
-                        {cant>1&&venta>0&&<>Unit. {fmt.money(Math.round(venta/cant))} · </>}
-                        {l.proveedor&&<>{l.proveedor}</>}
-                      </div>
-                    )}
-                    {l.categoria&&(
-                      <div style={{fontSize:10,color:C.inkFaint,marginTop:2,lineHeight:1.35}}>{l.categoria}</div>
-                    )}
-
-                    {(l.direccion_entrega||oc.direccion_entrega)&&(
-                      <div style={{fontSize:10.5,marginTop:4,lineHeight:1.4,
-                        color:l.direccion_entrega?C.warn:C.info,fontWeight:l.direccion_entrega?700:400}}>
-                        {l.direccion_entrega?"Despacho distinto: ":"Entregar en: "}
-                        {l.direccion_entrega||oc.direccion_entrega}
-                      </div>
-                    )}
-
-                    {/* Link, o el botón para agregarlo */}
-                    <div style={{display:"flex",alignItems:"center",gap:8,marginTop:7,
-                      paddingTop:7,borderTop:`1px solid ${C.border}`}}>
-                      {tieneUrl?(
-                        <>
+                      <div style={{display:"flex",alignItems:"center",gap:8,marginTop:6,
+                        paddingTop:6,borderTop:`1px solid ${C.border}`}}>
+                        {tieneUrl?(
                           <a href={l.url} target="_blank" rel="noopener noreferrer"
                             style={{flex:1,minWidth:0,fontSize:11,color:C.teal,textDecoration:"none",fontWeight:600,
                               overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                             🔗 {dominio||l.url} ↗
                           </a>
-                          <button onClick={()=>abrirEdicion(l)}
-                            style={{flexShrink:0,background:"none",border:"none",color:C.inkMuted,fontSize:11,cursor:"pointer",fontWeight:600,padding:0}}>Editar</button>
-                        </>
-                      ):(
+                        ):(
+                          <span style={{flex:1,fontSize:10.5,color:C.inkFaint}}>Sin link</span>
+                        )}
                         <button onClick={()=>abrirEdicion(l)}
-                          style={{flex:1,background:C.tealLight,border:`1px dashed ${C.teal}66`,borderRadius:7,
-                            padding:"6px 10px",fontSize:11,color:C.tealDark,cursor:"pointer",fontWeight:700}}>
-                          + Agregar link de compra
-                        </button>
-                      )}
-                      {esAdmin&&(
-                        <button onClick={async()=>{ if(window.confirm("¿Eliminar este producto?")) await onEliminarLink(l.id,oc); }}
-                          style={{flexShrink:0,background:"none",border:"none",color:C.danger,fontSize:11,cursor:"pointer",fontWeight:600,padding:0}}>Eliminar</button>
-                      )}
+                          style={{flexShrink:0,background:"none",border:"none",color:C.inkMuted,fontSize:11,cursor:"pointer",fontWeight:600,padding:0}}>Editar</button>
+                        {esAdmin&&(
+                          <button onClick={async()=>{ if(window.confirm("¿Eliminar este producto?")) await onEliminarLink(l.id,oc); }}
+                            style={{flexShrink:0,background:"none",border:"none",color:C.danger,fontSize:11,cursor:"pointer",fontWeight:600,padding:0}}>Eliminar</button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Formulario de alta y edición */}
+                {(nuevo||editando)&&(
+                  <div style={{background:C.tealLight,borderRadius:9,padding:"11px",marginBottom:6}}>
+                    <Field label="Producto"><input style={iStyle} value={dNom} onChange={e=>setDNom(e.target.value)} /></Field>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:7}}>
+                      <Field label="Cantidad"><input style={iMono} type="number" value={dCant} onChange={e=>setDCant(e.target.value)} /></Field>
+                      <Field label="Costo"><input style={iMono} type="number" value={dCompra} onChange={e=>setDCompra(e.target.value)} /></Field>
+                      <Field label="Venta"><input style={iMono} type="number" value={dVenta} onChange={e=>setDVenta(e.target.value)} /></Field>
+                    </div>
+                    <Field label="Link de compra"><input style={iStyle} value={dUrl} onChange={e=>setDUrl(e.target.value)} placeholder="https://…" /></Field>
+                    <Field label="Dirección de despacho" hint="Solo si va a otra dirección">
+                      <input style={iStyle} value={dDir} onChange={e=>setDDir(e.target.value)} placeholder={oc.direccion_entrega||"Misma que la OC"} />
+                    </Field>
+                    <div style={{display:"flex",gap:6}}>
+                      <button onClick={async()=>{
+                        if(!dNom.trim()) return;
+                        if(editando){ const l=todos.find(x=>x.id===editando); await guardarEdicion(l); }
+                        else {
+                          await onGuardarLink(oc.id,{descripcion:dNom.trim(),
+                            cantidad:dCant?Number(dCant):null,
+                            precio_compra:dCompra?Number(dCompra):null,
+                            precio_venta:dVenta?Number(dVenta):null,
+                            url:dUrl.trim()||"sin-link",orden:todos.length,
+                            origen:"compra",
+                            direccion_entrega:dDir.trim()||null},oc);
+                          setNuevo(false); limpiar();
+                        }
+                      }} style={btnP(C.teal)}>{editando?"Guardar":"Agregar"}</button>
+                      <button onClick={()=>{setNuevo(false);setEditando(null);limpiar();}} style={btnP(C.inkFaint)}>Cancelar</button>
                     </div>
                   </div>
-                );
-              })}
+                )}
 
-              {/* Total de los productos */}
-              {(()=>{
-                const tv=links.reduce((s,l)=>s+(Number(l.precio_venta)||0),0);
-                const tc=links.reduce((s,l)=>s+(Number(l.precio_compra)||0),0);
-                if(!tv) return null;
-                const calza=Math.abs(tv-(Number(oc.monto_total)||0))<=1;
-                return (
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",
-                    padding:"8px 11px",marginTop:2,borderTop:`2px solid ${C.border}`}}>
-                    <span style={{fontSize:11,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4}}>
-                      Total productos
-                    </span>
-                    <span style={{textAlign:"right"}}>
-                      <span style={{display:"block",fontFamily:MONO,fontWeight:800,fontSize:12.5,color:C.ink}}>{fmt.money(tv)}</span>
-                      {tc>0&&<span style={{display:"block",fontSize:10,color:C.inkFaint}}>costo {fmt.money(tc)}</span>}
-                      {!calza&&(
-                        <span style={{display:"block",fontSize:10,color:C.warn,fontWeight:700}}>
-                          ⚠ la OC dice {fmt.money(oc.monto_total)}
+                {!nuevo&&!editando&&(
+                  <button onClick={()=>{setNuevo(true);limpiar();}}
+                    style={{fontSize:11,background:"none",border:`1px dashed ${C.teal}66`,borderRadius:8,
+                      padding:"7px 12px",color:C.tealDark,cursor:"pointer",width:"100%",fontWeight:700}}>
+                    + Agregar producto comprado
+                  </button>
+                )}
+
+                {/* Margen entre lo vendido y lo comprado */}
+                {(()=>{
+                  const venta=Number(oc.monto_total)||0;
+                  const costo=Number(oc.costo_total)||0;
+                  if(!venta||!costo) return null;
+                  const util=venta-costo, pct=Math.round(util/venta*100);
+                  const col=pct>=20?C.ok:pct>=10?C.warn:C.danger;
+                  return (
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",
+                      marginTop:10,paddingTop:9,borderTop:`2px solid ${C.border}`}}>
+                      <span style={{fontSize:10.5,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4}}>Margen de la OC</span>
+                      <span style={{textAlign:"right"}}>
+                        <span style={{fontFamily:MONO,fontWeight:800,fontSize:13,color:col}}>{fmt.money(util)}</span>
+                        <span style={{fontSize:11,fontWeight:800,color:col,marginLeft:6}}>{pct}%</span>
+                        <span style={{display:"block",fontSize:10,color:C.inkFaint}}>
+                          venta {fmt.money(venta)} · costo {fmt.money(costo)}
                         </span>
-                      )}
-                    </span>
-                  </div>
-                );
-              })()}
-
-              {nuevo?(
-                <div style={{background:C.tealLight,borderRadius:9,padding:"11px",marginTop:6}}>
-                  <Field label="Producto"><input style={iStyle} value={dNom} onChange={e=>setDNom(e.target.value)} /></Field>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:7}}>
-                    <Field label="Cantidad"><input style={iMono} type="number" value={dCant} onChange={e=>setDCant(e.target.value)} /></Field>
-                    <Field label="Costo"><input style={iMono} type="number" value={dCompra} onChange={e=>setDCompra(e.target.value)} /></Field>
-                    <Field label="Venta"><input style={iMono} type="number" value={dVenta} onChange={e=>setDVenta(e.target.value)} /></Field>
-                  </div>
-                  <Field label="Link de compra"><input style={iStyle} value={dUrl} onChange={e=>setDUrl(e.target.value)} placeholder="https://…" /></Field>
-                  <Field label="Dirección de despacho" hint="Solo si va a otra dirección">
-                    <input style={iStyle} value={dDir} onChange={e=>setDDir(e.target.value)} placeholder={oc.direccion_entrega||"Misma que la OC"} />
-                  </Field>
-                  <div style={{display:"flex",gap:6}}>
-                    <button onClick={async()=>{
-                      if(!dNom.trim()) return;
-                      await onGuardarLink(oc.id,{descripcion:dNom.trim(),
-                        cantidad:dCant?Number(dCant):null,
-                        precio_compra:dCompra?Number(dCompra):null,
-                        precio_venta:dVenta?Number(dVenta):null,
-                        url:dUrl.trim()||"sin-link",orden:links.length,
-                        direccion_entrega:dDir.trim()||null},oc);
-                      setNuevo(false); limpiar();
-                    }} style={btnP(C.teal)}>Agregar</button>
-                    <button onClick={()=>setNuevo(false)} style={btnP(C.inkFaint)}>Cancelar</button>
-                  </div>
-                </div>
-              ):(
-                <button onClick={()=>{setNuevo(true);limpiar();}}
-                  style={{fontSize:11,background:"none",border:`1px dashed ${C.border}`,borderRadius:8,
-                    padding:"7px 12px",color:C.teal,cursor:"pointer",width:"100%",marginTop:4}}>
-                  + Agregar producto
-                </button>
-              )}
+                      </span>
+                    </div>
+                  );
+                })()}
+              </div>
             </div>
           )}
 
