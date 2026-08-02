@@ -101,7 +101,7 @@ export default function App() {
       setNotificaciones(notifD); setHistorialCambios(histD); setAportes(aporD);
 
       // Reintentar completar las OCs que se guardaron antes de ser aceptadas
-      const faltanDatos=ocsConReclamos.some(o=>o.sync_pendiente||!o.rut_cliente||String(o.cliente||"").toUpperCase().includes("POR COMPLETAR"));
+      const faltanDatos=ocsConReclamos.some(o=>o.sync_pendiente||!o.rut_cliente||!o.fecha_emision_mp||String(o.cliente||"").toUpperCase().includes("POR COMPLETAR"));
       if(faltanDatos){
         sincronizarPendientes(ocsConReclamos).then(n=>{
           if(n>0){ showToast(`${n} OC${n>1?"s":""} completada${n>1?"s":""} desde Mercado Público`); cargarTodo(); }
@@ -245,6 +245,7 @@ export default function App() {
     const sinDatos=(o)=>
       o.sync_pendiente ||
       !o.rut_cliente ||
+      !o.fecha_emision_mp ||
       String(o.cliente||"").toUpperCase().includes("POR COMPLETAR");
 
     const candidatas=(listaOcs||[])
@@ -274,11 +275,19 @@ export default function App() {
         if(vacio(oc.contacto))       cambios.contacto=d.contacto||"";
         if(vacio(oc.correo_cliente)) cambios.correo_cliente=d.correo_cliente||"";
         if(vacio(oc.tipo_despacho))  cambios.tipo_despacho=d.tipo_despacho||"";
-        if(!oc.fecha_emision_mp&&d.fecha_creacion) cambios.fecha_emision_mp=String(d.fecha_creacion).slice(0,10);
+        const fechaMP=String(d.fecha_creacion||"").slice(0,10);
+        if(fechaMP&&!oc.fecha_emision_mp) cambios.fecha_emision_mp=fechaMP;
+        if(!oc.tipo_despacho&&d.tipo_despacho) cambios.tipo_despacho=d.tipo_despacho;
         if(!oc.dias_pago)            cambios.dias_pago=d.dias_pago||30;
         if(!Number(oc.monto_total))  cambios.monto_total=d.monto_total||0;
 
         await upd("ordenes_compra_v2",t,oc.id,cambios);
+
+        // La fecha del evento de compra debe reflejar la emisión real
+        const evC=(oc.eventos_compra||[])[0];
+        if(fechaMP&&evC&&!String(evC.fecha||"").startsWith(fechaMP)){
+          try{ await upd("eventos_compra",t,evC.id,{fecha:fechaMP}); }catch{}
+        }
 
         // Completar descripciones de productos que quedaron en blanco
         const links=(oc.oc_productos_link||[]).slice().sort((a,b)=>a.orden-b.orden);
@@ -314,7 +323,8 @@ export default function App() {
   const [sincronizando,setSincronizando]=useState(null); // {hechas,total}
   const completarTodasDesdeMP=async()=>{
     const pendientes=ocs.filter(o=>
-      o.sync_pendiente||!o.rut_cliente||String(o.cliente||"").toUpperCase().includes("POR COMPLETAR"));
+      o.sync_pendiente||!o.rut_cliente||!o.fecha_emision_mp||
+      String(o.cliente||"").toUpperCase().includes("POR COMPLETAR"));
     if(!pendientes.length){ showToast("No hay OCs por completar"); return; }
     intentadas.current.clear();
     setSincronizando({hechas:0,total:pendientes.length});
