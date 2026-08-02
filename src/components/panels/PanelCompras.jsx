@@ -396,12 +396,11 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
                   return (
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",
                       marginTop:10,paddingTop:9,borderTop:`2px solid ${C.border}`}}>
-                      <span style={{fontSize:10.5,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4}}>Margen de la OC</span>
+                      <span style={{fontSize:10.5,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4}}>Ganancia de la OC</span>
                       <span style={{textAlign:"right"}}>
-                        <span style={{fontFamily:MONO,fontWeight:800,fontSize:13,color:col}}>{fmt.money(util)}</span>
-                        <span style={{fontSize:11,fontWeight:800,color:col,marginLeft:6}}>{pct}%</span>
-                        <span style={{display:"block",fontSize:10,color:C.inkFaint}}>
-                          venta {fmt.money(venta)} · costo {fmt.money(costo)}
+                        <span style={{fontFamily:MONO,fontWeight:800,fontSize:16,color:col}}>{fmt.money(util)}</span>
+                        <span style={{display:"block",fontSize:10.5,color:C.inkFaint,marginTop:1}}>
+                          {pct}% · venta {fmt.money(venta)} · costo {fmt.money(costo)}
                         </span>
                       </span>
                     </div>
@@ -554,7 +553,12 @@ export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded
           </span>
           {(()=>{const mg=calcMargen(oc.monto_total,oc.costo_total);
             return oc.costo_total?(
-              <span style={{fontSize:10.5,color:mg.color,fontWeight:700,background:mg.bg,padding:"1px 6px",borderRadius:5,flexShrink:0}}>{mg.pct}%</span>
+              <span style={{flexShrink:0,textAlign:"right"}}>
+                <span style={{display:"block",fontFamily:MONO,fontSize:12,fontWeight:800,color:mg.color}}>
+                  +{fmt.money(mg.pesos)}
+                </span>
+                <span style={{display:"block",fontSize:9.5,color:mg.color,opacity:0.8}}>{mg.pct}% margen</span>
+              </span>
             ):null;})()}
         </div>
 
@@ -719,6 +723,7 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, onSincroniz
   const [vista,setVista]=useState("todas");
   const [masFiltros,setMasFiltros]=useState(false);
   const [desde,setDesde]=useState(""); const [hasta,setHasta]=useState("");
+  const [orden,setOrden]=useState("fecha");   // fecha | ganancia
 
   const fechaDe=(o)=>String(o.fecha_emision_mp||(o.eventos_compra||[])[0]?.fecha||o.creadoEn||"").slice(0,10);
 
@@ -906,10 +911,24 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, onSincroniz
         </div>
       )}
 
-      <div style={{fontSize:11.5,color:C.inkFaint,marginBottom:10}}>
-        {filtered.length} orden{filtered.length!==1?"es":""}
-        {(desde||hasta)&&<span style={{color:C.teal,fontWeight:700}}> · {desde?fmt.date(desde):"inicio"} a {hasta?fmt.date(hasta):"hoy"}</span>}
-        {(desde||hasta)&&<> · <b>{fmt.money(filtered.reduce((s,o)=>s+(Number(o.monto_total)||0),0))}</b></>}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:10}}>
+        <span style={{fontSize:11.5,color:C.inkFaint,minWidth:0}}>
+          {filtered.length} orden{filtered.length!==1?"es":""}
+          {(()=>{
+            const gan=filtered.reduce((s,o)=>s+((Number(o.monto_total)||0)-(Number(o.costo_total)||0)),0);
+            const ven=filtered.reduce((s,o)=>s+(Number(o.monto_total)||0),0);
+            return gan>0?(
+              <> · vende <b style={{color:C.ink}}>{fmt.money(ven)}</b> · deja <b style={{color:C.ok}}>{fmt.money(gan)}</b></>
+            ):null;
+          })()}
+        </span>
+        <button onClick={()=>setOrden(o=>o==="fecha"?"ganancia":"fecha")}
+          style={{flexShrink:0,fontSize:10.5,fontWeight:700,padding:"4px 9px",borderRadius:7,cursor:"pointer",
+            border:`1px solid ${orden==="ganancia"?C.ok:C.border}`,
+            background:orden==="ganancia"?C.okLight:C.card,
+            color:orden==="ganancia"?C.ok:C.inkMuted}}>
+          {orden==="ganancia"?"Por ganancia":"Por fecha"}
+        </button>
       </div>
       {filtered.map(oc=><FilaOC key={oc.id} oc={oc} perfiles={perfiles} todasLasOcs={ocs} onSincronizarFecha={onSincronizarFecha} expanded={expId===oc.id} onToggle={()=>setExpId(expId===oc.id?null:oc.id)} contactos={contactos} onEnviarReclamo={onEnviarReclamo} onGuardarContacto={onGuardarContacto} onGuardarDatosOC={onGuardarDatosOC} onEditarEvento={onEditarEvento} financiadores={financiadores} onConfirmarEntrega={onConfirmarEntrega} onEmitirFactura={onEmitirFactura} onPagoCliente={onPagoCliente} onPagoFinanciamiento={onPagoFinanciamiento} entidadesCatalogo={entidadesCatalogo} onGuardarLink={onGuardarLink} onEliminarLink={onEliminarLink} onEditarLink={onEditarLink} bloqueos={bloqueos} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={onAgregarComentario} onEliminarComentario={onEliminarComentario} onBloquear={onBloquear} onLiberar={onLiberar} onEliminarOC={onEliminarOC} onEliminarFactura={onEliminarFactura} onEliminarEvento={onEliminarEvento} vendedores={vendedores} onIngresarCompra={onIngresarCompra} onAsignarResponsable={onAsignarResponsable} onGuardarPostventa={onGuardarPostventa} />)}
       {filtered.length===0&&<div style={{textAlign:"center",padding:30,color:C.inkFaint,fontSize:13}}>No hay órdenes con estos filtros.</div>}
