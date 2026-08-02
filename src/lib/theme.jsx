@@ -20,6 +20,21 @@ export const fmt = {
   diasDesde: (fechaStr) => { if(!fechaStr) return null; const hoy=new Date(); hoy.setHours(0,0,0,0); const f=new Date(fechaStr+"T00:00:00"); return Math.floor((hoy-f)/(1000*60*60*24)); },
 };
 
+// Ganancia considerando los costos de post-venta.
+// El costo extra de reponer o resolver un reclamo sale de la utilidad.
+export const costoPostventa=(oc)=>
+  (oc?.eventos_postventa||[]).reduce((s,e)=>s+(Number(e.costo_extra)||0),0);
+
+export const gananciaReal=(oc)=>{
+  const venta=Number(oc?.monto_total)||0;
+  const costo=(Number(oc?.costo_total)||0)+costoPostventa(oc);
+  const pesos=venta-costo;
+  const pct=venta>0?Math.round(pesos/venta*100):0;
+  const color=pct>=20?C.ok:pct>=10?C.warn:C.danger;
+  const bg=pct>=20?C.okLight:pct>=10?C.warnLight:C.dangerLight;
+  return {venta,costo,pesos,pct,color,bg,extra:costoPostventa(oc)};
+};
+
 export const calcMargen=(venta,costo)=>{
   const v=Number(venta)||0; const c=Number(costo)||0;
   if(v<=0) return {pesos:0,pct:0,color:C.danger,bg:C.dangerLight};
