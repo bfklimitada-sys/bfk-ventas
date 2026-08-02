@@ -12,12 +12,18 @@ export function FormPostventa({ oc, evento, onSave }) {
   const [estado,setEstado]=useState(evento?.estado||"abierto");
   const [solucion,setSolucion]=useState(evento?.solucion||"");
   const [fechaRes,setFechaRes]=useState(evento?.fecha_resolucion||"");
+  const [costoExtra,setCostoExtra]=useState(evento?.costo_extra||"");
+  const [detalleCosto,setDetalleCosto]=useState(evento?.detalle_costo||"");
   const [err,setErr]=useState(""); const [saving,setSaving]=useState(false);
   const guardar=async()=>{
     if(!descripcion.trim()){setErr("Describe la incidencia");return;}
     if(estado==="resuelto"&&!solucion.trim()){setErr("Indica la solución aplicada");return;}
     setErr("");setSaving(true);
-    try{ await onSave({id:evento?.id,ocId:oc.id,tipo,fecha,descripcion:descripcion.trim(),estado,solucion:solucion.trim()||null,fecha_resolucion:estado==="resuelto"?(fechaRes||new Date().toISOString().slice(0,10)):null}); }
+    try{ await onSave({id:evento?.id,ocId:oc.id,tipo,fecha,descripcion:descripcion.trim(),estado,
+      solucion:solucion.trim()||null,
+      fecha_resolucion:estado==="resuelto"?(fechaRes||new Date().toISOString().slice(0,10)):null,
+      costo_extra:costoExtra?Number(costoExtra):0,
+      detalle_costo:detalleCosto.trim()||null}); }
     catch(e){setErr(e.message);} finally{setSaving(false);}
   };
   return (
@@ -34,6 +40,16 @@ export function FormPostventa({ oc, evento, onSave }) {
       <Field label="Descripción" required>
         <textarea style={{...iStyle,minHeight:70,resize:"vertical"}} value={descripcion} onChange={e=>setDescripcion(e.target.value)} placeholder="Qué informó el cliente" />
       </Field>
+      <Field label="Costo extra ($)" hint="Lo que costó resolverlo: reposición, flete, repuesto. Se descuenta de la ganancia de la OC.">
+        <input style={iMono} type="number" value={costoExtra}
+          onChange={e=>setCostoExtra(e.target.value)} placeholder="0" />
+      </Field>
+      {Number(costoExtra)>0&&(
+        <Field label="¿En qué se gastó?">
+          <input style={iStyle} value={detalleCosto} onChange={e=>setDetalleCosto(e.target.value)}
+            placeholder="ej: reposición de 1 unidad, flete de devolución" />
+        </Field>
+      )}
       <Field label="Estado">
         <select style={selStyle} value={estado} onChange={e=>setEstado(e.target.value)}>
           <option value="abierto">Abierto</option>
@@ -212,6 +228,11 @@ export function EtapasOC({ oc, perfil, perfiles, onEditarEvento, onEliminarFactu
               <div style={{fontSize:11.5,color:C.inkMuted}}>{fmt.date(ev.fecha)||"—"}</div>
               {ev.descripcion&&<div style={{fontSize:11.5,color:C.ink,marginTop:3}}>{ev.descripcion}</div>}
               {ev.solucion&&<div style={{fontSize:11,color:C.ok,marginTop:3}}>Solución: {ev.solucion}{ev.fecha_resolucion?` · ${fmt.date(ev.fecha_resolucion)}`:""}</div>}
+              {Number(ev.costo_extra)>0&&(
+                <div style={{fontSize:11,color:C.danger,marginTop:3,fontWeight:600}}>
+                  Costo extra: {fmt.money(ev.costo_extra)}{ev.detalle_costo?` · ${ev.detalle_costo}`:""}
+                </div>
+              )}
             </>}
             <div style={{display:"flex",gap:6,marginTop:8}}>
               <button onClick={()=>onEditarEvento&&onEditarEvento({tipo:etapa.label,e:ev,tabla:etapa.tabla})}
