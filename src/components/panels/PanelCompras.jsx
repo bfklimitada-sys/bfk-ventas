@@ -214,14 +214,10 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
                 const tieneUrl=l.url&&l.url!=="sin-link";
                 let dominio="";
                 if(tieneUrl){ try{ dominio=new URL(l.url).hostname.replace(/^www\./,""); }catch{} }
-                // La descripción viene como "Nombre × 3 | Compra: $X | Venta: $Y | Categoría"
-                const partes=String(l.descripcion||"").split("|").map(x=>x.trim());
-                const cabecera=partes[0]||"";
-                const m=cabecera.match(/^(.*?)\s*[×x]\s*(\d+)\s*$/);
-                const nombre=m?m[1].trim():cabecera;
-                const cantidad=m?m[2]:null;
-                const montos=partes.slice(1).filter(x=>/^(Compra|Venta):/i.test(x));
-                const categoria=partes.slice(1).find(x=>!/^(Compra|Venta):/i.test(x));
+                const {nombre,cantidad,resto}=partirDesc(l.descripcion);
+                const montos=resto.filter(x=>/^(Compra|Venta):/i.test(x));
+                const categoria=resto.find(x=>!/^(Compra|Venta):/i.test(x));
+
                 if(editando===l.id){
                   return (
                     <div key={l.id} style={{background:C.tealLight,borderRadius:9,padding:"10px 11px",marginBottom:6}}>
@@ -238,8 +234,10 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
                     </div>
                   );
                 }
+
                 return (
                   <div key={l.id} style={{background:C.paper,borderRadius:9,padding:"9px 11px",marginBottom:6}}>
+                    {/* Fila: producto · cantidad */}
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
                       <span style={{fontSize:12,color:C.ink,fontWeight:600,lineHeight:1.45,minWidth:0}}>{nombre}</span>
                       {cantidad&&(
@@ -247,39 +245,40 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
                           padding:"2px 8px",fontSize:11.5,fontWeight:800,fontFamily:MONO}}>×{cantidad}</span>
                       )}
                     </div>
-                    {montos.length>0&&(
-                      <div style={{fontSize:11,color:C.inkMuted,marginTop:4}}>{montos.join(" · ")}</div>
-                    )}
-                    {categoria&&(
-                      <div style={{fontSize:10.5,color:C.inkFaint,marginTop:3,lineHeight:1.4}}>{categoria}</div>
-                    )}
+                    {montos.length>0&&<div style={{fontSize:11,color:C.inkMuted,marginTop:3}}>{montos.join(" · ")}</div>}
+                    {categoria&&<div style={{fontSize:10.5,color:C.inkFaint,marginTop:2,lineHeight:1.4}}>{categoria}</div>}
+
                     {(l.direccion_entrega||oc.direccion_entrega)&&(
-                      <div style={{fontSize:10.5,marginTop:5,lineHeight:1.4,
-                        color:l.direccion_entrega?C.warn:C.info,
-                        fontWeight:l.direccion_entrega?700:400}}>
+                      <div style={{fontSize:10.5,marginTop:4,lineHeight:1.4,
+                        color:l.direccion_entrega?C.warn:C.info,fontWeight:l.direccion_entrega?700:400}}>
                         {l.direccion_entrega?"Despacho distinto: ":"Entregar en: "}
                         {l.direccion_entrega||oc.direccion_entrega}
                       </div>
                     )}
-                    <div style={{display:"flex",alignItems:"center",gap:10,marginTop:6,flexWrap:"wrap"}}>
+
+                    {/* Fila del link: si existe se abre, si no se agrega ahí mismo */}
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginTop:7,
+                      paddingTop:7,borderTop:`1px solid ${C.border}`}}>
                       {tieneUrl?(
-                        <a href={l.url} target="_blank" rel="noopener noreferrer"
-                          style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:11,
-                            color:C.teal,textDecoration:"none",fontWeight:600}}>
-                          🔗 {dominio||"Abrir link"} ↗
-                        </a>
+                        <>
+                          <a href={l.url} target="_blank" rel="noopener noreferrer"
+                            style={{flex:1,minWidth:0,fontSize:11,color:C.teal,textDecoration:"none",fontWeight:600,
+                              overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                            🔗 {dominio||l.url} ↗
+                          </a>
+                          <button onClick={()=>abrirEdicion(l)}
+                            style={{flexShrink:0,background:"none",border:"none",color:C.inkMuted,fontSize:11,cursor:"pointer",fontWeight:600,padding:0}}>Editar</button>
+                        </>
                       ):(
-                        <span style={{fontSize:10.5,color:C.inkFaint}}>Sin link de compra</span>
+                        <button onClick={()=>abrirEdicion(l)}
+                          style={{flex:1,background:C.tealLight,border:`1px dashed ${C.teal}66`,borderRadius:7,
+                            padding:"6px 10px",fontSize:11,color:C.tealDark,cursor:"pointer",fontWeight:700}}>
+                          + Agregar link de compra
+                        </button>
                       )}
-                      <button onClick={()=>abrirEdicion(l)}
-                        style={{background:"none",border:"none",color:C.inkMuted,fontSize:11,cursor:"pointer",fontWeight:600,padding:0}}>
-                        Editar
-                      </button>
                       {esAdmin&&(
                         <button onClick={async()=>{ if(window.confirm("¿Eliminar este producto?")) await onEliminarLink(l.id,oc); }}
-                          style={{background:"none",border:"none",color:C.danger,fontSize:11,cursor:"pointer",fontWeight:600,padding:0}}>
-                          Eliminar
-                        </button>
+                          style={{flexShrink:0,background:"none",border:"none",color:C.danger,fontSize:11,cursor:"pointer",fontWeight:600,padding:0}}>Eliminar</button>
                       )}
                     </div>
                   </div>
@@ -493,10 +492,8 @@ export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded
             {(oc.entidad||oc.contacto)&&<br/>}
             {saldo>0&&oc.monto_facturado>0&&<>Por cobrar <b style={{color:C.danger}}>{fmt.money(saldo)}</b> · </>}
             {(()=>{
-              const esHist=oc.id?.startsWith("ocv2_hist");
-              const fc=(oc.eventos_compra||[])[0]?.fecha;
-              const f=esHist&&fc?fmt.date(fc):(oc.creadoEn?fmt.date(String(oc.creadoEn).slice(0,10)):null);
-              return f?<>Creada {f}</>:null;
+              const f=oc.fecha_emision_mp||(oc.eventos_compra||[])[0]?.fecha||oc.creadoEn;
+              return f?<>Emitida {fmt.date(String(f).slice(0,10))}</>:null;
             })()}
           </div>
 
@@ -622,6 +619,9 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, onSincroniz
   const [bannerAbierto,setBannerAbierto]=useState(false);
   const [vista,setVista]=useState("todas");
   const [masFiltros,setMasFiltros]=useState(false);
+  const [desde,setDesde]=useState(""); const [hasta,setHasta]=useState("");
+
+  const fechaDe=(o)=>String(o.fecha_emision_mp||(o.eventos_compra||[])[0]?.fecha||o.creadoEn||"").slice(0,10);
 
   // Cada vista responde a "¿qué me falta hacer?" en esa etapa
   const cumpleVista=(oc,v)=>{
@@ -655,13 +655,16 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, onSincroniz
     if(busq.trim()){ const q=busq.toLowerCase(); if(!oc.numero_oc.toLowerCase().includes(q)&&!(oc.cliente||"").toLowerCase().includes(q)&&!(oc.comuna||"").toLowerCase().includes(q)&&!(oc.entidad||"").toLowerCase().includes(q)) return false; }
     if(comunaSel&&oc.comuna!==comunaSel) return false;
     if(!cumpleVista(oc,vista)) return false;
+    const f=fechaDe(oc);
+    if(desde&&(!f||f<desde)) return false;
+    if(hasta&&(!f||f>hasta)) return false;
     for(const f of FILTROS){ const s=filtros[f.key]; if(!s) continue; const ok=oc[f.okField]===f.okValue; if(s==="ok"&&!ok) return false; if(s==="pend"&&ok) return false; }
     return true;
   }).sort((a,b)=>{
-    const fa=((a.eventos_compra||[])[0]?.fecha)||a.creadoEn||"";
-    const fb=((b.eventos_compra||[])[0]?.fecha)||b.creadoEn||"";
+    const fa=a.fecha_emision_mp||((a.eventos_compra||[])[0]?.fecha)||a.creadoEn||"";
+    const fb=b.fecha_emision_mp||((b.eventos_compra||[])[0]?.fecha)||b.creadoEn||"";
     return String(fb).localeCompare(String(fa));
-  }),[ocs,filtros,busq,comunaSel,vista]);
+  }),[ocs,filtros,busq,comunaSel,vista,desde,hasta]);
 
   const alertas=useMemo(()=>ocs.filter(o=>{
     if(o.estado_pago_cliente==="pagado") return false;
@@ -765,17 +768,50 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, onSincroniz
       </button>
 
       {masFiltros&&(
-        <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:12,background:C.paper,borderRadius:10,padding:"10px"}}>
+        <div style={{background:C.paper,borderRadius:10,padding:"10px",marginBottom:12}}>
+          <div style={{fontSize:10.5,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Rango de fechas</div>
+          <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:6}}>
+            <input type="date" value={desde} onChange={e=>setDesde(e.target.value)}
+              style={{...iStyle,flex:1,fontSize:12,padding:"7px 9px"}} />
+            <span style={{fontSize:11,color:C.inkFaint}}>a</span>
+            <input type="date" value={hasta} onChange={e=>setHasta(e.target.value)}
+              style={{...iStyle,flex:1,fontSize:12,padding:"7px 9px"}} />
+          </div>
+          <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:10}}>
+            {[
+              {t:"Este mes",d:()=>{const h=new Date();return [`${h.getFullYear()}-${String(h.getMonth()+1).padStart(2,"0")}-01`,h.toISOString().slice(0,10)];}},
+              {t:"Mes pasado",d:()=>{const h=new Date();const i=new Date(h.getFullYear(),h.getMonth()-1,1);const f=new Date(h.getFullYear(),h.getMonth(),0);return [i.toISOString().slice(0,10),f.toISOString().slice(0,10)];}},
+              {t:"Últimos 90 días",d:()=>{const h=new Date();const i=new Date();i.setDate(i.getDate()-90);return [i.toISOString().slice(0,10),h.toISOString().slice(0,10)];}},
+              {t:"Este año",d:()=>{const h=new Date();return [`${h.getFullYear()}-01-01`,h.toISOString().slice(0,10)];}},
+            ].map(b=>(
+              <button key={b.t} onClick={()=>{const [i,f]=b.d();setDesde(i);setHasta(f);}}
+                style={{fontSize:10.5,fontWeight:700,padding:"5px 9px",borderRadius:7,cursor:"pointer",
+                  border:`1px solid ${C.border}`,background:C.card,color:C.inkMuted}}>{b.t}</button>
+            ))}
+            {(desde||hasta)&&(
+              <button onClick={()=>{setDesde("");setHasta("");}}
+                style={{fontSize:10.5,fontWeight:700,padding:"5px 9px",borderRadius:7,cursor:"pointer",
+                  border:`1px solid ${C.danger}`,background:C.dangerLight,color:C.danger}}>Quitar fechas</button>
+            )}
+          </div>
+
+          <div style={{fontSize:10.5,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Por etapa</div>
+          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
           {FILTROS.map(f=>(
             <div key={f.key} style={{display:"flex",gap:3}}>
               <button onClick={()=>{setVista("todas");toggle(f.key,"pend");}} style={{fontSize:10.5,fontWeight:700,padding:"5px 8px",borderRadius:7,border:`1.5px solid ${filtros[f.key]==="pend"?C.danger:C.border}`,background:filtros[f.key]==="pend"?C.dangerLight:C.card,color:filtros[f.key]==="pend"?C.danger:C.inkMuted,cursor:"pointer"}}>{f.label}: {f.pendLabel}</button>
               <button onClick={()=>{setVista("todas");toggle(f.key,"ok");}} style={{fontSize:10.5,fontWeight:700,padding:"5px 8px",borderRadius:7,border:`1.5px solid ${filtros[f.key]==="ok"?C.ok:C.border}`,background:filtros[f.key]==="ok"?C.okLight:C.card,color:filtros[f.key]==="ok"?C.ok:C.inkMuted,cursor:"pointer"}}>{f.okLabel}</button>
             </div>
           ))}
+          </div>
         </div>
       )}
 
-      <div style={{fontSize:11.5,color:C.inkFaint,marginBottom:10}}>{filtered.length} orden{filtered.length!==1?"es":""}</div>
+      <div style={{fontSize:11.5,color:C.inkFaint,marginBottom:10}}>
+        {filtered.length} orden{filtered.length!==1?"es":""}
+        {(desde||hasta)&&<span style={{color:C.teal,fontWeight:700}}> · {desde?fmt.date(desde):"inicio"} a {hasta?fmt.date(hasta):"hoy"}</span>}
+        {(desde||hasta)&&<> · <b>{fmt.money(filtered.reduce((s,o)=>s+(Number(o.monto_total)||0),0))}</b></>}
+      </div>
       {filtered.map(oc=><FilaOC key={oc.id} oc={oc} perfiles={perfiles} todasLasOcs={ocs} onSincronizarFecha={onSincronizarFecha} expanded={expId===oc.id} onToggle={()=>setExpId(expId===oc.id?null:oc.id)} contactos={contactos} onEnviarReclamo={onEnviarReclamo} onGuardarContacto={onGuardarContacto} onGuardarDatosOC={onGuardarDatosOC} onEditarEvento={onEditarEvento} financiadores={financiadores} onConfirmarEntrega={onConfirmarEntrega} onEmitirFactura={onEmitirFactura} onPagoCliente={onPagoCliente} onPagoFinanciamiento={onPagoFinanciamiento} entidadesCatalogo={entidadesCatalogo} onGuardarLink={onGuardarLink} onEliminarLink={onEliminarLink} onEditarLink={onEditarLink} bloqueos={bloqueos} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={onAgregarComentario} onEliminarComentario={onEliminarComentario} onBloquear={onBloquear} onLiberar={onLiberar} onEliminarOC={onEliminarOC} onEliminarFactura={onEliminarFactura} onEliminarEvento={onEliminarEvento} vendedores={vendedores} onIngresarCompra={onIngresarCompra} onAsignarResponsable={onAsignarResponsable} onGuardarPostventa={onGuardarPostventa} />)}
       {filtered.length===0&&<div style={{textAlign:"center",padding:30,color:C.inkFaint,fontSize:13}}>No hay órdenes con estos filtros.</div>}
       <Leyenda items={[
