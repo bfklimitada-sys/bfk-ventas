@@ -141,32 +141,32 @@ export function FormEditarEvento({ item, onSave, onCancel }) {
 function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, onSincronizarFecha }) {
   const [abierto,setAbierto]=useState(false);
   const [editando,setEditando]=useState(null);   // id del link en edición
-  const [dNom,setDNom]=useState(""); const [dCant,setDCant]=useState(""); const [dUrl,setDUrl]=useState(""); const [dDir,setDDir]=useState("");
+  const [dNom,setDNom]=useState(""); const [dCant,setDCant]=useState("");
+  const [dCompra,setDCompra]=useState(""); const [dVenta,setDVenta]=useState("");
+  const [dUrl,setDUrl]=useState(""); const [dDir,setDDir]=useState("");
   const [nuevo,setNuevo]=useState(false);
   const [sincronizando,setSincronizando]=useState(false);
   const esAdmin=perfil?.rol==="admin";
 
-  // La descripción se guarda como "Nombre × 3 | Compra: $X | Venta: $Y"
-  const partirDesc=(desc)=>{
-    const partes=String(desc||"").split("|").map(x=>x.trim());
-    const m=(partes[0]||"").match(/^(.*?)\s*[×x]\s*(\d+)\s*$/);
-    return { nombre:m?m[1].trim():(partes[0]||""), cantidad:m?m[2]:"", resto:partes.slice(1) };
-  };
-  const armarDesc=(nombre,cantidad,resto)=>
-    [`${nombre}${cantidad?` × ${cantidad}`:""}`, ...resto].filter(Boolean).join(" | ");
-
   const abrirEdicion=(l)=>{
-    const {nombre,cantidad}=partirDesc(l.descripcion);
-    setEditando(l.id); setDNom(nombre); setDCant(cantidad);
+    setEditando(l.id);
+    setDNom(l.descripcion||""); setDCant(l.cantidad??"");
+    setDCompra(l.precio_compra??""); setDVenta(l.precio_venta??"");
     setDUrl(l.url&&l.url!=="sin-link"?l.url:"");
     setDDir(l.direccion_entrega||"");
   };
   const guardarEdicion=async(l)=>{
-    const {resto}=partirDesc(l.descripcion);
-    await onEditarLink(l.id,{descripcion:armarDesc(dNom.trim(),dCant.trim(),resto),
-      url:dUrl.trim()||"sin-link", direccion_entrega:dDir.trim()||null},oc);
+    await onEditarLink(l.id,{
+      descripcion:dNom.trim(),
+      cantidad:dCant?Number(dCant):null,
+      precio_compra:dCompra?Number(dCompra):null,
+      precio_venta:dVenta?Number(dVenta):null,
+      url:dUrl.trim()||"sin-link",
+      direccion_entrega:dDir.trim()||null,
+    },oc);
     setEditando(null);
   };
+  const limpiar=()=>{setDNom("");setDCant("");setDCompra("");setDVenta("");setDUrl("");setDDir("");};
   const links=(oc.oc_productos_link||[]).slice().sort((a,b)=>a.orden-b.orden);
   const evC=(oc.eventos_compra||[])[0];
   const evE=(oc.eventos_entrega||[])[0];
@@ -210,19 +210,31 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
           {links.length>0&&(
             <div style={{marginBottom:12}}>
               <div style={{fontSize:10,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Productos</div>
-              {links.map((l,i)=>{
+              {/* Encabezado de la tabla */}
+              <div style={{display:"flex",gap:8,padding:"0 11px 5px",fontSize:9.5,fontWeight:800,
+                color:C.inkFaint,textTransform:"uppercase",letterSpacing:0.4}}>
+                <span style={{flex:1}}>Producto</span>
+                <span style={{width:34,textAlign:"center"}}>Cant</span>
+                <span style={{width:76,textAlign:"right"}}>Total</span>
+              </div>
+
+              {links.map((l)=>{
                 const tieneUrl=l.url&&l.url!=="sin-link";
                 let dominio="";
                 if(tieneUrl){ try{ dominio=new URL(l.url).hostname.replace(/^www\./,""); }catch{} }
-                const {nombre,cantidad,resto}=partirDesc(l.descripcion);
-                const montos=resto.filter(x=>/^(Compra|Venta):/i.test(x));
-                const categoria=resto.find(x=>!/^(Compra|Venta):/i.test(x));
+                const cant=Number(l.cantidad)||null;
+                const venta=Number(l.precio_venta)||0;
+                const compra=Number(l.precio_compra)||0;
 
                 if(editando===l.id){
                   return (
-                    <div key={l.id} style={{background:C.tealLight,borderRadius:9,padding:"10px 11px",marginBottom:6}}>
+                    <div key={l.id} style={{background:C.tealLight,borderRadius:9,padding:"11px",marginBottom:6}}>
                       <Field label="Producto"><input style={iStyle} value={dNom} onChange={e=>setDNom(e.target.value)} /></Field>
-                      <Field label="Cantidad"><input style={iMono} type="number" value={dCant} onChange={e=>setDCant(e.target.value)} /></Field>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:7}}>
+                        <Field label="Cantidad"><input style={iMono} type="number" value={dCant} onChange={e=>setDCant(e.target.value)} /></Field>
+                        <Field label="Costo"><input style={iMono} type="number" value={dCompra} onChange={e=>setDCompra(e.target.value)} /></Field>
+                        <Field label="Venta"><input style={iMono} type="number" value={dVenta} onChange={e=>setDVenta(e.target.value)} /></Field>
+                      </div>
                       <Field label="Link de compra"><input style={iStyle} value={dUrl} onChange={e=>setDUrl(e.target.value)} placeholder="https://…" /></Field>
                       <Field label="Dirección de despacho" hint="Solo si este producto va a otra dirección">
                         <input style={iStyle} value={dDir} onChange={e=>setDDir(e.target.value)} placeholder={oc.direccion_entrega||"Misma que la OC"} />
@@ -237,16 +249,32 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
 
                 return (
                   <div key={l.id} style={{background:C.paper,borderRadius:9,padding:"9px 11px",marginBottom:6}}>
-                    {/* Fila: producto · cantidad */}
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
-                      <span style={{fontSize:12,color:C.ink,fontWeight:600,lineHeight:1.45,minWidth:0}}>{nombre}</span>
-                      {cantidad&&(
-                        <span style={{flexShrink:0,background:C.tealLight,color:C.tealDark,borderRadius:6,
-                          padding:"2px 8px",fontSize:11.5,fontWeight:800,fontFamily:MONO}}>×{cantidad}</span>
-                      )}
+                    {/* Fila principal alineada con el encabezado */}
+                    <div style={{display:"flex",gap:8,alignItems:"flex-start"}}>
+                      <span style={{flex:1,minWidth:0,fontSize:12,color:C.ink,fontWeight:600,lineHeight:1.4}}>
+                        {l.descripcion}
+                      </span>
+                      <span style={{width:34,flexShrink:0,textAlign:"center",fontFamily:MONO,
+                        fontSize:11.5,fontWeight:800,color:cant?C.tealDark:C.inkFaint}}>
+                        {cant?`×${cant}`:"—"}
+                      </span>
+                      <span style={{width:76,flexShrink:0,textAlign:"right",fontFamily:MONO,
+                        fontSize:11.5,fontWeight:800,color:C.ink}}>
+                        {venta?fmt.money(venta):"—"}
+                      </span>
                     </div>
-                    {montos.length>0&&<div style={{fontSize:11,color:C.inkMuted,marginTop:3}}>{montos.join(" · ")}</div>}
-                    {categoria&&<div style={{fontSize:10.5,color:C.inkFaint,marginTop:2,lineHeight:1.4}}>{categoria}</div>}
+
+                    {/* Segunda línea: costo, unitario, proveedor */}
+                    {(compra>0||l.proveedor||(cant&&venta))&&(
+                      <div style={{fontSize:10.5,color:C.inkMuted,marginTop:3}}>
+                        {compra>0&&<>Costo {fmt.money(compra)} · </>}
+                        {cant>1&&venta>0&&<>Unit. {fmt.money(Math.round(venta/cant))} · </>}
+                        {l.proveedor&&<>{l.proveedor}</>}
+                      </div>
+                    )}
+                    {l.categoria&&(
+                      <div style={{fontSize:10,color:C.inkFaint,marginTop:2,lineHeight:1.35}}>{l.categoria}</div>
+                    )}
 
                     {(l.direccion_entrega||oc.direccion_entrega)&&(
                       <div style={{fontSize:10.5,marginTop:4,lineHeight:1.4,
@@ -256,7 +284,7 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
                       </div>
                     )}
 
-                    {/* Fila del link: si existe se abre, si no se agrega ahí mismo */}
+                    {/* Link, o el botón para agregarlo */}
                     <div style={{display:"flex",alignItems:"center",gap:8,marginTop:7,
                       paddingTop:7,borderTop:`1px solid ${C.border}`}}>
                       {tieneUrl?(
@@ -284,10 +312,40 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
                   </div>
                 );
               })}
+
+              {/* Total de los productos */}
+              {(()=>{
+                const tv=links.reduce((s,l)=>s+(Number(l.precio_venta)||0),0);
+                const tc=links.reduce((s,l)=>s+(Number(l.precio_compra)||0),0);
+                if(!tv) return null;
+                const calza=Math.abs(tv-(Number(oc.monto_total)||0))<=1;
+                return (
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",
+                    padding:"8px 11px",marginTop:2,borderTop:`2px solid ${C.border}`}}>
+                    <span style={{fontSize:11,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4}}>
+                      Total productos
+                    </span>
+                    <span style={{textAlign:"right"}}>
+                      <span style={{display:"block",fontFamily:MONO,fontWeight:800,fontSize:12.5,color:C.ink}}>{fmt.money(tv)}</span>
+                      {tc>0&&<span style={{display:"block",fontSize:10,color:C.inkFaint}}>costo {fmt.money(tc)}</span>}
+                      {!calza&&(
+                        <span style={{display:"block",fontSize:10,color:C.warn,fontWeight:700}}>
+                          ⚠ la OC dice {fmt.money(oc.monto_total)}
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                );
+              })()}
+
               {nuevo?(
-                <div style={{background:C.tealLight,borderRadius:9,padding:"10px 11px",marginBottom:6}}>
+                <div style={{background:C.tealLight,borderRadius:9,padding:"11px",marginTop:6}}>
                   <Field label="Producto"><input style={iStyle} value={dNom} onChange={e=>setDNom(e.target.value)} /></Field>
-                  <Field label="Cantidad"><input style={iMono} type="number" value={dCant} onChange={e=>setDCant(e.target.value)} /></Field>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:7}}>
+                    <Field label="Cantidad"><input style={iMono} type="number" value={dCant} onChange={e=>setDCant(e.target.value)} /></Field>
+                    <Field label="Costo"><input style={iMono} type="number" value={dCompra} onChange={e=>setDCompra(e.target.value)} /></Field>
+                    <Field label="Venta"><input style={iMono} type="number" value={dVenta} onChange={e=>setDVenta(e.target.value)} /></Field>
+                  </div>
                   <Field label="Link de compra"><input style={iStyle} value={dUrl} onChange={e=>setDUrl(e.target.value)} placeholder="https://…" /></Field>
                   <Field label="Dirección de despacho" hint="Solo si va a otra dirección">
                     <input style={iStyle} value={dDir} onChange={e=>setDDir(e.target.value)} placeholder={oc.direccion_entrega||"Misma que la OC"} />
@@ -295,17 +353,21 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
                   <div style={{display:"flex",gap:6}}>
                     <button onClick={async()=>{
                       if(!dNom.trim()) return;
-                      await onGuardarLink(oc.id,{descripcion:armarDesc(dNom.trim(),dCant.trim(),[]),
-                        url:dUrl.trim()||"sin-link",orden:links.length,direccion_entrega:dDir.trim()||null},oc);
-                      setNuevo(false); setDNom(""); setDCant(""); setDUrl(""); setDDir("");
+                      await onGuardarLink(oc.id,{descripcion:dNom.trim(),
+                        cantidad:dCant?Number(dCant):null,
+                        precio_compra:dCompra?Number(dCompra):null,
+                        precio_venta:dVenta?Number(dVenta):null,
+                        url:dUrl.trim()||"sin-link",orden:links.length,
+                        direccion_entrega:dDir.trim()||null},oc);
+                      setNuevo(false); limpiar();
                     }} style={btnP(C.teal)}>Agregar</button>
                     <button onClick={()=>setNuevo(false)} style={btnP(C.inkFaint)}>Cancelar</button>
                   </div>
                 </div>
               ):(
-                <button onClick={()=>{setNuevo(true);setDNom("");setDCant("");setDUrl("");setDDir("");}}
+                <button onClick={()=>{setNuevo(true);limpiar();}}
                   style={{fontSize:11,background:"none",border:`1px dashed ${C.border}`,borderRadius:8,
-                    padding:"6px 12px",color:C.teal,cursor:"pointer",width:"100%"}}>
+                    padding:"7px 12px",color:C.teal,cursor:"pointer",width:"100%",marginTop:4}}>
                   + Agregar producto
                 </button>
               )}
