@@ -6,7 +6,7 @@ import { DiasBadge, Field, Leyenda, Modal, Trazabilidad } from "../ui/Basicos";
 import { EtapasOC, FormPostventa } from "../ui/EtapasOC";
 import { BloqueoBanner, ComentariosOC, HistorialCambiosOC } from "../ui/Multiusuario";
 import { del } from "../../lib/supabase";
-import { C, MONO, btnG, btnP, calcMargen, fmt, iMono, iStyle, selStyle } from "../../lib/theme";
+import { C, MONO, btnG, btnP, calcMargen, gananciaReal, fmt, iMono, iStyle, selStyle } from "../../lib/theme";
 
 export const FILTROS=[
   {key:"compra",label:"Compra",okField:"estado_compra",okValue:"comprado",okLabel:"Comprado",pendLabel:"Pendiente"},
@@ -388,11 +388,9 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
 
                 {/* Margen entre lo vendido y lo comprado */}
                 {(()=>{
-                  const venta=Number(oc.monto_total)||0;
-                  const costo=Number(oc.costo_total)||0;
-                  if(!venta||!costo) return null;
-                  const util=venta-costo, pct=Math.round(util/venta*100);
-                  const col=pct>=20?C.ok:pct>=10?C.warn:C.danger;
+                  const g=gananciaReal(oc);
+                  const venta=g.venta, costo=g.costo, util=g.pesos, pct=g.pct, col=g.color;
+                  if(!venta||!Number(oc.costo_total)) return null;
                   return (
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",
                       marginTop:10,paddingTop:9,borderTop:`2px solid ${C.border}`}}>
@@ -401,6 +399,7 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
                         <span style={{fontFamily:MONO,fontWeight:800,fontSize:16,color:col}}>{fmt.money(util)}</span>
                         <span style={{display:"block",fontSize:10.5,color:C.inkFaint,marginTop:1}}>
                           {pct}% · venta {fmt.money(venta)} · costo {fmt.money(costo)}
+                          {g.extra>0&&<span style={{color:C.danger}}> (incluye {fmt.money(g.extra)} de post-venta)</span>}
                         </span>
                       </span>
                     </div>
@@ -551,13 +550,15 @@ export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded
                 : <span style={{color:C.warn,fontWeight:700}}>⚠ Falta la entidad</span>;
             })()}
           </span>
-          {(()=>{const mg=calcMargen(oc.monto_total,oc.costo_total);
+          {(()=>{const mg=gananciaReal(oc);
             return oc.costo_total?(
               <span style={{flexShrink:0,textAlign:"right"}}>
                 <span style={{display:"block",fontFamily:MONO,fontSize:12,fontWeight:800,color:mg.color}}>
                   +{fmt.money(mg.pesos)}
                 </span>
-                <span style={{display:"block",fontSize:9.5,color:mg.color,opacity:0.8}}>{mg.pct}% margen</span>
+                <span style={{display:"block",fontSize:9.5,color:mg.color,opacity:0.8}}>
+                  {mg.pct}%{mg.extra>0?" · con post-venta":" margen"}
+                </span>
               </span>
             ):null;})()}
         </div>
@@ -915,7 +916,7 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, onSincroniz
         <span style={{fontSize:11.5,color:C.inkFaint,minWidth:0}}>
           {filtered.length} orden{filtered.length!==1?"es":""}
           {(()=>{
-            const gan=filtered.reduce((s,o)=>s+((Number(o.monto_total)||0)-(Number(o.costo_total)||0)),0);
+            const gan=filtered.reduce((s,o)=>s+gananciaReal(o).pesos,0);
             const ven=filtered.reduce((s,o)=>s+(Number(o.monto_total)||0),0);
             return gan>0?(
               <> · vende <b style={{color:C.ink}}>{fmt.money(ven)}</b> · deja <b style={{color:C.ok}}>{fmt.money(gan)}</b></>
