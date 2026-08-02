@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Field } from "./Basicos";
 import { del } from "../../lib/supabase";
-import { C, MONO, SANS, btnP, fmt, iStyle, selStyle } from "../../lib/theme";
+import { C, MONO, SANS, btnP, fmt, iMono, iStyle, selStyle } from "../../lib/theme";
 
 export const TIPOS_PV={falla:"Falla del producto",faltante:"Faltante",cambio:"Cambio / reposición",devolucion:"Devolución",otro:"Otro"};
 
