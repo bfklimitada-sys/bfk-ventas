@@ -4,7 +4,7 @@ import { gananciaReal, costoPostventa } from "../../lib/theme";
 import { del } from "../../lib/supabase";
 import { C, MONO, SANS, btnP, fmt } from "../../lib/theme";
 
-export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, aportes: aportesLista, onNavigate, onAccion, onSincronizar, sincronizando, porAceptar, esCodigoMP, ultimaCartola }) {
+export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, aportes: aportesLista, onNavigate, onAccion, onSincronizar, sincronizando, porAceptar, esCodigoMP, ultimaCartola, saldoBanco, bancoMensual, onEditarSaldo }) {
   const [expandido,setExpandido]=useState(null);
   const [verHistorico,setVerHistorico]=useState(false);
 
@@ -45,7 +45,36 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
     const gastoImpuesto=gastos.filter(g=>g.categoria_id==="cat_impuesto").reduce((s,g)=>s+(g.monto||0),0);
     const gastosVendedores=pagosVendedor.reduce((s,p)=>s+(p.monto_pagado||0),0);
 
+        // La app calcula su propio saldo con lo registrado.
     const saldoCtaCte = cobrado + totalAportes - creditoPagadoTotal - gastosTotal - costoBFK;
+
+    // Y se compara con el saldo real del banco: la diferencia es
+    // lo que se movió en la cuenta y no está registrado acá.
+    const corte = saldoBanco?.fecha_corte ? String(saldoBanco.fecha_corte).slice(0,10) : null;
+    const saldoReal = saldoBanco ? Number(saldoBanco.saldo)||0 : null;
+
+    // Movimientos registrados después del corte: se suman al saldo real
+    // para poder comparar ambos en el mismo momento.
+    let movDesdeCorte=0;
+    if(corte){
+      for(const oc of ocs){
+        for(const e of (oc.eventos_pago_cliente||[]))
+          if(String(e.fecha||"").slice(0,10) > corte) movDesdeCorte += Number(e.monto)||0;
+        for(const e of (oc.eventos_pago_financiamiento||[]))
+          if(String(e.fecha||"").slice(0,10) > corte) movDesdeCorte -= Number(e.monto)||0;
+      }
+      for(const e of (pagoFinSueltos||[]))
+        if(String(e.fecha||"").slice(0,10) > corte) movDesdeCorte -= Number(e.monto)||0;
+      for(const g of gastos)
+        if(String(g.fecha||"").slice(0,10) > corte) movDesdeCorte -= Number(g.monto)||0;
+      for(const p of pagosVendedor)
+        if(String(p.fecha||"").slice(0,10) > corte) movDesdeCorte -= Number(p.monto_pagado)||0;
+      for(const a of (aportesLista||[]))
+        if(String(a.fecha||"").slice(0,10) > corte)
+          movDesdeCorte += (a.tipo==="retiro"?-1:1)*(Number(a.monto)||0);
+    }
+    const saldoEsperado = saldoReal!==null ? saldoReal + movDesdeCorte : null;
+    const brecha = saldoEsperado!==null ? saldoCtaCte - saldoEsperado : null;
 
     let ingresosPendientes=0;
     for(const oc of ocs){
@@ -98,8 +127,8 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
     }).length;
 
     const utilidad=ingresos-costos;
-    return {gananciaMes,ventaMes,aportes:totalAportes,cobrado,porCobrar,deudaFin,utilidad,saldoProyectado,saldoCtaCte,ingresosPendientes,deudaTotal,gastoContador,gastosVendedores,gastoImpuesto,f29,margenPromPct,deudaVendedoresMes,ocsAbiertas};
-  },[ocs,financiadores,gastos,pagosVendedor,ivaMensual,vendedores,pagoFinSueltos,aportesLista]);
+    return {saldoReal,saldoEsperado,brecha,corteBanco:corte,movDesdeCorte,gananciaMes,ventaMes,aportes:totalAportes,cobrado,porCobrar,deudaFin,utilidad,saldoProyectado,saldoCtaCte,ingresosPendientes,deudaTotal,gastoContador,gastosVendedores,gastoImpuesto,f29,margenPromPct,deudaVendedoresMes,ocsAbiertas};
+  },[ocs,financiadores,gastos,pagosVendedor,ivaMensual,vendedores,pagoFinSueltos,aportesLista,saldoBanco]);
 
   const ocsPagadas=useMemo(()=>ocs.filter(o=>o.estado_pago_cliente==="pagado").map(o=>{
     const evF=(o.eventos_factura||[])[0]; return {...o,fechaFactura:evF?.fecha};
@@ -293,7 +322,97 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
             borderRadius:9,padding:"7px 12px",color:"#B8C4D9",fontSize:11.5,fontWeight:600,cursor:"pointer",width:"100%"}}>
           {kpis.ocsAbiertas} órdenes en curso ›
         </button>
+
+        <div style={{fontSize:10.5,color:C.inkFaint,marginTop:10,paddingTop:9,borderTop:"1px solid rgba(255,255,255,0.08)",lineHeight:1.6}}>
+          {ultimaCartola&&(
+            <>Última cartola: {fmt.date(String(ultimaCartola.fecha_desde).slice(0,10))} a {fmt.date(String(ultimaCartola.fecha_hasta).slice(0,10))}<br/></>
+          )}
+          <button onClick={onEditarSaldo}
+            style={{background:"none",border:"none",color:C.teal,fontSize:10.5,fontWeight:700,cursor:"pointer",padding:"3px 0"}}>
+            {kpis.saldoReal!==null?"Actualizar el saldo del banco":"Registrar el saldo del banco para conciliar"}
+          </button>
+        </div>
       </div>
+
+      {/* Conciliación por mes: el banco valida lo registrado.
+          No se comparan movimientos uno a uno porque las entidades
+          pagan varias facturas juntas y nunca calzarían. */}
+      {(bancoMensual||[]).length>0&&(()=>{
+        const meses=(bancoMensual||[]).slice(0,6).map(bm=>{
+          const ini=`${bm.anio}-${String(bm.mes).padStart(2,"0")}-01`;
+          const fin=`${bm.anio}-${String(bm.mes).padStart(2,"0")}-31`;
+          const enRango=(f)=>{const d=String(f||"").slice(0,10); return d>=ini&&d<=fin;};
+
+          let appEntro=0, appSalio=0;
+          for(const oc of ocs){
+            for(const e of (oc.eventos_pago_cliente||[]))          if(enRango(e.fecha)) appEntro+=Number(e.monto)||0;
+            for(const e of (oc.eventos_pago_financiamiento||[]))   if(enRango(e.fecha)) appSalio+=Number(e.monto)||0;
+          }
+          for(const e of (pagoFinSueltos||[])) if(enRango(e.fecha)) appSalio+=Number(e.monto)||0;
+          for(const g of gastos)               if(enRango(g.fecha)) appSalio+=Number(g.monto)||0;
+          for(const p of pagosVendedor)        if(enRango(p.fecha)) appSalio+=Number(p.monto_pagado)||0;
+          for(const a of (aportesLista||[]))   if(enRango(a.fecha)) (a.tipo==="retiro"?appSalio+=Number(a.monto)||0:appEntro+=Number(a.monto)||0);
+
+          const dEntro=appEntro-(Number(bm.entro)||0);
+          const dSalio=appSalio-(Number(bm.salio)||0);
+          const peor=Math.max(Math.abs(dEntro),Math.abs(dSalio));
+          const nombre=new Date(bm.anio,bm.mes-1,1).toLocaleDateString("es-CL",{month:"short",year:"2-digit"});
+          return {bm,nombre,appEntro,appSalio,dEntro,dSalio,peor};
+        });
+
+        const conProblema=meses.filter(m=>m.peor>50000).length;
+
+        return (
+          <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"13px 15px",marginBottom:12}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:3}}>
+              <span style={{fontSize:11.5,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4}}>
+                El banco vs lo registrado
+              </span>
+              {conProblema===0
+                ? <span style={{fontSize:11,fontWeight:700,color:C.ok}}>✓ todo cuadra</span>
+                : <span style={{fontSize:11,fontWeight:700,color:C.warn}}>{conProblema} mes(es) con diferencia</span>}
+            </div>
+            <div style={{fontSize:11,color:C.inkFaint,marginBottom:10,lineHeight:1.45}}>
+              Se comparan totales del mes, no movimiento a movimiento: las entidades pagan varias facturas juntas.
+            </div>
+
+            <div style={{display:"flex",gap:8,padding:"0 0 5px",fontSize:9.5,fontWeight:800,
+              color:C.inkFaint,textTransform:"uppercase",letterSpacing:0.4}}>
+              <span style={{width:52}}>Mes</span>
+              <span style={{flex:1,textAlign:"right"}}>Entró</span>
+              <span style={{flex:1,textAlign:"right"}}>Salió</span>
+            </div>
+
+            {meses.map(m=>(
+              <div key={m.bm.id} style={{padding:"7px 0",borderTop:`1px solid ${C.border}`}}>
+                <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                  <span style={{width:52,fontSize:11.5,fontWeight:700,color:C.ink}}>{m.nombre}</span>
+                  <span style={{flex:1,textAlign:"right"}}>
+                    <span style={{display:"block",fontFamily:MONO,fontSize:11.5,color:C.ink}}>{fmt.money(m.bm.entro)}</span>
+                    {Math.abs(m.dEntro)>50000&&(
+                      <span style={{display:"block",fontSize:9.5,fontWeight:700,color:m.dEntro>0?C.warn:C.danger}}>
+                        app {m.dEntro>0?"+":""}{fmt.money(m.dEntro)}
+                      </span>
+                    )}
+                  </span>
+                  <span style={{flex:1,textAlign:"right"}}>
+                    <span style={{display:"block",fontFamily:MONO,fontSize:11.5,color:C.ink}}>{fmt.money(m.bm.salio)}</span>
+                    {Math.abs(m.dSalio)>50000&&(
+                      <span style={{display:"block",fontSize:9.5,fontWeight:700,color:m.dSalio>0?C.warn:C.danger}}>
+                        app {m.dSalio>0?"+":""}{fmt.money(m.dSalio)}
+                      </span>
+                    )}
+                  </span>
+                </div>
+              </div>
+            ))}
+
+            <div style={{fontSize:10.5,color:C.inkFaint,marginTop:9,paddingTop:8,borderTop:`1px solid ${C.border}`,lineHeight:1.5}}>
+              En negro lo que dice el banco. Debajo, cuánto se desvía lo registrado en la app.
+            </div>
+          </div>
+        );
+      })()}
 
       </Seccion>
 
