@@ -51,9 +51,22 @@ async function buscarCodigoProveedor(ticket) {
   return d?.listaEmpresas?.[0]?.CodigoEmpresa ?? d?.Listado?.[0]?.CodigoEmpresa ?? null;
 }
 
+// Códigos de estado que devuelve la API (CodigoEstado)
+const ESTADOS_OC = {
+  3:  "Enviada a proveedor",
+  4:  "En proceso",
+  5:  "Aceptada",
+  6:  "Enviada a proveedor",
+  7:  "Recepción conforme",
+  9:  "Cancelada",
+  12: "Recepción conforme",
+};
+// Los que interesan para avisar: aún sin aceptar
+const SIN_ACEPTAR = new Set([3, 4, 6]);
+
 async function listarOCs(req, res, ticket) {
-  const estado = txt(req.query?.listar) || "enviadaproveedor";
   const dias = Math.min(Number(req.query?.dias) || 30, 90);
+  const soloPendientes = txt(req.query?.listar) !== "todas";
 
   const codigo = await buscarCodigoProveedor(ticket);
   if (!codigo) {
@@ -62,22 +75,26 @@ async function listarOCs(req, res, ticket) {
 
   const encontradas = [];
   const hoy = new Date();
+
   for (let i = 0; i < dias; i++) {
     const d = new Date(hoy); d.setDate(d.getDate() - i);
     const f = `${String(d.getDate()).padStart(2,"0")}${String(d.getMonth()+1).padStart(2,"0")}${d.getFullYear()}`;
+    // La API no acepta 'estado' junto con CodigoProveedor: se filtra acá.
     const url = "https://api.mercadopublico.cl/servicios/v1/publico/ordenesdecompra.json" +
-      `?fecha=${f}&estado=${encodeURIComponent(estado)}&CodigoProveedor=${codigo}` +
-      `&ticket=${encodeURIComponent(ticket)}`;
+      `?fecha=${f}&CodigoProveedor=${codigo}&ticket=${encodeURIComponent(ticket)}`;
     try {
       const r = await fetch(url, { headers: { Accept: "application/json" } });
       if (!r.ok) continue;
       const j = await r.json();
       for (const oc of (j?.Listado || [])) {
+        const cod = Number(oc.CodigoEstado);
+        if (soloPendientes && !SIN_ACEPTAR.has(cod)) continue;
         encontradas.push({
           numero_oc: txt(oc.Codigo),
           nombre: txt(oc.Nombre),
-          estado: txt(oc.Estado) || estado,
-          fecha: txt(oc.FechaEnvio) || txt(oc.FechaCreacion),
+          codigo_estado: cod,
+          estado: ESTADOS_OC[cod] || `Estado ${cod}`,
+          fecha: `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`,
         });
       }
     } catch { /* un día que falle no debe cortar la búsqueda */ }
@@ -85,7 +102,7 @@ async function listarOCs(req, res, ticket) {
 
   res.setHeader("Cache-Control", "s-maxage=900, stale-while-revalidate");
   return res.status(200).json({
-    ok: true, estado, dias, codigoProveedor: codigo,
+    ok: true, dias, codigoProveedor: codigo,
     total: encontradas.length, ocs: encontradas,
   });
 }
