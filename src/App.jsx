@@ -301,9 +301,13 @@ export default function App() {
         if(vacio(oc.contacto))       cambios.contacto=d.contacto||"";
         if(vacio(oc.correo_cliente)) cambios.correo_cliente=d.correo_cliente||"";
         if(vacio(oc.tipo_despacho))  cambios.tipo_despacho=d.tipo_despacho||"";
+        // La fecha de emisión no es un dato editable como el cliente o el
+        // contacto: Mercado Público es la única fuente de verdad, así que
+        // siempre se sincroniza (no solo cuando está vacía), para que una
+        // fecha vieja o mal cargada se autocorrija en la próxima pasada.
         const fechaMP=String(d.fecha_creacion||"").slice(0,10);
-        if(fechaMP&&!oc.fecha_emision_mp) cambios.fecha_emision_mp=fechaMP;
-        if(d.fecha_creacion&&!oc.fecha_hora_emision_mp) cambios.fecha_hora_emision_mp=d.fecha_creacion;
+        if(fechaMP&&fechaMP!==oc.fecha_emision_mp) cambios.fecha_emision_mp=fechaMP;
+        if(d.fecha_creacion&&d.fecha_creacion!==oc.fecha_hora_emision_mp) cambios.fecha_hora_emision_mp=d.fecha_creacion;
         if(!oc.tipo_despacho&&d.tipo_despacho) cambios.tipo_despacho=d.tipo_despacho;
         if(!oc.dias_pago)            cambios.dias_pago=d.dias_pago||30;
         if(!Number(oc.monto_total))  cambios.monto_total=d.monto_total||0;
