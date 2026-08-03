@@ -51,20 +51,25 @@ async function buscarCodigoProveedor(ticket) {
   return d?.listaEmpresas?.[0]?.CodigoEmpresa ?? d?.Listado?.[0]?.CodigoEmpresa ?? null;
 }
 
-// Códigos de estado que devuelve la API (CodigoEstado)
+// Códigos de estado que devuelve la API (CodigoEstado), según la
+// documentación oficial (chilecompra.cl/api → Órdenes de Compra):
+//   4  Enviada a Proveedor · 5  En proceso · 6  Aceptada · 9  Cancelada
+//   12 Recepción Conforme  · 13 Pendiente de Recepcionar
+//   14 Recepcionada Parcialmente · 15 Recepción Conforme Incompleta
 const ESTADOS_OC = {
-  3:  "Enviada a proveedor",
-  4:  "En proceso",
-  5:  "Aceptada",
-  6:  "Enviada a proveedor",
-  7:  "Recepción conforme",
+  4:  "Enviada a proveedor",
+  5:  "En proceso",
+  6:  "Aceptada",
   9:  "Cancelada",
   12: "Recepción conforme",
+  13: "Pendiente de recepcionar",
+  14: "Recepcionada parcialmente",
+  15: "Recepción conforme incompleta",
 };
 // Los que interesan para avisar: aún sin aceptar
-const SIN_ACEPTAR = new Set([3, 4, 6]);
-// Ya aceptadas y listas para cargar a la app (no canceladas)
-const ACEPTADAS = new Set([5, 7, 12]);
+const SIN_ACEPTAR = new Set([4, 5]);
+// Ya aceptadas (en cualquier etapa posterior) y listas para cargar a la app
+const ACEPTADAS = new Set([6, 12, 13, 14, 15]);
 
 async function listarOCs(req, res, ticket) {
   const dias = Math.min(Number(req.query?.dias) || 30, 90);
