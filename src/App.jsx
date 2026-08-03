@@ -444,6 +444,8 @@ export default function App() {
   // ─── OCs esperando aceptación en Mercado Público ─────────────
   // Se consultan al abrir la app: son ventas que todavía no
   // entran al sistema porque nadie las aceptó en el portal.
+  const SIN_ACEPTAR=new Set([3,4,6]); // mismos códigos que usa el backend
+
   const revisarPorAceptar=async()=>{
     try{
       const r=await fetch("/api/oc?listar=enviadaproveedor&dias=30");
@@ -452,7 +454,22 @@ export default function App() {
       if(!j.ok) return;
       const norm=(v)=>String(v||"").toUpperCase().replace(/[^A-Z0-9]/g,"").replace(/^N(?=\d)/,"");
       const cargadas=new Set(ocs.map(o=>norm(o.numero_oc)));
-      setPorAceptar((j.ocs||[]).filter(o=>!cargadas.has(norm(o.numero_oc))));
+      const candidatas=(j.ocs||[]).filter(o=>!cargadas.has(norm(o.numero_oc)));
+
+      // El listado masivo por fecha a veces queda un paso atrás del estado
+      // real. Antes de mostrar el aviso, se revalida cada una con la
+      // consulta puntual (más confiable) para que la pantalla se limpie
+      // sola apenas Mercado Público confirme que ya fue aceptada.
+      const verificadas=await Promise.all(candidatas.map(async(o)=>{
+        try{
+          const rr=await fetch(`/api/oc?codigo=${encodeURIComponent(o.numero_oc)}`);
+          if(rr.status===404) return o; // sigue sin publicarse: sigue pendiente
+          const jj=await rr.json();
+          if(!jj.ok) return o; // no se pudo confirmar: se deja para no ocultar de más
+          return SIN_ACEPTAR.has(Number(jj.oc?.codigo_estado)) ? o : null;
+        }catch{ return o; } // si falla la revalidación, se deja visible por seguridad
+      }));
+      setPorAceptar(verificadas.filter(Boolean));
     }catch{ /* si falla, simplemente no se muestra el aviso */ }
   };
 
