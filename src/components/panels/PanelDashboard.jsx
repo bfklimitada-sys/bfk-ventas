@@ -4,7 +4,7 @@ import { gananciaReal, costoPostventa } from "../../lib/theme";
 import { del } from "../../lib/supabase";
 import { C, MONO, SANS, btnP, fmt } from "../../lib/theme";
 
-export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, aportes: aportesLista, onNavigate, onAccion, onSincronizar, sincronizando, porAceptar, aceptadasSinCargar, onCargarOC, esCodigoMP, ultimaCartola, saldoBanco, bancoMensual, onEditarSaldo }) {
+export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, aportes: aportesLista, onNavigate, onAccion, onSincronizar, sincronizando, porAceptar, aceptadasSinCargar, onCargarOC, onCargarTodasAceptadas, cargandoAceptadas, canceladasEnMP, onEliminarCancelada, esCodigoMP, ultimaCartola, saldoBanco, bancoMensual, onEditarSaldo }) {
   const [expandido,setExpandido]=useState(null);
   const [verHistorico,setVerHistorico]=useState(false);
   const [verDesglose,setVerDesglose]=useState(false);
@@ -476,8 +476,19 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
             {aceptadasSinCargar.length} OC{aceptadasSinCargar.length>1?"s":""} aceptada{aceptadasSinCargar.length>1?"s":""} sin cargar
           </div>
           <div style={{fontSize:11.5,color:C.inkMuted,marginBottom:9,lineHeight:1.45}}>
-            Ya las aceptaron en Mercado Público. Revísalas y confirma para traerlas con sus datos.
+            Ya las aceptaron en Mercado Público. Revísalas una a una, o cárgalas todas de una vez (sin link de compra — lo agregas después en cada una).
           </div>
+          {cargandoAceptadas?(
+            <div style={{background:C.card,borderRadius:9,padding:"9px 12px",fontSize:11.5,fontWeight:700,color:C.ok,textAlign:"center"}}>
+              Cargando {cargandoAceptadas.hechas} de {cargandoAceptadas.total}…
+            </div>
+          ):(
+            <button onClick={()=>onCargarTodasAceptadas&&onCargarTodasAceptadas()}
+              style={{width:"100%",background:C.ok,border:"none",color:"#fff",borderRadius:9,padding:"9px 12px",
+                fontSize:12.5,fontWeight:700,cursor:"pointer",marginBottom:10}}>
+              Cargar las {aceptadasSinCargar.length} de una vez
+            </button>
+          )}
           {aceptadasSinCargar.slice(0,6).map((o,i)=>(
             <button key={i} onClick={()=>onCargarOC&&onCargarOC(o.numero_oc)}
               style={{width:"100%",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,
@@ -493,6 +504,35 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
           {aceptadasSinCargar.length>6&&(
             <div style={{fontSize:10.5,color:C.inkFaint,marginTop:5}}>y {aceptadasSinCargar.length-6} más</div>
           )}
+        </div>
+      )}
+
+      {/* ── OCs que están cargadas en la app pero se cancelaron en MP ── */}
+      {(canceladasEnMP||[]).length>0&&(
+        <div style={{background:C.dangerLight,border:`1px solid ${C.danger}`,borderRadius:12,padding:"12px 14px",marginBottom:12}}>
+          <div style={{fontSize:12.5,fontWeight:700,color:C.danger,marginBottom:3}}>
+            {canceladasEnMP.length} OC{canceladasEnMP.length>1?"s":""} cancelada{canceladasEnMP.length>1?"s":""} en Mercado Público
+          </div>
+          <div style={{fontSize:11.5,color:C.inkMuted,marginBottom:9,lineHeight:1.45}}>
+            Están cargadas acá, pero en Mercado Público figuran canceladas. Revisa si ya alcanzaste a comprar o gastar algo antes de eliminarlas.
+          </div>
+          {canceladasEnMP.map((o,i)=>(
+            <div key={o.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,padding:"7px 0",
+              borderBottom:i<canceladasEnMP.length-1?`1px solid ${C.danger}33`:"none"}}>
+              <span style={{minWidth:0}}>
+                <span style={{fontFamily:MONO,fontSize:11.5,fontWeight:700,color:C.ink,display:"block"}}>{o.numero_oc}</span>
+                <span style={{fontSize:10.5,color:C.inkMuted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"block"}}>{o.cliente||o.nombre||""}</span>
+              </span>
+              <button onClick={()=>{
+                  if(window.confirm(`¿Eliminar la OC ${o.numero_oc}?\n\nFigura cancelada en Mercado Público. Esta acción no se puede deshacer.`))
+                    onEliminarCancelada&&onEliminarCancelada(o.id);
+                }}
+                style={{flexShrink:0,background:"none",border:`1px solid ${C.danger}`,color:C.danger,borderRadius:8,
+                  padding:"5px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                🗑 Eliminar
+              </button>
+            </div>
+          ))}
         </div>
       )}
 
