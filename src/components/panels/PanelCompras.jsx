@@ -845,6 +845,7 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, onSincroniz
             onEnviar={async(data)=>{ await onEnviarReclamo(data); setReclamandoBanner(null); }} />
         </Modal>
       )}
+      {/* ── Buscador ── */}
       <div style={{display:"flex",gap:6,marginBottom:10}}>
         <input style={{...iStyle,flex:1,fontSize:13,padding:"9px 11px"}} placeholder="Buscar OC, cliente o comuna…"
           value={busq} onChange={e=>setBusq(e.target.value)} />
@@ -855,71 +856,104 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, onSincroniz
           </select>
         )}
       </div>
-      {/* Vista rápida: qué falta hacer. Un toque, una respuesta. */}
-      <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:10}}>
+
+      {/* ── Vista rápida: qué falta hacer. Un toque, una respuesta ── */}
+      <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:2,marginBottom:12,WebkitOverflowScrolling:"touch"}}>
         {VISTAS.map(v=>{
           const activa=vista===v.key;
           return (
             <button key={v.key} onClick={()=>{setVista(v.key);setFiltros({});}}
-              style={{fontSize:11,fontWeight:700,padding:"6px 11px",borderRadius:9,cursor:"pointer",
+              style={{flexShrink:0,fontSize:11,fontWeight:700,padding:"7px 12px",borderRadius:20,cursor:"pointer",
                 border:`1.5px solid ${activa?v.color:C.border}`,
-                background:activa?v.bg:C.card, color:activa?v.color:C.inkMuted}}>
+                background:activa?v.bg:C.card, color:activa?v.color:C.inkMuted,whiteSpace:"nowrap"}}>
               {v.label}{v.n>0?` ${v.n}`:""}
             </button>
           );
         })}
       </div>
 
-      {/* Período — visible, no escondido tras un desplegable */}
-      <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:10,alignItems:"center"}}>
-        {[
-          {t:"Este mes",d:()=>{const h=new Date();return [`${h.getFullYear()}-${String(h.getMonth()+1).padStart(2,"0")}-01`,h.toISOString().slice(0,10)];}},
-          {t:"Mes pasado",d:()=>{const h=new Date();const i=new Date(h.getFullYear(),h.getMonth()-1,1);const f=new Date(h.getFullYear(),h.getMonth(),0);return [i.toISOString().slice(0,10),f.toISOString().slice(0,10)];}},
-          {t:"90 días",d:()=>{const h=new Date();const i=new Date();i.setDate(i.getDate()-90);return [i.toISOString().slice(0,10),h.toISOString().slice(0,10)];}},
-          {t:"Este año",d:()=>{const h=new Date();return [`${h.getFullYear()}-01-01`,h.toISOString().slice(0,10)];}},
-        ].map(b=>{
-          const [i,f]=b.d(); const activo=desde===i&&hasta===f;
-          return (
-            <button key={b.t} onClick={()=>{ if(activo){setDesde("");setHasta("");} else {setDesde(i);setHasta(f);} }}
-              style={{fontSize:10.5,fontWeight:700,padding:"5px 10px",borderRadius:8,cursor:"pointer",
-                border:`1.5px solid ${activo?C.info:C.border}`,
-                background:activo?C.infoLight:C.card, color:activo?C.info:C.inkMuted}}>{b.t}</button>
-          );
-        })}
-        {(desde||hasta)&&(
-          <button onClick={()=>{setDesde("");setHasta("");}}
-            style={{fontSize:10.5,fontWeight:700,padding:"5px 9px",borderRadius:8,cursor:"pointer",
-              border:"none",background:"none",color:C.danger}}>✕ quitar</button>
-        )}
-      </div>
+      {/* ── Filtros avanzados: período, fechas exactas y etapa, todo en un solo lugar ── */}
+      {(()=>{
+        const etapasActivas=Object.values(filtros).filter(Boolean).length;
+        const rangoActivo=(desde||hasta)?1:0;
+        const totalActivos=etapasActivas+rangoActivo;
+        const limpiarTodo=()=>{ setDesde(""); setHasta(""); setFiltros({}); };
+        return (<>
+          <button onClick={()=>setMasFiltros(m=>!m)}
+            style={{display:"flex",alignItems:"center",gap:7,background:"none",border:"none",
+              color:totalActivos>0?C.info:C.inkFaint,fontSize:11.5,fontWeight:700,cursor:"pointer",
+              padding:"3px 2px",marginBottom:masFiltros?10:14}}>
+            <span style={{fontSize:10}}>{masFiltros?"▾":"▸"}</span>
+            Filtros avanzados
+            {totalActivos>0&&(
+              <span style={{background:C.info,color:"#fff",borderRadius:20,fontSize:10,fontWeight:800,
+                padding:"1.5px 7px",lineHeight:1.5}}>{totalActivos}</span>
+            )}
+          </button>
 
-      <button onClick={()=>setMasFiltros(m=>!m)}
-        style={{background:"none",border:"none",color:C.inkFaint,fontSize:11,cursor:"pointer",padding:"2px 0",marginBottom:masFiltros?8:12}}>
-        {masFiltros?"▾":"▸"} Filtros combinados
-      </button>
+          {masFiltros&&(
+            <div style={{background:C.paper,border:`1px solid ${C.border}`,borderRadius:12,padding:"13px 14px",marginBottom:12}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                <span style={{fontSize:10.5,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4}}>Filtros avanzados</span>
+                {totalActivos>0&&(
+                  <button onClick={limpiarTodo}
+                    style={{background:"none",border:"none",color:C.danger,fontSize:10.5,fontWeight:700,cursor:"pointer",padding:0}}>
+                    ✕ Limpiar todo
+                  </button>
+                )}
+              </div>
 
-      {masFiltros&&(
-        <div style={{background:C.paper,borderRadius:10,padding:"10px",marginBottom:12}}>
-          <div style={{fontSize:10.5,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Fechas exactas</div>
-          <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:6}}>
-            <input type="date" value={desde} onChange={e=>setDesde(e.target.value)}
-              style={{...iStyle,flex:1,fontSize:12,padding:"7px 9px"}} />
-            <span style={{fontSize:11,color:C.inkFaint}}>a</span>
-            <input type="date" value={hasta} onChange={e=>setHasta(e.target.value)}
-              style={{...iStyle,flex:1,fontSize:12,padding:"7px 9px"}} />
-          </div>
-          <div style={{fontSize:10.5,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Por etapa</div>
-          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-          {FILTROS.map(f=>(
-            <div key={f.key} style={{display:"flex",gap:3}}>
-              <button onClick={()=>{setVista("todas");toggle(f.key,"pend");}} style={{fontSize:10.5,fontWeight:700,padding:"5px 8px",borderRadius:7,border:`1.5px solid ${filtros[f.key]==="pend"?C.danger:C.border}`,background:filtros[f.key]==="pend"?C.dangerLight:C.card,color:filtros[f.key]==="pend"?C.danger:C.inkMuted,cursor:"pointer"}}>{f.label}: {f.pendLabel}</button>
-              <button onClick={()=>{setVista("todas");toggle(f.key,"ok");}} style={{fontSize:10.5,fontWeight:700,padding:"5px 8px",borderRadius:7,border:`1.5px solid ${filtros[f.key]==="ok"?C.ok:C.border}`,background:filtros[f.key]==="ok"?C.okLight:C.card,color:filtros[f.key]==="ok"?C.ok:C.inkMuted,cursor:"pointer"}}>{f.okLabel}</button>
+              <div style={{fontSize:10,fontWeight:800,color:C.inkFaint,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Período</div>
+              <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:12}}>
+                {[
+                  {t:"Este mes",d:()=>{const h=new Date();return [`${h.getFullYear()}-${String(h.getMonth()+1).padStart(2,"0")}-01`,h.toISOString().slice(0,10)];}},
+                  {t:"Mes pasado",d:()=>{const h=new Date();const i=new Date(h.getFullYear(),h.getMonth()-1,1);const f=new Date(h.getFullYear(),h.getMonth(),0);return [i.toISOString().slice(0,10),f.toISOString().slice(0,10)];}},
+                  {t:"90 días",d:()=>{const h=new Date();const i=new Date();i.setDate(i.getDate()-90);return [i.toISOString().slice(0,10),h.toISOString().slice(0,10)];}},
+                  {t:"Este año",d:()=>{const h=new Date();return [`${h.getFullYear()}-01-01`,h.toISOString().slice(0,10)];}},
+                ].map(b=>{
+                  const [i,f]=b.d(); const activo=desde===i&&hasta===f;
+                  return (
+                    <button key={b.t} onClick={()=>{ if(activo){setDesde("");setHasta("");} else {setDesde(i);setHasta(f);} }}
+                      style={{fontSize:10.5,fontWeight:700,padding:"5px 10px",borderRadius:8,cursor:"pointer",
+                        border:`1.5px solid ${activo?C.info:C.border}`,
+                        background:activo?C.infoLight:C.card, color:activo?C.info:C.inkMuted}}>{b.t}</button>
+                  );
+                })}
+              </div>
+
+              <div style={{fontSize:10,fontWeight:800,color:C.inkFaint,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Fechas exactas</div>
+              <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:12}}>
+                <input type="date" value={desde} onChange={e=>setDesde(e.target.value)}
+                  style={{...iStyle,flex:1,fontSize:12,padding:"7px 9px"}} />
+                <span style={{fontSize:11,color:C.inkFaint}}>a</span>
+                <input type="date" value={hasta} onChange={e=>setHasta(e.target.value)}
+                  style={{...iStyle,flex:1,fontSize:12,padding:"7px 9px"}} />
+              </div>
+
+              <div style={{fontSize:10,fontWeight:800,color:C.inkFaint,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Por etapa</div>
+              <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                {FILTROS.map(f=>(
+                  <div key={f.key} style={{display:"flex",alignItems:"center",gap:8}}>
+                    <span style={{fontSize:10.5,fontWeight:700,color:C.inkMuted,width:52,flexShrink:0}}>{f.label}</span>
+                    <button onClick={()=>{setVista("todas");toggle(f.key,"pend");}}
+                      style={{flex:1,fontSize:10.5,fontWeight:700,padding:"6px 8px",borderRadius:7,cursor:"pointer",
+                        border:`1.5px solid ${filtros[f.key]==="pend"?C.danger:C.border}`,
+                        background:filtros[f.key]==="pend"?C.dangerLight:C.card,
+                        color:filtros[f.key]==="pend"?C.danger:C.inkMuted}}>{f.pendLabel}</button>
+                    <button onClick={()=>{setVista("todas");toggle(f.key,"ok");}}
+                      style={{flex:1,fontSize:10.5,fontWeight:700,padding:"6px 8px",borderRadius:7,cursor:"pointer",
+                        border:`1.5px solid ${filtros[f.key]==="ok"?C.ok:C.border}`,
+                        background:filtros[f.key]==="ok"?C.okLight:C.card,
+                        color:filtros[f.key]==="ok"?C.ok:C.inkMuted}}>{f.okLabel}</button>
+                  </div>
+                ))}
+              </div>
             </div>
-          ))}
-          </div>
-        </div>
-      )}
+          )}
+        </>);
+      })()}
 
+      {/* ── Resumen y orden ── */}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:10}}>
         <span style={{fontSize:11,color:C.inkFaint,minWidth:0,lineHeight:1.5}}>
           {(()=>{
