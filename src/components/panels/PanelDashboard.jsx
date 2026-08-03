@@ -30,6 +30,54 @@ function KpiBtn({label,value,color,id,expandido,setExpandido,children}){
   );
 }
 
+// Tarjeta base para los avisos ligados a Mercado Público: encabezado con
+// icono + botón de refresco, y cuerpo blanco para el contenido/lista.
+function AvisoMP({icon,color,bg,titulo,descripcion,onActualizar,verificando,children}){
+  return (
+    <div style={{background:C.card,borderRadius:16,marginBottom:14,overflow:"hidden",
+      border:`1px solid ${C.border}`,boxShadow:"0 1px 3px rgba(15,23,42,0.05)"}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",background:bg}}>
+        <div style={{width:30,height:30,borderRadius:10,background:color,color:"#fff",flexShrink:0,
+          display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:800}}>{icon}</div>
+        <div style={{flex:1,minWidth:0,fontSize:13,fontWeight:800,color,lineHeight:1.3}}>{titulo}</div>
+        {onActualizar&&(
+          <button onClick={onActualizar} disabled={verificando}
+            style={{flexShrink:0,width:30,height:30,borderRadius:9,border:"none",
+              background:"rgba(255,255,255,0.65)",color,fontSize:13,fontWeight:800,
+              cursor:verificando?"default":"pointer",opacity:verificando?0.55:1,
+              display:"flex",alignItems:"center",justifyContent:"center"}}>
+            {verificando?"⋯":"↻"}
+          </button>
+        )}
+      </div>
+      <div style={{padding:"12px 14px"}}>
+        {descripcion&&<div style={{fontSize:11.5,color:C.inkMuted,marginBottom:11,lineHeight:1.5}}>{descripcion}</div>}
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// Fila estándar de un código de OC dentro de un AvisoMP
+function FilaAvisoMP({codigo,nombre,accion,onClick,color,ultima}){
+  const Tag=onClick?"button":"div";
+  return (
+    <Tag onClick={onClick} style={{width:"100%",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,
+      padding:"9px 0",background:"none",border:"none",textAlign:"left",cursor:onClick?"pointer":"default",
+      borderBottom:ultima?"none":`1px solid ${C.border}`}}>
+      <span style={{minWidth:0}}>
+        <span style={{fontFamily:MONO,fontSize:12,fontWeight:700,color:C.ink,display:"block"}}>{codigo}</span>
+        <span style={{fontSize:10.5,color:C.inkFaint,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"block"}}>{nombre||""}</span>
+      </span>
+      {accion&&<span style={{flexShrink:0,fontSize:11,fontWeight:700,color}}>{accion} ›</span>}
+    </Tag>
+  );
+}
+
+function VerMasAvisoMP({n}){
+  return <div style={{fontSize:10.5,color:C.inkFaint,marginTop:6,textAlign:"center"}}>y {n} más</div>;
+}
+
 export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, aportes: aportesLista, onNavigate, onAccion, onSincronizar, sincronizando, porAceptar, onActualizarPorAceptar, verificandoPorAceptar, aceptadasSinCargar, onCargarOC, onCargarTodasAceptadas, cargandoAceptadas, onActualizarAceptadas, verificandoAceptadas, canceladasEnMP, onEliminarCancelada, onActualizarCanceladas, verificandoCanceladas, esCodigoMP, ultimaCartola, saldoBanco, bancoMensual, onEditarSaldo }) {
   const [expandido,setExpandido]=useState(null);
   const [verHistorico,setVerHistorico]=useState(false);
@@ -463,113 +511,67 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
       <Seccion titulo="Requiere atención">
       {/* ── OCs esperando aceptación en Mercado Público ── */}
       {(porAceptar||[]).length>0&&(
-        <div style={{background:C.warnLight,border:`1px solid ${C.warn}`,borderRadius:12,padding:"12px 14px",marginBottom:12}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
-            <div style={{fontSize:12.5,fontWeight:700,color:C.warn}}>
-              {porAceptar.length} OC{porAceptar.length>1?"s":""} esperando aceptación
-            </div>
-            <button onClick={()=>onActualizarPorAceptar&&onActualizarPorAceptar()} disabled={verificandoPorAceptar}
-              style={{flexShrink:0,background:"none",border:"none",color:C.warn,fontSize:11,fontWeight:700,
-                cursor:verificandoPorAceptar?"default":"pointer",opacity:verificandoPorAceptar?0.5:1}}>
-              {verificandoPorAceptar?"Revisando…":"🔄 Actualizar"}
-            </button>
-          </div>
-          <div style={{fontSize:11.5,color:C.inkMuted,marginBottom:9,lineHeight:1.45}}>
-            Están enviadas en Mercado Público pero nadie las ha aceptado. Hasta que se acepten no se pueden cargar acá.
-          </div>
+        <AvisoMP icon="⏳" color={C.warn} bg={C.warnLight}
+          titulo={`${porAceptar.length} OC${porAceptar.length>1?"s":""} esperando aceptación`}
+          descripcion="Están enviadas en Mercado Público pero nadie las ha aceptado todavía. Hasta que se acepten no se pueden cargar acá."
+          onActualizar={onActualizarPorAceptar} verificando={verificandoPorAceptar}>
           {porAceptar.slice(0,5).map((o,i)=>(
-            <div key={i} style={{display:"flex",justifyContent:"space-between",gap:8,padding:"5px 0",
-              borderBottom:i<Math.min(porAceptar.length,5)-1?`1px solid ${C.warn}33`:"none"}}>
-              <span style={{fontFamily:MONO,fontSize:11.5,fontWeight:700,color:C.ink}}>{o.numero_oc}</span>
-              <span style={{fontSize:10.5,color:C.inkMuted,textAlign:"right",minWidth:0,
-                overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{o.nombre||""}</span>
-            </div>
+            <FilaAvisoMP key={i} codigo={o.numero_oc} nombre={o.nombre} ultima={i===Math.min(porAceptar.length,5)-1} />
           ))}
-          {porAceptar.length>5&&(
-            <div style={{fontSize:10.5,color:C.inkFaint,marginTop:5}}>y {porAceptar.length-5} más</div>
-          )}
-        </div>
+          {porAceptar.length>5&&<VerMasAvisoMP n={porAceptar.length-5} />}
+        </AvisoMP>
       )}
 
-      {/* ── OCs ya aceptadas en Mercado Público, listas para cargar ── */}
+      {/* ── OCs ya aceptadas en Mercado Público, sin ningún registro en la app ── */}
       {(aceptadasSinCargar||[]).length>0&&(
-        <div style={{background:C.okLight,border:`1px solid ${C.ok}`,borderRadius:12,padding:"12px 14px",marginBottom:12}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
-            <div style={{fontSize:12.5,fontWeight:700,color:C.ok}}>
-              {aceptadasSinCargar.length} OC{aceptadasSinCargar.length>1?"s":""} aceptada{aceptadasSinCargar.length>1?"s":""} sin cargar
-            </div>
-            <button onClick={()=>onActualizarAceptadas&&onActualizarAceptadas()} disabled={verificandoAceptadas}
-              style={{flexShrink:0,background:"none",border:"none",color:C.ok,fontSize:11,fontWeight:700,
-                cursor:verificandoAceptadas?"default":"pointer",opacity:verificandoAceptadas?0.5:1}}>
-              {verificandoAceptadas?"Revisando…":"🔄 Actualizar"}
-            </button>
-          </div>
-          <div style={{fontSize:11.5,color:C.inkMuted,marginBottom:9,lineHeight:1.45}}>
-            Ya las aceptaron en Mercado Público. Revísalas una a una, o cárgalas todas de una vez (sin link de compra — lo agregas después en cada una).
-          </div>
+        <AvisoMP icon="✓" color={C.ok} bg={C.okLight}
+          titulo={`${aceptadasSinCargar.length} OC${aceptadasSinCargar.length>1?"s":""} aceptada${aceptadasSinCargar.length>1?"s":""} en MP sin registrar acá`}
+          descripcion="Ya las aceptaron en Mercado Público, pero todavía no existen como registro en la app. Revísalas una a una, o cárgalas todas de una vez (sin link de compra — lo agregas después en cada una)."
+          onActualizar={onActualizarAceptadas} verificando={verificandoAceptadas}>
           {cargandoAceptadas?(
-            <div style={{background:C.card,borderRadius:9,padding:"9px 12px",fontSize:11.5,fontWeight:700,color:C.ok,textAlign:"center"}}>
+            <div style={{background:C.paper,borderRadius:10,padding:"10px 12px",fontSize:11.5,fontWeight:700,color:C.ok,textAlign:"center",marginBottom:2}}>
               Cargando {cargandoAceptadas.hechas} de {cargandoAceptadas.total}…
             </div>
           ):(
             <button onClick={()=>onCargarTodasAceptadas&&onCargarTodasAceptadas()}
-              style={{width:"100%",background:C.ok,border:"none",color:"#fff",borderRadius:9,padding:"9px 12px",
-                fontSize:12.5,fontWeight:700,cursor:"pointer",marginBottom:10}}>
+              style={{width:"100%",background:C.ok,border:"none",color:"#fff",borderRadius:10,padding:"10px 12px",
+                fontSize:12.5,fontWeight:700,cursor:"pointer",marginBottom:6,boxShadow:`0 2px 8px ${C.ok}40`}}>
               Cargar las {aceptadasSinCargar.length} de una vez
             </button>
           )}
           {aceptadasSinCargar.slice(0,6).map((o,i)=>(
-            <button key={i} onClick={()=>onCargarOC&&onCargarOC(o.numero_oc)}
-              style={{width:"100%",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,
-                padding:"7px 0",background:"none",border:"none",cursor:"pointer",textAlign:"left",
-                borderBottom:i<Math.min(aceptadasSinCargar.length,6)-1?`1px solid ${C.ok}33`:"none"}}>
-              <span style={{minWidth:0}}>
-                <span style={{fontFamily:MONO,fontSize:11.5,fontWeight:700,color:C.ink,display:"block"}}>{o.numero_oc}</span>
-                <span style={{fontSize:10.5,color:C.inkMuted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"block"}}>{o.nombre||""}</span>
-              </span>
-              <span style={{flexShrink:0,fontSize:11,fontWeight:700,color:C.ok}}>Revisar ›</span>
-            </button>
+            <FilaAvisoMP key={i} codigo={o.numero_oc} nombre={o.nombre} accion="Revisar"
+              onClick={()=>onCargarOC&&onCargarOC(o.numero_oc)} color={C.ok}
+              ultima={i===Math.min(aceptadasSinCargar.length,6)-1} />
           ))}
-          {aceptadasSinCargar.length>6&&(
-            <div style={{fontSize:10.5,color:C.inkFaint,marginTop:5}}>y {aceptadasSinCargar.length-6} más</div>
-          )}
-        </div>
+          {aceptadasSinCargar.length>6&&<VerMasAvisoMP n={aceptadasSinCargar.length-6} />}
+        </AvisoMP>
       )}
 
       {/* ── OCs que están cargadas en la app pero se cancelaron en MP ── */}
       {(canceladasEnMP||[]).length>0&&(
-        <div style={{background:C.dangerLight,border:`1px solid ${C.danger}`,borderRadius:12,padding:"12px 14px",marginBottom:12}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
-            <div style={{fontSize:12.5,fontWeight:700,color:C.danger}}>
-              {canceladasEnMP.length} OC{canceladasEnMP.length>1?"s":""} cancelada{canceladasEnMP.length>1?"s":""} en Mercado Público
-            </div>
-            <button onClick={()=>onActualizarCanceladas&&onActualizarCanceladas()} disabled={verificandoCanceladas}
-              style={{flexShrink:0,background:"none",border:"none",color:C.danger,fontSize:11,fontWeight:700,
-                cursor:verificandoCanceladas?"default":"pointer",opacity:verificandoCanceladas?0.5:1}}>
-              {verificandoCanceladas?"Revisando…":"🔄 Actualizar"}
-            </button>
-          </div>
-          <div style={{fontSize:11.5,color:C.inkMuted,marginBottom:9,lineHeight:1.45}}>
-            Están cargadas acá, pero en Mercado Público figuran canceladas. Revisa si ya alcanzaste a comprar o gastar algo antes de eliminarlas.
-          </div>
+        <AvisoMP icon="✕" color={C.danger} bg={C.dangerLight}
+          titulo={`${canceladasEnMP.length} OC${canceladasEnMP.length>1?"s":""} cancelada${canceladasEnMP.length>1?"s":""} en Mercado Público`}
+          descripcion="Están cargadas acá, pero en Mercado Público figuran canceladas. Revisa si ya alcanzaste a comprar o gastar algo antes de eliminarlas."
+          onActualizar={onActualizarCanceladas} verificando={verificandoCanceladas}>
           {canceladasEnMP.map((o,i)=>(
-            <div key={o.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,padding:"7px 0",
-              borderBottom:i<canceladasEnMP.length-1?`1px solid ${C.danger}33`:"none"}}>
+            <div key={o.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,padding:"9px 0",
+              borderBottom:i<canceladasEnMP.length-1?`1px solid ${C.border}`:"none"}}>
               <span style={{minWidth:0}}>
-                <span style={{fontFamily:MONO,fontSize:11.5,fontWeight:700,color:C.ink,display:"block"}}>{o.numero_oc}</span>
-                <span style={{fontSize:10.5,color:C.inkMuted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"block"}}>{o.cliente||o.nombre||""}</span>
+                <span style={{fontFamily:MONO,fontSize:12,fontWeight:700,color:C.ink,display:"block"}}>{o.numero_oc}</span>
+                <span style={{fontSize:10.5,color:C.inkFaint,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"block"}}>{o.cliente||o.nombre||""}</span>
               </span>
               <button onClick={()=>{
                   if(window.confirm(`¿Eliminar la OC ${o.numero_oc}?\n\nFigura cancelada en Mercado Público. Esta acción no se puede deshacer.`))
                     onEliminarCancelada&&onEliminarCancelada(o.id);
                 }}
-                style={{flexShrink:0,background:"none",border:`1px solid ${C.danger}`,color:C.danger,borderRadius:8,
-                  padding:"5px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                style={{flexShrink:0,background:C.card,border:`1px solid ${C.danger}55`,color:C.danger,borderRadius:8,
+                  padding:"6px 11px",fontSize:11,fontWeight:700,cursor:"pointer"}}>
                 🗑 Eliminar
               </button>
             </div>
           ))}
-        </div>
+        </AvisoMP>
       )}
 
       {/* ── OCs sin datos: ofrecer completarlas desde Mercado Público ── */}
