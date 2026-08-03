@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Field } from "../ui/Basicos";
 import { C, MONO, SANS, btnP, btnG, fmt, iStyle, iMono, selStyle } from "../../lib/theme";
 
@@ -24,9 +24,9 @@ function extraerDireccion(texto) {
   return "";
 }
 
-export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, onGuardar, onCerrar }) {
+export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoInicial, onGuardar, onCerrar }) {
   const [paso, setPaso] = useState(1);
-  const [codigo, setCodigo] = useState("");
+  const [codigo, setCodigo] = useState(codigoInicial || "");
   const [cargando, setCargando] = useState(false);
   const [err, setErr] = useState("");
   const [datos, setDatos] = useState(null);     // respuesta normalizada de la API
@@ -38,8 +38,8 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, onGuardar
   const [correo, setCorreo] = useState("");
   const [guardando, setGuardando] = useState(false);
 
-  const buscar = async () => {
-    const cod = codigo.trim().toUpperCase();
+  const buscar = async (codigoForzado) => {
+    const cod = (codigoForzado ?? codigo).trim().toUpperCase();
     if (!cod) { setErr("Ingresa el código de la OC"); return; }
     setErr(""); setCargando(true); setDatos(null); setPendiente(false);
     try {
@@ -70,6 +70,12 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, onGuardar
       setCargando(false);
     }
   };
+
+  // Si llega un código prefijado (desde el aviso de "OCs aceptadas sin cargar"),
+  // saltamos directo a buscarlo — Mati no tiene que volver a escribirlo.
+  useEffect(() => {
+    if (codigoInicial) { setCodigo(codigoInicial); buscar(codigoInicial); }
+  }, [codigoInicial]);
 
   const guardar = async () => {
     if (!links.some(l => l.trim())) { setErr("Agrega al menos un link de producto"); return; }
