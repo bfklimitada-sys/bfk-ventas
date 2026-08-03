@@ -382,6 +382,29 @@ export default function App() {
     await cargarTodo();
   };
 
+  // A diferencia de completarTodasDesdeMP (solo las que les falta algo),
+  // esta pasa por TODAS las OC de Mercado Público, tengan o no ya una
+  // fecha guardada, para que cualquier fecha vieja o mal cargada se
+  // corrija contra lo que diga Mercado Público hoy.
+  const corregirFechasTodas=async()=>{
+    const candidatas=ocs.filter(o=>esCodigoMP(o.numero_oc)&&!o.no_en_mp);
+    if(!candidatas.length){ showToast("No hay OCs de Mercado Público para revisar"); return; }
+    intentadas.current.clear();
+    setSincronizando({hechas:0,total:candidatas.length});
+    let ok=0;
+    for(let i=0;i<candidatas.length;i+=4){
+      const lote=candidatas.slice(i,i+4);
+      ok+=await sincronizarPendientes(lote,true);
+      setSincronizando({hechas:Math.min(i+4,candidatas.length),total:candidatas.length,ok});
+    }
+    setSincronizando(null);
+    const fallaron=candidatas.length-ok;
+    showToast(fallaron>0
+      ? `${ok} fechas revisadas · ${fallaron} no están en Mercado Público`
+      : `${ok} fechas revisadas y corregidas contra Mercado Público`);
+    await cargarTodo();
+  };
+
   const handleGuardarAporte=async({id,socio,tipo,monto,fecha,medio,notas})=>{
     const t=session.access_token;
     const fila={socio,tipo,monto,fecha,medio:medio||null,notas:notas||null};
@@ -452,7 +475,7 @@ export default function App() {
   const revisarPorAceptar=async()=>{
     setVerificandoPorAceptar(true);
     try{
-      const r=await fetch("/api/oc?listar=enviadaproveedor&dias=30");
+      const r=await fetch("/api/oc?listar=enviadaproveedor&dias=90");
       if(!r.ok) return;
       const j=await r.json();
       if(!j.ok) return;
@@ -1139,7 +1162,7 @@ export default function App() {
 
       {/* CONTENIDO */}
       <div style={{padding:16}}>
-        {tab==="panel"&&<PanelDashboard ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} aportes={aportes} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setTab(t);}} onAccion={(k)=>setAccion(k)} onSincronizar={completarTodasDesdeMP} sincronizando={sincronizando} porAceptar={porAceptar} onActualizarPorAceptar={revisarPorAceptar} verificandoPorAceptar={verificandoPorAceptar} aceptadasSinCargar={aceptadasSinCargar} onCargarOC={(numero)=>{setCodigoOcRapida(numero);setAccion("compra_oc");}} onCargarTodasAceptadas={handleCargarTodasAceptadas} cargandoAceptadas={cargandoAceptadas} onActualizarAceptadas={revisarAceptadasSinCargar} verificandoAceptadas={verificandoAceptadas} canceladasEnMP={canceladasEnMP} onEliminarCancelada={handleEliminarOC} onActualizarCanceladas={revisarCanceladasEnMP} verificandoCanceladas={verificandoCanceladas} esCodigoMP={esCodigoMP} ultimaCartola={ultimaCartola} saldoBanco={saldoBanco} bancoMensual={bancoMensual} onEditarSaldo={()=>setAccion("saldo_banco")} />}
+        {tab==="panel"&&<PanelDashboard ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} aportes={aportes} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setTab(t);}} onAccion={(k)=>setAccion(k)} onSincronizar={completarTodasDesdeMP} onCorregirFechas={corregirFechasTodas} sincronizando={sincronizando} porAceptar={porAceptar} onActualizarPorAceptar={revisarPorAceptar} verificandoPorAceptar={verificandoPorAceptar} aceptadasSinCargar={aceptadasSinCargar} onCargarOC={(numero)=>{setCodigoOcRapida(numero);setAccion("compra_oc");}} onCargarTodasAceptadas={handleCargarTodasAceptadas} cargandoAceptadas={cargandoAceptadas} onActualizarAceptadas={revisarAceptadasSinCargar} verificandoAceptadas={verificandoAceptadas} canceladasEnMP={canceladasEnMP} onEliminarCancelada={handleEliminarOC} onActualizarCanceladas={revisarCanceladasEnMP} verificandoCanceladas={verificandoCanceladas} esCodigoMP={esCodigoMP} ultimaCartola={ultimaCartola} saldoBanco={saldoBanco} bancoMensual={bancoMensual} onEditarSaldo={()=>setAccion("saldo_banco")} />}
         {tab==="compras"&&<PanelCompras ocs={ocs} perfiles={perfiles} filtroInicial={filtroCompras} ocFoco={ocFoco} contactos={contactos} onEnviarReclamo={handleEnviarReclamo} onGuardarContacto={handleGuardarContacto} onGuardarDatosOC={handleGuardarDatosOC} onEditarEvento={handleEditarEvento} financiadores={financiadores} onConfirmarEntrega={handleEntrega} onEmitirFactura={handleFactura} onPagoCliente={handlePagoCliente} onPagoFinanciamiento={handlePagoFin} entidadesCatalogo={entidadesCatalogo} onGuardarLink={handleGuardarLink} onEliminarLink={handleEliminarLink} onEditarLink={handleEditarLink} onSincronizarFecha={handleSincronizarFecha} bloqueos={bloqueos} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={handleAgregarComentario} onEliminarComentario={handleEliminarComentario} onBloquear={handleBloquear} onLiberar={handleLiberar} onEliminarOC={handleEliminarOC} onEliminarFactura={handleEliminarFactura} onEliminarEvento={handleEliminarEvento} vendedores={vendedores} onIngresarCompra={handleIngresarCompra} onAsignarResponsable={handleAsignarResponsable} onGuardarPostventa={handleGuardarPostventa} />}
         {tab==="notif"&&<PanelNotificaciones notificaciones={notificaciones} ocs={ocs} onMarcarLeidas={handleMarcarNotificacionesLeidas} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setTab(t);}} />}
         {tab==="agenda"&&<PanelCalendario ocs={ocs} onMarcarFecha={handleMarcarFecha} />}
