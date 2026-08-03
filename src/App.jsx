@@ -396,10 +396,16 @@ export default function App() {
   // Deja constancia del período importado y su saldo de cierre
   const registrarCartola=async(info,{cobros=0,egresos=0}={})=>{
     if(!info) return;
-    // Totales del banco por mes: son la base de la conciliación
+    // Totales del banco por mes: son la base de la conciliación.
+    // Igual que con saldo_banco: un PATCH a un id que no existe
+    // todavía (mes recién importado) responde 200 OK sin filas,
+    // no lanza error — hay que revisar el resultado, no solo el catch.
     for(const m of (info.meses||[])){
-      try{ await upd("banco_mensual",session.access_token,m.id,{...m,actualizado:new Date().toISOString()}); }
-      catch{ try{ await ins("banco_mensual",session.access_token,{...m,actualizado:new Date().toISOString()}); }catch{} }
+      const fila={...m,actualizado:new Date().toISOString()};
+      const actualizadas=await upd("banco_mensual",session.access_token,m.id,fila).catch(()=>[]);
+      if(!Array.isArray(actualizadas)||actualizadas.length===0){
+        try{ await ins("banco_mensual",session.access_token,fila); }catch{}
+      }
     }
     try{
       await ins("cartolas_importadas",session.access_token,{
@@ -546,8 +552,14 @@ export default function App() {
   const handleGuardarSaldoBanco=async({saldo,fecha,nota})=>{
     const t=session.access_token;
     const fila={saldo:Number(saldo),fecha_corte:fecha,nota:nota||null,actualizado_por:session.user.id};
-    try{ await upd("saldo_banco",t,"actual",fila); }
-    catch{ await ins("saldo_banco",t,{id:"actual",...fila}); }
+    // upd() hace PATCH ?id=eq.actual: si esa fila no existe todavía,
+    // Supabase responde 200 OK con un arreglo vacío (no lanza error),
+    // así que hay que revisar si realmente actualizó algo antes de
+    // decidir si corresponde crear la fila con insert.
+    const actualizadas=await upd("saldo_banco",t,"actual",fila).catch(()=>[]);
+    if(!Array.isArray(actualizadas)||actualizadas.length===0){
+      await ins("saldo_banco",t,{id:"actual",...fila});
+    }
     showToast(`Saldo del banco fijado en ${fmt.money(saldo)}`);
     setAccion(null); await cargarTodo();
   };
