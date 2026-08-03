@@ -292,7 +292,7 @@ export default function App() {
         const d=j.oc;
 
         // Solo rellenamos lo que está vacío
-        const cambios={sync_pendiente:false};
+        const cambios={sync_pendiente:false, no_en_mp:false};
         const vacio=(v)=>!v||String(v).trim()===""||String(v).toUpperCase().includes("POR COMPLETAR");
         if(vacio(oc.cliente))        cambios.cliente=d.cliente||"";
         if(vacio(oc.entidad))        cambios.entidad=d.entidad||"";
@@ -385,19 +385,26 @@ export default function App() {
   // A diferencia de completarTodasDesdeMP (solo las que les falta algo),
   // esta pasa por TODAS las OC de Mercado Público, tengan o no ya una
   // fecha guardada, para que cualquier fecha vieja o mal cargada se
-  // corrija contra lo que diga Mercado Público hoy.
+  // corrija contra lo que diga Mercado Público hoy. No se filtra por
+  // no_en_mp: si antes falló la búsqueda por algo transitorio, acá se
+  // le da otra oportunidad en vez de dejarla marcada para siempre.
   const corregirFechasTodas=async()=>{
-    const candidatas=ocs.filter(o=>esCodigoMP(o.numero_oc)&&!o.no_en_mp);
+    const candidatas=ocs.filter(o=>esCodigoMP(o.numero_oc));
     if(!candidatas.length){ showToast("No hay OCs de Mercado Público para revisar"); return; }
+    // Toast inmediato: no depende de que el botón esté a la vista en pantalla.
+    showToast(`Revisando ${candidatas.length} OC contra Mercado Público…`);
     intentadas.current.clear();
     setSincronizando({hechas:0,total:candidatas.length});
     let ok=0;
-    for(let i=0;i<candidatas.length;i+=4){
-      const lote=candidatas.slice(i,i+4);
-      ok+=await sincronizarPendientes(lote,true);
-      setSincronizando({hechas:Math.min(i+4,candidatas.length),total:candidatas.length,ok});
+    try{
+      for(let i=0;i<candidatas.length;i+=4){
+        const lote=candidatas.slice(i,i+4);
+        ok+=await sincronizarPendientes(lote,true);
+        setSincronizando({hechas:Math.min(i+4,candidatas.length),total:candidatas.length,ok});
+      }
+    } finally {
+      setSincronizando(null); // pase lo que pase, el botón no debe quedar trabado
     }
-    setSincronizando(null);
     const fallaron=candidatas.length-ok;
     showToast(fallaron>0
       ? `${ok} fechas revisadas · ${fallaron} no están en Mercado Público`
