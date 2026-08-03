@@ -475,6 +475,19 @@ export default function App() {
     setAccion(null); await cargarTodo();
   };
 
+  // Mercado Público es inestable (ellos mismos la marcan "Beta"): si
+  // falla una vez, se reintenta antes de dejar el aviso vacío en silencio.
+  const fetchConReintento=async(url)=>{
+    for(let intento=0;intento<2;intento++){
+      try{
+        const r=await fetch(url);
+        if(r.ok) return r;
+      }catch{ /* reintenta */ }
+      if(intento===0) await new Promise(res=>setTimeout(res,1500));
+    }
+    return null;
+  };
+
   // ─── OCs esperando aceptación en Mercado Público ─────────────
   // Se consultan al abrir la app: son ventas que todavía no
   // entran al sistema porque nadie las aceptó en el portal.
@@ -482,8 +495,8 @@ export default function App() {
   const revisarPorAceptar=async()=>{
     setVerificandoPorAceptar(true);
     try{
-      const r=await fetch("/api/oc?listar=enviadaproveedor&dias=90");
-      if(!r.ok) return;
+      const r=await fetchConReintento("/api/oc?listar=enviadaproveedor&dias=90");
+      if(!r) return;
       const j=await r.json();
       if(!j.ok) return;
       const norm=(v)=>String(v||"").toUpperCase().replace(/[^A-Z0-9]/g,"").replace(/^N(?=\d)/,"");
@@ -502,8 +515,8 @@ export default function App() {
   const revisarAceptadasSinCargar=async()=>{
     setVerificandoAceptadas(true);
     try{
-      const r=await fetch("/api/oc?listar=aceptadas&dias=90");
-      if(!r.ok) return;
+      const r=await fetchConReintento("/api/oc?listar=aceptadas&dias=90");
+      if(!r) return;
       const j=await r.json();
       if(!j.ok) return;
       const norm=(v)=>String(v||"").toUpperCase().replace(/[^A-Z0-9]/g,"").replace(/^N(?=\d)/,"");
@@ -525,8 +538,8 @@ export default function App() {
   const revisarCanceladasEnMP=async()=>{
     setVerificandoCanceladas(true);
     try{
-      const r=await fetch("/api/oc?listar=todas&dias=90");
-      if(!r.ok) return;
+      const r=await fetchConReintento("/api/oc?listar=todas&dias=90");
+      if(!r) return;
       const j=await r.json();
       if(!j.ok) return;
       const norm=(v)=>String(v||"").toUpperCase().replace(/[^A-Z0-9]/g,"").replace(/^N(?=\d)/,"");
