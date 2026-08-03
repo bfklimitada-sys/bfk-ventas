@@ -30,7 +30,7 @@ function KpiBtn({label,value,color,id,expandido,setExpandido,children}){
   );
 }
 
-export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, aportes: aportesLista, onNavigate, onAccion, onSincronizar, sincronizando, porAceptar, aceptadasSinCargar, onCargarOC, onCargarTodasAceptadas, cargandoAceptadas, canceladasEnMP, onEliminarCancelada, esCodigoMP, ultimaCartola, saldoBanco, bancoMensual, onEditarSaldo }) {
+export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, aportes: aportesLista, onNavigate, onAccion, onSincronizar, sincronizando, porAceptar, onActualizarPorAceptar, verificandoPorAceptar, aceptadasSinCargar, onCargarOC, onCargarTodasAceptadas, cargandoAceptadas, onActualizarAceptadas, verificandoAceptadas, canceladasEnMP, onEliminarCancelada, onActualizarCanceladas, verificandoCanceladas, esCodigoMP, ultimaCartola, saldoBanco, bancoMensual, onEditarSaldo }) {
   const [expandido,setExpandido]=useState(null);
   const [verHistorico,setVerHistorico]=useState(false);
   const [verDesglose,setVerDesglose]=useState(false);
@@ -464,8 +464,15 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
       {/* ── OCs esperando aceptación en Mercado Público ── */}
       {(porAceptar||[]).length>0&&(
         <div style={{background:C.warnLight,border:`1px solid ${C.warn}`,borderRadius:12,padding:"12px 14px",marginBottom:12}}>
-          <div style={{fontSize:12.5,fontWeight:700,color:C.warn,marginBottom:3}}>
-            {porAceptar.length} OC{porAceptar.length>1?"s":""} esperando aceptación
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
+            <div style={{fontSize:12.5,fontWeight:700,color:C.warn}}>
+              {porAceptar.length} OC{porAceptar.length>1?"s":""} esperando aceptación
+            </div>
+            <button onClick={()=>onActualizarPorAceptar&&onActualizarPorAceptar()} disabled={verificandoPorAceptar}
+              style={{flexShrink:0,background:"none",border:"none",color:C.warn,fontSize:11,fontWeight:700,
+                cursor:verificandoPorAceptar?"default":"pointer",opacity:verificandoPorAceptar?0.5:1}}>
+              {verificandoPorAceptar?"Revisando…":"🔄 Actualizar"}
+            </button>
           </div>
           <div style={{fontSize:11.5,color:C.inkMuted,marginBottom:9,lineHeight:1.45}}>
             Están enviadas en Mercado Público pero nadie las ha aceptado. Hasta que se acepten no se pueden cargar acá.
@@ -487,8 +494,15 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
       {/* ── OCs ya aceptadas en Mercado Público, listas para cargar ── */}
       {(aceptadasSinCargar||[]).length>0&&(
         <div style={{background:C.okLight,border:`1px solid ${C.ok}`,borderRadius:12,padding:"12px 14px",marginBottom:12}}>
-          <div style={{fontSize:12.5,fontWeight:700,color:C.ok,marginBottom:3}}>
-            {aceptadasSinCargar.length} OC{aceptadasSinCargar.length>1?"s":""} aceptada{aceptadasSinCargar.length>1?"s":""} sin cargar
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
+            <div style={{fontSize:12.5,fontWeight:700,color:C.ok}}>
+              {aceptadasSinCargar.length} OC{aceptadasSinCargar.length>1?"s":""} aceptada{aceptadasSinCargar.length>1?"s":""} sin cargar
+            </div>
+            <button onClick={()=>onActualizarAceptadas&&onActualizarAceptadas()} disabled={verificandoAceptadas}
+              style={{flexShrink:0,background:"none",border:"none",color:C.ok,fontSize:11,fontWeight:700,
+                cursor:verificandoAceptadas?"default":"pointer",opacity:verificandoAceptadas?0.5:1}}>
+              {verificandoAceptadas?"Revisando…":"🔄 Actualizar"}
+            </button>
           </div>
           <div style={{fontSize:11.5,color:C.inkMuted,marginBottom:9,lineHeight:1.45}}>
             Ya las aceptaron en Mercado Público. Revísalas una a una, o cárgalas todas de una vez (sin link de compra — lo agregas después en cada una).
@@ -525,8 +539,15 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
       {/* ── OCs que están cargadas en la app pero se cancelaron en MP ── */}
       {(canceladasEnMP||[]).length>0&&(
         <div style={{background:C.dangerLight,border:`1px solid ${C.danger}`,borderRadius:12,padding:"12px 14px",marginBottom:12}}>
-          <div style={{fontSize:12.5,fontWeight:700,color:C.danger,marginBottom:3}}>
-            {canceladasEnMP.length} OC{canceladasEnMP.length>1?"s":""} cancelada{canceladasEnMP.length>1?"s":""} en Mercado Público
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
+            <div style={{fontSize:12.5,fontWeight:700,color:C.danger}}>
+              {canceladasEnMP.length} OC{canceladasEnMP.length>1?"s":""} cancelada{canceladasEnMP.length>1?"s":""} en Mercado Público
+            </div>
+            <button onClick={()=>onActualizarCanceladas&&onActualizarCanceladas()} disabled={verificandoCanceladas}
+              style={{flexShrink:0,background:"none",border:"none",color:C.danger,fontSize:11,fontWeight:700,
+                cursor:verificandoCanceladas?"default":"pointer",opacity:verificandoCanceladas?0.5:1}}>
+              {verificandoCanceladas?"Revisando…":"🔄 Actualizar"}
+            </button>
           </div>
           <div style={{fontSize:11.5,color:C.inkMuted,marginBottom:9,lineHeight:1.45}}>
             Están cargadas acá, pero en Mercado Público figuran canceladas. Revisa si ya alcanzaste a comprar o gastar algo antes de eliminarlas.
