@@ -63,10 +63,12 @@ const ESTADOS_OC = {
 };
 // Los que interesan para avisar: aún sin aceptar
 const SIN_ACEPTAR = new Set([3, 4, 6]);
+// Ya aceptadas y listas para cargar a la app (no canceladas)
+const ACEPTADAS = new Set([5, 7, 12]);
 
 async function listarOCs(req, res, ticket) {
   const dias = Math.min(Number(req.query?.dias) || 30, 90);
-  const soloPendientes = txt(req.query?.listar) !== "todas";
+  const modo = txt(req.query?.listar); // "enviadaproveedor" | "aceptadas" | "todas"
 
   const codigo = await buscarCodigoProveedor(ticket);
   if (!codigo) {
@@ -88,7 +90,8 @@ async function listarOCs(req, res, ticket) {
       const j = await r.json();
       for (const oc of (j?.Listado || [])) {
         const cod = Number(oc.CodigoEstado);
-        if (soloPendientes && !SIN_ACEPTAR.has(cod)) continue;
+        if (modo === "aceptadas") { if (!ACEPTADAS.has(cod)) continue; }
+        else if (modo !== "todas") { if (!SIN_ACEPTAR.has(cod)) continue; }
         encontradas.push({
           numero_oc: txt(oc.Codigo),
           nombre: txt(oc.Nombre),
