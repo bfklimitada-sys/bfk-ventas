@@ -119,7 +119,9 @@ async function listarOCs(req, res, ticket) {
     }
   }
 
-  res.setHeader("Cache-Control", "s-maxage=900, stale-while-revalidate");
+  // Antes 15 min: si una OC se acepta/cancela en MP, la app podía
+  // seguir mostrando el estado viejo hasta por un cuarto de hora.
+  res.setHeader("Cache-Control", "s-maxage=60, stale-while-revalidate");
   return res.status(200).json({
     ok: true, dias, codigoProveedor: codigo,
     total: encontradas.length, ocs: encontradas,
