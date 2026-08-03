@@ -77,30 +77,46 @@ async function listarOCs(req, res, ticket) {
 
   const encontradas = [];
   const hoy = new Date();
+  const dds = Array.from({ length: dias }, (_, i) => { const d = new Date(hoy); d.setDate(d.getDate() - i); return d; });
 
-  for (let i = 0; i < dias; i++) {
-    const d = new Date(hoy); d.setDate(d.getDate() - i);
+  const consultarDia = async (d) => {
     const f = `${String(d.getDate()).padStart(2,"0")}${String(d.getMonth()+1).padStart(2,"0")}${d.getFullYear()}`;
     // La API no acepta 'estado' junto con CodigoProveedor: se filtra acá.
     const url = "https://api.mercadopublico.cl/servicios/v1/publico/ordenesdecompra.json" +
       `?fecha=${f}&CodigoProveedor=${codigo}&ticket=${encodeURIComponent(ticket)}`;
     try {
       const r = await fetch(url, { headers: { Accept: "application/json" } });
-      if (!r.ok) continue;
+      if (!r.ok) return [];
       const j = await r.json();
-      for (const oc of (j?.Listado || [])) {
+      return (j?.Listado || []).map((oc) => {
         const cod = Number(oc.CodigoEstado);
+        return {
+          cod,
+          fila: {
+            numero_oc: txt(oc.Codigo),
+            nombre: txt(oc.Nombre),
+            codigo_estado: cod,
+            estado: ESTADOS_OC[cod] || `Estado ${cod}`,
+            fecha: `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`,
+          },
+        };
+      });
+    } catch { return []; } // un día que falle no debe cortar la búsqueda
+  };
+
+  // En lotes paralelos: escanear 90 días uno por uno se pasa del límite
+  // de tiempo de la función serverless. En lotes de 15 en paralelo,
+  // 90 días toman ~6 vueltas en vez de 90 llamadas secuenciales.
+  const LOTE = 15;
+  for (let i = 0; i < dds.length; i += LOTE) {
+    const resultados = await Promise.all(dds.slice(i, i + LOTE).map(consultarDia));
+    for (const items of resultados) {
+      for (const { cod, fila } of items) {
         if (modo === "aceptadas") { if (!ACEPTADAS.has(cod)) continue; }
         else if (modo !== "todas") { if (!SIN_ACEPTAR.has(cod)) continue; }
-        encontradas.push({
-          numero_oc: txt(oc.Codigo),
-          nombre: txt(oc.Nombre),
-          codigo_estado: cod,
-          estado: ESTADOS_OC[cod] || `Estado ${cod}`,
-          fecha: `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`,
-        });
+        encontradas.push(fila);
       }
-    } catch { /* un día que falle no debe cortar la búsqueda */ }
+    }
   }
 
   res.setHeader("Cache-Control", "s-maxage=900, stale-while-revalidate");
