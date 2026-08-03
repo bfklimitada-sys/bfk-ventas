@@ -78,7 +78,7 @@ function VerMasAvisoMP({n}){
   return <div style={{fontSize:10.5,color:C.inkFaint,marginTop:6,textAlign:"center"}}>y {n} más</div>;
 }
 
-export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, aportes: aportesLista, onNavigate, onAccion, onSincronizar, sincronizando, porAceptar, onActualizarPorAceptar, verificandoPorAceptar, aceptadasSinCargar, onCargarOC, onCargarTodasAceptadas, cargandoAceptadas, onActualizarAceptadas, verificandoAceptadas, canceladasEnMP, onEliminarCancelada, onActualizarCanceladas, verificandoCanceladas, esCodigoMP, ultimaCartola, saldoBanco, bancoMensual, onEditarSaldo }) {
+export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, aportes: aportesLista, onNavigate, onAccion, onSincronizar, onCorregirFechas, sincronizando, porAceptar, onActualizarPorAceptar, verificandoPorAceptar, aceptadasSinCargar, onCargarOC, onCargarTodasAceptadas, cargandoAceptadas, onActualizarAceptadas, verificandoAceptadas, canceladasEnMP, onEliminarCancelada, onActualizarCanceladas, verificandoCanceladas, esCodigoMP, ultimaCartola, saldoBanco, bancoMensual, onEditarSaldo }) {
   const [expandido,setExpandido]=useState(null);
   const [verHistorico,setVerHistorico]=useState(false);
   const [verDesglose,setVerDesglose]=useState(false);
@@ -581,7 +581,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
         return (
           <div style={{background:C.infoLight,border:`1px solid ${C.info}`,borderRadius:12,padding:"12px 14px",marginBottom:12}}>
             <div style={{fontSize:12.5,fontWeight:700,color:C.info,marginBottom:3}}>
-              {sincronizando?`Completando ${sincronizando.hechas} de ${sincronizando.total}…`:`${sinDatos} OC${sinDatos>1?"s":""} sin datos de cliente`}
+              {sincronizando?`Revisando ${sincronizando.hechas} de ${sincronizando.total}…`:`${sinDatos} OC${sinDatos>1?"s":""} sin datos de cliente`}
             </div>
             <div style={{fontSize:11.5,color:C.inkMuted,marginBottom:sincronizando?0:9,lineHeight:1.45}}>
               Mercado Público tiene el cliente, RUT, comuna, contacto, fecha de emisión y productos de estas órdenes. Solo se consultan las que tienen código de Mercado Público; las ventas directas quedan fuera.
@@ -595,6 +595,15 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
           </div>
         );
       })()}
+
+      {/* ── Forzar que la fecha de TODAS las OC de MP calce con Mercado Público, ──
+          no solo las que les falta algo (a diferencia del botón de arriba) ── */}
+      <button onClick={()=>onCorregirFechas&&onCorregirFechas()} disabled={!!sincronizando}
+        style={{width:"100%",background:"none",border:`1px dashed ${C.border}`,color:sincronizando?C.inkFaint:C.inkMuted,
+          borderRadius:10,padding:"9px 12px",fontSize:11.5,fontWeight:700,
+          cursor:sincronizando?"default":"pointer",marginBottom:12}}>
+        {sincronizando?`Revisando ${sincronizando.hechas} de ${sincronizando.total}…`:"🕐 Corregir fechas de todas contra Mercado Público"}
+      </button>
 
       {/* ── Prioridades de hoy ── */}
       <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px",marginBottom:12}}>
