@@ -444,9 +444,9 @@ export default function App() {
   // ─── OCs esperando aceptación en Mercado Público ─────────────
   // Se consultan al abrir la app: son ventas que todavía no
   // entran al sistema porque nadie las aceptó en el portal.
-  const SIN_ACEPTAR=new Set([3,4,6]); // mismos códigos que usa el backend
-
+  const [verificandoPorAceptar,setVerificandoPorAceptar]=useState(false);
   const revisarPorAceptar=async()=>{
+    setVerificandoPorAceptar(true);
     try{
       const r=await fetch("/api/oc?listar=enviadaproveedor&dias=30");
       if(!r.ok) return;
@@ -454,23 +454,9 @@ export default function App() {
       if(!j.ok) return;
       const norm=(v)=>String(v||"").toUpperCase().replace(/[^A-Z0-9]/g,"").replace(/^N(?=\d)/,"");
       const cargadas=new Set(ocs.map(o=>norm(o.numero_oc)));
-      const candidatas=(j.ocs||[]).filter(o=>!cargadas.has(norm(o.numero_oc)));
-
-      // El listado masivo por fecha a veces queda un paso atrás del estado
-      // real. Antes de mostrar el aviso, se revalida cada una con la
-      // consulta puntual (más confiable) para que la pantalla se limpie
-      // sola apenas Mercado Público confirme que ya fue aceptada.
-      const verificadas=await Promise.all(candidatas.map(async(o)=>{
-        try{
-          const rr=await fetch(`/api/oc?codigo=${encodeURIComponent(o.numero_oc)}`);
-          if(rr.status===404) return o; // sigue sin publicarse: sigue pendiente
-          const jj=await rr.json();
-          if(!jj.ok) return o; // no se pudo confirmar: se deja para no ocultar de más
-          return SIN_ACEPTAR.has(Number(jj.oc?.codigo_estado)) ? o : null;
-        }catch{ return o; } // si falla la revalidación, se deja visible por seguridad
-      }));
-      setPorAceptar(verificadas.filter(Boolean));
+      setPorAceptar((j.ocs||[]).filter(o=>!cargadas.has(norm(o.numero_oc))));
     }catch{ /* si falla, simplemente no se muestra el aviso */ }
+    finally{ setVerificandoPorAceptar(false); }
   };
 
   useEffect(()=>{ if(session&&ocs.length) revisarPorAceptar(); },[session,ocs.length]);
@@ -478,7 +464,9 @@ export default function App() {
   // ─── OCs ya aceptadas en Mercado Público, pero aún no cargadas ──
   // A diferencia de revisarPorAceptar (informativo), estas ya se
   // pueden traer — solo falta que Kevin las revise y confirme una a una.
+  const [verificandoAceptadas,setVerificandoAceptadas]=useState(false);
   const revisarAceptadasSinCargar=async()=>{
+    setVerificandoAceptadas(true);
     try{
       const r=await fetch("/api/oc?listar=aceptadas&dias=90");
       if(!r.ok) return;
@@ -488,6 +476,7 @@ export default function App() {
       const cargadas=new Set(ocs.map(o=>norm(o.numero_oc)));
       setAceptadasSinCargar((j.ocs||[]).filter(o=>!cargadas.has(norm(o.numero_oc))));
     }catch{ /* si falla, simplemente no se muestra el aviso */ }
+    finally{ setVerificandoAceptadas(false); }
   };
 
   useEffect(()=>{ if(session&&ocs.length) revisarAceptadasSinCargar(); },[session,ocs.length]);
@@ -498,7 +487,9 @@ export default function App() {
   // la ventana de 90 días (limitación de la API pública de MP, que solo
   // permite buscar día por día).
   const [canceladasEnMP,setCanceladasEnMP]=useState([]);
+  const [verificandoCanceladas,setVerificandoCanceladas]=useState(false);
   const revisarCanceladasEnMP=async()=>{
+    setVerificandoCanceladas(true);
     try{
       const r=await fetch("/api/oc?listar=todas&dias=90");
       if(!r.ok) return;
@@ -515,6 +506,7 @@ export default function App() {
       }
       setCanceladasEnMP(encontradas);
     }catch{ /* si falla, simplemente no se muestra el aviso */ }
+    finally{ setVerificandoCanceladas(false); }
   };
 
   useEffect(()=>{ if(session&&ocs.length) revisarCanceladasEnMP(); },[session,ocs.length]);
@@ -1143,7 +1135,7 @@ export default function App() {
 
       {/* CONTENIDO */}
       <div style={{padding:16}}>
-        {tab==="panel"&&<PanelDashboard ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} aportes={aportes} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setTab(t);}} onAccion={(k)=>setAccion(k)} onSincronizar={completarTodasDesdeMP} sincronizando={sincronizando} porAceptar={porAceptar} aceptadasSinCargar={aceptadasSinCargar} onCargarOC={(numero)=>{setCodigoOcRapida(numero);setAccion("compra_oc");}} onCargarTodasAceptadas={handleCargarTodasAceptadas} cargandoAceptadas={cargandoAceptadas} canceladasEnMP={canceladasEnMP} onEliminarCancelada={handleEliminarOC} esCodigoMP={esCodigoMP} ultimaCartola={ultimaCartola} saldoBanco={saldoBanco} bancoMensual={bancoMensual} onEditarSaldo={()=>setAccion("saldo_banco")} />}
+        {tab==="panel"&&<PanelDashboard ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} aportes={aportes} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setTab(t);}} onAccion={(k)=>setAccion(k)} onSincronizar={completarTodasDesdeMP} sincronizando={sincronizando} porAceptar={porAceptar} onActualizarPorAceptar={revisarPorAceptar} verificandoPorAceptar={verificandoPorAceptar} aceptadasSinCargar={aceptadasSinCargar} onCargarOC={(numero)=>{setCodigoOcRapida(numero);setAccion("compra_oc");}} onCargarTodasAceptadas={handleCargarTodasAceptadas} cargandoAceptadas={cargandoAceptadas} onActualizarAceptadas={revisarAceptadasSinCargar} verificandoAceptadas={verificandoAceptadas} canceladasEnMP={canceladasEnMP} onEliminarCancelada={handleEliminarOC} onActualizarCanceladas={revisarCanceladasEnMP} verificandoCanceladas={verificandoCanceladas} esCodigoMP={esCodigoMP} ultimaCartola={ultimaCartola} saldoBanco={saldoBanco} bancoMensual={bancoMensual} onEditarSaldo={()=>setAccion("saldo_banco")} />}
         {tab==="compras"&&<PanelCompras ocs={ocs} perfiles={perfiles} filtroInicial={filtroCompras} ocFoco={ocFoco} contactos={contactos} onEnviarReclamo={handleEnviarReclamo} onGuardarContacto={handleGuardarContacto} onGuardarDatosOC={handleGuardarDatosOC} onEditarEvento={handleEditarEvento} financiadores={financiadores} onConfirmarEntrega={handleEntrega} onEmitirFactura={handleFactura} onPagoCliente={handlePagoCliente} onPagoFinanciamiento={handlePagoFin} entidadesCatalogo={entidadesCatalogo} onGuardarLink={handleGuardarLink} onEliminarLink={handleEliminarLink} onEditarLink={handleEditarLink} onSincronizarFecha={handleSincronizarFecha} bloqueos={bloqueos} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={handleAgregarComentario} onEliminarComentario={handleEliminarComentario} onBloquear={handleBloquear} onLiberar={handleLiberar} onEliminarOC={handleEliminarOC} onEliminarFactura={handleEliminarFactura} onEliminarEvento={handleEliminarEvento} vendedores={vendedores} onIngresarCompra={handleIngresarCompra} onAsignarResponsable={handleAsignarResponsable} onGuardarPostventa={handleGuardarPostventa} />}
         {tab==="notif"&&<PanelNotificaciones notificaciones={notificaciones} ocs={ocs} onMarcarLeidas={handleMarcarNotificacionesLeidas} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setTab(t);}} />}
         {tab==="agenda"&&<PanelCalendario ocs={ocs} onMarcarFecha={handleMarcarFecha} />}
