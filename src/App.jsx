@@ -49,6 +49,8 @@ export default function App() {
   const [historialCambios,setHistorialCambios]=useState([]);
   const [aportes,setAportes]=useState([]);
   const [porAceptar,setPorAceptar]=useState([]); // OCs enviadas y sin aceptar en MP
+  const [aceptadasSinCargar,setAceptadasSinCargar]=useState([]); // OCs ya aceptadas en MP, pendientes de cargar
+  const [codigoOcRapida,setCodigoOcRapida]=useState(""); // prefill al cargar desde el aviso
   const [ultimaCartola,setUltimaCartola]=useState(null);
   const [saldoBanco,setSaldoBanco]=useState(null);
   const [bancoMensual,setBancoMensual]=useState([]);
@@ -452,6 +454,23 @@ export default function App() {
   };
 
   useEffect(()=>{ if(session&&ocs.length) revisarPorAceptar(); },[session,ocs.length]);
+
+  // ─── OCs ya aceptadas en Mercado Público, pero aún no cargadas ──
+  // A diferencia de revisarPorAceptar (informativo), estas ya se
+  // pueden traer — solo falta que Kevin las revise y confirme una a una.
+  const revisarAceptadasSinCargar=async()=>{
+    try{
+      const r=await fetch("/api/oc?listar=aceptadas&dias=30");
+      if(!r.ok) return;
+      const j=await r.json();
+      if(!j.ok) return;
+      const norm=(v)=>String(v||"").toUpperCase().replace(/[^A-Z0-9]/g,"").replace(/^N(?=\d)/,"");
+      const cargadas=new Set(ocs.map(o=>norm(o.numero_oc)));
+      setAceptadasSinCargar((j.ocs||[]).filter(o=>!cargadas.has(norm(o.numero_oc))));
+    }catch{ /* si falla, simplemente no se muestra el aviso */ }
+  };
+
+  useEffect(()=>{ if(session&&ocs.length) revisarAceptadasSinCargar(); },[session,ocs.length]);
 
   // ─── EGRESOS DE LA CARTOLA ───────────────────────────────────
   // Cada cargo del banco se registra según lo que sea: devolución
@@ -1046,7 +1065,7 @@ export default function App() {
 
       {/* CONTENIDO */}
       <div style={{padding:16}}>
-        {tab==="panel"&&<PanelDashboard ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} aportes={aportes} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setTab(t);}} onAccion={(k)=>setAccion(k)} onSincronizar={completarTodasDesdeMP} sincronizando={sincronizando} porAceptar={porAceptar} esCodigoMP={esCodigoMP} ultimaCartola={ultimaCartola} saldoBanco={saldoBanco} bancoMensual={bancoMensual} onEditarSaldo={()=>setAccion("saldo_banco")} />}
+        {tab==="panel"&&<PanelDashboard ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} aportes={aportes} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setTab(t);}} onAccion={(k)=>setAccion(k)} onSincronizar={completarTodasDesdeMP} sincronizando={sincronizando} porAceptar={porAceptar} aceptadasSinCargar={aceptadasSinCargar} onCargarOC={(numero)=>{setCodigoOcRapida(numero);setAccion("compra_oc");}} esCodigoMP={esCodigoMP} ultimaCartola={ultimaCartola} saldoBanco={saldoBanco} bancoMensual={bancoMensual} onEditarSaldo={()=>setAccion("saldo_banco")} />}
         {tab==="compras"&&<PanelCompras ocs={ocs} perfiles={perfiles} filtroInicial={filtroCompras} ocFoco={ocFoco} contactos={contactos} onEnviarReclamo={handleEnviarReclamo} onGuardarContacto={handleGuardarContacto} onGuardarDatosOC={handleGuardarDatosOC} onEditarEvento={handleEditarEvento} financiadores={financiadores} onConfirmarEntrega={handleEntrega} onEmitirFactura={handleFactura} onPagoCliente={handlePagoCliente} onPagoFinanciamiento={handlePagoFin} entidadesCatalogo={entidadesCatalogo} onGuardarLink={handleGuardarLink} onEliminarLink={handleEliminarLink} onEditarLink={handleEditarLink} onSincronizarFecha={handleSincronizarFecha} bloqueos={bloqueos} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={handleAgregarComentario} onEliminarComentario={handleEliminarComentario} onBloquear={handleBloquear} onLiberar={handleLiberar} onEliminarOC={handleEliminarOC} onEliminarFactura={handleEliminarFactura} onEliminarEvento={handleEliminarEvento} vendedores={vendedores} onIngresarCompra={handleIngresarCompra} onAsignarResponsable={handleAsignarResponsable} onGuardarPostventa={handleGuardarPostventa} />}
         {tab==="notif"&&<PanelNotificaciones notificaciones={notificaciones} ocs={ocs} onMarcarLeidas={handleMarcarNotificacionesLeidas} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setTab(t);}} />}
         {tab==="agenda"&&<PanelCalendario ocs={ocs} onMarcarFecha={handleMarcarFecha} />}
@@ -1104,9 +1123,10 @@ export default function App() {
 
       {/* MODAL NUEVA OC */}
       {accion==="compra_oc"&&(
-        <Modal title="Nueva OC" onClose={()=>setAccion(null)}>
+        <Modal title="Nueva OC" onClose={()=>{setAccion(null);setCodigoOcRapida("");}}>
           <NuevaOCRapida perfil={perfil} vendedores={vendedores} entidadesCatalogo={entidadesCatalogo}
-            onGuardar={handleNuevaOCRapida} onCerrar={()=>setAccion(null)} />
+            codigoInicial={codigoOcRapida}
+            onGuardar={handleNuevaOCRapida} onCerrar={()=>{setAccion(null);setCodigoOcRapida("");}} />
           <button onClick={()=>setAccion("compra_manual")}
             style={{width:"100%",background:"none",border:"none",color:C.inkFaint,fontSize:11.5,cursor:"pointer",marginTop:14,textDecoration:"underline"}}>
             Ingresar manualmente (formulario completo)
