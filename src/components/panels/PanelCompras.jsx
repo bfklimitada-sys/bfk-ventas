@@ -766,10 +766,11 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, onSincroniz
     for(const f of FILTROS){ const s=filtros[f.key]; if(!s) continue; const ok=oc[f.okField]===f.okValue; if(s==="ok"&&!ok) return false; if(s==="pend"&&ok) return false; }
     return true;
   }).sort((a,b)=>{
+    if(orden==="ganancia") return gananciaReal(b).pesos-gananciaReal(a).pesos;
     const fa=a.fecha_emision_mp||((a.eventos_compra||[])[0]?.fecha)||a.creadoEn||"";
     const fb=b.fecha_emision_mp||((b.eventos_compra||[])[0]?.fecha)||b.creadoEn||"";
     return String(fb).localeCompare(String(fa));
-  }),[ocs,filtros,busq,comunaSel,vista,desde,hasta]);
+  }),[ocs,filtros,busq,comunaSel,vista,desde,hasta,orden]);
 
   const alertas=useMemo(()=>ocs.filter(o=>{
     if(o.estado_pago_cliente==="pagado") return false;
@@ -846,15 +847,9 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, onSincroniz
         </Modal>
       )}
       {/* ── Buscador ── */}
-      <div style={{display:"flex",gap:6,marginBottom:10}}>
-        <input style={{...iStyle,flex:1,fontSize:13,padding:"9px 11px"}} placeholder="Buscar OC, cliente o comuna…"
+      <div style={{marginBottom:10}}>
+        <input style={{...iStyle,fontSize:13,padding:"9px 11px"}} placeholder="Buscar OC, cliente o comuna…"
           value={busq} onChange={e=>setBusq(e.target.value)} />
-        {comunas.length>0&&(
-          <select style={{...selStyle,width:110,fontSize:12,padding:"9px 8px"}} value={comunaSel} onChange={e=>setComunaSel(e.target.value)}>
-            <option value="">Comuna</option>
-            {comunas.map(c=><option key={c} value={c}>{c}</option>)}
-          </select>
-        )}
       </div>
 
       {/* ── Vista rápida: qué falta hacer. Un toque, una respuesta ── */}
@@ -876,8 +871,9 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, onSincroniz
       {(()=>{
         const etapasActivas=Object.values(filtros).filter(Boolean).length;
         const rangoActivo=(desde||hasta)?1:0;
-        const totalActivos=etapasActivas+rangoActivo;
-        const limpiarTodo=()=>{ setDesde(""); setHasta(""); setFiltros({}); };
+        const comunaActiva=comunaSel?1:0;
+        const totalActivos=etapasActivas+rangoActivo+comunaActiva;
+        const limpiarTodo=()=>{ setDesde(""); setHasta(""); setFiltros({}); setComunaSel(""); };
         return (<>
           <button onClick={()=>setMasFiltros(m=>!m)}
             style={{display:"flex",alignItems:"center",gap:7,background:"none",border:"none",
@@ -902,6 +898,14 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, onSincroniz
                   </button>
                 )}
               </div>
+
+              {comunas.length>0&&(<>
+                <div style={{fontSize:10,fontWeight:800,color:C.inkFaint,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Comuna</div>
+                <select style={{...selStyle,fontSize:12,padding:"8px 10px",marginBottom:12}} value={comunaSel} onChange={e=>setComunaSel(e.target.value)}>
+                  <option value="">Todas las comunas</option>
+                  {comunas.map(c=><option key={c} value={c}>{c}</option>)}
+                </select>
+              </>)}
 
               <div style={{fontSize:10,fontWeight:800,color:C.inkFaint,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Período</div>
               <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:12}}>
