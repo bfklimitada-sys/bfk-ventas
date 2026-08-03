@@ -793,8 +793,10 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, onSincroniz
     return true;
   }).sort((a,b)=>{
     if(orden==="ganancia") return gananciaReal(b).pesos-gananciaReal(a).pesos;
-    const fa=a.fecha_emision_mp||((a.eventos_compra||[])[0]?.fecha)||a.creadoEn||"";
-    const fb=b.fecha_emision_mp||((b.eventos_compra||[])[0]?.fecha)||b.creadoEn||"";
+    // Mercado Público ordena por fecha Y hora de emisión. Usamos la
+    // hora exacta cuando ya se sincronizó; si no, cae a la fecha sola.
+    const fa=a.fecha_hora_emision_mp||a.fecha_emision_mp||((a.eventos_compra||[])[0]?.fecha)||a.creadoEn||"";
+    const fb=b.fecha_hora_emision_mp||b.fecha_emision_mp||((b.eventos_compra||[])[0]?.fecha)||b.creadoEn||"";
     return String(fb).localeCompare(String(fa));
   }),[ocs,filtros,busq,comunaSel,vista,desde,hasta,orden]);
 
