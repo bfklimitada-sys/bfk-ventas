@@ -8,6 +8,17 @@ import { BloqueoBanner, ComentariosOC, HistorialCambiosOC } from "../ui/Multiusu
 import { del } from "../../lib/supabase";
 import { C, MONO, btnG, btnP, calcMargen, gananciaReal, fmt, iMono, iStyle, selStyle } from "../../lib/theme";
 
+// Fecha de creación de la OC para mostrar en la lista: si el dato viene
+// de Mercado Público (fecha_hora_emision_mp) trae hora exacta; si viene
+// del Excel/registro manual, solo hay fecha.
+function fmtFechaHora(raw){
+  if(!raw) return null;
+  const s=String(raw);
+  const fecha=fmt.date(s.slice(0,10));
+  if(s.length>10&&s[10]==="T") return `${fecha} · ${s.slice(11,16)}`;
+  return fecha;
+}
+
 export const FILTROS=[
   {key:"compra",label:"Compra",okField:"estado_compra",okValue:"comprado",okLabel:"Comprado",pendLabel:"Pendiente"},
   {key:"entrega",label:"Entrega",okField:"estado_entrega",okValue:"confirmada",okLabel:"Confirmada",pendLabel:"Sin confirmar"},
@@ -564,6 +575,12 @@ export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded
           <span style={{fontFamily:MONO,fontWeight:800,fontSize:13.5,color:C.ink}}>{oc.numero_oc}</span>
           <span style={{fontFamily:MONO,fontWeight:800,fontSize:14.5,color:C.ink,flexShrink:0}}>{fmt.money(oc.monto_total)}</span>
         </div>
+
+        {/* Fecha (y hora, si viene de Mercado Público) de creación */}
+        {(()=>{
+          const f=fmtFechaHora(oc.fecha_hora_emision_mp||oc.fecha_emision_mp||(oc.eventos_compra||[])[0]?.fecha||oc.creadoEn);
+          return f ? <div style={{fontSize:10,color:C.inkFaint,marginTop:1}}>{f}</div> : null;
+        })()}
 
         {/* Línea 2 — quién */}
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:10,marginTop:3}}>
