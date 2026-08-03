@@ -146,7 +146,12 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
   const [dUrl,setDUrl]=useState(""); const [dDir,setDDir]=useState("");
   const [nuevo,setNuevo]=useState(false);
   const [sincronizando,setSincronizando]=useState(false);
+  const [copiado,setCopiado]=useState(false);
   const esAdmin=perfil?.rol==="admin";
+  const copiarFolio=(folio)=>{
+    if(navigator.clipboard) navigator.clipboard.writeText(String(folio)).catch(()=>{});
+    setCopiado(true); setTimeout(()=>setCopiado(false),1500);
+  };
 
   const abrirEdicion=(l)=>{
     setEditando(l.id);
@@ -437,6 +442,27 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
           <Dato k="Entrega estimada" v={evC?.fecha_entrega_estimada?fmt.date(String(evC.fecha_entrega_estimada).slice(0,10)):null} />
           <Dato k="Entrega real"     v={evE?.fecha?fmt.date(String(evE.fecha).slice(0,10)):null} />
           <Dato k="Factura"          v={evF?.fecha?`N°${evF.numero_factura} · ${fmt.date(String(evF.fecha).slice(0,10))}`:null} />
+          {evF?.numero_factura&&(
+            <div style={{background:C.infoLight,border:`1px solid ${C.info}33`,borderRadius:9,padding:"10px 11px",margin:"8px 0"}}>
+              <div style={{fontSize:10,fontWeight:800,color:C.info,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Verificar en el SII</div>
+              <div style={{fontSize:11.5,color:C.inkMuted,lineHeight:1.7,marginBottom:9}}>
+                RUT emisor <b style={{color:C.ink}}>77.322.317-3</b> (BFK Ltda) · Factura electrónica<br/>
+                Folio{" "}
+                <b onClick={()=>copiarFolio(evF.numero_factura)}
+                  style={{color:C.ink,cursor:"pointer",textDecoration:"underline dotted"}}>{evF.numero_factura}</b>
+                {copiado&&<span style={{color:C.ok,fontWeight:700}}> ✓ copiado</span>}
+                {" · "}Monto <b style={{color:C.ink}}>{fmt.money(oc.monto_facturado||oc.monto_total)}</b>
+              </div>
+              <a href="https://palena.sii.cl/dte/mn_verif_doc.html" target="_blank" rel="noopener noreferrer"
+                style={{display:"block",textAlign:"center",background:C.info,color:"#fff",borderRadius:8,
+                  padding:"9px 12px",fontSize:11.5,fontWeight:700,textDecoration:"none"}}>
+                Abrir verificador del SII ↗
+              </a>
+              <div style={{fontSize:10,color:C.inkFaint,marginTop:6,lineHeight:1.4}}>
+                El SII pide iniciar sesión con tu RUT y clave (o ClaveÚnica) antes de buscar el folio — no se puede precargar por link.
+              </div>
+            </div>
+          )}
           <Dato k="Cobro"            v={evP?.fecha?fmt.date(String(evP.fecha).slice(0,10)):null} />
           <Dato k="Proveedor"        v={evC?.proveedor} />
         </div>
