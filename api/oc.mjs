@@ -207,6 +207,7 @@ export default async function handler(req, res) {
       nombre_oc: txt(oc.Nombre),
       descripcion: txt(oc.Descripcion),
       estado_mp: txt(oc.Estado) || txt(oc.CodigoEstado),
+      codigo_estado: Number(oc.CodigoEstado) || null,
 
       // ── Datos del cliente (van directo a ordenes_compra_v2) ──
       cliente: txt(comprador.NombreOrganismo),
