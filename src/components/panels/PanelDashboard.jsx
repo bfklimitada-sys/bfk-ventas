@@ -4,6 +4,32 @@ import { gananciaReal, costoPostventa } from "../../lib/theme";
 import { del } from "../../lib/supabase";
 import { C, MONO, SANS, btnP, fmt } from "../../lib/theme";
 
+// Agrupa el contenido bajo un título discreto
+function Seccion({titulo,children,sub,ocultarSiVacio}){
+  if(ocultarSiVacio) return null;
+  return (
+  <div style={{marginBottom:18}}>
+    <div style={{fontSize:10.5,fontWeight:800,color:C.inkFaint,textTransform:"uppercase",
+      letterSpacing:0.6,marginBottom:8,paddingLeft:2}}>{titulo}</div>
+    {sub&&<div style={{fontSize:11.5,color:C.inkFaint,marginBottom:8,paddingLeft:2}}>{sub}</div>}
+    {children}
+  </div>
+  );
+}
+
+function KpiBtn({label,value,color,id,expandido,setExpandido,children}){
+  return (
+  <div style={{background:C.card,border:`1px solid ${expandido===id?color:C.border}`,borderRadius:14,overflow:"hidden",marginBottom:10}}>
+    <button onClick={()=>setExpandido(expandido===id?null:id)} style={{width:"100%",background:"none",border:"none",padding:"14px 16px",textAlign:"left",cursor:"pointer"}}>
+      <div style={{fontSize:11,color:C.inkMuted,fontWeight:600,marginBottom:4}}>{label}</div>
+      <div style={{fontSize:22,fontWeight:800,color:color||C.ink,fontFamily:MONO,letterSpacing:-0.5}}>{value}</div>
+      <div style={{fontSize:10.5,color:C.inkFaint,marginTop:2}}>{expandido===id?"▲ Cerrar":"▼ Ver detalle"}</div>
+    </button>
+    {expandido===id&&<div style={{borderTop:`1px solid ${C.border}`,padding:"12px 16px",background:C.paper}}>{children}</div>}
+  </div>
+  );
+}
+
 export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, aportes: aportesLista, onNavigate, onAccion, onSincronizar, sincronizando, porAceptar, esCodigoMP, ultimaCartola, saldoBanco, bancoMensual, onEditarSaldo }) {
   const [expandido,setExpandido]=useState(null);
   const [verHistorico,setVerHistorico]=useState(false);
@@ -158,23 +184,6 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
     return { mesAnterior:utilMesAnt, m3:calcUtil(3), m6:calcUtil(6), m9:calcUtil(9), m12:calcUtil(12), historico:ocs.reduce((s,o)=>s+(o.monto_total||0)-(o.costo_total||0),0), nombreMesAnt:fmt.monthYear(mesAnterior,anioMA) };
   },[ocs]);
 
-  const deudaVendedores=useMemo(()=>{
-    const hoy=new Date(); const mesActual=hoy.getMonth()+1; const anioActual=hoy.getFullYear();
-    return vendedores.map(v=>{
-      const factsMes=ocs.filter(o=>{
-        if(o.vendedor_id!==v.id) return false;
-        if(o.estado_factura_propia!=="emitida") return false;
-        if(o.vendedor_pagado) return false;
-        const evF=(o.eventos_factura||[])[0]; if(!evF) return false;
-        const f=new Date(evF.fecha); return f.getMonth()+1===mesActual&&f.getFullYear()===anioActual;
-      });
-      const sumaFacts=factsMes.reduce((s,o)=>s+(o.monto_facturado||0),0);
-      const ivaMesV=ivaMensual.find(i=>i.mes===mesActual&&i.anio===anioActual); const impPagadoV=ivaMesV?Math.max(0,(ivaMesV.iva_ventas||0)-(ivaMesV.iva_compras||0)):0; const pagoCalculado=Math.max(0,Math.round(sumaFacts/2 - impPagadoV/2));
-      const pagado=pagosVendedor.filter(p=>p.vendedor_id===v.id&&p.mes===mesActual&&p.anio===anioActual).reduce((s,p)=>s+(p.monto_pagado||0),0);
-      return {vendedor:v,pagoCalculado,pagado,deuda:Math.max(0,pagoCalculado-pagado)};
-    });
-  },[ocs,vendedores,pagosVendedor]);
-
   // ── Serie diaria acumulada de ventas (mes actual vs mes anterior) ──
   const ventasChart=useMemo(()=>{
     const hoy=new Date(); const diaHoy=hoy.getDate();
@@ -198,6 +207,59 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
     const totalAntComparable=acumAntRaw[acumAntRaw.length-1]||0;
     const variacion=totalAntComparable>0?Math.round(((totalAct-totalAntComparable)/totalAntComparable)*100):null;
     return {acumAct,acumAnt,totalAct,variacion};
+  },[ocs]);
+
+  // ── Conciliación banco vs registrado (antes se recalculaba en cada render) ──
+  const conciliacionBanco=useMemo(()=>{
+    const meses=(bancoMensual||[]).slice(0,6).map(bm=>{
+      const ini=`${bm.anio}-${String(bm.mes).padStart(2,"0")}-01`;
+      const fin=`${bm.anio}-${String(bm.mes).padStart(2,"0")}-31`;
+      const enRango=(f)=>{const d=String(f||"").slice(0,10); return d>=ini&&d<=fin;};
+
+      let appEntro=0, appSalio=0;
+      for(const oc of ocs){
+        for(const e of (oc.eventos_pago_cliente||[]))          if(enRango(e.fecha)) appEntro+=Number(e.monto)||0;
+        for(const e of (oc.eventos_pago_financiamiento||[]))   if(enRango(e.fecha)) appSalio+=Number(e.monto)||0;
+      }
+      for(const e of (pagoFinSueltos||[])) if(enRango(e.fecha)) appSalio+=Number(e.monto)||0;
+      for(const g of gastos)               if(enRango(g.fecha)) appSalio+=Number(g.monto)||0;
+      for(const p of pagosVendedor)        if(enRango(p.fecha)) appSalio+=Number(p.monto_pagado)||0;
+      for(const a of (aportesLista||[]))   if(enRango(a.fecha)) (a.tipo==="retiro"?appSalio+=Number(a.monto)||0:appEntro+=Number(a.monto)||0);
+
+      const dEntro=appEntro-(Number(bm.entro)||0);
+      const dSalio=appSalio-(Number(bm.salio)||0);
+      const peor=Math.max(Math.abs(dEntro),Math.abs(dSalio));
+      const nombre=new Date(bm.anio,bm.mes-1,1).toLocaleDateString("es-CL",{month:"short",year:"2-digit"});
+      return {bm,nombre,appEntro,appSalio,dEntro,dSalio,peor};
+    });
+    const conProblema=meses.filter(m=>m.peor>50000).length;
+    return {meses,conProblema};
+  },[bancoMensual,ocs,pagoFinSueltos,gastos,pagosVendedor,aportesLista]);
+
+  // ── OCs de MP sin datos de cliente (antes se recalculaba en cada render) ──
+  const sinDatosMP=useMemo(()=>
+    ocs.filter(o=>esCodigoMP&&esCodigoMP(o.numero_oc)&&!o.no_en_mp&&(o.sync_pendiente||!o.rut_cliente||!o.fecha_emision_mp||String(o.cliente||"").toUpperCase().includes("POR COMPLETAR"))).length
+  ,[ocs,esCodigoMP]);
+
+  // ── Resultado del mes cerrado (antes se recalculaba en cada render) ──
+  const mesCerrado=useMemo(()=>{
+    const h=new Date();
+    const mAnt=h.getMonth()===0?12:h.getMonth();
+    const aAnt=h.getMonth()===0?h.getFullYear()-1:h.getFullYear();
+    const delMes=ocs.filter(o=>{
+      if((o.tipo_registro||"venta")!=="venta") return false;
+      const f=o.fecha_emision_mp||(o.eventos_compra||[])[0]?.fecha;
+      if(!f) return false;
+      const d=new Date(String(f).slice(0,10)+"T00:00:00");
+      return d.getMonth()+1===mAnt&&d.getFullYear()===aAnt;
+    });
+    if(!delMes.length) return null;
+    const venta=delMes.reduce((s,o)=>s+(Number(o.monto_total)||0),0);
+    const costo=delMes.reduce((s,o)=>s+(Number(o.costo_total)||0),0);
+    const util=venta-costo, pct=venta>0?Math.round(util/venta*100):0;
+    const col=pct>=20?C.ok:pct>=10?C.warn:C.danger;
+    const nombreMes=new Date(aAnt,mAnt-1,1).toLocaleDateString("es-CL",{month:"long"});
+    return {cantidad:delMes.length,venta,costo,util,pct,col,nombreMes};
   },[ocs]);
 
   const buildPath=(arr,w,h,max)=>{
@@ -245,30 +307,6 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
 
     return items;
   },[ocsPorCobrar,ocs]);
-
-  // Agrupa el contenido bajo un título discreto
-  const Seccion=({titulo,children,sub,ocultarSiVacio})=>{
-    if(ocultarSiVacio) return null;
-    return (
-    <div style={{marginBottom:18}}>
-      <div style={{fontSize:10.5,fontWeight:800,color:C.inkFaint,textTransform:"uppercase",
-        letterSpacing:0.6,marginBottom:8,paddingLeft:2}}>{titulo}</div>
-      {sub&&<div style={{fontSize:11.5,color:C.inkFaint,marginBottom:8,paddingLeft:2}}>{sub}</div>}
-      {children}
-    </div>
-    );
-  };
-
-  const KpiBtn=({label,value,color,id,children})=>(
-    <div style={{background:C.card,border:`1px solid ${expandido===id?color:C.border}`,borderRadius:14,overflow:"hidden",marginBottom:10}}>
-      <button onClick={()=>setExpandido(expandido===id?null:id)} style={{width:"100%",background:"none",border:"none",padding:"14px 16px",textAlign:"left",cursor:"pointer"}}>
-        <div style={{fontSize:11,color:C.inkMuted,fontWeight:600,marginBottom:4}}>{label}</div>
-        <div style={{fontSize:22,fontWeight:800,color:color||C.ink,fontFamily:MONO,letterSpacing:-0.5}}>{value}</div>
-        <div style={{fontSize:10.5,color:C.inkFaint,marginTop:2}}>{expandido===id?"▲ Cerrar":"▼ Ver detalle"}</div>
-      </button>
-      {expandido===id&&<div style={{borderTop:`1px solid ${C.border}`,padding:"12px 16px",background:C.paper}}>{children}</div>}
-    </div>
-  );
 
   return (
     <div style={{fontFamily:SANS}}>
@@ -338,30 +376,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
           No se comparan movimientos uno a uno porque las entidades
           pagan varias facturas juntas y nunca calzarían. */}
       {(bancoMensual||[]).length>0&&(()=>{
-        const meses=(bancoMensual||[]).slice(0,6).map(bm=>{
-          const ini=`${bm.anio}-${String(bm.mes).padStart(2,"0")}-01`;
-          const fin=`${bm.anio}-${String(bm.mes).padStart(2,"0")}-31`;
-          const enRango=(f)=>{const d=String(f||"").slice(0,10); return d>=ini&&d<=fin;};
-
-          let appEntro=0, appSalio=0;
-          for(const oc of ocs){
-            for(const e of (oc.eventos_pago_cliente||[]))          if(enRango(e.fecha)) appEntro+=Number(e.monto)||0;
-            for(const e of (oc.eventos_pago_financiamiento||[]))   if(enRango(e.fecha)) appSalio+=Number(e.monto)||0;
-          }
-          for(const e of (pagoFinSueltos||[])) if(enRango(e.fecha)) appSalio+=Number(e.monto)||0;
-          for(const g of gastos)               if(enRango(g.fecha)) appSalio+=Number(g.monto)||0;
-          for(const p of pagosVendedor)        if(enRango(p.fecha)) appSalio+=Number(p.monto_pagado)||0;
-          for(const a of (aportesLista||[]))   if(enRango(a.fecha)) (a.tipo==="retiro"?appSalio+=Number(a.monto)||0:appEntro+=Number(a.monto)||0);
-
-          const dEntro=appEntro-(Number(bm.entro)||0);
-          const dSalio=appSalio-(Number(bm.salio)||0);
-          const peor=Math.max(Math.abs(dEntro),Math.abs(dSalio));
-          const nombre=new Date(bm.anio,bm.mes-1,1).toLocaleDateString("es-CL",{month:"short",year:"2-digit"});
-          return {bm,nombre,appEntro,appSalio,dEntro,dSalio,peor};
-        });
-
-        const conProblema=meses.filter(m=>m.peor>50000).length;
-
+        const {meses,conProblema}=conciliacionBanco;
         return (
           <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"13px 15px",marginBottom:12}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:3}}>
@@ -442,7 +457,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
 
       {/* ── OCs sin datos: ofrecer completarlas desde Mercado Público ── */}
       {(()=>{
-        const sinDatos=ocs.filter(o=>esCodigoMP&&esCodigoMP(o.numero_oc)&&!o.no_en_mp&&(o.sync_pendiente||!o.rut_cliente||!o.fecha_emision_mp||String(o.cliente||"").toUpperCase().includes("POR COMPLETAR"))).length;
+        const sinDatos=sinDatosMP;
         if(!sinDatos&&!sincronizando) return null;
         return (
           <div style={{background:C.infoLight,border:`1px solid ${C.info}`,borderRadius:12,padding:"12px 14px",marginBottom:12}}>
@@ -489,29 +504,15 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
       <Seccion titulo="Este mes" ocultarSiVacio={ventasChart.totalAct<=0&&kpis.margenPromPct<=0}>
       {/* Resultado del mes cerrado: dato estable que no depende del día */}
       {(()=>{
-        const h=new Date();
-        const mAnt=h.getMonth()===0?12:h.getMonth();
-        const aAnt=h.getMonth()===0?h.getFullYear()-1:h.getFullYear();
-        const delMes=ocs.filter(o=>{
-          if((o.tipo_registro||"venta")!=="venta") return false;
-          const f=o.fecha_emision_mp||(o.eventos_compra||[])[0]?.fecha;
-          if(!f) return false;
-          const d=new Date(String(f).slice(0,10)+"T00:00:00");
-          return d.getMonth()+1===mAnt&&d.getFullYear()===aAnt;
-        });
-        if(!delMes.length) return null;
-        const venta=delMes.reduce((s,o)=>s+(Number(o.monto_total)||0),0);
-        const costo=delMes.reduce((s,o)=>s+(Number(o.costo_total)||0),0);
-        const util=venta-costo, pct=venta>0?Math.round(util/venta*100):0;
-        const col=pct>=20?C.ok:pct>=10?C.warn:C.danger;
-        const nombreMes=new Date(aAnt,mAnt-1,1).toLocaleDateString("es-CL",{month:"long"});
+        if(!mesCerrado) return null;
+        const {cantidad,venta,costo,util,pct,col,nombreMes}=mesCerrado;
         return (
           <div style={{marginBottom:18}}>
             <div style={{fontSize:10.5,fontWeight:800,color:C.inkFaint,textTransform:"uppercase",
               letterSpacing:0.6,marginBottom:8,paddingLeft:2}}>{nombreMes} · mes cerrado</div>
-            <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px"}}>
+            <div style={{background:C.card,border:`1px solid ${C.border}`,padding:"14px 16px",borderRadius:14}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:10}}>
-                <span style={{fontSize:11.5,color:C.inkMuted}}>{delMes.length} órdenes</span>
+                <span style={{fontSize:11.5,color:C.inkMuted}}>{cantidad} órdenes</span>
                 <span style={{fontFamily:MONO,fontWeight:800,fontSize:19,color:C.ink}}>{fmt.money(venta)}</span>
               </div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,
@@ -595,7 +596,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
 
       {/* 4 KPIs clickeables (detalle expandible) */}
       {verHistorico&&<>
-      <KpiBtn label="Ingresos cobrados" value={fmt.money(kpis.cobrado)} color={C.ok} id="cobrado">
+      <KpiBtn label="Ingresos cobrados" value={fmt.money(kpis.cobrado)} color={C.ok} id="cobrado" expandido={expandido} setExpandido={setExpandido}>
         <div style={{fontSize:11.5,fontWeight:700,color:C.inkMuted,marginBottom:8}}>OC cobradas ({ocsPagadas.length})</div>
         {ocsPagadas.map(o=>(
           <div key={o.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
@@ -605,7 +606,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
         ))}
       </KpiBtn>
 
-      <KpiBtn label="Por cobrar" value={fmt.money(kpis.porCobrar)} color={C.warn} id="porCobrar">
+      <KpiBtn label="Por cobrar" value={fmt.money(kpis.porCobrar)} color={C.warn} id="porCobrar" expandido={expandido} setExpandido={setExpandido}>
         <div style={{fontSize:11.5,fontWeight:700,color:C.inkMuted,marginBottom:8}}>Facturas pendientes de pago ({ocsPorCobrar.length})</div>
         {ocsPorCobrar.sort((a,b)=>(b.diasDesde||0)-(a.diasDesde||0)).map(o=>(
           <div key={o.id} style={{padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
@@ -621,7 +622,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
         ))}
       </KpiBtn>
 
-      <KpiBtn label="Deuda a financiadores" value={fmt.money(kpis.deudaFin)} color={C.danger} id="deudaFin">
+      <KpiBtn label="Deuda a financiadores" value={fmt.money(kpis.deudaFin)} color={C.danger} id="deudaFin" expandido={expandido} setExpandido={setExpandido}>
         {financiadores.map(f=>(
           <div key={f.id} style={{marginBottom:12}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
@@ -633,7 +634,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
         <button onClick={()=>onNavigate("financiamiento")} style={{...btnP(C.night),marginTop:4}}>Ver cartola completa →</button>
       </KpiBtn>
 
-      <KpiBtn label="Utilidad bruta" value={fmt.money(kpis.utilidad)} color={C.teal} id="utilidad">
+      <KpiBtn label="Utilidad bruta" value={fmt.money(kpis.utilidad)} color={C.teal} id="utilidad" expandido={expandido} setExpandido={setExpandido}>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
           {[
             {label:`${utilidadPeriodos.nombreMesAnt} (mes ant.)`,v:utilidadPeriodos.mesAnterior},
