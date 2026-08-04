@@ -84,9 +84,9 @@ export default function App() {
     const t=session.access_token;
     try {
       const [ocsD,finD,vendD,catD,gastD,ivaD,pagVD,ajuD,perfD,contD,entD,pagoFinSueltosD,notifD,histD,reclamosD,respD,pvD,aporD,cartD,sbD,bmD]=await Promise.all([
-        selOCs(t), sel("financiadores",t,"&order=nombre"), sel("vendedores",t,"&order=nombre"),
-        sel("categorias_gasto",t,"&order=nombre"), sel("gastos_indirectos",t,"&order=fecha.desc"),
-        sel("iva_mensual",t), sel("pagos_vendedor",t), sel("ajustes_saldo_financiador",t,"&order=creadoEn.desc"),
+        selOCs(t), sel("financiadores",t,"&order=nombre").catch(()=>[]), sel("vendedores",t,"&order=nombre").catch(()=>[]),
+        sel("categorias_gasto",t,"&order=nombre").catch(()=>[]), sel("gastos_indirectos",t,"&order=fecha.desc").catch(()=>[]),
+        sel("iva_mensual",t).catch(()=>[]), sel("pagos_vendedor",t).catch(()=>[]), sel("ajustes_saldo_financiador",t,"&order=creadoEn.desc").catch(()=>[]),
         selPerfiles(t), sel("contactos_cobranza",t).catch(()=>[]), sel("entidades_catalogo",t).catch(()=>[]),
         sel("eventos_pago_financiamiento",t,"&oc_id=is.null").catch(()=>[]),
         sel("notificaciones",t,`&usuario_id=eq.${session.user.id}&order=creadoEn.desc&limit=50`).catch(()=>[]),
