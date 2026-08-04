@@ -93,12 +93,14 @@ async function listarOCs(req, res, ticket) {
     // Mercado Público falla de forma intermitente en consultas puntuales.
     // Sin reintento, un solo día que falle desaparece en silencio de los
     // 90 — nada avisa que faltó, así que hay que insistir antes de rendirse.
-    // La pausa antes de reintentar importa: si la primera falló por una
+    // Las pausas antes de reintentar importan: si la primera falló por una
     // ráfaga de solicitudes simultáneas, reintentar de inmediato pega
-    // contra el mismo bloqueo.
+    // contra el mismo bloqueo. Tres intentos en vez de dos: con dos
+    // seguía perdiendo días de vez en cuando.
     let j = null;
-    for (let intento = 0; intento < 2 && !j; intento++) {
-      if (intento === 1) await new Promise((res) => setTimeout(res, 700));
+    for (let intento = 0; intento < 3 && !j; intento++) {
+      if (intento === 1) await new Promise((res) => setTimeout(res, 600));
+      if (intento === 2) await new Promise((res) => setTimeout(res, 1400));
       try {
         const r = await fetch(url, { headers: { Accept: "application/json" } });
         if (r.ok) j = await r.json();
@@ -121,11 +123,11 @@ async function listarOCs(req, res, ticket) {
     });
   };
 
-  // Antes: lotes de 15 en paralelo. Una ráfaga tan grande puede activar
-  // algún límite de Mercado Público y tirar abajo la tanda completa —
-  // incluido el día que importaba. Ahora, lotes de 4 con una pausa breve
-  // entre cada uno: más lento, pero mucho menos propenso a bloquearse.
-  const LOTE = 4;
+  // Antes: lotes de 15 en paralelo, después 4. Una ráfaga simultánea
+  // puede activar algún límite de Mercado Público y tirar abajo la
+  // tanda completa — incluido el día que importaba. Ahora, lotes de 3
+  // con una pausa entre cada uno: más lento, pero más confiable.
+  const LOTE = 3;
   for (let i = 0; i < dds.length; i += LOTE) {
     const resultados = await Promise.all(dds.slice(i, i + LOTE).map(consultarDia));
     for (const items of resultados) {
@@ -135,7 +137,7 @@ async function listarOCs(req, res, ticket) {
         encontradas.push(fila);
       }
     }
-    if (i + LOTE < dds.length) await new Promise((res) => setTimeout(res, 150));
+    if (i + LOTE < dds.length) await new Promise((res) => setTimeout(res, 180));
   }
 
   // Antes 15 min: si una OC se acepta/cancela en MP, la app podía
