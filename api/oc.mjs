@@ -190,13 +190,21 @@ export default async function handler(req, res) {
     let data = null;
     let ultimoStatus = null;
 
-    for (const base of BASES) {
-      const url = `${base}?codigo=${encodeURIComponent(codigo)}&ticket=${encodeURIComponent(ticket)}`;
-      const r = await fetch(url, { headers: { Accept: "application/json" } });
-      ultimoStatus = r.status;
-      if (!r.ok) continue;
-      try { data = await r.json(); } catch { continue; }
-      if (data) break;
+    // Nunca había tenido reintento — funcionó bien todo el día porque
+    // Mercado Público estaba estable, pero cuando ellos tienen un mal
+    // momento, un solo intento por variante no alcanza.
+    for (let intento = 0; intento < 3 && !data; intento++) {
+      if (intento > 0) await new Promise((res) => setTimeout(res, intento === 1 ? 600 : 1400));
+      for (const base of BASES) {
+        const url = `${base}?codigo=${encodeURIComponent(codigo)}&ticket=${encodeURIComponent(ticket)}`;
+        try {
+          const r = await fetch(url, { headers: { Accept: "application/json" } });
+          ultimoStatus = r.status;
+          if (!r.ok) continue;
+          const j = await r.json().catch(() => null);
+          if (j?.Listado?.[0]) { data = j; break; }
+        } catch { /* prueba la siguiente variante o reintenta */ }
+      }
     }
 
     if (!data) {
