@@ -65,7 +65,7 @@ function VerMasAvisoMP({n}){
   return <div style={{fontSize:10.5,color:C.inkFaint,marginTop:6,textAlign:"center"}}>y {n} más</div>;
 }
 
-export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, aportes: aportesLista, onNavigate, onAccion, onSincronizar, onCorregirFechas, sincronizando, porAceptar, onActualizarPorAceptar, verificandoPorAceptar, aceptadasSinCargar, onCargarOC, onCargarTodasAceptadas, cargandoAceptadas, onActualizarAceptadas, verificandoAceptadas, canceladasEnMP, onEliminarCancelada, onActualizarCanceladas, verificandoCanceladas, onValidarTodo, validandoTodo, usoMP, esCodigoMP, ultimaCartola, saldoBanco, bancoMensual, onEditarSaldo }) {
+export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, aportes: aportesLista, onNavigate, onAccion, onSincronizar, onCorregirFechas, sincronizando, porAceptar, onActualizarPorAceptar, verificandoPorAceptar, aceptadasSinCargar, onCargarOC, onCargarTodasAceptadas, cargandoAceptadas, onActualizarAceptadas, verificandoAceptadas, canceladasEnMP, onEliminarCancelada, onActualizarCanceladas, verificandoCanceladas, onValidarTodo, validandoTodo, usoMP, actMP, esCodigoMP, ultimaCartola, saldoBanco, bancoMensual, onEditarSaldo }) {
   const [verMP,setVerMP]=useState(false);
 
   const kpis=useMemo(()=>{
@@ -358,6 +358,19 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
         const nCanceladas=(canceladasEnMP||[]).length;
         const total=nPorAceptar+nAceptadas+nCanceladas;
         const verificandoAlgo=verificandoPorAceptar||verificandoAceptadas||verificandoCanceladas;
+
+        const hace=(iso)=>{
+          if(!iso) return null;
+          const mins=Math.floor((Date.now()-new Date(iso).getTime())/60000);
+          if(mins<1) return "recién";
+          if(mins<60) return `hace ${mins} min`;
+          const hrs=Math.floor(mins/60);
+          if(hrs<24) return `hace ${hrs} h`;
+          return `hace ${Math.floor(hrs/24)} d`;
+        };
+        const ultimasFechas=[actMP?.porAceptar,actMP?.aceptadas,actMP?.canceladas].filter(Boolean);
+        const ultimaGeneral=ultimasFechas.length?ultimasFechas.sort().slice(-1)[0]:null;
+
         if(!total&&!verificandoAlgo) return (
           <button onClick={()=>{
               onActualizarPorAceptar&&onActualizarPorAceptar();
@@ -369,7 +382,10 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
               cursor:"pointer",marginBottom:10,boxShadow:"0 1px 2px rgba(15,23,42,0.04)"}}>
             <span style={{width:28,height:28,borderRadius:9,background:C.infoLight,color:C.info,flexShrink:0,
               display:"flex",alignItems:"center",justifyContent:"center",fontSize:13}}>↻</span>
-            <span style={{fontSize:12,fontWeight:700,color:C.ink}}>Revisar Mercado Público de nuevo</span>
+            <span style={{flex:1,minWidth:0}}>
+              <span style={{display:"block",fontSize:12,fontWeight:700,color:C.ink}}>Revisar Mercado Público de nuevo</span>
+              {ultimaGeneral&&<span style={{display:"block",fontSize:10,color:C.inkFaint,marginTop:1}}>Última consulta exitosa: {hace(ultimaGeneral)}</span>}
+            </span>
           </button>
         );
         return (
@@ -377,8 +393,11 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
             <button onClick={()=>setVerMP(v=>!v)}
               style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"13px 14px",
                 background:"none",border:"none",cursor:"pointer",textAlign:"left"}}>
-              <span style={{fontSize:13,fontWeight:800,color:C.ink,flex:1}}>
-                {verificandoAlgo?"Revisando Mercado Público…":"Mercado Público"}
+              <span style={{flex:1,minWidth:0}}>
+                <span style={{display:"block",fontSize:13,fontWeight:800,color:C.ink}}>
+                  {verificandoAlgo?"Revisando Mercado Público…":"Mercado Público"}
+                </span>
+                {!verificandoAlgo&&ultimaGeneral&&<span style={{display:"block",fontSize:10,color:C.inkFaint,marginTop:1}}>Última consulta exitosa: {hace(ultimaGeneral)}</span>}
               </span>
               {nPorAceptar>0&&<span style={{fontSize:11,fontWeight:800,color:C.warn,background:C.warnLight,borderRadius:20,padding:"2px 8px"}}>⏳ {nPorAceptar}</span>}
               {nAceptadas>0&&<span style={{fontSize:11,fontWeight:800,color:C.ok,background:C.okLight,borderRadius:20,padding:"2px 8px"}}>✓ {nAceptadas}</span>}
