@@ -855,7 +855,19 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, onSincroniz
   const toggle=(key,val)=>setFiltros(prev=>({...prev,[key]:prev[key]===val?undefined:val}));
   const comunas=useMemo(()=>Array.from(new Set(ocs.map(o=>o.comuna).filter(Boolean))).sort(),[ocs]);
   const filtered=useMemo(()=>ocs.filter(oc=>{
-    if(busq.trim()){ const q=busq.toLowerCase(); if(!oc.numero_oc.toLowerCase().includes(q)&&!(oc.cliente||"").toLowerCase().includes(q)&&!(oc.comuna||"").toLowerCase().includes(q)&&!(oc.entidad||"").toLowerCase().includes(q)) return false; }
+    if(busq.trim()){
+      const q=busq.toLowerCase();
+      const numFactura=(oc.eventos_factura||[])[0]?.numero_factura;
+      const coincide=
+        oc.numero_oc.toLowerCase().includes(q) ||
+        (oc.cliente||"").toLowerCase().includes(q) ||
+        (oc.comuna||"").toLowerCase().includes(q) ||
+        (oc.entidad||"").toLowerCase().includes(q) ||
+        (oc.rut_cliente||"").toLowerCase().includes(q) ||
+        String(numFactura||"").toLowerCase().includes(q) ||
+        String(oc.monto_facturado||"").includes(q);
+      if(!coincide) return false;
+    }
     if(comunaSel&&oc.comuna!==comunaSel) return false;
     if(!cumpleVista(oc,vista)) return false;
     const f=fechaDe(oc);
@@ -948,7 +960,7 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, onSincroniz
       )}
       {/* ── Buscador ── */}
       <div style={{marginBottom:10}}>
-        <input style={{...iStyle,fontSize:13,padding:"9px 11px"}} placeholder="Buscar OC, cliente o comuna…"
+        <input style={{...iStyle,fontSize:13,padding:"9px 11px"}} placeholder="Buscar OC, cliente, RUT, comuna, N° o monto factura…"
           value={busq} onChange={e=>setBusq(e.target.value)} />
       </div>
 
