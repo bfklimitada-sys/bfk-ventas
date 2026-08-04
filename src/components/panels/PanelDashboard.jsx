@@ -78,7 +78,7 @@ function VerMasAvisoMP({n}){
   return <div style={{fontSize:10.5,color:C.inkFaint,marginTop:6,textAlign:"center"}}>y {n} más</div>;
 }
 
-export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, aportes: aportesLista, onNavigate, onAccion, onSincronizar, onCorregirFechas, sincronizando, porAceptar, onActualizarPorAceptar, verificandoPorAceptar, aceptadasSinCargar, onCargarOC, onCargarTodasAceptadas, cargandoAceptadas, onActualizarAceptadas, verificandoAceptadas, canceladasEnMP, onEliminarCancelada, onActualizarCanceladas, verificandoCanceladas, esCodigoMP, ultimaCartola, saldoBanco, bancoMensual, onEditarSaldo }) {
+export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, aportes: aportesLista, onNavigate, onAccion, onSincronizar, onCorregirFechas, sincronizando, porAceptar, onActualizarPorAceptar, verificandoPorAceptar, aceptadasSinCargar, onCargarOC, onCargarTodasAceptadas, cargandoAceptadas, onActualizarAceptadas, verificandoAceptadas, canceladasEnMP, onEliminarCancelada, onActualizarCanceladas, verificandoCanceladas, onValidarTodo, validandoTodo, esCodigoMP, ultimaCartola, saldoBanco, bancoMensual, onEditarSaldo }) {
   const [expandido,setExpandido]=useState(null);
   const [verHistorico,setVerHistorico]=useState(false);
   const [verDesglose,setVerDesglose]=useState(false);
@@ -234,21 +234,25 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
     return { mesAnterior:utilMesAnt, m3:calcUtil(3), m6:calcUtil(6), m9:calcUtil(9), m12:calcUtil(12), historico:ocs.reduce((s,o)=>s+(o.monto_total||0)-(o.costo_total||0),0), nombreMesAnt:fmt.monthYear(mesAnterior,anioMA) };
   },[ocs]);
 
-  // ── Proyección del mes: promedio de los últimos 3 meses, para tener ──
+  // ── Proyección del mes: promedio histórico completo, para tener ──
   // algo que mostrar desde el día 1, antes de que existan ventas reales.
   const proyeccionMes=useMemo(()=>{
-    const limite=new Date(); limite.setMonth(limite.getMonth()-3);
-    const recientes=ocs.filter(o=>{
+    const historicas=ocs.filter(o=>{
       if((o.tipo_registro||"venta")!=="venta") return false;
-      const evC=(o.eventos_compra||[])[0]; if(!evC) return false;
-      return new Date(evC.fecha)>=limite;
+      const evC=(o.eventos_compra||[])[0];
+      return !!evC;
     });
-    const venta=recientes.reduce((s,o)=>s+(Number(o.monto_total)||0),0);
-    const costo=recientes.reduce((s,o)=>s+(Number(o.costo_total)||0),0);
-    const ventaProm=Math.round(venta/3), costoProm=Math.round(costo/3);
+    if(!historicas.length) return {ventaProm:0,utilProm:0,pct:0,meses:0};
+    // Meses distintos con al menos una venta, para promediar por mes real
+    // y no solo dividir por una cantidad fija de períodos.
+    const clavesMes=new Set(historicas.map(o=>String((o.eventos_compra||[])[0].fecha).slice(0,7)));
+    const meses=Math.max(1,clavesMes.size);
+    const venta=historicas.reduce((s,o)=>s+(Number(o.monto_total)||0),0);
+    const costo=historicas.reduce((s,o)=>s+(Number(o.costo_total)||0),0);
+    const ventaProm=Math.round(venta/meses), costoProm=Math.round(costo/meses);
     const utilProm=ventaProm-costoProm;
     const pct=ventaProm>0?Math.round(utilProm/ventaProm*100):0;
-    return {ventaProm,utilProm,pct};
+    return {ventaProm,utilProm,pct,meses};
   },[ocs]);
 
   // ── Serie diaria acumulada de ventas (mes actual vs mes anterior) ──
@@ -572,9 +576,18 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
                   disabled={verificandoAlgo}
                   style={{width:"100%",background:"none",border:`1px dashed ${C.border}`,
                     color:verificandoAlgo?C.inkFaint:C.inkMuted,borderRadius:10,padding:"8px 12px",
-                    fontSize:11,fontWeight:700,cursor:verificandoAlgo?"default":"pointer",marginBottom:12}}>
+                    fontSize:11,fontWeight:700,cursor:verificandoAlgo?"default":"pointer",marginBottom:8}}>
                   {verificandoAlgo?"Revisando…":"↻ Revisar de nuevo"}
                 </button>
+
+                {onValidarTodo&&(
+                  <button onClick={()=>onValidarTodo()} disabled={!!validandoTodo}
+                    style={{width:"100%",background:"none",border:`1px dashed ${C.border}`,
+                      color:validandoTodo?C.inkFaint:C.inkMuted,borderRadius:10,padding:"8px 12px",
+                      fontSize:11,fontWeight:700,cursor:validandoTodo?"default":"pointer",marginBottom:12}}>
+                    {validandoTodo?`Validando ${validandoTodo.hechas} de ${validandoTodo.total}…`:"🔍 Validar todas mis OC contra Mercado Público"}
+                  </button>
+                )}
 
                 {nPorAceptar>0&&(
                   <AvisoMP icon="⏳" color={C.warn} bg={C.warnLight}
@@ -741,7 +754,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
             letterSpacing:0.6,marginBottom:8,paddingLeft:2}}>Este mes · proyección</div>
           <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px"}}>
             <div style={{fontSize:11.5,color:C.inkMuted,lineHeight:1.5,marginBottom:12}}>
-              Todavía no hay ventas registradas en {new Date().toLocaleDateString("es-CL",{month:"long"})}. Esto es el promedio mensual de los últimos 3 meses, como referencia mientras entran las primeras.
+              Todavía no hay ventas registradas en {new Date().toLocaleDateString("es-CL",{month:"long"})}. Esto es el promedio mensual de todo el histórico ({proyeccionMes.meses} mes{proyeccionMes.meses!==1?"es":""} con ventas), como referencia mientras entran las primeras.
             </div>
             <div style={{display:"flex",alignItems:"center",gap:14}}>
               <div style={{flex:1}}>
