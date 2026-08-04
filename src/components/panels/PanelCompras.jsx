@@ -482,7 +482,61 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
   );
 }
 
-export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded, onToggle, contactos, onEnviarReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, bloqueos, perfil, historialCambios, onAgregarComentario, onEliminarComentario, onBloquear, onLiberar, onEliminarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa }) {
+// Historial de reclamos de pago con posibilidad de anotar la respuesta
+// del cliente (fecha que prometió pagar, o cualquier nota libre).
+function HistorialReclamos({ reclamos, onRegistrarRespuesta }){
+  const [editando,setEditando]=useState(null); // id del reclamo en edición
+  const [fecha,setFecha]=useState("");
+  const [notas,setNotas]=useState("");
+  const ordenados=(reclamos||[]).slice().sort((a,b)=>(b.fecha||"").localeCompare(a.fecha||""));
+
+  return (
+    <div style={{marginBottom:10}}>
+      <div style={{fontSize:10.5,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>
+        Historial de reclamos ({ordenados.length})
+      </div>
+      {ordenados.map(r=>(
+        <div key={r.id} style={{background:C.paper,borderRadius:10,padding:"10px 12px",marginBottom:6,border:`1px solid ${C.border}`}}>
+          <span style={{fontSize:11.5,fontWeight:700,color:C.ink}}>📧 {fmt.datetime(r.fecha)}</span>
+          <div style={{fontSize:10.5,color:C.inkMuted,marginTop:2}}>Enviado a {r.correo}</div>
+
+          {r.respondido_en ? (
+            <div style={{marginTop:8,paddingTop:8,borderTop:`1px solid ${C.border}`}}>
+              <div style={{fontSize:10.5,fontWeight:700,color:C.ok}}>↩ Respondió</div>
+              {r.fecha_prometida&&<div style={{fontSize:11.5,color:C.ink,marginTop:2}}>Prometió pagar: <b>{fmt.date(r.fecha_prometida)}</b></div>}
+              {r.respuesta_notas&&<div style={{fontSize:11,color:C.inkMuted,marginTop:2,lineHeight:1.4}}>{r.respuesta_notas}</div>}
+            </div>
+          ) : editando===r.id ? (
+            <div style={{marginTop:8,paddingTop:8,borderTop:`1px solid ${C.border}`}}>
+              <label style={{fontSize:10,color:C.inkFaint,fontWeight:700,display:"block",marginBottom:3}}>Fecha que prometió pagar (opcional)</label>
+              <input type="date" value={fecha} onChange={e=>setFecha(e.target.value)}
+                style={{...iStyle,fontSize:12,padding:"7px 9px",marginBottom:8}} />
+              <label style={{fontSize:10,color:C.inkFaint,fontWeight:700,display:"block",marginBottom:3}}>Notas (opcional)</label>
+              <textarea value={notas} onChange={e=>setNotas(e.target.value)} rows={2}
+                placeholder="Ej: dice que pasó a contabilidad, pagan los viernes…"
+                style={{...iStyle,fontSize:12,padding:"7px 9px",marginBottom:8,resize:"vertical",width:"100%",boxSizing:"border-box"}} />
+              <div style={{display:"flex",gap:6}}>
+                <button onClick={()=>{
+                    onRegistrarRespuesta&&onRegistrarRespuesta({reclamoId:r.id,fechaPrometida:fecha,notas});
+                    setEditando(null); setFecha(""); setNotas("");
+                  }}
+                  style={{...btnP(C.ok),flex:1,padding:"8px",fontSize:12}}>Guardar</button>
+                <button onClick={()=>setEditando(null)} style={{...btnG,flex:1,padding:"8px",fontSize:12}}>Cancelar</button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={()=>{setEditando(r.id);setFecha("");setNotas("");}}
+              style={{marginTop:6,background:"none",border:"none",color:C.info,fontSize:11,fontWeight:700,cursor:"pointer",padding:0}}>
+              📩 Registrar respuesta
+            </button>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded, onToggle, contactos, onEnviarReclamo, onRegistrarRespuestaReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, bloqueos, perfil, historialCambios, onAgregarComentario, onEliminarComentario, onBloquear, onLiberar, onEliminarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa }) {
   const evF=(oc.eventos_factura||[])[0];
   const dias=fmt.diasDesde(evF?.fecha);
   const saldo=(oc.monto_facturado||0)-(oc.monto_cobrado||0);
@@ -674,6 +728,9 @@ export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded
                   📧 Reclamar pago de factura{(oc.oc_reclamos||[]).length>0?` (${(oc.oc_reclamos||[]).length} reclamo${(oc.oc_reclamos||[]).length>1?"s":""} previo${(oc.oc_reclamos||[]).length>1?"s":""})`:""}</button>
           )}
 
+          {(oc.oc_reclamos||[]).length>0&&
+            <HistorialReclamos reclamos={oc.oc_reclamos} onRegistrarRespuesta={onRegistrarRespuestaReclamo} />}
+
           <ComentariosOC oc={oc} perfil={perfil} onAgregar={onAgregarComentario} onEliminar={onEliminarComentario} />
           <HistorialCambiosOC ocId={oc.id} historialCambios={historialCambios} />
 
@@ -758,7 +815,7 @@ export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded
   );
 }
 
-export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, onSincronizarFecha, contactos, onEnviarReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, bloqueos, perfil, historialCambios, onAgregarComentario, onEliminarComentario, onBloquear, onLiberar, onEliminarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa }) {
+export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, onSincronizarFecha, contactos, onEnviarReclamo, onRegistrarRespuestaReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, bloqueos, perfil, historialCambios, onAgregarComentario, onEliminarComentario, onBloquear, onLiberar, onEliminarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa }) {
   const [filtros,setFiltros]=useState({}); const [busq,setBusq]=useState(""); const [expId,setExpId]=useState(null);
   const [reclamandoBanner,setReclamandoBanner]=useState(null); const [comunaSel,setComunaSel]=useState("");
   const [bannerAbierto,setBannerAbierto]=useState(false);
@@ -1022,7 +1079,7 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, onSincroniz
           {orden==="ganancia"?"↓ Ganancia":"↓ Fecha"}
         </button>
       </div>
-      {filtered.map(oc=><FilaOC key={oc.id} oc={oc} perfiles={perfiles} todasLasOcs={ocs} onSincronizarFecha={onSincronizarFecha} expanded={expId===oc.id} onToggle={()=>setExpId(expId===oc.id?null:oc.id)} contactos={contactos} onEnviarReclamo={onEnviarReclamo} onGuardarContacto={onGuardarContacto} onGuardarDatosOC={onGuardarDatosOC} onEditarEvento={onEditarEvento} financiadores={financiadores} onConfirmarEntrega={onConfirmarEntrega} onEmitirFactura={onEmitirFactura} onPagoCliente={onPagoCliente} onPagoFinanciamiento={onPagoFinanciamiento} entidadesCatalogo={entidadesCatalogo} onGuardarLink={onGuardarLink} onEliminarLink={onEliminarLink} onEditarLink={onEditarLink} bloqueos={bloqueos} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={onAgregarComentario} onEliminarComentario={onEliminarComentario} onBloquear={onBloquear} onLiberar={onLiberar} onEliminarOC={onEliminarOC} onEliminarFactura={onEliminarFactura} onEliminarEvento={onEliminarEvento} vendedores={vendedores} onIngresarCompra={onIngresarCompra} onAsignarResponsable={onAsignarResponsable} onGuardarPostventa={onGuardarPostventa} />)}
+      {filtered.map(oc=><FilaOC key={oc.id} oc={oc} perfiles={perfiles} todasLasOcs={ocs} onSincronizarFecha={onSincronizarFecha} expanded={expId===oc.id} onToggle={()=>setExpId(expId===oc.id?null:oc.id)} contactos={contactos} onEnviarReclamo={onEnviarReclamo} onRegistrarRespuestaReclamo={onRegistrarRespuestaReclamo} onGuardarContacto={onGuardarContacto} onGuardarDatosOC={onGuardarDatosOC} onEditarEvento={onEditarEvento} financiadores={financiadores} onConfirmarEntrega={onConfirmarEntrega} onEmitirFactura={onEmitirFactura} onPagoCliente={onPagoCliente} onPagoFinanciamiento={onPagoFinanciamiento} entidadesCatalogo={entidadesCatalogo} onGuardarLink={onGuardarLink} onEliminarLink={onEliminarLink} onEditarLink={onEditarLink} bloqueos={bloqueos} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={onAgregarComentario} onEliminarComentario={onEliminarComentario} onBloquear={onBloquear} onLiberar={onLiberar} onEliminarOC={onEliminarOC} onEliminarFactura={onEliminarFactura} onEliminarEvento={onEliminarEvento} vendedores={vendedores} onIngresarCompra={onIngresarCompra} onAsignarResponsable={onAsignarResponsable} onGuardarPostventa={onGuardarPostventa} />)}
       {filtered.length===0&&<div style={{textAlign:"center",padding:30,color:C.inkFaint,fontSize:13}}>No hay órdenes con estos filtros.</div>}
       <Leyenda items={[
         {muestra:"✓ Cerrada",   color:C.ok,      bg:C.okLight,      texto:"Cobrada al cliente y pagada al financiador. Ciclo terminado."},
