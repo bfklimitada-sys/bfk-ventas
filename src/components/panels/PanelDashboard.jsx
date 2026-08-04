@@ -509,6 +509,25 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
       </Seccion>
 
       <Seccion titulo="Requiere atención">
+      {/* ── Refrescar Mercado Público: siempre visible, no depende de que ──
+          ya haya algo que mostrar (si no, no hay forma de forzar el chequeo) */}
+      {(onActualizarPorAceptar||onActualizarAceptadas||onActualizarCanceladas)&&(()=>{
+        const verificandoAlgo=verificandoPorAceptar||verificandoAceptadas||verificandoCanceladas;
+        return (
+          <button onClick={()=>{
+              onActualizarPorAceptar&&onActualizarPorAceptar();
+              onActualizarAceptadas&&onActualizarAceptadas();
+              onActualizarCanceladas&&onActualizarCanceladas();
+            }}
+            disabled={verificandoAlgo}
+            style={{width:"100%",background:"none",border:`1px dashed ${C.border}`,
+              color:verificandoAlgo?C.inkFaint:C.inkMuted,borderRadius:10,padding:"9px 12px",
+              fontSize:11.5,fontWeight:700,cursor:verificandoAlgo?"default":"pointer",marginBottom:12}}>
+            {verificandoAlgo?"Revisando Mercado Público…":"↻ Revisar Mercado Público de nuevo"}
+          </button>
+        );
+      })()}
+
       {/* ── OCs esperando aceptación en Mercado Público ── */}
       {(porAceptar||[]).length>0&&(
         <AvisoMP icon="⏳" color={C.warn} bg={C.warnLight}
