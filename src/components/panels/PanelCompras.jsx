@@ -569,22 +569,31 @@ export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded
 
   return (
     <div style={{background:C.card,border:`1px solid ${C.border}`,borderLeft:`4px solid ${estadoOC.color}`,borderRadius:13,marginBottom:8,overflow:"hidden"}}>
-      <div onClick={handleToggle} style={{padding:"12px 14px",cursor:"pointer"}}>
-        {/* Línea 1 — identificador y plata */}
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:10}}>
-          <span style={{fontFamily:MONO,fontWeight:800,fontSize:13.5,color:C.ink}}>{oc.numero_oc}</span>
-          <span style={{fontFamily:MONO,fontWeight:800,fontSize:14.5,color:C.ink,flexShrink:0}}>{fmt.money(oc.monto_total)}</span>
+      <div onClick={handleToggle} style={{padding:"13px 14px",cursor:"pointer"}}>
+        {/* Línea 1 — dos bloques pareados: código+fecha a la izquierda, monto+ganancia a la derecha */}
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10}}>
+          <div style={{minWidth:0}}>
+            <div style={{fontFamily:MONO,fontWeight:800,fontSize:13.5,color:C.ink}}>{oc.numero_oc}</div>
+            {(()=>{
+              const f=fmtFechaHora(oc.fecha_hora_emision_mp||oc.fecha_emision_mp||(oc.eventos_compra||[])[0]?.fecha||oc.creadoEn);
+              return f ? <div style={{fontSize:10,color:C.inkFaint,marginTop:2}}>{f}</div> : null;
+            })()}
+          </div>
+          <div style={{flexShrink:0,textAlign:"right"}}>
+            <div style={{fontFamily:MONO,fontWeight:800,fontSize:14.5,color:C.ink}}>{fmt.money(oc.monto_total)}</div>
+            {(()=>{const mg=gananciaReal(oc);
+              return oc.costo_total?(
+                <div style={{marginTop:2}}>
+                  <span style={{display:"block",fontFamily:MONO,fontSize:12,fontWeight:800,color:mg.color}}>+{fmt.money(mg.pesos)}</span>
+                  <span style={{display:"block",fontSize:9.5,color:mg.color,opacity:0.8}}>{mg.pct}%{mg.extra>0?" · con post-venta":" margen"}</span>
+                </div>
+              ):null;})()}
+          </div>
         </div>
 
-        {/* Fecha (y hora, si viene de Mercado Público) de creación */}
-        {(()=>{
-          const f=fmtFechaHora(oc.fecha_hora_emision_mp||oc.fecha_emision_mp||(oc.eventos_compra||[])[0]?.fecha||oc.creadoEn);
-          return f ? <div style={{fontSize:10,color:C.inkFaint,marginTop:1}}>{f}</div> : null;
-        })()}
-
-        {/* Línea 2 — quién */}
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:10,marginTop:3}}>
-          <span style={{fontSize:11.5,color:C.inkMuted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+        {/* Línea 2 — cliente y comuna, a todo el ancho */}
+        <div style={{marginTop:7}}>
+          <span style={{fontSize:11.5,color:C.inkMuted,display:"block",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
             {(()=>{
               const esPorCompletar=oc.cliente?.toUpperCase().includes("POR COMPLETAR");
               const nombre=esPorCompletar?(oc.entidad||null):oc.cliente;
@@ -593,17 +602,6 @@ export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded
                 : <span style={{color:C.warn,fontWeight:700}}>⚠ Falta la entidad</span>;
             })()}
           </span>
-          {(()=>{const mg=gananciaReal(oc);
-            return oc.costo_total?(
-              <span style={{flexShrink:0,textAlign:"right"}}>
-                <span style={{display:"block",fontFamily:MONO,fontSize:12,fontWeight:800,color:mg.color}}>
-                  +{fmt.money(mg.pesos)}
-                </span>
-                <span style={{display:"block",fontSize:9.5,color:mg.color,opacity:0.8}}>
-                  {mg.pct}%{mg.extra>0?" · con post-venta":" margen"}
-                </span>
-              </span>
-            ):null;})()}
         </div>
 
         {/* Línea 3 — un solo estado, con el progreso al lado */}
