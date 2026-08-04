@@ -41,10 +41,17 @@ const txt = (v) => (v === null || v === undefined ? "" : String(v).trim());
 // de las que están esperando aceptación en Mercado Público.
 const RUT_BFK = "77.322.317-3";
 
+// El código de proveedor de BFK en Mercado Público no cambia — lo vimos
+// salir "1943006" en decenas de respuestas exitosas. Pedirlo de nuevo en
+// cada consulta solo expone la app a que ese endpoint puntual falle sin
+// necesidad. Se deja fijo, y solo se recurre a la API como respaldo si
+// algún día no viniera seteado (ej. otro RUT usando este mismo código).
+const CODIGO_PROVEEDOR_CONOCIDO = "1943006";
+
 async function buscarCodigoProveedor(ticket) {
+  if (CODIGO_PROVEEDOR_CONOCIDO) return CODIGO_PROVEEDOR_CONOCIDO;
+
   // Esta consulta es el primer paso de todo: si falla, nada más funciona.
-  // No tenía reintento (a diferencia del resto del archivo) — un solo
-  // hipo de Mercado Público tiraba abajo los 3 avisos de una vez.
   for (let intento = 0; intento < 3; intento++) {
     if (intento > 0) await new Promise((res) => setTimeout(res, intento === 1 ? 600 : 1400));
     try {
