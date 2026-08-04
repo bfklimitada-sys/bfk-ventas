@@ -649,17 +649,15 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
       })()}
 
       {/* ── Forzar que la fecha de TODAS las OC de MP calce con Mercado Público, ──
-          no solo las que les falta algo (a diferencia del botón de arriba) ── */}
+          no solo las que les falta algo (a diferencia del botón de arriba). ──
+          Discreto a propósito: es para validar una vez que las fechas ──
+          quedaron bien, no una acción de uso diario — las OC nuevas ya ──
+          entran con la fecha correcta desde que se cargan. ── */}
       <button onClick={()=>onCorregirFechas&&onCorregirFechas()} disabled={!!sincronizando}
-        style={{width:"100%",display:"flex",alignItems:"center",gap:10,textAlign:"left",
-          background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"11px 14px",
-          cursor:sincronizando?"default":"pointer",opacity:sincronizando?0.6:1,marginBottom:12,
-          boxShadow:"0 1px 2px rgba(15,23,42,0.04)"}}>
-        <span style={{width:28,height:28,borderRadius:9,background:C.purpleLight,color:C.purple,flexShrink:0,
-          display:"flex",alignItems:"center",justifyContent:"center",fontSize:13}}>🕐</span>
-        <span style={{fontSize:12,fontWeight:700,color:C.ink}}>
-          {sincronizando?`Revisando ${sincronizando.hechas} de ${sincronizando.total}…`:"Corregir fechas de todas contra Mercado Público"}
-        </span>
+        style={{display:"block",margin:"0 auto 14px",background:"none",border:"none",
+          color:C.inkFaint,fontSize:10.5,cursor:sincronizando?"default":"pointer",
+          textDecoration:sincronizando?"none":"underline"}}>
+        {sincronizando?`Revisando ${sincronizando.hechas} de ${sincronizando.total}…`:"Corregir fechas de todas contra Mercado Público"}
       </button>
 
       {/* ── Prioridades de hoy ── */}
