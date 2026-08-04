@@ -102,6 +102,53 @@ export default function App() {
     return resultados;
   };
 
+  // ─── Contador de uso diario de Mercado Público ───────────────
+  // Su API tiene un límite de 10.000 solicitudes por día por ticket.
+  // Como el ticket vive del lado del servidor (no en el navegador),
+  // la app no puede leer cuánto consumió — así que lleva su propia
+  // cuenta estimada, sumando lo que ella misma dispara en cada acción.
+  const [usoMP,setUsoMP]=useState(null); // {id,solicitudes}
+  const hoyISO=()=>new Date().toISOString().slice(0,10);
+
+  const cargarUsoMP=async()=>{
+    try{
+      const r=await sel("mp_uso_diario",session.access_token,`&id=eq.${hoyISO()}`);
+      setUsoMP((r||[])[0]||{id:hoyISO(),solicitudes:0});
+    }catch{ /* si falla, simplemente no se muestra el contador */ }
+  };
+
+  const registrarUsoMP=async(cantidad)=>{
+    if(!cantidad||!session) return;
+    const t=session.access_token, dia=hoyISO();
+    try{
+      const actualizadas=await upd("mp_uso_diario",t,dia,
+        {solicitudes:(usoMP?.id===dia?usoMP.solicitudes:0)+cantidad,actualizado_en:new Date().toISOString()}
+      ).catch(()=>[]);
+      if(Array.isArray(actualizadas)&&actualizadas.length){
+        setUsoMP(actualizadas[0]);
+      }else{
+        const nueva=await ins("mp_uso_diario",t,{id:dia,solicitudes:cantidad}).catch(()=>null);
+        if(nueva) setUsoMP(Array.isArray(nueva)?nueva[0]:nueva);
+      }
+    }catch{ /* que falle esto no debe frenar la acción real */ }
+  };
+
+  useEffect(()=>{ if(session) cargarUsoMP(); },[session]);
+
+  // Antes de una acción pesada (cientos de solicitudes de una vez),
+  // avisa si eso acercaría al límite diario de 10.000 de Mercado Público.
+  const confirmarSiCercaDelLimite=(estimado)=>{
+    const usado=usoMP?.solicitudes||0;
+    if(usado+estimado>9000){
+      return window.confirm(
+        `Ya van ~${usado.toLocaleString("es-CL")} solicitudes hoy a Mercado Público.\n\n`+
+        `Esto sumaría ~${estimado} más, acercándose al límite diario de 10.000 (después de eso, Mercado Público puede dejar de responder por el resto del día).\n\n`+
+        `¿Continuar de todas formas?`
+      );
+    }
+    return true;
+  };
+
   const cargarTodo=async()=>{
     if(!session) return;
     const t=session.access_token;
@@ -410,6 +457,7 @@ export default function App() {
       (o.sync_pendiente||!o.rut_cliente||!o.fecha_emision_mp||!o.fecha_hora_emision_mp||
        String(o.cliente||"").toUpperCase().includes("POR COMPLETAR")));
     if(!pendientes.length){ showToast("No hay OCs por completar"); return; }
+    if(!confirmarSiCercaDelLimite(pendientes.length)) return;
     intentadas.current.clear();
     setSincronizando({hechas:0,total:pendientes.length});
     let ok=0;
@@ -423,6 +471,7 @@ export default function App() {
     showToast(fallaron>0
       ? `${ok} completadas · ${fallaron} no están en Mercado Público`
       : `${ok} OCs completadas`);
+    registrarUsoMP(pendientes.length);
     await cargarTodo();
   };
 
@@ -435,6 +484,7 @@ export default function App() {
   const corregirFechasTodas=async()=>{
     const candidatas=ocs.filter(o=>esCodigoMP(o.numero_oc));
     if(!candidatas.length){ showToast("No hay OCs de Mercado Público para revisar"); return; }
+    if(!confirmarSiCercaDelLimite(candidatas.length)) return;
     // Toast inmediato: no depende de que el botón esté a la vista en pantalla.
     showToast(`Revisando ${candidatas.length} OC contra Mercado Público…`);
     intentadas.current.clear();
@@ -453,6 +503,7 @@ export default function App() {
     showToast(fallaron>0
       ? `${ok} fechas revisadas · ${fallaron} no están en Mercado Público`
       : `${ok} fechas revisadas y corregidas contra Mercado Público`);
+    registrarUsoMP(candidatas.length);
     await cargarTodo();
   };
 
@@ -546,6 +597,7 @@ export default function App() {
       const norm=(v)=>String(v||"").toUpperCase().replace(/[^A-Z0-9]/g,"").replace(/^N(?=\d)/,"");
       const cargadas=new Set(ocs.map(o=>norm(o.numero_oc)));
       setPorAceptar((j.ocs||[]).filter(o=>!cargadas.has(norm(o.numero_oc))));
+      registrarUsoMP(30); // aproximado: 1 solicitud por día escaneado
     }catch{ /* si falla, simplemente no se muestra el aviso */ }
     finally{ setVerificandoPorAceptar(false); }
   };
@@ -565,6 +617,7 @@ export default function App() {
       const norm=(v)=>String(v||"").toUpperCase().replace(/[^A-Z0-9]/g,"").replace(/^N(?=\d)/,"");
       const cargadas=new Set(ocs.map(o=>norm(o.numero_oc)));
       setAceptadasSinCargar((j.ocs||[]).filter(o=>!cargadas.has(norm(o.numero_oc))));
+      registrarUsoMP(30);
     }catch{ /* si falla, simplemente no se muestra el aviso */ }
     finally{ setVerificandoAceptadas(false); }
   };
@@ -594,6 +647,7 @@ export default function App() {
         if(enMP) encontradas.push({id:oc.id,numero_oc:oc.numero_oc,cliente:oc.cliente,nombre:enMP.nombre});
       }
       setCanceladasEnMP(encontradas);
+      registrarUsoMP(90);
     }catch{ /* si falla, simplemente no se muestra el aviso */ }
     finally{ setVerificandoCanceladas(false); }
   };
@@ -609,6 +663,7 @@ export default function App() {
   const validarTodoContraMP=async()=>{
     const candidatas=ocs.filter(o=>esCodigoMP(o.numero_oc));
     if(!candidatas.length){ showToast("No hay OCs de Mercado Público para validar"); return; }
+    if(!confirmarSiCercaDelLimite(candidatas.length)) return;
     showToast(`Validando ${candidatas.length} OC contra Mercado Público…`);
     setValidandoTodo({hechas:0,total:candidatas.length});
     const canceladas=[];
@@ -638,6 +693,7 @@ export default function App() {
     showToast(canceladas.length>0
       ? `${canceladas.length} OC cancelada${canceladas.length>1?"s":""} encontrada${canceladas.length>1?"s":""}`
       : "Ninguna cancelada — todo al día");
+    registrarUsoMP(candidatas.length);
     await cargarTodo();
   };
 
@@ -1279,7 +1335,7 @@ export default function App() {
 
       {/* CONTENIDO */}
       <div style={{padding:16}}>
-        {tab==="panel"&&<PanelDashboard ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} aportes={aportes} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setTab(t);}} onAccion={(k)=>setAccion(k)} onSincronizar={completarTodasDesdeMP} onCorregirFechas={corregirFechasTodas} sincronizando={sincronizando} porAceptar={porAceptar} onActualizarPorAceptar={revisarPorAceptar} verificandoPorAceptar={verificandoPorAceptar} aceptadasSinCargar={aceptadasSinCargar} onCargarOC={(numero)=>{setCodigoOcRapida(numero);setAccion("compra_oc");}} onCargarTodasAceptadas={handleCargarTodasAceptadas} cargandoAceptadas={cargandoAceptadas} onActualizarAceptadas={revisarAceptadasSinCargar} verificandoAceptadas={verificandoAceptadas} canceladasEnMP={canceladasEnMP} onEliminarCancelada={handleEliminarOC} onActualizarCanceladas={revisarCanceladasEnMP} verificandoCanceladas={verificandoCanceladas} onValidarTodo={validarTodoContraMP} validandoTodo={validandoTodo} esCodigoMP={esCodigoMP} ultimaCartola={ultimaCartola} saldoBanco={saldoBanco} bancoMensual={bancoMensual} onEditarSaldo={()=>setAccion("saldo_banco")} />}
+        {tab==="panel"&&<PanelDashboard ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} aportes={aportes} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setTab(t);}} onAccion={(k)=>setAccion(k)} onSincronizar={completarTodasDesdeMP} onCorregirFechas={corregirFechasTodas} sincronizando={sincronizando} porAceptar={porAceptar} onActualizarPorAceptar={revisarPorAceptar} verificandoPorAceptar={verificandoPorAceptar} aceptadasSinCargar={aceptadasSinCargar} onCargarOC={(numero)=>{setCodigoOcRapida(numero);setAccion("compra_oc");}} onCargarTodasAceptadas={handleCargarTodasAceptadas} cargandoAceptadas={cargandoAceptadas} onActualizarAceptadas={revisarAceptadasSinCargar} verificandoAceptadas={verificandoAceptadas} canceladasEnMP={canceladasEnMP} onEliminarCancelada={handleEliminarOC} onActualizarCanceladas={revisarCanceladasEnMP} verificandoCanceladas={verificandoCanceladas} onValidarTodo={validarTodoContraMP} validandoTodo={validandoTodo} usoMP={usoMP} esCodigoMP={esCodigoMP} ultimaCartola={ultimaCartola} saldoBanco={saldoBanco} bancoMensual={bancoMensual} onEditarSaldo={()=>setAccion("saldo_banco")} />}
         {tab==="compras"&&<PanelCompras ocs={ocs} perfiles={perfiles} filtroInicial={filtroCompras} ocFoco={ocFoco} contactos={contactos} onEnviarReclamo={handleEnviarReclamo} onRegistrarRespuestaReclamo={handleRegistrarRespuestaReclamo} onGuardarContacto={handleGuardarContacto} onGuardarDatosOC={handleGuardarDatosOC} onEditarEvento={handleEditarEvento} financiadores={financiadores} onConfirmarEntrega={handleEntrega} onEmitirFactura={handleFactura} onPagoCliente={handlePagoCliente} onPagoFinanciamiento={handlePagoFin} entidadesCatalogo={entidadesCatalogo} onGuardarLink={handleGuardarLink} onEliminarLink={handleEliminarLink} onEditarLink={handleEditarLink} onSincronizarFecha={handleSincronizarFecha} bloqueos={bloqueos} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={handleAgregarComentario} onEliminarComentario={handleEliminarComentario} onBloquear={handleBloquear} onLiberar={handleLiberar} onEliminarOC={handleEliminarOC} onEliminarFactura={handleEliminarFactura} onEliminarEvento={handleEliminarEvento} vendedores={vendedores} onIngresarCompra={handleIngresarCompra} onAsignarResponsable={handleAsignarResponsable} onGuardarPostventa={handleGuardarPostventa} />}
         {tab==="notif"&&<PanelNotificaciones notificaciones={notificaciones} ocs={ocs} onMarcarLeidas={handleMarcarNotificacionesLeidas} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setTab(t);}} />}
         {tab==="agenda"&&<PanelCalendario ocs={ocs} onMarcarFecha={handleMarcarFecha} />}
