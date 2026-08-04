@@ -550,7 +550,6 @@ export default function App() {
     finally{ setVerificandoPorAceptar(false); }
   };
 
-  useEffect(()=>{ if(session&&ocs.length) revisarPorAceptar(); },[session,ocs.length]);
 
   // ─── OCs ya aceptadas en Mercado Público, pero aún no cargadas ──
   // A diferencia de revisarPorAceptar (informativo), estas ya se
@@ -570,7 +569,6 @@ export default function App() {
     finally{ setVerificandoAceptadas(false); }
   };
 
-  useEffect(()=>{ if(session&&ocs.length) revisarAceptadasSinCargar(); },[session,ocs.length]);
 
   // ─── OCs que YA están cargadas en la app pero se cancelaron en MP ──
   // Compara el estado actual en Mercado Público contra lo que tenemos.
@@ -600,7 +598,6 @@ export default function App() {
     finally{ setVerificandoCanceladas(false); }
   };
 
-  useEffect(()=>{ if(session&&ocs.length) revisarCanceladasEnMP(); },[session,ocs.length]);
 
   // ─── Validación exhaustiva: TODAS las OC cargadas, una por una ──
   // A diferencia de revisarCanceladasEnMP (que depende de una ventana de
