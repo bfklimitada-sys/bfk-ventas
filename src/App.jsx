@@ -135,6 +135,34 @@ export default function App() {
 
   useEffect(()=>{ if(session) cargarUsoMP(); },[session]);
 
+  // ─── Caché del último resultado bueno de Mercado Público ────────
+  // Si la consulta de ahora falla, no se borra lo que ya se sabía —
+  // se sigue mostrando lo último que sí funcionó, con la hora exacta,
+  // para que "no aparece nada" nunca se confunda con "no hay nada".
+  const [actMP,setActMP]=useState({porAceptar:null,aceptadas:null,canceladas:null});
+
+  const guardarCacheMP=async(clave,datos)=>{
+    if(!session) return;
+    const t=session.access_token, iso=new Date().toISOString();
+    try{
+      const actualizadas=await upd("mp_cache_avisos",t,clave,{datos,actualizado_en:iso}).catch(()=>[]);
+      if(!Array.isArray(actualizadas)||!actualizadas.length) await ins("mp_cache_avisos",t,{id:clave,datos,actualizado_en:iso}).catch(()=>{});
+      setActMP(a=>({...a,[clave]:iso}));
+    }catch{ /* si falla el guardado, el dato igual queda mostrado en esta sesión */ }
+  };
+
+  const cargarCacheMP=async()=>{
+    try{
+      const filas=await sel("mp_cache_avisos",session.access_token).catch(()=>[]);
+      const porId={}; for(const f of (filas||[])) porId[f.id]=f;
+      if(porId.porAceptar){ setPorAceptar(porId.porAceptar.datos||[]); setActMP(a=>({...a,porAceptar:porId.porAceptar.actualizado_en})); }
+      if(porId.aceptadas){ setAceptadasSinCargar(porId.aceptadas.datos||[]); setActMP(a=>({...a,aceptadas:porId.aceptadas.actualizado_en})); }
+      if(porId.canceladas){ setCanceladasEnMP(porId.canceladas.datos||[]); setActMP(a=>({...a,canceladas:porId.canceladas.actualizado_en})); }
+    }catch{ /* sin caché disponible, se parte vacío como antes */ }
+  };
+
+  useEffect(()=>{ if(session) cargarCacheMP(); },[session]);
+
   // Antes de una acción pesada (cientos de solicitudes de una vez),
   // avisa si eso acercaría al límite diario de 10.000 de Mercado Público.
   const confirmarSiCercaDelLimite=(estimado)=>{
@@ -596,7 +624,9 @@ export default function App() {
       if(!j.ok) return;
       const norm=(v)=>String(v||"").toUpperCase().replace(/[^A-Z0-9]/g,"").replace(/^N(?=\d)/,"");
       const cargadas=new Set(ocs.map(o=>norm(o.numero_oc)));
-      setPorAceptar((j.ocs||[]).filter(o=>!cargadas.has(norm(o.numero_oc))));
+      const filtradas=(j.ocs||[]).filter(o=>!cargadas.has(norm(o.numero_oc)));
+      setPorAceptar(filtradas);
+      guardarCacheMP("porAceptar",filtradas);
       registrarUsoMP(30); // aproximado: 1 solicitud por día escaneado
     }catch{ /* si falla, simplemente no se muestra el aviso */ }
     finally{ setVerificandoPorAceptar(false); }
@@ -616,7 +646,9 @@ export default function App() {
       if(!j.ok) return;
       const norm=(v)=>String(v||"").toUpperCase().replace(/[^A-Z0-9]/g,"").replace(/^N(?=\d)/,"");
       const cargadas=new Set(ocs.map(o=>norm(o.numero_oc)));
-      setAceptadasSinCargar((j.ocs||[]).filter(o=>!cargadas.has(norm(o.numero_oc))));
+      const filtradas=(j.ocs||[]).filter(o=>!cargadas.has(norm(o.numero_oc)));
+      setAceptadasSinCargar(filtradas);
+      guardarCacheMP("aceptadas",filtradas);
       registrarUsoMP(30);
     }catch{ /* si falla, simplemente no se muestra el aviso */ }
     finally{ setVerificandoAceptadas(false); }
@@ -647,6 +679,7 @@ export default function App() {
         if(enMP) encontradas.push({id:oc.id,numero_oc:oc.numero_oc,cliente:oc.cliente,nombre:enMP.nombre});
       }
       setCanceladasEnMP(encontradas);
+      guardarCacheMP("canceladas",encontradas);
       registrarUsoMP(90);
     }catch{ /* si falla, simplemente no se muestra el aviso */ }
     finally{ setVerificandoCanceladas(false); }
@@ -690,6 +723,7 @@ export default function App() {
     }
     setValidandoTodo(null);
     setCanceladasEnMP(canceladas);
+    guardarCacheMP("canceladas",canceladas);
     showToast(canceladas.length>0
       ? `${canceladas.length} OC cancelada${canceladas.length>1?"s":""} encontrada${canceladas.length>1?"s":""}`
       : "Ninguna cancelada — todo al día");
@@ -1335,7 +1369,7 @@ export default function App() {
 
       {/* CONTENIDO */}
       <div style={{padding:16}}>
-        {tab==="panel"&&<PanelDashboard ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} aportes={aportes} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setTab(t);}} onAccion={(k)=>setAccion(k)} onSincronizar={completarTodasDesdeMP} onCorregirFechas={corregirFechasTodas} sincronizando={sincronizando} porAceptar={porAceptar} onActualizarPorAceptar={revisarPorAceptar} verificandoPorAceptar={verificandoPorAceptar} aceptadasSinCargar={aceptadasSinCargar} onCargarOC={(numero)=>{setCodigoOcRapida(numero);setAccion("compra_oc");}} onCargarTodasAceptadas={handleCargarTodasAceptadas} cargandoAceptadas={cargandoAceptadas} onActualizarAceptadas={revisarAceptadasSinCargar} verificandoAceptadas={verificandoAceptadas} canceladasEnMP={canceladasEnMP} onEliminarCancelada={handleEliminarOC} onActualizarCanceladas={revisarCanceladasEnMP} verificandoCanceladas={verificandoCanceladas} onValidarTodo={validarTodoContraMP} validandoTodo={validandoTodo} usoMP={usoMP} esCodigoMP={esCodigoMP} ultimaCartola={ultimaCartola} saldoBanco={saldoBanco} bancoMensual={bancoMensual} onEditarSaldo={()=>setAccion("saldo_banco")} />}
+        {tab==="panel"&&<PanelDashboard ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} aportes={aportes} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setTab(t);}} onAccion={(k)=>setAccion(k)} onSincronizar={completarTodasDesdeMP} onCorregirFechas={corregirFechasTodas} sincronizando={sincronizando} porAceptar={porAceptar} onActualizarPorAceptar={revisarPorAceptar} verificandoPorAceptar={verificandoPorAceptar} aceptadasSinCargar={aceptadasSinCargar} onCargarOC={(numero)=>{setCodigoOcRapida(numero);setAccion("compra_oc");}} onCargarTodasAceptadas={handleCargarTodasAceptadas} cargandoAceptadas={cargandoAceptadas} onActualizarAceptadas={revisarAceptadasSinCargar} verificandoAceptadas={verificandoAceptadas} canceladasEnMP={canceladasEnMP} onEliminarCancelada={handleEliminarOC} onActualizarCanceladas={revisarCanceladasEnMP} verificandoCanceladas={verificandoCanceladas} onValidarTodo={validarTodoContraMP} validandoTodo={validandoTodo} usoMP={usoMP} actMP={actMP} esCodigoMP={esCodigoMP} ultimaCartola={ultimaCartola} saldoBanco={saldoBanco} bancoMensual={bancoMensual} onEditarSaldo={()=>setAccion("saldo_banco")} />}
         {tab==="compras"&&<PanelCompras ocs={ocs} perfiles={perfiles} filtroInicial={filtroCompras} ocFoco={ocFoco} contactos={contactos} onEnviarReclamo={handleEnviarReclamo} onRegistrarRespuestaReclamo={handleRegistrarRespuestaReclamo} onGuardarContacto={handleGuardarContacto} onGuardarDatosOC={handleGuardarDatosOC} onEditarEvento={handleEditarEvento} financiadores={financiadores} onConfirmarEntrega={handleEntrega} onEmitirFactura={handleFactura} onPagoCliente={handlePagoCliente} onPagoFinanciamiento={handlePagoFin} entidadesCatalogo={entidadesCatalogo} onGuardarLink={handleGuardarLink} onEliminarLink={handleEliminarLink} onEditarLink={handleEditarLink} onSincronizarFecha={handleSincronizarFecha} bloqueos={bloqueos} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={handleAgregarComentario} onEliminarComentario={handleEliminarComentario} onBloquear={handleBloquear} onLiberar={handleLiberar} onEliminarOC={handleEliminarOC} onEliminarFactura={handleEliminarFactura} onEliminarEvento={handleEliminarEvento} vendedores={vendedores} onIngresarCompra={handleIngresarCompra} onAsignarResponsable={handleAsignarResponsable} onGuardarPostventa={handleGuardarPostventa} />}
         {tab==="notif"&&<PanelNotificaciones notificaciones={notificaciones} ocs={ocs} onMarcarLeidas={handleMarcarNotificacionesLeidas} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setTab(t);}} />}
         {tab==="agenda"&&<PanelCalendario ocs={ocs} onMarcarFecha={handleMarcarFecha} />}
