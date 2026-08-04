@@ -238,7 +238,17 @@ export default function App() {
           dias_pago:oc.dias_pago||30, sync_pendiente:false,
           estado_compra:"pendiente", creado_por:session.user.id };
 
-    const nueva=await ins("ordenes_compra_v2",t,fila);
+    let nueva;
+    try{
+      nueva=await ins("ordenes_compra_v2",t,fila);
+    }catch(e){
+      // La restricción única de la base es la protección real contra dos
+      // personas creando la misma OC al mismo tiempo — el chequeo de
+      // arriba solo mira lo que este celular ya tenía cargado.
+      if(String(e.message||"").toLowerCase().includes("duplicate")||String(e.message||"").toLowerCase().includes("unique"))
+        throw new Error(`La OC ${numero} ya la cargó alguien más justo ahora`);
+      throw e;
+    }
     const ocId=(Array.isArray(nueva)?nueva[0]:nueva).id;
 
     // Productos: uno por cada ítem de la OC, con su link
