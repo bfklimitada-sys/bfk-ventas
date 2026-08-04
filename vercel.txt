@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "api/oc.mjs": {
+      "maxDuration": 60
+    }
+  }
+}
