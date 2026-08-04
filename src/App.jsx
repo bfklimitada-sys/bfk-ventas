@@ -79,25 +79,55 @@ export default function App() {
   };
   const handleLogout=async()=>{ await supaSignOut(session.access_token); setSession(null); setPerfil(null); storageSet(SESSION_KEY,""); };
 
+  // Reintenta una función asíncrona hasta 2 veces antes de rendirse.
+  // Para datos críticos (OCs, perfiles) que no queremos dejar vacíos
+  // solo porque Supabase tuvo un mal momento con tantas conexiones.
+  const conReintento=async(fn)=>{
+    try{ return await fn(); }
+    catch(e){
+      await new Promise(res=>setTimeout(res,1200));
+      return await fn(); // si falla la segunda vez, el error sube tal cual
+    }
+  };
+
+  // Ejecuta las consultas en grupos chicos en vez de las 21 a la vez:
+  // disparar tantas conexiones simultáneas puede superar el límite del
+  // plan de Supabase, y ahí fallan al azar las que no alcanzan a entrar.
+  const enLotes=async(tareas,tamano=6)=>{
+    const resultados=[];
+    for(let i=0;i<tareas.length;i+=tamano){
+      const lote=tareas.slice(i,i+tamano).map(fn=>fn());
+      resultados.push(...await Promise.all(lote));
+    }
+    return resultados;
+  };
+
   const cargarTodo=async()=>{
     if(!session) return;
     const t=session.access_token;
     try {
-      const [ocsD,finD,vendD,catD,gastD,ivaD,pagVD,ajuD,perfD,contD,entD,pagoFinSueltosD,notifD,histD,reclamosD,respD,pvD,aporD,cartD,sbD,bmD]=await Promise.all([
-        selOCs(t), sel("financiadores",t,"&order=nombre").catch(()=>[]), sel("vendedores",t,"&order=nombre").catch(()=>[]),
-        sel("categorias_gasto",t,"&order=nombre").catch(()=>[]), sel("gastos_indirectos",t,"&order=fecha.desc").catch(()=>[]),
-        sel("iva_mensual",t).catch(()=>[]), sel("pagos_vendedor",t).catch(()=>[]), sel("ajustes_saldo_financiador",t,"&order=creadoEn.desc").catch(()=>[]),
-        selPerfiles(t), sel("contactos_cobranza",t).catch(()=>[]), sel("entidades_catalogo",t).catch(()=>[]),
-        sel("eventos_pago_financiamiento",t,"&oc_id=is.null").catch(()=>[]),
-        sel("notificaciones",t,`&usuario_id=eq.${session.user.id}&order=creadoEn.desc&limit=50`).catch(()=>[]),
-        sel("historial_cambios",t,"&order=creadoEn.desc&limit=200").catch(()=>[]),
-        sel("oc_reclamos",t,"&order=fecha.desc").catch(()=>[]),
-        sel("oc_responsables",t).catch(()=>[]),
-        sel("eventos_postventa",t,"&order=creadoEn.desc").catch(()=>[]),
-        sel("aportes_socios",t,"&order=fecha.desc").catch(()=>[]),
-        sel("cartolas_importadas",t,"&order=fecha_hasta.desc&limit=1").catch(()=>[]),
-        sel("saldo_banco",t,"&id=eq.actual").catch(()=>[]),
-        sel("banco_mensual",t,"&order=id.desc&limit=24").catch(()=>[]),
+      const [ocsD,finD,vendD,catD,gastD,ivaD,pagVD,ajuD,perfD,contD,entD,pagoFinSueltosD,notifD,histD,reclamosD,respD,pvD,aporD,cartD,sbD,bmD]=await enLotes([
+        ()=>conReintento(()=>selOCs(t)),
+        ()=>sel("financiadores",t,"&order=nombre").catch(()=>[]),
+        ()=>sel("vendedores",t,"&order=nombre").catch(()=>[]),
+        ()=>sel("categorias_gasto",t,"&order=nombre").catch(()=>[]),
+        ()=>sel("gastos_indirectos",t,"&order=fecha.desc").catch(()=>[]),
+        ()=>sel("iva_mensual",t).catch(()=>[]),
+        ()=>sel("pagos_vendedor",t).catch(()=>[]),
+        ()=>sel("ajustes_saldo_financiador",t,"&order=creadoEn.desc").catch(()=>[]),
+        ()=>conReintento(()=>selPerfiles(t)),
+        ()=>sel("contactos_cobranza",t).catch(()=>[]),
+        ()=>sel("entidades_catalogo",t).catch(()=>[]),
+        ()=>sel("eventos_pago_financiamiento",t,"&oc_id=is.null").catch(()=>[]),
+        ()=>sel("notificaciones",t,`&usuario_id=eq.${session.user.id}&order=creadoEn.desc&limit=50`).catch(()=>[]),
+        ()=>sel("historial_cambios",t,"&order=creadoEn.desc&limit=200").catch(()=>[]),
+        ()=>sel("oc_reclamos",t,"&order=fecha.desc").catch(()=>[]),
+        ()=>sel("oc_responsables",t).catch(()=>[]),
+        ()=>sel("eventos_postventa",t,"&order=creadoEn.desc").catch(()=>[]),
+        ()=>sel("aportes_socios",t,"&order=fecha.desc").catch(()=>[]),
+        ()=>sel("cartolas_importadas",t,"&order=fecha_hasta.desc&limit=1").catch(()=>[]),
+        ()=>sel("saldo_banco",t,"&id=eq.actual").catch(()=>[]),
+        ()=>sel("banco_mensual",t,"&order=id.desc&limit=24").catch(()=>[]),
       ]);
       const reclamosPorOC={}, respPorOC={}, pvPorOC={};
       for(const r of reclamosD){ if(!reclamosPorOC[r.oc_id]) reclamosPorOC[r.oc_id]=[]; reclamosPorOC[r.oc_id].push(r); }
