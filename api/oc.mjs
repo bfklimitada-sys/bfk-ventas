@@ -89,24 +89,32 @@ async function listarOCs(req, res, ticket) {
     // La API no acepta 'estado' junto con CodigoProveedor: se filtra acá.
     const url = "https://api.mercadopublico.cl/servicios/v1/publico/ordenesdecompra.json" +
       `?fecha=${f}&CodigoProveedor=${codigo}&ticket=${encodeURIComponent(ticket)}`;
-    try {
-      const r = await fetch(url, { headers: { Accept: "application/json" } });
-      if (!r.ok) return [];
-      const j = await r.json();
-      return (j?.Listado || []).map((oc) => {
-        const cod = Number(oc.CodigoEstado);
-        return {
-          cod,
-          fila: {
-            numero_oc: txt(oc.Codigo),
-            nombre: txt(oc.Nombre),
-            codigo_estado: cod,
-            estado: ESTADOS_OC[cod] || `Estado ${cod}`,
-            fecha: `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`,
-          },
-        };
-      });
-    } catch { return []; } // un día que falle no debe cortar la búsqueda
+
+    // Mercado Público falla de forma intermitente en consultas puntuales.
+    // Sin reintento, un solo día que falle desaparece en silencio de los
+    // 90 — nada avisa que faltó, así que hay que insistir antes de rendirse.
+    let j = null;
+    for (let intento = 0; intento < 2 && !j; intento++) {
+      try {
+        const r = await fetch(url, { headers: { Accept: "application/json" } });
+        if (r.ok) j = await r.json();
+      } catch { /* reintenta */ }
+    }
+    if (!j) return [];
+
+    return (j?.Listado || []).map((oc) => {
+      const cod = Number(oc.CodigoEstado);
+      return {
+        cod,
+        fila: {
+          numero_oc: txt(oc.Codigo),
+          nombre: txt(oc.Nombre),
+          codigo_estado: cod,
+          estado: ESTADOS_OC[cod] || `Estado ${cod}`,
+          fecha: `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`,
+        },
+      };
+    });
   };
 
   // En lotes paralelos: escanear 90 días uno por uno se pasa del límite
