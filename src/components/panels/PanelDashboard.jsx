@@ -275,8 +275,18 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
       monto:sinEntregar.reduce((s,o)=>s+(o.monto_total||0),0),
       color:C.transit,tab:"compras",filtro:"entrega"});
 
+    // OCs que llegaron desde Mercado Público (aceptadas y cargadas) pero
+    // a las que todavía nadie les registró la compra — quedan "colgadas"
+    // si no se les presta atención, porque no aparecen en ningún otro aviso.
+    const sinCompraDeMP=ocs.filter(o=>(o.tipo_registro||"venta")==="venta"&&esCodigoMP&&esCodigoMP(o.numero_oc)&&(o.eventos_compra||[]).length===0);
+    if(sinCompraDeMP.length) items.push({
+      label:`${sinCompraDeMP.length} OC de Mercado Público sin comprar`,
+      detalle:"Se cargaron desde MP, pero falta registrar la compra",
+      monto:sinCompraDeMP.reduce((s,o)=>s+(o.monto_total||0),0),
+      color:C.purple,tab:"compras",filtro:"compra"});
+
     return items;
-  },[ocsPorCobrar,ocs]);
+  },[ocsPorCobrar,ocs,esCodigoMP]);
 
   return (
     <div style={{fontFamily:SANS}}>
