@@ -17,19 +17,6 @@ function Seccion({titulo,children,sub,ocultarSiVacio}){
   );
 }
 
-function KpiBtn({label,value,color,id,expandido,setExpandido,children}){
-  return (
-  <div style={{background:C.card,border:`1px solid ${expandido===id?color:C.border}`,borderRadius:14,overflow:"hidden",marginBottom:10}}>
-    <button onClick={()=>setExpandido(expandido===id?null:id)} style={{width:"100%",background:"none",border:"none",padding:"14px 16px",textAlign:"left",cursor:"pointer"}}>
-      <div style={{fontSize:11,color:C.inkMuted,fontWeight:600,marginBottom:4}}>{label}</div>
-      <div style={{fontSize:22,fontWeight:800,color:color||C.ink,fontFamily:MONO,letterSpacing:-0.5}}>{value}</div>
-      <div style={{fontSize:10.5,color:C.inkFaint,marginTop:2}}>{expandido===id?"▲ Cerrar":"▼ Ver detalle"}</div>
-    </button>
-    {expandido===id&&<div style={{borderTop:`1px solid ${C.border}`,padding:"12px 16px",background:C.paper}}>{children}</div>}
-  </div>
-  );
-}
-
 // Tarjeta base para los avisos ligados a Mercado Público: encabezado con
 // icono + botón de refresco, y cuerpo blanco para el contenido/lista.
 function AvisoMP({icon,color,bg,titulo,descripcion,onActualizar,verificando,children}){
@@ -79,9 +66,6 @@ function VerMasAvisoMP({n}){
 }
 
 export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, aportes: aportesLista, onNavigate, onAccion, onSincronizar, onCorregirFechas, sincronizando, porAceptar, onActualizarPorAceptar, verificandoPorAceptar, aceptadasSinCargar, onCargarOC, onCargarTodasAceptadas, cargandoAceptadas, onActualizarAceptadas, verificandoAceptadas, canceladasEnMP, onEliminarCancelada, onActualizarCanceladas, verificandoCanceladas, onValidarTodo, validandoTodo, esCodigoMP, ultimaCartola, saldoBanco, bancoMensual, onEditarSaldo }) {
-  const [expandido,setExpandido]=useState(null);
-  const [verHistorico,setVerHistorico]=useState(false);
-  const [verDesglose,setVerDesglose]=useState(false);
   const [verMP,setVerMP]=useState(false);
 
   const kpis=useMemo(()=>{
@@ -206,36 +190,13 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
     return {saldoReal,saldoEsperado,brecha,corteBanco:corte,movDesdeCorte,gananciaMes,ventaMes,aportes:totalAportes,cobrado,porCobrar,deudaFin,utilidad,saldoProyectado,saldoCtaCte,ingresosPendientes,deudaTotal,gastoContador,gastosVendedores,gastoImpuesto,f29,margenPromPct,deudaVendedoresMes,ocsAbiertas,creditoPagadoTotal,gastosTotal,costoBFK};
   },[ocs,financiadores,gastos,pagosVendedor,ivaMensual,vendedores,pagoFinSueltos,aportesLista,saldoBanco]);
 
-  const ocsPagadas=useMemo(()=>ocs.filter(o=>o.estado_pago_cliente==="pagado").map(o=>{
-    const evF=(o.eventos_factura||[])[0]; return {...o,fechaFactura:evF?.fecha};
-  }),[ocs]);
-
+  // ── Proyección del mes: promedio histórico completo, para tener ──
+  // algo que mostrar desde el día 1, antes de que existan ventas reales.
   const ocsPorCobrar=useMemo(()=>ocs.filter(o=>(o.tipo_registro||"venta")==="venta"&&o.estado_factura_propia==="emitida"&&o.estado_pago_cliente!=="pagado").map(o=>{
     const evF=(o.eventos_factura||[])[0]; const dias=fmt.diasDesde(evF?.fecha);
     return {...o,fechaFactura:evF?.fecha,diasDesde:dias};
   }),[ocs]);
 
-  const utilidadPeriodos=useMemo(()=>{
-    const hoy=new Date(); const mesActual=hoy.getMonth()+1; const anioActual=hoy.getFullYear();
-    const mesAnterior=mesActual===1?12:mesActual-1; const anioMA=mesActual===1?anioActual-1:anioActual;
-    const calcUtil=(meses)=>{
-      const limite=new Date(); limite.setMonth(limite.getMonth()-meses);
-      return ocs.filter(o=>{
-        if((o.tipo_registro||"venta")!=="venta") return false;
-        const evC=(o.eventos_compra||[])[0]; if(!evC) return false;
-        return new Date(evC.fecha)>=limite;
-      }).reduce((s,o)=>s+gananciaReal(o).pesos,0);
-    };
-    const mesAntOcs=ocs.filter(o=>{
-      const evC=(o.eventos_compra||[])[0]; if(!evC) return false;
-      const f=new Date(evC.fecha); return f.getMonth()+1===mesAnterior&&f.getFullYear()===anioMA;
-    });
-    const utilMesAnt=mesAntOcs.reduce((s,o)=>s+gananciaReal(o).pesos,0);
-    return { mesAnterior:utilMesAnt, m3:calcUtil(3), m6:calcUtil(6), m9:calcUtil(9), m12:calcUtil(12), historico:ocs.reduce((s,o)=>s+(o.monto_total||0)-(o.costo_total||0),0), nombreMesAnt:fmt.monthYear(mesAnterior,anioMA) };
-  },[ocs]);
-
-  // ── Proyección del mes: promedio histórico completo, para tener ──
-  // algo que mostrar desde el día 1, antes de que existan ventas reales.
   const proyeccionMes=useMemo(()=>{
     const historicas=ocs.filter(o=>{
       if((o.tipo_registro||"venta")!=="venta") return false;
@@ -254,58 +215,6 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
     const pct=ventaProm>0?Math.round(utilProm/ventaProm*100):0;
     return {ventaProm,utilProm,pct,meses};
   },[ocs]);
-
-  // ── Serie diaria acumulada de ventas (mes actual vs mes anterior) ──
-  const ventasChart=useMemo(()=>{
-    const hoy=new Date(); const diaHoy=hoy.getDate();
-    const mesAct=hoy.getMonth()+1, anioAct=hoy.getFullYear();
-    const mesAnt=mesAct===1?12:mesAct-1, anioAnt=mesAct===1?anioAct-1:anioAct;
-    const diasMesAnt=new Date(anioAnt,mesAnt,0).getDate();
-    const porDiaAct=Array(diaHoy).fill(0);
-    const porDiaAnt=Array(Math.min(diaHoy,diasMesAnt)).fill(0);
-    for(const oc of ocs){
-      if((oc.tipo_registro||"venta")!=="venta") continue;
-      const evC=(oc.eventos_compra||[])[0]; if(!evC||!evC.fecha) continue;
-      const f=new Date(String(evC.fecha).slice(0,10)+"T00:00:00");
-      const monto=oc.monto_total||0;
-      if(f.getFullYear()===anioAct&&f.getMonth()+1===mesAct&&f.getDate()<=diaHoy) porDiaAct[f.getDate()-1]+=monto;
-      else if(f.getFullYear()===anioAnt&&f.getMonth()+1===mesAnt&&f.getDate()<=porDiaAnt.length) porDiaAnt[f.getDate()-1]+=monto;
-    }
-    let acc=0; const acumAct=porDiaAct.map(v=>acc+=v);
-    acc=0; const acumAntRaw=porDiaAnt.map(v=>acc+=v);
-    const acumAnt=Array.from({length:diaHoy},(_,i)=>acumAntRaw[i]??acumAntRaw[acumAntRaw.length-1]??0);
-    const totalAct=acumAct[acumAct.length-1]||0;
-    const totalAntComparable=acumAntRaw[acumAntRaw.length-1]||0;
-    const variacion=totalAntComparable>0?Math.round(((totalAct-totalAntComparable)/totalAntComparable)*100):null;
-    return {acumAct,acumAnt,totalAct,variacion};
-  },[ocs]);
-
-  // ── Conciliación banco vs registrado (antes se recalculaba en cada render) ──
-  const conciliacionBanco=useMemo(()=>{
-    const meses=(bancoMensual||[]).slice(0,6).map(bm=>{
-      const ini=`${bm.anio}-${String(bm.mes).padStart(2,"0")}-01`;
-      const fin=`${bm.anio}-${String(bm.mes).padStart(2,"0")}-31`;
-      const enRango=(f)=>{const d=String(f||"").slice(0,10); return d>=ini&&d<=fin;};
-
-      let appEntro=0, appSalio=0;
-      for(const oc of ocs){
-        for(const e of (oc.eventos_pago_cliente||[]))          if(enRango(e.fecha)) appEntro+=Number(e.monto)||0;
-        for(const e of (oc.eventos_pago_financiamiento||[]))   if(enRango(e.fecha)) appSalio+=Number(e.monto)||0;
-      }
-      for(const e of (pagoFinSueltos||[])) if(enRango(e.fecha)) appSalio+=Number(e.monto)||0;
-      for(const g of gastos)               if(enRango(g.fecha)) appSalio+=Number(g.monto)||0;
-      for(const p of pagosVendedor)        if(enRango(p.fecha)) appSalio+=Number(p.monto_pagado)||0;
-      for(const a of (aportesLista||[]))   if(enRango(a.fecha)) (a.tipo==="retiro"?appSalio+=Number(a.monto)||0:appEntro+=Number(a.monto)||0);
-
-      const dEntro=appEntro-(Number(bm.entro)||0);
-      const dSalio=appSalio-(Number(bm.salio)||0);
-      const peor=Math.max(Math.abs(dEntro),Math.abs(dSalio));
-      const nombre=new Date(bm.anio,bm.mes-1,1).toLocaleDateString("es-CL",{month:"short",year:"2-digit"});
-      return {bm,nombre,appEntro,appSalio,dEntro,dSalio,peor};
-    });
-    const conProblema=meses.filter(m=>m.peor>50000).length;
-    return {meses,conProblema};
-  },[bancoMensual,ocs,pagoFinSueltos,gastos,pagosVendedor,aportesLista]);
 
   // ── OCs de MP sin datos de cliente (antes se recalculaba en cada render) ──
   const sinDatosMP=useMemo(()=>
@@ -332,16 +241,6 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
     const nombreMes=new Date(aAnt,mAnt-1,1).toLocaleDateString("es-CL",{month:"long"});
     return {cantidad:delMes.length,venta,costo,util,pct,col,nombreMes};
   },[ocs]);
-
-  const buildPath=(arr,w,h,max)=>{
-    if(!arr.length) return "";
-    const stepX=arr.length>1?w/(arr.length-1):w;
-    return arr.map((v,i)=>`${i===0?"M":"L"}${(i*stepX).toFixed(1)},${(h-(v/max)*h*0.92-2).toFixed(1)}`).join(" ");
-  };
-  const chartMax=Math.max(...ventasChart.acumAct,...ventasChart.acumAnt,1);
-  const CW=300, CH=84;
-  const pathAct=buildPath(ventasChart.acumAct,CW,CH,chartMax);
-  const pathAnt=buildPath(ventasChart.acumAnt,CW,CH,chartMax);
 
   // ── Prioridades de hoy (reales, derivadas de las OCs) ──
   const prioridades=useMemo(()=>{
@@ -405,128 +304,25 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
       </Seccion>
 
       <Seccion titulo="Situación">
-      {/* ── Saldo Proyectado ── */}
+      {/* ── Saldo Proyectado: solo lo esencial ── */}
       <div style={{background:`linear-gradient(135deg,${C.night},${C.nightSoft})`,borderRadius:16,padding:"18px 20px",marginBottom:12}}>
         <div style={{fontSize:11.5,color:C.inkFaint,fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:0.5}}>Saldo Proyectado</div>
         <div style={{fontFamily:MONO,fontWeight:800,fontSize:28,color:kpis.saldoProyectado>=0?C.teal:C.danger,letterSpacing:-1}}>{fmt.money(kpis.saldoProyectado)}</div>
         <div style={{fontSize:11,color:C.inkFaint,marginTop:4}}>Cuánto quedaría si se cobra todo lo pendiente y se paga todo lo que se debe</div>
 
-        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginTop:12,paddingTop:12,borderTop:"1px solid rgba(255,255,255,0.08)"}}>
-          <button onClick={()=>setVerDesglose(v=>!v)}
-            style={{background:"none",border:"none",padding:0,textAlign:"left",cursor:"pointer"}}>
-            <div style={{fontSize:9.5,color:C.inkFaint,marginBottom:2}}>En la cuenta {verDesglose?"▾":"▸"}</div>
-            <div style={{fontFamily:MONO,fontSize:12.5,fontWeight:800,color:kpis.saldoCtaCte>=0?C.teal:C.danger}}>{fmt.money(kpis.saldoCtaCte)}</div>
-          </button>
-          <div>
-            <div style={{fontSize:9.5,color:C.inkFaint,marginBottom:2}}>Por entrar</div>
-            <div style={{fontFamily:MONO,fontSize:12.5,fontWeight:800,color:C.warn}}>{fmt.money(kpis.ingresosPendientes)}</div>
-          </div>
-          <div>
-            <div style={{fontSize:9.5,color:C.inkFaint,marginBottom:2}}>Por pagar</div>
-            <div style={{fontFamily:MONO,fontSize:12.5,fontWeight:800,color:C.danger}}>{fmt.money(kpis.deudaTotal)}</div>
-          </div>
-        </div>
-
-        {verDesglose&&(
-          <div style={{marginTop:12,paddingTop:12,borderTop:"1px solid rgba(255,255,255,0.08)"}}>
-            <div style={{fontSize:9.5,color:C.inkFaint,marginBottom:8,textTransform:"uppercase",letterSpacing:0.4}}>De qué está hecho "En la cuenta"</div>
-            {[
-              {label:"Cobrado (ventas)",v:kpis.cobrado,signo:"+"},
-              {label:"Aportes de socios",v:kpis.aportes,signo:kpis.aportes>=0?"+":"−"},
-              {label:"Pagado a financiadores",v:kpis.creditoPagadoTotal,signo:"−"},
-              {label:"Gastos indirectos",v:kpis.gastosTotal,signo:"−"},
-              {label:"Compras con cuenta BFK",v:kpis.costoBFK,signo:"−"},
-            ].map(({label,v,signo})=>(
-              <div key={label} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 0"}}>
-                <span style={{fontSize:11.5,color:"#B8C4D9"}}>{label}</span>
-                <span style={{fontFamily:MONO,fontSize:12,fontWeight:700,color:"#fff"}}>{signo} {fmt.money(Math.abs(v))}</span>
-              </div>
-            ))}
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0 0",marginTop:4,borderTop:"1px solid rgba(255,255,255,0.12)"}}>
-              <span style={{fontSize:11.5,fontWeight:700,color:"#fff"}}>Total "En la cuenta"</span>
-              <span style={{fontFamily:MONO,fontSize:13,fontWeight:800,color:kpis.saldoCtaCte>=0?C.teal:C.danger}}>{fmt.money(kpis.saldoCtaCte)}</span>
-            </div>
-            {kpis.saldoReal!==null&&(
-              <div style={{fontSize:10.5,color:C.inkFaint,marginTop:8,lineHeight:1.5}}>
-                Tu banco real: <b style={{color:"#fff"}}>{fmt.money(kpis.saldoReal)}</b> al {fmt.date(kpis.corteBanco)}. Compara cada línea de arriba contra lo que tú sabes que pasó — el número que esté mal es el que hay que corregir en su origen (una OC, un gasto o un pago).
-              </div>
-            )}
-          </div>
-        )}
-
         <button onClick={()=>onNavigate&&onNavigate("compras",null)}
-          style={{marginTop:12,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.12)",
+          style={{marginTop:14,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.12)",
             borderRadius:9,padding:"7px 12px",color:"#B8C4D9",fontSize:11.5,fontWeight:600,cursor:"pointer",width:"100%"}}>
           {kpis.ocsAbiertas} órdenes en curso ›
         </button>
 
         <div style={{fontSize:10.5,color:C.inkFaint,marginTop:10,paddingTop:9,borderTop:"1px solid rgba(255,255,255,0.08)",lineHeight:1.6}}>
-          {ultimaCartola&&(
-            <>Última cartola: {fmt.date(String(ultimaCartola.fecha_desde).slice(0,10))} a {fmt.date(String(ultimaCartola.fecha_hasta).slice(0,10))}<br/></>
-          )}
           <button onClick={onEditarSaldo}
             style={{background:"none",border:"none",color:C.teal,fontSize:10.5,fontWeight:700,cursor:"pointer",padding:"3px 0"}}>
             {kpis.saldoReal!==null?"Actualizar el saldo del banco":"Registrar el saldo del banco para conciliar"}
           </button>
         </div>
       </div>
-
-      {/* Conciliación por mes: el banco valida lo registrado.
-          No se comparan movimientos uno a uno porque las entidades
-          pagan varias facturas juntas y nunca calzarían. */}
-      {(bancoMensual||[]).length>0&&(()=>{
-        const {meses,conProblema}=conciliacionBanco;
-        return (
-          <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"13px 15px",marginBottom:12}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:3}}>
-              <span style={{fontSize:11.5,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4}}>
-                El banco vs lo registrado
-              </span>
-              {conProblema===0
-                ? <span style={{fontSize:11,fontWeight:700,color:C.ok}}>✓ todo cuadra</span>
-                : <span style={{fontSize:11,fontWeight:700,color:C.warn}}>{conProblema} mes(es) con diferencia</span>}
-            </div>
-            <div style={{fontSize:11,color:C.inkFaint,marginBottom:10,lineHeight:1.45}}>
-              Se comparan totales del mes, no movimiento a movimiento: las entidades pagan varias facturas juntas.
-            </div>
-
-            <div style={{display:"flex",gap:8,padding:"0 0 5px",fontSize:9.5,fontWeight:800,
-              color:C.inkFaint,textTransform:"uppercase",letterSpacing:0.4}}>
-              <span style={{width:52}}>Mes</span>
-              <span style={{flex:1,textAlign:"right"}}>Entró</span>
-              <span style={{flex:1,textAlign:"right"}}>Salió</span>
-            </div>
-
-            {meses.map(m=>(
-              <div key={m.bm.id} style={{padding:"7px 0",borderTop:`1px solid ${C.border}`}}>
-                <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                  <span style={{width:52,fontSize:11.5,fontWeight:700,color:C.ink}}>{m.nombre}</span>
-                  <span style={{flex:1,textAlign:"right"}}>
-                    <span style={{display:"block",fontFamily:MONO,fontSize:11.5,color:C.ink}}>{fmt.money(m.bm.entro)}</span>
-                    {Math.abs(m.dEntro)>50000&&(
-                      <span style={{display:"block",fontSize:9.5,fontWeight:700,color:m.dEntro>0?C.warn:C.danger}}>
-                        app {m.dEntro>0?"+":""}{fmt.money(m.dEntro)}
-                      </span>
-                    )}
-                  </span>
-                  <span style={{flex:1,textAlign:"right"}}>
-                    <span style={{display:"block",fontFamily:MONO,fontSize:11.5,color:C.ink}}>{fmt.money(m.bm.salio)}</span>
-                    {Math.abs(m.dSalio)>50000&&(
-                      <span style={{display:"block",fontSize:9.5,fontWeight:700,color:m.dSalio>0?C.warn:C.danger}}>
-                        app {m.dSalio>0?"+":""}{fmt.money(m.dSalio)}
-                      </span>
-                    )}
-                  </span>
-                </div>
-              </div>
-            ))}
-
-            <div style={{fontSize:10.5,color:C.inkFaint,marginTop:9,paddingTop:8,borderTop:`1px solid ${C.border}`,lineHeight:1.5}}>
-              En negro lo que dice el banco. Debajo, cuánto se desvía lo registrado en la app.
-            </div>
-          </div>
-        );
-      })()}
 
       </Seccion>
 
@@ -715,176 +511,37 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
       </Seccion>
 
       <Seccion titulo="Este mes">
-      {/* Resultado del mes cerrado: dato estable que no depende del día */}
+      {/* Utilidad: promedio histórico, mes pasado cerrado, y este mes en curso — un solo gráfico, sin vueltas */}
       {(()=>{
-        if(!mesCerrado) return null;
-        const {cantidad,venta,costo,util,pct,col,nombreMes}=mesCerrado;
+        const barras=[
+          {label:"Promedio histórico",v:proyeccionMes.utilProm,pct:proyeccionMes.pct},
+          {label:mesCerrado?mesCerrado.nombreMes:"Mes pasado",v:mesCerrado?mesCerrado.util:0,pct:mesCerrado?mesCerrado.pct:0},
+          {label:"Este mes",v:kpis.gananciaMes||0,pct:kpis.margenPromPct||0},
+        ];
+        const max=Math.max(1,...barras.map(b=>Math.abs(b.v)));
         return (
-          <div style={{marginBottom:18}}>
-            <div style={{fontSize:10.5,fontWeight:800,color:C.inkFaint,textTransform:"uppercase",
-              letterSpacing:0.6,marginBottom:8,paddingLeft:2}}>{nombreMes} · mes cerrado</div>
-            <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px"}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:10}}>
-                <span style={{fontSize:11.5,color:C.inkMuted}}>{cantidad} órdenes</span>
-                <span style={{fontFamily:MONO,fontWeight:800,fontSize:19,color:C.ink}}>{fmt.money(venta)}</span>
-              </div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,
-                paddingTop:10,borderTop:`1px solid ${C.border}`}}>
-                <div>
-                  <div style={{fontSize:10,color:C.inkFaint,fontWeight:700,textTransform:"uppercase"}}>Costo</div>
-                  <div style={{fontFamily:MONO,fontWeight:800,fontSize:13.5,color:C.inkMuted}}>{fmt.money(costo)}</div>
+          <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"16px 16px 14px"}}>
+            <div style={{fontSize:11.5,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:16}}>Utilidad</div>
+            <div style={{display:"flex",alignItems:"flex-end",gap:10,height:110}}>
+              {barras.map(b=>(
+                <div key={b.label} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-end",height:"100%"}}>
+                  <span style={{fontSize:11,fontWeight:800,fontFamily:MONO,color:b.v>=0?C.ink:C.danger,marginBottom:4,textAlign:"center"}}>{fmt.money(b.v)}</span>
+                  <div style={{width:"64%",minHeight:4,height:`${Math.max(4,Math.min(100,Math.abs(b.v)/max*100))}%`,
+                    background:b.v>=0?C.teal:C.danger,borderRadius:"7px 7px 2px 2px"}} />
                 </div>
-                <div style={{textAlign:"right"}}>
-                  <div style={{fontSize:10,color:C.inkFaint,fontWeight:700,textTransform:"uppercase"}}>Utilidad</div>
-                  <div style={{fontFamily:MONO,fontWeight:800,fontSize:13.5,color:col}}>
-                    {fmt.money(util)} <span style={{fontSize:11}}>{pct}%</span>
-                  </div>
+              ))}
+            </div>
+            <div style={{display:"flex",gap:10,marginTop:8}}>
+              {barras.map(b=>(
+                <div key={b.label} style={{flex:1,textAlign:"center"}}>
+                  <div style={{fontSize:9.5,color:C.inkFaint,lineHeight:1.3}}>{b.label}</div>
+                  {b.pct>0&&<div style={{fontSize:9.5,fontWeight:700,color:C.inkMuted}}>{b.pct}%</div>}
                 </div>
-              </div>
+              ))}
             </div>
           </div>
         );
       })()}
-
-      {/* Proyección basada en el promedio de los últimos 3 meses: se ve
-          desde el día 1, incluso sin ninguna venta registrada todavía. */}
-      {ventasChart.totalAct<=0&&kpis.margenPromPct<=0&&(
-        <div style={{marginBottom:18}}>
-          <div style={{fontSize:10.5,fontWeight:800,color:C.inkFaint,textTransform:"uppercase",
-            letterSpacing:0.6,marginBottom:8,paddingLeft:2}}>Este mes · proyección</div>
-          <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px"}}>
-            <div style={{fontSize:11.5,color:C.inkMuted,lineHeight:1.5,marginBottom:12}}>
-              Todavía no hay ventas registradas en {new Date().toLocaleDateString("es-CL",{month:"long"})}. Esto es el promedio mensual de todo el histórico ({proyeccionMes.meses} mes{proyeccionMes.meses!==1?"es":""} con ventas), como referencia mientras entran las primeras.
-            </div>
-            <div style={{display:"flex",alignItems:"center",gap:14}}>
-              <div style={{flex:1}}>
-                <div style={{fontSize:20,fontWeight:800,color:C.ink,fontFamily:MONO}}>{fmt.money(proyeccionMes.ventaProm)}</div>
-                <div style={{fontSize:10,color:C.inkFaint}}>venta promedio / mes</div>
-              </div>
-              <div style={{width:62,height:62,borderRadius:"50%",flexShrink:0,
-                background:`conic-gradient(${proyeccionMes.pct>=20?C.ok:proyeccionMes.pct>=10?C.warn:C.danger} ${Math.max(0,Math.min(100,proyeccionMes.pct))*3.6}deg, ${C.paper} 0)`,
-                display:"flex",alignItems:"center",justifyContent:"center"}}>
-                <div style={{width:44,height:44,borderRadius:"50%",background:C.card,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
-                  <span style={{fontSize:13,fontWeight:800,color:C.ink,fontFamily:MONO}}>{proyeccionMes.pct>0?`${proyeccionMes.pct}%`:"—"}</span>
-                  <span style={{fontSize:7,color:C.inkFaint,letterSpacing:0.2}}>MARGEN</span>
-                </div>
-              </div>
-            </div>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",
-              marginTop:10,paddingTop:10,borderTop:`1px solid ${C.border}`}}>
-              <span style={{fontSize:10.5,color:C.inkFaint}}>utilidad promedio / mes</span>
-              <span style={{fontFamily:MONO,fontWeight:800,fontSize:14,color:proyeccionMes.utilProm>=0?C.ok:C.danger}}>{fmt.money(proyeccionMes.utilProm)}</span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Ventas y margen ── */}
-      {(ventasChart.totalAct>0||kpis.margenPromPct>0)&&(()=>{ const hayCurva=ventasChart.acumAct.length>=3; return (
-      <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px",marginBottom:14}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:2}}>
-          <div style={{fontSize:11.5,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4}}>Ventas del mes</div>
-          {ventasChart.variacion!==null&&(
-            <span style={{fontSize:11,fontWeight:700,color:ventasChart.variacion>=0?C.ok:C.danger}}>{ventasChart.variacion>=0?"+":""}{ventasChart.variacion}% vs mes ant.</span>
-          )}
-        </div>
-
-        <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:6}}>
-          <div style={{flex:1}}>
-            <div style={{fontSize:20,fontWeight:800,color:C.ink,fontFamily:MONO}}>{fmt.money(ventasChart.totalAct)}</div>
-            <div style={{fontSize:10,color:C.inkFaint}}>vendido este mes</div>
-          </div>
-          <div style={{width:62,height:62,borderRadius:"50%",flexShrink:0,
-            background:`conic-gradient(${kpis.margenPromPct>=20?C.ok:kpis.margenPromPct>=10?C.warn:C.danger} ${Math.max(0,Math.min(100,kpis.margenPromPct))*3.6}deg, ${C.paper} 0)`,
-            display:"flex",alignItems:"center",justifyContent:"center"}}>
-            <div style={{width:44,height:44,borderRadius:"50%",background:C.card,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
-              <span style={{fontSize:13,fontWeight:800,color:C.ink,fontFamily:MONO}}>{kpis.margenPromPct>0?`${kpis.margenPromPct}%`:"—"}</span>
-              <span style={{fontSize:7,color:C.inkFaint,letterSpacing:0.2}}>MARGEN</span>
-            </div>
-          </div>
-        </div>
-
-        {hayCurva&&<svg viewBox={`0 0 ${CW} ${CH}`} width="100%" height={CH} preserveAspectRatio="none">
-          <path d={pathAnt} fill="none" stroke={C.border} strokeWidth="2" />
-          <path d={pathAct} fill="none" stroke={C.teal} strokeWidth="2.5" />
-        </svg>}
-        {!hayCurva&&(
-          <div style={{fontSize:11.5,color:C.inkFaint,padding:"14px 0 4px",lineHeight:1.5}}>
-            Recién empieza el mes — la curva aparece con unos días de ventas.
-          </div>
-        )}
-        {hayCurva&&<div style={{display:"flex",gap:14,marginTop:4}}>
-          <span style={{fontSize:10.5,color:C.inkMuted,display:"flex",alignItems:"center",gap:4}}><span style={{width:8,height:8,borderRadius:"50%",background:C.teal,display:"inline-block"}} />Este mes</span>
-          <span style={{fontSize:10.5,color:C.inkMuted,display:"flex",alignItems:"center",gap:4}}><span style={{width:8,height:8,borderRadius:"50%",background:C.border,display:"inline-block"}} />Mes anterior</span>
-        </div>}
-      </div>); })()}
-
-      <button onClick={()=>setVerHistorico(v=>!v)}
-        style={{width:"100%",background:"none",border:"none",cursor:"pointer",textAlign:"left",
-          fontSize:11.5,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,
-          marginBottom:8,padding:"4px 0",display:"flex",alignItems:"center",gap:6}}>
-        <span style={{fontSize:12}}>{verHistorico?"▾":"▸"}</span> Detalle e histórico
-      </button>
-
-      {/* 4 KPIs clickeables (detalle expandible) */}
-      {verHistorico&&<>
-      <KpiBtn label="Ingresos cobrados" value={fmt.money(kpis.cobrado)} color={C.ok} id="cobrado" expandido={expandido} setExpandido={setExpandido}>
-        <div style={{fontSize:11.5,fontWeight:700,color:C.inkMuted,marginBottom:8}}>OC cobradas ({ocsPagadas.length})</div>
-        {ocsPagadas.map(o=>(
-          <div key={o.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
-            <div><div style={{fontFamily:MONO,fontWeight:700,fontSize:12,color:C.ok}}>✓ {o.numero_oc}</div><div style={{fontSize:11,color:C.inkMuted}}>{o.cliente} · Factura {fmt.date(o.fechaFactura)}</div></div>
-            <div style={{fontFamily:MONO,fontWeight:800,fontSize:13,color:C.ok}}>{fmt.money(o.monto_cobrado)}</div>
-          </div>
-        ))}
-      </KpiBtn>
-
-      <KpiBtn label="Por cobrar" value={fmt.money(kpis.porCobrar)} color={C.warn} id="porCobrar" expandido={expandido} setExpandido={setExpandido}>
-        <div style={{fontSize:11.5,fontWeight:700,color:C.inkMuted,marginBottom:8}}>Facturas pendientes de pago ({ocsPorCobrar.length})</div>
-        {ocsPorCobrar.sort((a,b)=>(b.diasDesde||0)-(a.diasDesde||0)).map(o=>(
-          <div key={o.id} style={{padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <div style={{fontFamily:MONO,fontWeight:700,fontSize:12,color:C.danger}}>{o.numero_oc}</div>
-              <div style={{fontFamily:MONO,fontWeight:800,fontSize:13,color:C.warn}}>{fmt.money((o.monto_facturado||0)-(o.monto_cobrado||0))}</div>
-            </div>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:3}}>
-              <div style={{fontSize:11,color:C.inkMuted}}>{o.cliente} · Factura {fmt.date(o.fechaFactura)}</div>
-              {o.diasDesde!==null&&<DiasBadge dias={o.diasDesde} diasPago={o.dias_pago} />}
-            </div>
-          </div>
-        ))}
-      </KpiBtn>
-
-      <KpiBtn label="Deuda a financiadores" value={fmt.money(kpis.deudaFin)} color={C.danger} id="deudaFin" expandido={expandido} setExpandido={setExpandido}>
-        {financiadores.map(f=>(
-          <div key={f.id} style={{marginBottom:12}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-              <span style={{fontWeight:700,color:C.ink}}>{f.nombre}</span>
-              <span style={{fontFamily:MONO,fontWeight:800,color:C.danger}}>{fmt.money(f.saldo_deuda)}</span>
-            </div>
-          </div>
-        ))}
-        <button onClick={()=>onNavigate("financiamiento")} style={{...btnP(C.night),marginTop:4}}>Ver cartola completa →</button>
-      </KpiBtn>
-
-      <KpiBtn label="Utilidad bruta" value={fmt.money(kpis.utilidad)} color={C.teal} id="utilidad" expandido={expandido} setExpandido={setExpandido}>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
-          {[
-            {label:`${utilidadPeriodos.nombreMesAnt} (mes ant.)`,v:utilidadPeriodos.mesAnterior},
-            {label:"Últimos 3 meses",v:utilidadPeriodos.m3},
-            {label:"Últimos 6 meses",v:utilidadPeriodos.m6},
-            {label:"Últimos 9 meses",v:utilidadPeriodos.m9},
-            {label:"Últimos 12 meses",v:utilidadPeriodos.m12},
-            {label:"Histórico total",v:utilidadPeriodos.historico},
-          ].map(({label,v})=>(
-            <div key={label} style={{background:C.card,borderRadius:10,padding:"10px 12px",border:`1px solid ${C.border}`}}>
-              <div style={{fontSize:10.5,color:C.inkFaint,marginBottom:3}}>{label}</div>
-              <div style={{fontFamily:MONO,fontWeight:800,fontSize:15,color:v>=0?C.teal:C.danger}}>{fmt.money(v)}</div>
-            </div>
-          ))}
-        </div>
-        <div style={{fontSize:11,color:C.inkFaint,marginTop:4}}>Utilidad = Ventas − Costo compras (sin descontar gastos indirectos)</div>
-      </KpiBtn>
-      </>}
 
       </Seccion>
 
