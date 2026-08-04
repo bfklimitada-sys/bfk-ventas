@@ -539,7 +539,7 @@ export default function App() {
   const revisarPorAceptar=async()=>{
     setVerificandoPorAceptar(true);
     try{
-      const r=await fetchConReintento("/api/oc?listar=enviadaproveedor&dias=90");
+      const r=await fetchConReintento("/api/oc?listar=enviadaproveedor&dias=30");
       if(!r) return;
       const j=await r.json();
       if(!j.ok) return;
@@ -558,7 +558,7 @@ export default function App() {
   const revisarAceptadasSinCargar=async()=>{
     setVerificandoAceptadas(true);
     try{
-      const r=await fetchConReintento("/api/oc?listar=aceptadas&dias=90");
+      const r=await fetchConReintento("/api/oc?listar=aceptadas&dias=30");
       if(!r) return;
       const j=await r.json();
       if(!j.ok) return;
