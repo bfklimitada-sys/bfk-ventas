@@ -378,10 +378,10 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
 
                 {onValidarTodo&&(
                   <button onClick={()=>onValidarTodo()} disabled={!!validandoTodo}
-                    style={{width:"100%",background:"none",border:`1px dashed ${C.border}`,
-                      color:validandoTodo?C.inkFaint:C.inkMuted,borderRadius:10,padding:"8px 12px",
-                      fontSize:11,fontWeight:700,cursor:validandoTodo?"default":"pointer",marginBottom:12}}>
-                    {validandoTodo?`Validando ${validandoTodo.hechas} de ${validandoTodo.total}…`:"🔍 Validar todas mis OC contra Mercado Público"}
+                    style={{display:"block",margin:"0 auto 12px",background:"none",border:"none",
+                      color:C.inkFaint,fontSize:10.5,cursor:validandoTodo?"default":"pointer",
+                      textDecoration:validandoTodo?"none":"underline"}}>
+                    {validandoTodo?`Validando ${validandoTodo.hechas} de ${validandoTodo.total}…`:"Validar todas mis OC contra Mercado Público"}
                   </button>
                 )}
 
