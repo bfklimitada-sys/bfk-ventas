@@ -233,8 +233,8 @@ export default function App() {
           comuna:oc.comuna||"", contacto:oc.contacto||"", correo_cliente:correo_cliente||"",
           monto_total:oc.monto_total||0, vendedor_id:vendedorId,
           tipo_despacho:oc.tipo_despacho||"", direccion_entrega:direccion_entrega||"",
-          fecha_emision_mp:String(oc.fecha_creacion||"").slice(0,10)||null,
-          fecha_hora_emision_mp:oc.fecha_creacion||null,
+          fecha_emision_mp:String(oc.fecha_envio||oc.fecha_creacion||"").slice(0,10)||null,
+          fecha_hora_emision_mp:oc.fecha_envio||oc.fecha_creacion||null,
           dias_pago:oc.dias_pago||30, sync_pendiente:false,
           estado_compra:"pendiente", creado_por:session.user.id };
 
@@ -335,9 +335,13 @@ export default function App() {
         // contacto: Mercado Público es la única fuente de verdad, así que
         // siempre se sincroniza (no solo cuando está vacía), para que una
         // fecha vieja o mal cargada se autocorrija en la próxima pasada.
-        const fechaMP=String(d.fecha_creacion||"").slice(0,10);
+        // Se prioriza fecha_envio (la que Mercado Público muestra en
+        // pantalla junto al código) sobre fecha_creacion (la del proceso
+        // interno, que puede ser bastante anterior en compras ágiles).
+        const fechaHoraMP=d.fecha_envio||d.fecha_creacion||"";
+        const fechaMP=String(fechaHoraMP).slice(0,10);
         if(fechaMP&&fechaMP!==oc.fecha_emision_mp) cambios.fecha_emision_mp=fechaMP;
-        if(d.fecha_creacion&&d.fecha_creacion!==oc.fecha_hora_emision_mp) cambios.fecha_hora_emision_mp=d.fecha_creacion;
+        if(fechaHoraMP&&fechaHoraMP!==oc.fecha_hora_emision_mp) cambios.fecha_hora_emision_mp=fechaHoraMP;
         if(!oc.tipo_despacho&&d.tipo_despacho) cambios.tipo_despacho=d.tipo_despacho;
         if(!oc.dias_pago)            cambios.dias_pago=d.dias_pago||30;
         if(!Number(oc.monto_total))  cambios.monto_total=d.monto_total||0;
@@ -854,7 +858,10 @@ export default function App() {
       const j=await r.json();
       if(!j.ok||!j.oc){ showToast("No se encontró en Mercado Público","error"); return; }
       const d=j.oc;
-      const fechaMP=String(d.fecha_creacion||"").slice(0,10);
+      // Se prioriza fecha_envio (la que Mercado Público muestra en pantalla
+      // junto al código) sobre fecha_creacion (la del proceso interno).
+      const fechaHoraMP=d.fecha_envio||d.fecha_creacion||"";
+      const fechaMP=String(fechaHoraMP).slice(0,10);
 
       // La fecha de la OC vive en su evento de compra
       const evC=(oc.eventos_compra||[])[0];
@@ -872,7 +879,7 @@ export default function App() {
         correo_cliente:oc.correo_cliente||d.correo_cliente||"",
         tipo_despacho:d.tipo_despacho||oc.tipo_despacho,
         fecha_emision_mp:fechaMP||oc.fecha_emision_mp,
-        fecha_hora_emision_mp:d.fecha_creacion||oc.fecha_hora_emision_mp,
+        fecha_hora_emision_mp:fechaHoraMP||oc.fecha_hora_emision_mp,
         dias_pago:d.dias_pago||oc.dias_pago||30});
 
       showToast(fechaMP?`Actualizado · fecha ${fmt.date(fechaMP)}`:"Datos actualizados");
