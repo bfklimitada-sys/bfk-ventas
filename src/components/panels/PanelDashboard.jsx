@@ -234,6 +234,23 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
     return { mesAnterior:utilMesAnt, m3:calcUtil(3), m6:calcUtil(6), m9:calcUtil(9), m12:calcUtil(12), historico:ocs.reduce((s,o)=>s+(o.monto_total||0)-(o.costo_total||0),0), nombreMesAnt:fmt.monthYear(mesAnterior,anioMA) };
   },[ocs]);
 
+  // ── Proyección del mes: promedio de los últimos 3 meses, para tener ──
+  // algo que mostrar desde el día 1, antes de que existan ventas reales.
+  const proyeccionMes=useMemo(()=>{
+    const limite=new Date(); limite.setMonth(limite.getMonth()-3);
+    const recientes=ocs.filter(o=>{
+      if((o.tipo_registro||"venta")!=="venta") return false;
+      const evC=(o.eventos_compra||[])[0]; if(!evC) return false;
+      return new Date(evC.fecha)>=limite;
+    });
+    const venta=recientes.reduce((s,o)=>s+(Number(o.monto_total)||0),0);
+    const costo=recientes.reduce((s,o)=>s+(Number(o.costo_total)||0),0);
+    const ventaProm=Math.round(venta/3), costoProm=Math.round(costo/3);
+    const utilProm=ventaProm-costoProm;
+    const pct=ventaProm>0?Math.round(utilProm/ventaProm*100):0;
+    return {ventaProm,utilProm,pct};
+  },[ocs]);
+
   // ── Serie diaria acumulada de ventas (mes actual vs mes anterior) ──
   const ventasChart=useMemo(()=>{
     const hoy=new Date(); const diaHoy=hoy.getDate();
@@ -684,7 +701,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
 
       </Seccion>
 
-      <Seccion titulo="Este mes" ocultarSiVacio={ventasChart.totalAct<=0&&kpis.margenPromPct<=0}>
+      <Seccion titulo="Este mes">
       {/* Resultado del mes cerrado: dato estable que no depende del día */}
       {(()=>{
         if(!mesCerrado) return null;
@@ -716,15 +733,34 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
         );
       })()}
 
-      {/* Resumen del mes, incluso sin curva todavía */}
+      {/* Proyección basada en el promedio de los últimos 3 meses: se ve
+          desde el día 1, incluso sin ninguna venta registrada todavía. */}
       {ventasChart.totalAct<=0&&kpis.margenPromPct<=0&&(
         <div style={{marginBottom:18}}>
           <div style={{fontSize:10.5,fontWeight:800,color:C.inkFaint,textTransform:"uppercase",
-            letterSpacing:0.6,marginBottom:8,paddingLeft:2}}>Este mes</div>
+            letterSpacing:0.6,marginBottom:8,paddingLeft:2}}>Este mes · proyección</div>
           <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px"}}>
-            <div style={{fontSize:12.5,color:C.inkMuted,lineHeight:1.5}}>
-              Todavía no hay compras registradas en {new Date().toLocaleDateString("es-CL",{month:"long"})}.
-              Las ventas y el margen del mes aparecen aquí cuando se registre la primera.
+            <div style={{fontSize:11.5,color:C.inkMuted,lineHeight:1.5,marginBottom:12}}>
+              Todavía no hay ventas registradas en {new Date().toLocaleDateString("es-CL",{month:"long"})}. Esto es el promedio mensual de los últimos 3 meses, como referencia mientras entran las primeras.
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:14}}>
+              <div style={{flex:1}}>
+                <div style={{fontSize:20,fontWeight:800,color:C.ink,fontFamily:MONO}}>{fmt.money(proyeccionMes.ventaProm)}</div>
+                <div style={{fontSize:10,color:C.inkFaint}}>venta promedio / mes</div>
+              </div>
+              <div style={{width:62,height:62,borderRadius:"50%",flexShrink:0,
+                background:`conic-gradient(${proyeccionMes.pct>=20?C.ok:proyeccionMes.pct>=10?C.warn:C.danger} ${Math.max(0,Math.min(100,proyeccionMes.pct))*3.6}deg, ${C.paper} 0)`,
+                display:"flex",alignItems:"center",justifyContent:"center"}}>
+                <div style={{width:44,height:44,borderRadius:"50%",background:C.card,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
+                  <span style={{fontSize:13,fontWeight:800,color:C.ink,fontFamily:MONO}}>{proyeccionMes.pct>0?`${proyeccionMes.pct}%`:"—"}</span>
+                  <span style={{fontSize:7,color:C.inkFaint,letterSpacing:0.2}}>MARGEN</span>
+                </div>
+              </div>
+            </div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",
+              marginTop:10,paddingTop:10,borderTop:`1px solid ${C.border}`}}>
+              <span style={{fontSize:10.5,color:C.inkFaint}}>utilidad promedio / mes</span>
+              <span style={{fontFamily:MONO,fontWeight:800,fontSize:14,color:proyeccionMes.utilProm>=0?C.ok:C.danger}}>{fmt.money(proyeccionMes.utilProm)}</span>
             </div>
           </div>
         </div>
