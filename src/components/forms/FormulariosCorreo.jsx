@@ -87,7 +87,7 @@ export function FormReclamarFactura({ oc, evF, dias, contactos, onEnviar, onGuar
   const [err, setErr] = useState(""); const [sending, setSending] = useState(false);
 
   const asunto = `OC ${oc.numero_oc} — Solicitud de pago factura N°${evF?.numero_factura || ""}`;
-  const cuerpo = `Estimados,\n\nEsperamos se encuentren bien. Por medio del presente correo solicitamos la gestión de pago de la factura N°${evF?.numero_factura || ""} asociada a la Orden de Compra ${oc.numero_oc}, emitida con fecha ${fmt.date(evF?.fecha)}, la cual registra ${dias} días desde su emisión.\n\nQuedamos atentos a su pronta respuesta.\n\nDatos para transferencia:\nBanco Estado\nBFK Ltda.\nRUT: 77.322.317-3\nChequera Electrónica: 54970259913\n\nSaludos cordiales,\nBFK Ltda`;
+  const cuerpo = `Estimados,\n\nEsperamos se encuentren bien. Por medio del presente correo solicitamos la gestión de pago de la factura N°${evF?.numero_factura || ""} asociada a la Orden de Compra ${oc.numero_oc}, emitida con fecha ${fmt.date(evF?.fecha)}, la cual registra ${dias} días desde su emisión.\n\nAgradeceríamos nos puedan indicar la fecha estimada en que se realizará el pago, para nuestro seguimiento interno.\n\nQuedamos atentos a su pronta respuesta.\n\nDatos para transferencia:\nBanco Estado\nBFK Ltda.\nRUT: 77.322.317-3\nChequera Electrónica: 54970259913\n\nSaludos cordiales,\nBFK Ltda`;
 
   const handleEnviar = async () => {
     if (!correo.trim()) { setErr("Indica el correo del cliente"); return; }
