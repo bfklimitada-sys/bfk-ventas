@@ -65,7 +65,7 @@ function VerMasAvisoMP({n}){
   return <div style={{fontSize:10.5,color:C.inkFaint,marginTop:6,textAlign:"center"}}>y {n} más</div>;
 }
 
-export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, aportes: aportesLista, onNavigate, onAccion, onSincronizar, onCorregirFechas, sincronizando, porAceptar, onActualizarPorAceptar, verificandoPorAceptar, aceptadasSinCargar, onCargarOC, onCargarTodasAceptadas, cargandoAceptadas, onActualizarAceptadas, verificandoAceptadas, canceladasEnMP, onEliminarCancelada, onActualizarCanceladas, verificandoCanceladas, onValidarTodo, validandoTodo, esCodigoMP, ultimaCartola, saldoBanco, bancoMensual, onEditarSaldo }) {
+export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, aportes: aportesLista, onNavigate, onAccion, onSincronizar, onCorregirFechas, sincronizando, porAceptar, onActualizarPorAceptar, verificandoPorAceptar, aceptadasSinCargar, onCargarOC, onCargarTodasAceptadas, cargandoAceptadas, onActualizarAceptadas, verificandoAceptadas, canceladasEnMP, onEliminarCancelada, onActualizarCanceladas, verificandoCanceladas, onValidarTodo, validandoTodo, usoMP, esCodigoMP, ultimaCartola, saldoBanco, bancoMensual, onEditarSaldo }) {
   const [verMP,setVerMP]=useState(false);
 
   const kpis=useMemo(()=>{
@@ -327,6 +327,20 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
       </Seccion>
 
       <Seccion titulo="Requiere atención">
+      {/* ── Contador de uso diario de Mercado Público (estimado) ── */}
+      {usoMP&&usoMP.solicitudes>0&&(()=>{
+        const pct=Math.min(100,Math.round(usoMP.solicitudes/10000*100));
+        const color=usoMP.solicitudes>9000?C.danger:usoMP.solicitudes>7000?C.warn:C.inkFaint;
+        return (
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10,fontSize:10}}>
+            <span style={{color,fontWeight:700,flexShrink:0}}>MP hoy: {usoMP.solicitudes.toLocaleString("es-CL")}/10.000</span>
+            <div style={{flex:1,height:4,borderRadius:2,background:C.border,overflow:"hidden"}}>
+              <div style={{width:`${pct}%`,height:"100%",background:color,borderRadius:2}} />
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ── Todo lo de Mercado Público bajo un solo desplegable ── */}
       {(()=>{
         const nPorAceptar=(porAceptar||[]).length;
