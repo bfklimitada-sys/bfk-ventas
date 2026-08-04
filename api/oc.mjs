@@ -42,13 +42,23 @@ const txt = (v) => (v === null || v === undefined ? "" : String(v).trim());
 const RUT_BFK = "77.322.317-3";
 
 async function buscarCodigoProveedor(ticket) {
-  const r = await fetch(
-    `https://api.mercadopublico.cl/servicios/v1/Publico/Empresas/BuscarProveedor` +
-    `?rutempresaproveedor=${encodeURIComponent(RUT_BFK)}&ticket=${encodeURIComponent(ticket)}`,
-    { headers: { Accept: "application/json" } });
-  if (!r.ok) return null;
-  const d = await r.json();
-  return d?.listaEmpresas?.[0]?.CodigoEmpresa ?? d?.Listado?.[0]?.CodigoEmpresa ?? null;
+  // Esta consulta es el primer paso de todo: si falla, nada más funciona.
+  // No tenía reintento (a diferencia del resto del archivo) — un solo
+  // hipo de Mercado Público tiraba abajo los 3 avisos de una vez.
+  for (let intento = 0; intento < 3; intento++) {
+    if (intento > 0) await new Promise((res) => setTimeout(res, intento === 1 ? 600 : 1400));
+    try {
+      const r = await fetch(
+        `https://api.mercadopublico.cl/servicios/v1/Publico/Empresas/BuscarProveedor` +
+        `?rutempresaproveedor=${encodeURIComponent(RUT_BFK)}&ticket=${encodeURIComponent(ticket)}`,
+        { headers: { Accept: "application/json" } });
+      if (!r.ok) continue;
+      const d = await r.json();
+      const codigo = d?.listaEmpresas?.[0]?.CodigoEmpresa ?? d?.Listado?.[0]?.CodigoEmpresa ?? null;
+      if (codigo) return codigo;
+    } catch { /* reintenta */ }
+  }
+  return null;
 }
 
 // Códigos de estado que devuelve la API (CodigoEstado), según la
