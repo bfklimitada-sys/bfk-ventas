@@ -107,22 +107,19 @@ async function listarOCs(req, res, ticket) {
     const url = "https://api.mercadopublico.cl/servicios/v1/publico/ordenesdecompra.json" +
       `?fecha=${f}&CodigoProveedor=${codigo}&ticket=${encodeURIComponent(ticket)}`;
 
-    // Mercado Público falla de forma intermitente en consultas puntuales.
-    // Sin reintento, un solo día que falle desaparece en silencio de los
-    // 90 — nada avisa que faltó, así que hay que insistir antes de rendirse.
-    // Las pausas antes de reintentar importan: si la primera falló por una
-    // ráfaga de solicitudes simultáneas, reintentar de inmediato pega
-    // contra el mismo bloqueo. Tres intentos en vez de dos: con dos
-    // seguía perdiendo días de vez en cuando.
+    // Un solo intento, con tope duro de 3 segundos. Insistir varias veces
+    // con esperas largas suena más confiable, pero si Mercado Público
+    // está lento hoy, eso es justo lo que deja la consulta entera pegada
+    // varios minutos. Mejor fallar rápido en un día puntual y seguir con
+    // el resto — "Validar todas mis OC" cubre lo que se pierda acá.
+    const control = new AbortController();
+    const corte = setTimeout(() => control.abort(), 3000);
     let j = null;
-    for (let intento = 0; intento < 3 && !j; intento++) {
-      if (intento === 1) await new Promise((res) => setTimeout(res, 600));
-      if (intento === 2) await new Promise((res) => setTimeout(res, 1400));
-      try {
-        const r = await fetch(url, { headers: { Accept: "application/json" } });
-        if (r.ok) j = await r.json();
-      } catch { /* reintenta */ }
-    }
+    try {
+      const r = await fetch(url, { headers: { Accept: "application/json" }, signal: control.signal });
+      if (r.ok) j = await r.json();
+    } catch { /* este día queda sin datos, se sigue con el resto */ }
+    finally { clearTimeout(corte); }
     if (!j) return [];
 
     return (j?.Listado || []).map((oc) => {
@@ -140,12 +137,13 @@ async function listarOCs(req, res, ticket) {
     });
   };
 
-  // Antes: lotes de 15 en paralelo, después 4. Una ráfaga simultánea
-  // puede activar algún límite de Mercado Público y tirar abajo la
-  // tanda completa — incluido el día que importaba. Ahora, lotes de 3
-  // con una pausa entre cada uno: más lento, pero más confiable.
-  const LOTE = 3;
+  // Tope global además del tope por solicitud: si ya pasaron 45 segundos,
+  // se devuelve lo encontrado hasta ahí en vez de seguir y arriesgarse a
+  // que Vercel corte la función a la fuerza sin responder nada.
+  const inicio = Date.now();
+  const LOTE = 5;
   for (let i = 0; i < dds.length; i += LOTE) {
+    if (Date.now() - inicio > 45000) break;
     const resultados = await Promise.all(dds.slice(i, i + LOTE).map(consultarDia));
     for (const items of resultados) {
       for (const { cod, fila } of items) {
@@ -154,7 +152,6 @@ async function listarOCs(req, res, ticket) {
         encontradas.push(fila);
       }
     }
-    if (i + LOTE < dds.length) await new Promise((res) => setTimeout(res, 180));
   }
 
   // Antes 15 min: si una OC se acepta/cancela en MP, la app podía
