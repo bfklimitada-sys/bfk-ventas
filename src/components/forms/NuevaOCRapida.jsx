@@ -113,6 +113,15 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
           </div>
         </div>
 
+        <Field label="Vendedor" hint="Quién trajo esta venta">
+          <select style={selStyle} value={vendedorId} onChange={e => setVendedorId(e.target.value)}>
+            <option value="">Sin vendedor asignado</option>
+            {(vendedores || []).map(v => (
+              <option key={v.id} value={v.id}>{v.nombre}</option>
+            ))}
+          </select>
+        </Field>
+
         <Field label="Código de la OC" required hint="Tal como aparece en Mercado Público">
           <input style={iMono} value={codigo} autoFocus
             onChange={e => { setCodigo(e.target.value); setErr(""); }}
@@ -227,13 +236,9 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
         </Field>
       )}
 
-      <Field label="Vendedor" hint="Quién trajo esta venta — no necesariamente quien la está cargando">
-        <select style={selStyle} value={vendedorId} onChange={e => setVendedorId(e.target.value)}>
-          <option value="">Sin vendedor asignado</option>
-          {(vendedores || []).map(v => (
-            <option key={v.id} value={v.id}>{v.nombre}</option>
-          ))}
-        </select>
+      <Field label="Vendedor" hint="Elegido en el paso anterior — vuelve atrás si lo quieres cambiar">
+        <input style={{...iStyle,background:C.paper,color:C.inkMuted}} disabled
+          value={(vendedores||[]).find(v=>v.id===vendedorId)?.nombre || "Sin vendedor asignado"} />
       </Field>
 
       {err && <div style={{ background: C.dangerLight, color: C.danger, borderRadius: 8, padding: "8px 12px", fontSize: 12.5, marginBottom: 10, fontWeight: 600 }}>{err}</div>}
