@@ -150,7 +150,10 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
       const factsMes=ocs.filter(o=>{
         if(o.vendedor_id!==v.id||o.estado_factura_propia!=="emitida"||o.vendedor_pagado) return false;
         const evF=(o.eventos_factura||[])[0]; if(!evF) return false;
-        const f=new Date(evF.fecha); return f.getMonth()+1===mesActual&&f.getFullYear()===anioActual;
+        // Leer año/mes del texto, no de un Date — evita el corrimiento de
+        // zona horaria que hacía caer facturas del día 1 en el mes anterior.
+        const [ay,am]=String(evF.fecha).slice(0,10).split("-");
+        return Number(am)===mesActual&&Number(ay)===anioActual;
       });
       // La comisión es sobre la utilidad del período, no sobre el monto
       // bruto facturado — usar monto_facturado acá inflaba varias veces
