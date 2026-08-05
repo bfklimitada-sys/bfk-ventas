@@ -911,7 +911,9 @@ export default function App() {
   };
   const handlePagoCliente=async(data)=>{
     const t=session.access_token; const oc=ocs.find(o=>o.id===data.ocId);
-    await ins("eventos_pago_cliente",t,{id:genId("evp"),oc_id:data.ocId,fecha:data.fecha,monto:data.monto,creado_por:session.user.id});
+    await ins("eventos_pago_cliente",t,{id:genId("evp"),oc_id:data.ocId,fecha:data.fecha,monto:data.monto,
+      medio_pago:data.medioPago||"transferencia",cobrado_en_banco:data.cobradoEnBanco!==false,institucion:data.institucion||null,
+      creado_por:session.user.id});
     const nuevoCobrado=(oc?.monto_cobrado||0)+data.monto;
     await upd("ordenes_compra_v2",t,data.ocId,{monto_cobrado:nuevoCobrado,estado_pago_cliente:nuevoCobrado>=(oc?.monto_facturado||0)?"pagado":"parcial"});
     showToast("Pago registrado"); setAccion(null); await cargarTodo();
