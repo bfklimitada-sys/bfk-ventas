@@ -293,23 +293,29 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
       <Seccion titulo="Registrar">
       <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:6,marginBottom:6}}>
         {[
-          {key:"compra",      icon:"📦", label:"Compra",  color:C.transit},
-          {key:"entrega",     icon:"🚚", label:"Entrega", color:C.info},
-          {key:"factura",     icon:"🧾", label:"Factura", color:C.purple},
-          {key:"pago_cliente",icon:"💰", label:"Pago",    color:C.ok},
-          {key:"cartola",     icon:"🏦", label:"Banco",   color:C.info},
+          {key:"compra",      icon:"📦", label:"Compra",  color:C.transit, paso:1},
+          {key:"entrega",     icon:"🚚", label:"Entrega", color:C.info,    paso:2},
+          {key:"factura",     icon:"🧾", label:"Factura", color:C.purple,  paso:3},
+          {key:"pago_cliente",icon:"💰", label:"Pago",    color:C.ok,      paso:4},
+          {key:"cartola",     icon:"🏦", label:"Banco",   color:C.info,    paso:null},
         ].map(a=>(
           <button key={a.key} onClick={()=>onAccion&&onAccion(a.key)}
-            style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,
-              padding:"10px 4px",cursor:"pointer",display:"flex",flexDirection:"column",
+            style={{position:"relative",background:C.card,
+              border:a.paso===null?`1px dashed ${C.border}`:`1px solid ${C.border}`,
+              borderRadius:12,padding:"10px 4px",cursor:"pointer",display:"flex",flexDirection:"column",
               alignItems:"center",gap:4}}>
+            {a.paso!==null&&(
+              <span style={{position:"absolute",top:4,left:5,width:13,height:13,borderRadius:"50%",
+                background:a.color,color:"#fff",fontSize:8.5,fontWeight:800,
+                display:"flex",alignItems:"center",justifyContent:"center"}}>{a.paso}</span>
+            )}
             <span style={{fontSize:19}}>{a.icon}</span>
             <span style={{fontSize:9.5,fontWeight:700,color:a.color,textAlign:"center",lineHeight:1.2}}>{a.label}</span>
           </button>
         ))}
       </div>
       <div style={{fontSize:10,color:C.inkFaint,textAlign:"center",marginBottom:14}}>
-        Registra una etapa del ciclo de una OC existente
+        Pasos ① a ④ de una OC ya creada — "Banco" es aparte, para conciliar la cartola
       </div>
       </Seccion>
 
