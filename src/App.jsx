@@ -288,7 +288,7 @@ export default function App() {
     showToast(data.esNueva?"OC creada correctamente":"Compra registrada"); setAccion(null); await cargarTodo();
   };
   // ─── NUEVA OC RÁPIDA (datos desde Mercado Público) ───────────
-  const handleNuevaOCRapida=async({pendienteSync, oc, links, direccion_entrega, correo_cliente, vendedorId: vendedorIdElegido})=>{
+  const handleNuevaOCRapida=async({pendienteSync, oc, links, direccion_entrega, correo_cliente, vendedorId: vendedorIdElegido, ventaPropia})=>{
     const t=session.access_token;
     const numero=oc.numero_oc;
 
@@ -304,12 +304,12 @@ export default function App() {
 
     const fila = pendienteSync
       ? { id:genId("ocv2"), numero_oc:numero, cliente:"POR COMPLETAR",
-          vendedor_id:vendedorId, sync_pendiente:true,
+          vendedor_id:vendedorId, es_venta_propia:!!ventaPropia, sync_pendiente:true,
           estado_compra:"pendiente", creado_por:session.user.id }
       : { id:genId("ocv2"), numero_oc:numero,
           cliente:oc.cliente||"", entidad:oc.entidad||"", rut_cliente:oc.rut_cliente||"",
           comuna:oc.comuna||"", contacto:oc.contacto||"", correo_cliente:correo_cliente||"",
-          monto_total:oc.monto_total||0, vendedor_id:vendedorId,
+          monto_total:oc.monto_total||0, vendedor_id:vendedorId, es_venta_propia:!!ventaPropia,
           tipo_despacho:oc.tipo_despacho||"", direccion_entrega:direccion_entrega||"",
           fecha_emision_mp:String(oc.fecha_envio||oc.fecha_creacion||"").slice(0,10)||null,
           fecha_hora_emision_mp:oc.fecha_envio||oc.fecha_creacion||null,
@@ -1198,7 +1198,7 @@ export default function App() {
     showToast(`${filas.length} entidades importadas al catálogo`);
     await cargarTodo();
   };
-  const handleGuardarDatosOC=async(ocId,{numeroOc,resincronizar,cliente,entidad,comuna,contacto,rutCliente,correo,fechaOC,vendedorId})=>{
+  const handleGuardarDatosOC=async(ocId,{numeroOc,resincronizar,cliente,entidad,comuna,contacto,rutCliente,correo,fechaOC,vendedorId,ventaPropia})=>{
     const t=session.access_token;
     const oc=ocs.find(o=>o.id===ocId);
 
@@ -1215,7 +1215,7 @@ export default function App() {
         valorAnterior:oc?.vendedor_id||"(sin asignar)",valorNuevo:vendedorId||"(sin asignar)"});
     }
 
-    await upd("ordenes_compra_v2",t,ocId,{...(numeroOc?{numero_oc:numeroOc}:{}),cliente,entidad,comuna,contacto,rut_cliente:rutCliente,correo_cliente:correo,...(vendedorId!==undefined?{vendedor_id:vendedorId}:{}),ultimo_editor:session.user.id,ultima_edicion:new Date().toISOString()});
+    await upd("ordenes_compra_v2",t,ocId,{...(numeroOc?{numero_oc:numeroOc}:{}),cliente,entidad,comuna,contacto,rut_cliente:rutCliente,correo_cliente:correo,...(vendedorId!==undefined?{vendedor_id:vendedorId}:{}),...(ventaPropia!==undefined?{es_venta_propia:!!ventaPropia}:{}),ultimo_editor:session.user.id,ultima_edicion:new Date().toISOString()});
 
     // Volver a traer los datos con el código corregido
     if(resincronizar&&numeroOc){
