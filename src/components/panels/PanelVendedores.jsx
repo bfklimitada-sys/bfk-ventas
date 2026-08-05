@@ -44,7 +44,10 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
           sumaUtilidad+=utilOC;
         }
       });
-      const ivaMesV2=ivaMensual.find(i=>i.mes===m&&i.anio===y); const impPagadoV2=ivaMesV2?Math.max(0,(ivaMesV2.iva_ventas||0)-(ivaMesV2.iva_compras||0)):0;
+      // Abril 2025 fue el único mes donde no se descontaba IVA — esa
+      // regla empezó a aplicarse recién desde mayo 2025 en adelante.
+      const sinIva=(y===2025&&m===4);
+      const ivaMesV2=sinIva?null:ivaMensual.find(i=>i.mes===m&&i.anio===y); const impPagadoV2=ivaMesV2?Math.max(0,(ivaMesV2.iva_ventas||0)-(ivaMesV2.iva_compras||0)):0;
       const pagoCalculado=Math.max(0,Math.round(sumaUtilidad/2 - impPagadoV2/2))+pagoVentasPropias;
       const pagosDelMes=pagosVendedor.filter(p=>p.vendedor_id===v.id&&p.mes===m&&p.anio===y);
       const pagado=pagosDelMes.reduce((s,p)=>s+(p.monto_pagado||0),0);
