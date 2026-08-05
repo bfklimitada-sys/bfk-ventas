@@ -536,6 +536,33 @@ function HistorialReclamos({ reclamos, onRegistrarRespuesta }){
   );
 }
 
+// Cadencia de cobranza: en vez de solo decir "vencida", sugiere el
+// próximo paso concreto según si ya se reclamó, si respondieron, y si
+// se pasó la fecha que prometieron pagar.
+function proximaAccionCobranza(oc){
+  const reclamos=(oc.oc_reclamos||[]).slice().sort((a,b)=>(b.fecha||"").localeCompare(a.fecha||""));
+  const ultimo=reclamos[0];
+
+  if(ultimo?.respondido_en){
+    if(ultimo.fecha_prometida){
+      const diasPasada=fmt.diasDesde(ultimo.fecha_prometida);
+      if(diasPasada!==null&&diasPasada>0)
+        return {nivel:"critico",texto:`Se pasó la fecha prometida (${fmt.date(ultimo.fecha_prometida)})`,boton:"📧 Contactar de nuevo"};
+      return {nivel:"ok",texto:`Prometió pagar el ${fmt.date(ultimo.fecha_prometida)}`,boton:null};
+    }
+    return {nivel:"ok",texto:"Respondió, sin fecha concreta",boton:"📧 Pedir fecha estimada"};
+  }
+
+  if(ultimo){
+    const diasSinResp=Math.floor((new Date()-new Date(ultimo.fecha))/(1000*60*60*24));
+    if(diasSinResp<1) return {nivel:"espera",texto:"Reclamada hoy, esperando respuesta",boton:null};
+    if(diasSinResp<7) return {nivel:"espera",texto:`Reclamada hace ${diasSinResp}d, esperando respuesta`,boton:null};
+    return {nivel:"critico",texto:`Sin respuesta hace ${diasSinResp}d`,boton:"📧 Reenviar reclamo"};
+  }
+
+  return {nivel:"critico",texto:"Sin reclamo enviado todavía",boton:"📧 Enviar primer reclamo"};
+}
+
 export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded, onToggle, contactos, onEnviarReclamo, onRegistrarRespuestaReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, bloqueos, perfil, historialCambios, onAgregarComentario, onEliminarComentario, onBloquear, onLiberar, onEliminarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa }) {
   const evF=(oc.eventos_factura||[])[0];
   const dias=fmt.diasDesde(evF?.fecha);
@@ -920,15 +947,14 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, onSincroniz
               {alertas.map(o=>{
             const evF=(o.eventos_factura||[])[0];
             const dias=fmt.diasDesde(evF?.fecha);
-            const reclamos=(o.oc_reclamos||[]).slice().sort((a,b)=>b.fecha?.localeCompare(a.fecha));
-            const ultimoReclamo=reclamos[0];
-            const hrsDesde=ultimoReclamo?Math.floor((new Date()-new Date(ultimoReclamo.fecha))/(1000*60*60)):null;
-            const reclamadaHoy=hrsDesde!==null&&hrsDesde<24;
-            const conRespuesta=!!ultimoReclamo?.respondido_en;
+            const reclamos=(o.oc_reclamos||[]).slice().sort((a,b)=>(b.fecha||"").localeCompare(a.fecha||""));
+            const accion=proximaAccionCobranza(o);
+            const colorNivel=accion.nivel==="ok"?C.ok:accion.nivel==="espera"?C.warn:C.danger;
+            const bgNivel=accion.nivel==="ok"?C.okLight:accion.nivel==="espera"?C.warnLight:"rgba(255,255,255,0.5)";
             return (
               <div key={o.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6,
-                background:conRespuesta?C.okLight:"rgba(255,255,255,0.5)",
-                border:conRespuesta?`1px solid ${C.ok}55`:"none",
+                background:bgNivel,
+                border:accion.nivel!=="critico"?`1px solid ${colorNivel}55`:"none",
                 borderRadius:8,padding:"7px 10px"}}>
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{display:"flex",alignItems:"center",gap:6}}>
@@ -941,31 +967,16 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, onSincroniz
                         fontFamily:MONO,fontWeight:700,fontSize:12,color:C.ink,textDecoration:"underline dotted"}}>
                       {o.numero_oc}
                     </button>
-                    <span style={{fontSize:10,color:C.danger,fontWeight:600}}>{dias}d</span>
+                    <span style={{fontSize:10,color:C.danger,fontWeight:600}}>{dias}d vencida</span>
                     {reclamos.length>0&&<span style={{fontSize:10,color:C.inkFaint}}>· {reclamos.length} reclamo{reclamos.length>1?"s":""}</span>}
                   </div>
-                  {ultimoReclamo&&<div style={{fontSize:10,color:C.inkMuted,marginTop:1}}>Último: {ultimoReclamo.correo} · {fmt.datetime(ultimoReclamo.fecha)}</div>}
-                  {conRespuesta&&ultimoReclamo.respuesta_notas&&<div style={{fontSize:10,color:C.ok,marginTop:2,lineHeight:1.35}}>{ultimoReclamo.respuesta_notas}</div>}
+                  <div style={{fontSize:10,fontWeight:700,color:colorNivel,marginTop:2}}>{accion.texto}</div>
                 </div>
-                {conRespuesta
-                  ? <div style={{display:"flex",alignItems:"center",gap:4,background:"#fff",borderRadius:6,padding:"4px 8px",flexShrink:0,border:`1px solid ${C.ok}`}}>
-                      <span style={{fontSize:12}}>💚</span>
-                      <div>
-                        <div style={{fontSize:10,fontWeight:700,color:C.ok,lineHeight:1.2}}>
-                          {ultimoReclamo.fecha_prometida?`Paga ${fmt.date(ultimoReclamo.fecha_prometida)}`:"Respondió"}
-                        </div>
-                        <div style={{fontSize:9,color:C.inkMuted}}>a la espera de pago</div>
-                      </div>
-                    </div>
-                  : reclamadaHoy
-                  ? <div style={{display:"flex",alignItems:"center",gap:4,background:C.okLight,borderRadius:6,padding:"4px 8px",flexShrink:0}}>
-                      <span style={{fontSize:12}}>✅</span>
-                      <div>
-                        <div style={{fontSize:10,fontWeight:700,color:C.ok,lineHeight:1.2}}>Reclamada</div>
-                        <div style={{fontSize:9,color:C.inkMuted}}>hace {hrsDesde}h</div>
-                      </div>
-                    </div>
-                  : <button onClick={()=>setReclamandoBanner(o)} style={{flexShrink:0,background:C.danger,border:"none",color:"#fff",borderRadius:7,padding:"6px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}}>📧 Reclamar</button>
+                {accion.boton
+                  ? <button onClick={()=>setReclamandoBanner(o)}
+                      style={{flexShrink:0,background:accion.nivel==="critico"?C.danger:C.warn,border:"none",color:"#fff",
+                        borderRadius:7,padding:"6px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}}>{accion.boton}</button>
+                  : <div style={{fontSize:16,flexShrink:0}}>{accion.nivel==="ok"?"💚":"⏳"}</div>
                 }
               </div>
             );
