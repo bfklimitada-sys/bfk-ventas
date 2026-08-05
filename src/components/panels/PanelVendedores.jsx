@@ -27,20 +27,29 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
     return Array.from(mesSet).sort((a,b)=>b.localeCompare(a)).map(ym=>{
       const [y,m]=[Number(ym.split("-")[0]),Number(ym.split("-")[1])];
       // La comisión es sobre la UTILIDAD del período (venta − costo), no
-      // sobre el monto bruto facturado — usar sumaFacts acá inflaba el
-      // cálculo varias veces por encima de lo real.
-      let sumaFacts=0, sumaUtilidad=0;
+      // sobre el monto bruto facturado. Las OC marcadas "venta propia"
+      // se pagan aparte, 100% de su utilidad menos el IVA de su propia
+      // factura — no entran al reparto general del 50%.
+      let sumaFacts=0, sumaUtilidad=0, pagoVentasPropias=0;
       ocs.filter(o=>o.vendedor_id===v.id&&o.estado_factura_propia==="emitida").forEach(o=>{
         const factsMes=(o.eventos_factura||[]).filter(ef=>{ const {anio,mes}=anioMesDe(ef.fecha); return anio===y&&mes===m; });
         if(!factsMes.length) return;
-        sumaFacts+=factsMes.reduce((ss,ef)=>ss+(ef.monto||0),0);
-        sumaUtilidad+=(Number(o.monto_total)||0)-(Number(o.costo_total)||0);
+        const montoFacts=factsMes.reduce((ss,ef)=>ss+(ef.monto||0),0);
+        const utilOC=(Number(o.monto_total)||0)-(Number(o.costo_total)||0);
+        if(o.es_venta_propia){
+          const ivaFactura=montoFacts-(montoFacts/1.19);
+          pagoVentasPropias+=Math.max(0,Math.round(utilOC-ivaFactura));
+        }else{
+          sumaFacts+=montoFacts;
+          sumaUtilidad+=utilOC;
+        }
       });
-      const ivaMesV2=ivaMensual.find(i=>i.mes===m&&i.anio===y); const impPagadoV2=ivaMesV2?Math.max(0,(ivaMesV2.iva_ventas||0)-(ivaMesV2.iva_compras||0)):0; const pagoCalculado=Math.max(0,Math.round(sumaUtilidad/2 - impPagadoV2/2));
+      const ivaMesV2=ivaMensual.find(i=>i.mes===m&&i.anio===y); const impPagadoV2=ivaMesV2?Math.max(0,(ivaMesV2.iva_ventas||0)-(ivaMesV2.iva_compras||0)):0;
+      const pagoCalculado=Math.max(0,Math.round(sumaUtilidad/2 - impPagadoV2/2))+pagoVentasPropias;
       const pagosDelMes=pagosVendedor.filter(p=>p.vendedor_id===v.id&&p.mes===m&&p.anio===y);
       const pagado=pagosDelMes.reduce((s,p)=>s+(p.monto_pagado||0),0);
       const estado=pagado>=pagoCalculado?"pagado":"pendiente";
-      return {mes:m,anio:y,label:fmt.monthYear(m,y),sumaFacts,sumaUtilidad,pagoCalculado,pagado,estado,deuda:Math.max(0,pagoCalculado-pagado)};
+      return {mes:m,anio:y,label:fmt.monthYear(m,y),sumaFacts,sumaUtilidad,pagoVentasPropias,pagoCalculado,pagado,estado,deuda:Math.max(0,pagoCalculado-pagado)};
     });
   };
 
@@ -93,7 +102,7 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
                       </span>
                     </div>
                     <div style={{fontSize:11,color:C.inkFaint,marginBottom:3}}>
-                      Comisión del mes: <b style={{color:C.ink}}>{fmt.money(d.pagoCalculado)}</b> (mitad de la utilidad, {fmt.money(d.sumaUtilidad)}, de {fmt.money(d.sumaFacts)} facturados)
+                      Comisión del mes: <b style={{color:C.ink}}>{fmt.money(d.pagoCalculado)}</b> (mitad de la utilidad, {fmt.money(d.sumaUtilidad)}, de {fmt.money(d.sumaFacts)} facturados{d.pagoVentasPropias>0?` · + ${fmt.money(d.pagoVentasPropias)} de ventas propias`:""})
                     </div>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
                       <span style={{fontSize:11,color:C.inkMuted}}>Ya se le pagó: {fmt.money(d.pagado)}</span>
