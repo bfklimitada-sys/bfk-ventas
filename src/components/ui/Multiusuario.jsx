@@ -171,18 +171,21 @@ export function calcularAlertas(ocs) {
       ...(oc.eventos_compra||[]), ...(oc.eventos_entrega||[]),
       ...(oc.eventos_factura||[]), ...(oc.eventos_pago_cliente||[]),
     ].map(e => e.fecha || e.creadoEn).filter(Boolean).sort();
-    const etapas = [
-      (oc.eventos_compra||[]).length > 0, entregada,
-      oc.estado_factura_propia === "emitida",
-      oc.estado_pago_cliente === "pagado",
-      oc.estado_pago_financiamiento === "pagado",
-    ].filter(Boolean).length;
+    const etapasNombres = {
+      compra:  (oc.eventos_compra||[]).length > 0,
+      entrega: entregada,
+      factura: oc.estado_factura_propia === "emitida",
+      cobro:   oc.estado_pago_cliente === "pagado",
+      financ:  oc.estado_pago_financiamiento === "pagado",
+    };
+    const etapas = Object.values(etapasNombres).filter(Boolean).length;
     if (etapas > 0 && etapas < 5 && fechas.length) {
       const quieta = Math.floor((new Date() - new Date(fechas[fechas.length-1])) / 86400000);
       if (quieta >= 14) {
+        const faltan = Object.entries(etapasNombres).filter(([,ok]) => !ok).map(([k]) => k);
         alertas.push({ ocId:oc.id, nivel:"bajo", icono:"⏸", oc:oc.numero_oc, cliente:oc.cliente,
           titulo:`Sin avance hace ${quieta} días`,
-          detalle:`Va en ${etapas} de 5 etapas`,
+          detalle:`Va en ${etapas} de 5 etapas · falta: ${faltan.join(", ")}`,
           monto:oc.monto_total, tab:"compras", filtro:null, orden:4 });
       }
     }
