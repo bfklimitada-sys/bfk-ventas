@@ -97,6 +97,9 @@ export function FormEmitirFactura({ ocs, onSave, ocPreseleccionada }) {
 export function FormPagoCliente({ ocs, onSave, ocPreseleccionada }) {
   const [ocId,setOcId]=useState(ocPreseleccionada||null); const [fecha,setFecha]=useState(new Date().toISOString().slice(0,10));
   const [monto,setMonto]=useState(""); const [err,setErr]=useState(""); const [saving,setSaving]=useState(false);
+  const [medioPago,setMedioPago]=useState("transferencia");
+  const [cobradoEnBanco,setCobradoEnBanco]=useState(true);
+  const [institucion,setInstitucion]=useState("");
   const selected=ocs.find(o=>o.id===ocId);
   const saldo=(selected?.monto_facturado||0)-(selected?.monto_cobrado||0);
   useEffect(()=>{ if(selected&&!monto) setMonto(String(saldo||"")); },[selected]);
@@ -106,7 +109,7 @@ export function FormPagoCliente({ ocs, onSave, ocPreseleccionada }) {
     if(!ocId){setErr("Selecciona la OC");return;}
     if(sinFactura){setErr("Esta OC no tiene factura emitida. Registra primero la factura.");return;}
     if(!monto||Number(monto)<=0){setErr("Indica el monto");return;}
-    setErr(""); setSaving(true); try{await onSave({ocId,fecha,monto:Number(monto)});}catch(e){setErr(e.message);}finally{setSaving(false);};
+    setErr(""); setSaving(true); try{await onSave({ocId,fecha,monto:Number(monto),medioPago,cobradoEnBanco,institucion:institucion.trim()||null});}catch(e){setErr(e.message);}finally{setSaving(false);};
   };
   return (
     <div>
@@ -119,6 +122,35 @@ export function FormPagoCliente({ ocs, onSave, ocPreseleccionada }) {
       {selected&&!sinFactura&&<div style={{background:C.paper,borderRadius:8,padding:"8px 12px",fontSize:12,color:C.inkMuted,marginBottom:12}}>Facturado: <b style={{color:C.ink}}>{fmt.money(selected.monto_facturado)}</b> · Cobrado: <b style={{color:C.ok}}>{fmt.money(selected.monto_cobrado)}</b> · Saldo: <b style={{color:C.danger}}>{fmt.money(saldo)}</b></div>}
       <Field label="Fecha de pago" required><input style={iStyle} type="date" value={fecha} onChange={e=>setFecha(e.target.value)} /></Field>
       <Field label="Monto pagado ($)" required><input style={iMono} type="number" value={monto} onChange={e=>setMonto(e.target.value)} /></Field>
+      <Field label="Medio de pago" hint="Algunas entidades transfieren directo, otras generan vale vista o cheque que hay que ir a cobrar">
+        <select style={selStyle} value={medioPago} onChange={e=>{
+            const val=e.target.value; setMedioPago(val);
+            setCobradoEnBanco(val==="transferencia");
+          }}>
+          <option value="transferencia">Transferencia</option>
+          <option value="vale_vista">Vale Vista</option>
+          <option value="cheque">Cheque</option>
+        </select>
+      </Field>
+      {medioPago!=="transferencia"&&(
+        <Field label="Institución (banco)" hint="Dónde hay que ir a cobrarlo">
+          <input style={iStyle} value={institucion} onChange={e=>setInstitucion(e.target.value)}
+            placeholder="ej: BancoEstado, Banco de Chile…" />
+        </Field>
+      )}
+      {medioPago!=="transferencia"&&(
+        <label style={{display:"flex",alignItems:"flex-start",gap:9,marginBottom:14,cursor:"pointer",
+          background:cobradoEnBanco?C.okLight:C.warnLight,borderRadius:10,padding:"10px 12px"}}>
+          <input type="checkbox" checked={cobradoEnBanco} onChange={e=>setCobradoEnBanco(e.target.checked)}
+            style={{marginTop:2,width:16,height:16,flexShrink:0}} />
+          <span>
+            <span style={{display:"block",fontSize:12.5,fontWeight:700,color:C.ink}}>Ya lo cobré / depositó en el banco</span>
+            <span style={{display:"block",fontSize:11,color:C.inkFaint,marginTop:1}}>
+              {cobradoEnBanco?"Se cuenta como plata real en la cuenta.":"El cliente pagó, pero esta plata todavía no está en el banco — aparecerá en \"Vale vistas por cobrar\" hasta que la marques cobrada."}
+            </span>
+          </span>
+        </label>
+      )}
       {err&&<div style={{background:C.dangerLight,color:C.danger,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}
       <button onClick={handleSave} disabled={saving} style={btnP(saving?C.inkFaint:C.ok)}>{saving?"Guardando…":"✓ Registrar pago"}</button>
     </div>
