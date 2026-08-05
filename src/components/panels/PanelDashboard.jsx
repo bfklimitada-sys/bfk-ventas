@@ -294,6 +294,31 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
       monto:sinEntregar.reduce((s,o)=>s+(o.monto_total||0),0),
       color:C.transit,tab:"compras",filtro:"entrega"});
 
+    // Vale vistas o cheques que el cliente ya entregó, pero que todavía
+    // no se han cobrado en el banco — esa plata no cuenta como real
+    // hasta que alguien vaya físicamente a cobrarlos.
+    const valeVistas=[];
+    ocs.forEach(o=>{
+      (o.eventos_pago_cliente||[]).forEach(ev=>{
+        if(ev.medio_pago&&ev.medio_pago!=="transferencia"&&!ev.cobrado_en_banco){
+          valeVistas.push({oc:o,ev});
+        }
+      });
+    });
+    if(valeVistas.length){
+      const porInstitucion={};
+      valeVistas.forEach(({ev})=>{
+        const inst=ev.institucion||"sin especificar";
+        porInstitucion[inst]=(porInstitucion[inst]||0)+1;
+      });
+      const detalleInst=Object.entries(porInstitucion).map(([inst,n])=>`${n} en ${inst}`).join(" · ");
+      items.push({
+        label:`${valeVistas.length} vale vista${valeVistas.length>1?"s":""}/cheque${valeVistas.length>1?"s":""} por cobrar`,
+        detalle:detalleInst,
+        monto:valeVistas.reduce((s,{ev})=>s+(ev.monto||0),0),
+        color:C.purple,tab:"compras",filtro:null});
+    }
+
     // OCs que llegaron desde Mercado Público (aceptadas y cargadas) pero
     // a las que todavía nadie les registró la compra — quedan "colgadas"
     // si no se les presta atención, porque no aparecen en ningún otro aviso.
