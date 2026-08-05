@@ -22,7 +22,7 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
   const datosVendedor=(v)=>{
     const mesSet=new Set();
     ocs.filter(o=>o.vendedor_id===v.id&&o.estado_factura_propia==="emitida").forEach(o=>{
-      (o.eventos_factura||[]).forEach(ef=>{ const {anio,mes}=anioMesDe(ef.fecha); mesSet.add(`${anio}-${mes}`); });
+      (o.eventos_factura||[]).forEach(ef=>{ const {anio,mes}=anioMesDe(ef.fecha); mesSet.add(`${anio}-${String(mes).padStart(2,"0")}`); });
     });
     return Array.from(mesSet).sort((a,b)=>b.localeCompare(a)).map(ym=>{
       const [y,m]=[Number(ym.split("-")[0]),Number(ym.split("-")[1])];
