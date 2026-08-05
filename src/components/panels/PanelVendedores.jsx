@@ -112,6 +112,11 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
                       <span style={{fontSize:11,color:C.inkMuted}}>Ya se le pagó: {fmt.money(d.pagado)}</span>
                       {d.deuda>0&&<span style={{fontSize:11.5,fontWeight:700,color:C.danger}}>Falta pagarle: {fmt.money(d.deuda)}</span>}
                     </div>
+                    {d.pagado>d.pagoCalculado+1000&&(
+                      <div style={{fontSize:10.5,color:C.warn,marginTop:3,lineHeight:1.4}}>
+                        ⚠ Se pagó {fmt.money(d.pagado-d.pagoCalculado)} más de lo que calcula la fórmula automática — probablemente venta propia o extra no marcado en el sistema. Revisa la nota del pago para el detalle.
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
