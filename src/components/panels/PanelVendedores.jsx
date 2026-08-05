@@ -8,10 +8,20 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
   const hoy=new Date(); const mesActual=hoy.getMonth()+1; const anioActual=hoy.getFullYear();
   const MESES=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 
+  // Leer año/mes directo del texto "YYYY-MM-DD" en vez de construir un
+  // Date y usar .getFullYear()/.getMonth() — esos métodos leen en la
+  // zona horaria local del navegador, y una fecha guardada como
+  // medianoche UTC se corre un día para atrás en Chile (UTC-4), haciendo
+  // que facturas del día 1 del mes queden contadas en el mes anterior.
+  const anioMesDe=(fechaStr)=>{
+    const [y,m]=String(fechaStr).slice(0,10).split("-");
+    return {anio:Number(y),mes:Number(m)};
+  };
+
   const datosVendedor=(v)=>{
     const mesSet=new Set();
     ocs.filter(o=>o.vendedor_id===v.id&&o.estado_factura_propia==="emitida").forEach(o=>{
-      (o.eventos_factura||[]).forEach(ef=>{ const f=new Date(ef.fecha); mesSet.add(`${f.getFullYear()}-${f.getMonth()+1}`); });
+      (o.eventos_factura||[]).forEach(ef=>{ const {anio,mes}=anioMesDe(ef.fecha); mesSet.add(`${anio}-${mes}`); });
     });
     return Array.from(mesSet).sort((a,b)=>b.localeCompare(a)).map(ym=>{
       const [y,m]=[Number(ym.split("-")[0]),Number(ym.split("-")[1])];
@@ -20,7 +30,7 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
       // cálculo varias veces por encima de lo real.
       let sumaFacts=0, sumaUtilidad=0;
       ocs.filter(o=>o.vendedor_id===v.id&&o.estado_factura_propia==="emitida").forEach(o=>{
-        const factsMes=(o.eventos_factura||[]).filter(ef=>{ const f=new Date(ef.fecha); return f.getFullYear()===y&&f.getMonth()+1===m; });
+        const factsMes=(o.eventos_factura||[]).filter(ef=>{ const {anio,mes}=anioMesDe(ef.fecha); return anio===y&&mes===m; });
         if(!factsMes.length) return;
         sumaFacts+=factsMes.reduce((ss,ef)=>ss+(ef.monto||0),0);
         sumaUtilidad+=(Number(o.monto_total)||0)-(Number(o.costo_total)||0);
