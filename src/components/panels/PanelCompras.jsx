@@ -27,7 +27,7 @@ export const FILTROS=[
   {key:"financ",label:"Financ.",okField:"estado_pago_financiamiento",okValue:"pagado",okLabel:"Pagado",pendLabel:"Con deuda"},
 ];
 
-export function FormEditarDatosOC({ oc, onSave, entidadesCatalogo, perfil, ocs }) {
+export function FormEditarDatosOC({ oc, onSave, entidadesCatalogo, perfil, ocs, vendedores }) {
   const [numeroOc,setNumeroOc]=useState(oc.numero_oc||"");
   const [resincronizar,setResincronizar]=useState(false);
   const [cliente,setCliente]=useState(oc.cliente||"");
@@ -36,6 +36,7 @@ export function FormEditarDatosOC({ oc, onSave, entidadesCatalogo, perfil, ocs }
   const [contacto,setContacto]=useState(oc.contacto||"");
   const [rutCliente,setRutCliente]=useState(oc.rut_cliente||"");
   const [correo,setCorreo]=useState(oc.correo_cliente||"");
+  const [vendedorId,setVendedorId]=useState(oc.vendedor_id||"");
   const fechaActual=(oc.eventos_compra||[])[0]?.fecha||"";
   const [fechaOC,setFechaOC]=useState(fechaActual?String(fechaActual).slice(0,10):"");
   const [autocompletado,setAutocompletado]=useState(false);
@@ -60,11 +61,20 @@ export function FormEditarDatosOC({ oc, onSave, entidadesCatalogo, perfil, ocs }
     if(codigoRepetido){ setErr("Ya existe otra OC con ese código"); return; }
     setErr(""); setSaving(true);
     try { await onSave({ numeroOc:numeroOc.trim(), resincronizar:resincronizar&&codigoCambio,
-      cliente:cliente.toUpperCase(), entidad:entidad.toUpperCase(), comuna:comuna.toUpperCase(), contacto, rutCliente, correo, fechaOC:fechaOC||null }); }
+      cliente:cliente.toUpperCase(), entidad:entidad.toUpperCase(), comuna:comuna.toUpperCase(), contacto, rutCliente, correo, fechaOC:fechaOC||null, vendedorId:vendedorId||null }); }
     catch(e){ setErr(e.message); } finally{ setSaving(false); }
   };
   return (
     <div>
+      <Field label="Vendedor" hint="Quién trajo esta venta">
+        <select style={selStyle} value={vendedorId} onChange={e=>setVendedorId(e.target.value)}>
+          <option value="">Sin vendedor asignado</option>
+          {(vendedores||[]).map(v=>(
+            <option key={v.id} value={v.id}>{v.nombre}</option>
+          ))}
+        </select>
+      </Field>
+
       {perfil?.rol==="admin"&&(
         <Field label="Código de la OC" hint="Corrígelo si se ingresó mal. Debe ser único.">
           <input style={iMono} value={numeroOc} onChange={e=>{setNumeroOc(e.target.value);setErr("");}} />
@@ -788,7 +798,7 @@ export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded
       )}
       {editandoDatos&&(
         <Modal title="Editar datos de la OC" onClose={()=>setEditandoDatos(false)}>
-          <FormEditarDatosOC oc={oc} entidadesCatalogo={entidadesCatalogo} perfil={perfil} ocs={todasLasOcs} onSave={async(data)=>{ await onGuardarDatosOC(oc.id,data); setEditandoDatos(false); }} />
+          <FormEditarDatosOC oc={oc} entidadesCatalogo={entidadesCatalogo} perfil={perfil} ocs={todasLasOcs} vendedores={vendedores} onSave={async(data)=>{ await onGuardarDatosOC(oc.id,data); setEditandoDatos(false); }} />
         </Modal>
       )}
       {editandoEvento&&(
