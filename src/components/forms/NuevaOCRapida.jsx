@@ -37,6 +37,7 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
   const [direccion, setDireccion] = useState("");
   const [correo, setCorreo] = useState("");
   const [vendedorId, setVendedorId] = useState(perfil?.vendedor_id || "");
+  const [ventaPropia, setVentaPropia] = useState(false);
   const [guardando, setGuardando] = useState(false);
 
   const buscar = async (codigoForzado) => {
@@ -89,6 +90,7 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
         direccion_entrega: direccion.trim(),
         correo_cliente: correo.trim(),
         vendedorId: vendedorId || null,
+        ventaPropia,
       });
     } catch (e) {
       setErr(e.message); setGuardando(false);
@@ -121,6 +123,18 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
             ))}
           </select>
         </Field>
+
+        {vendedorId&&(
+          <label style={{display:"flex",alignItems:"flex-start",gap:9,marginBottom:14,cursor:"pointer",
+            background:C.paper,borderRadius:10,padding:"10px 12px"}}>
+            <input type="checkbox" checked={ventaPropia} onChange={e=>setVentaPropia(e.target.checked)}
+              style={{marginTop:2,width:16,height:16,flexShrink:0}} />
+            <span>
+              <span style={{display:"block",fontSize:12.5,fontWeight:700,color:C.ink}}>Es venta propia del vendedor</span>
+              <span style={{display:"block",fontSize:11,color:C.inkFaint,marginTop:1}}>Se lleva el 100% de la utilidad (menos el IVA de su propia factura), en vez del 50% general</span>
+            </span>
+          </label>
+        )}
 
         <Field label="Código de la OC" required hint="Tal como aparece en Mercado Público">
           <input style={iMono} value={codigo} autoFocus
