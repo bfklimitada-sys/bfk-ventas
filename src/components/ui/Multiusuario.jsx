@@ -186,7 +186,7 @@ export function calcularAlertas(ocs) {
         alertas.push({ ocId:oc.id, nivel:"bajo", icono:"⏸", oc:oc.numero_oc, cliente:oc.cliente,
           titulo:`Sin avance hace ${quieta} días`,
           detalle:`Va en ${etapas} de 5 etapas · falta: ${faltan.join(", ")}`,
-          monto:oc.monto_total, tab:"compras", filtro:null, orden:4 });
+          monto:oc.monto_total, tab:"compras", filtro:null, orden:4, etapas });
       }
     }
 
@@ -215,7 +215,7 @@ export function calcularAlertas(ocs) {
     !(a.nivel === "bajo" && a.titulo.startsWith("Sin avance") && ocsConAvisoImportante.has(a.ocId))
   );
 
-  return finales.sort((a,b) => a.orden - b.orden || (b.monto||0) - (a.monto||0));
+  return finales.sort((a,b) => a.orden - b.orden || (a.etapas??99) - (b.etapas??99) || (b.monto||0) - (a.monto||0));
 }
 
 export function PanelNotificaciones({ notificaciones, ocs, onMarcarLeidas, onNavigate }) {
