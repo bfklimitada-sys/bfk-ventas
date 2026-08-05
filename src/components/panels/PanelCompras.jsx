@@ -130,6 +130,9 @@ export function FormEditarEvento({ item, onSave, onCancel }) {
   const [personaRecibe,setPersonaRecibe]=useState(e.persona_recibe||"");
   const [numeroFactura,setNumeroFactura]=useState(e.numero_factura||"");
   const [monto,setMonto]=useState(e.monto??"");
+  const [medioPago,setMedioPago]=useState(e.medio_pago||"transferencia");
+  const [institucion,setInstitucion]=useState(e.institucion||"");
+  const [cobradoEnBanco,setCobradoEnBanco]=useState(e.cobrado_en_banco!==false);
   const [err,setErr]=useState(""); const [saving,setSaving]=useState(false);
 
   const handleSave=async()=>{
@@ -139,7 +142,8 @@ export function FormEditarEvento({ item, onSave, onCancel }) {
       if(tabla==="eventos_compra") cambios={...cambios, monto_venta:Number(montoVenta), costo_compra:Number(costoCompra)};
       if(tabla==="eventos_entrega") cambios={...cambios, persona_recibe:personaRecibe};
       if(tabla==="eventos_factura") cambios={...cambios, numero_factura:numeroFactura, monto:Number(monto)};
-      if(tabla==="eventos_pago_cliente"||tabla==="eventos_pago_financiamiento") cambios={...cambios, monto:Number(monto)};
+      if(tabla==="eventos_pago_financiamiento") cambios={...cambios, monto:Number(monto)};
+      if(tabla==="eventos_pago_cliente") cambios={...cambios, monto:Number(monto), medio_pago:medioPago, institucion:medioPago!=="transferencia"?(institucion.trim()||null):null, cobrado_en_banco:medioPago==="transferencia"?true:cobradoEnBanco};
       await onSave(tabla, e, cambios);
     } catch(err){ setErr(err.message); } finally{ setSaving(false); }
   };
@@ -161,7 +165,36 @@ export function FormEditarEvento({ item, onSave, onCancel }) {
         <Field label="N° factura" required><input style={iMono} value={numeroFactura} onChange={ev=>setNumeroFactura(ev.target.value)} /></Field>
         <Field label="Monto ($)" required><input style={iMono} type="number" value={monto} onChange={ev=>setMonto(ev.target.value)} /></Field>
       </>)}
-      {(tabla==="eventos_pago_cliente"||tabla==="eventos_pago_financiamiento")&&(
+      {tabla==="eventos_pago_cliente"&&(<>
+        <Field label="Monto ($)" required><input style={iMono} type="number" value={monto} onChange={ev=>setMonto(ev.target.value)} /></Field>
+        <Field label="Medio de pago" hint="Algunas entidades transfieren directo, otras generan vale vista o cheque">
+          <select style={selStyle} value={medioPago} onChange={ev=>{
+              const val=ev.target.value; setMedioPago(val);
+              if(val==="transferencia") setCobradoEnBanco(true);
+            }}>
+            <option value="transferencia">Transferencia</option>
+            <option value="vale_vista">Vale Vista</option>
+            <option value="cheque">Cheque</option>
+          </select>
+        </Field>
+        {medioPago!=="transferencia"&&(<>
+          <Field label="Institución (banco)" hint="Dónde hay que ir a cobrarlo">
+            <input style={iStyle} value={institucion} onChange={ev=>setInstitucion(ev.target.value)} placeholder="ej: BancoEstado, Banco de Chile…" />
+          </Field>
+          <label style={{display:"flex",alignItems:"flex-start",gap:9,marginBottom:14,cursor:"pointer",
+            background:cobradoEnBanco?C.okLight:C.warnLight,borderRadius:10,padding:"10px 12px"}}>
+            <input type="checkbox" checked={cobradoEnBanco} onChange={ev=>setCobradoEnBanco(ev.target.checked)}
+              style={{marginTop:2,width:16,height:16,flexShrink:0}} />
+            <span>
+              <span style={{display:"block",fontSize:12.5,fontWeight:700,color:C.ink}}>Ya lo cobré / depositó en el banco</span>
+              <span style={{display:"block",fontSize:11,color:C.inkFaint,marginTop:1}}>
+                {cobradoEnBanco?"Se cuenta como plata real en la cuenta.":"Aparecerá en \"Vale vistas por cobrar\" hasta que la marques cobrada."}
+              </span>
+            </span>
+          </label>
+        </>)}
+      </>)}
+      {tabla==="eventos_pago_financiamiento"&&(
         <Field label="Monto ($)" required><input style={iMono} type="number" value={monto} onChange={ev=>setMonto(ev.target.value)} /></Field>
       )}
       {err&&<div style={{background:C.dangerLight,color:C.danger,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}
