@@ -1198,7 +1198,7 @@ export default function App() {
     showToast(`${filas.length} entidades importadas al catálogo`);
     await cargarTodo();
   };
-  const handleGuardarDatosOC=async(ocId,{numeroOc,resincronizar,cliente,entidad,comuna,contacto,rutCliente,correo,fechaOC})=>{
+  const handleGuardarDatosOC=async(ocId,{numeroOc,resincronizar,cliente,entidad,comuna,contacto,rutCliente,correo,fechaOC,vendedorId})=>{
     const t=session.access_token;
     const oc=ocs.find(o=>o.id===ocId);
 
@@ -1208,8 +1208,14 @@ export default function App() {
         accion:"Código de OC corregido",campo:"numero_oc",
         valorAnterior:oc?.numero_oc,valorNuevo:numeroOc});
     }
+    // Igual con el vendedor: importa quedar con el rastro de quién lo cambió
+    if(vendedorId!==undefined&&vendedorId!==(oc?.vendedor_id||null)){
+      await registrarCambio(t,{ocId,ocNumero:oc?.numero_oc,usuarioId:perfil?.id,usuarioNombre:perfil?.nombre,
+        accion:"Vendedor corregido",campo:"vendedor_id",
+        valorAnterior:oc?.vendedor_id||"(sin asignar)",valorNuevo:vendedorId||"(sin asignar)"});
+    }
 
-    await upd("ordenes_compra_v2",t,ocId,{...(numeroOc?{numero_oc:numeroOc}:{}),cliente,entidad,comuna,contacto,rut_cliente:rutCliente,correo_cliente:correo,ultimo_editor:session.user.id,ultima_edicion:new Date().toISOString()});
+    await upd("ordenes_compra_v2",t,ocId,{...(numeroOc?{numero_oc:numeroOc}:{}),cliente,entidad,comuna,contacto,rut_cliente:rutCliente,correo_cliente:correo,...(vendedorId!==undefined?{vendedor_id:vendedorId}:{}),ultimo_editor:session.user.id,ultima_edicion:new Date().toISOString()});
 
     // Volver a traer los datos con el código corregido
     if(resincronizar&&numeroOc){
