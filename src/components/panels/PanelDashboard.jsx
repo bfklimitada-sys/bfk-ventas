@@ -169,7 +169,11 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
           sumaUtilidad+=utilOC;
         }
       });
-      const ivaMes=ivaMensual.find(i=>i.mes===mesActual&&i.anio===anioActual);
+      // Abril 2025 fue el único mes sin descuento de IVA (la regla
+      // empezó recién en mayo 2025) — se mantiene por consistencia,
+      // aunque en la práctica esto ya no aplica al mes actual.
+      const sinIvaMes=(mesActual===4&&anioActual===2025);
+      const ivaMes=sinIvaMes?null:ivaMensual.find(i=>i.mes===mesActual&&i.anio===anioActual);
       const impPagado=ivaMes?(ivaMes.iva_ventas-ivaMes.iva_compras):0;
       const calculado=Math.round(sumaUtilidad/2 - impPagado/2)+pagoVentasPropias;
       const pagado=pagosVendedor.filter(p=>p.vendedor_id===v.id&&p.mes===mesActual&&p.anio===anioActual).reduce((s,p)=>s+(p.monto_pagado||0),0);
