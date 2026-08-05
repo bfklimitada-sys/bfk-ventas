@@ -204,7 +204,15 @@ export function calcularAlertas(ocs) {
     }
   }
 
-  return alertas.sort((a,b) => a.orden - b.orden || (b.monto||0) - (a.monto||0));
+  // Si una OC ya tiene un aviso urgente o de atención (factura vencida,
+  // entrega atrasada, etc.), el informativo "sin avance" es redundante
+  // — ya sabemos que necesita atención por otra razón más específica.
+  const ocsConAvisoImportante = new Set(alertas.filter(a => a.nivel !== "bajo").map(a => a.ocId));
+  const finales = alertas.filter(a =>
+    !(a.nivel === "bajo" && a.titulo.startsWith("Sin avance") && ocsConAvisoImportante.has(a.ocId))
+  );
+
+  return finales.sort((a,b) => a.orden - b.orden || (b.monto||0) - (a.monto||0));
 }
 
 export function PanelNotificaciones({ notificaciones, ocs, onMarcarLeidas, onNavigate }) {
