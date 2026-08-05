@@ -156,12 +156,22 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
         return Number(am)===mesActual&&Number(ay)===anioActual;
       });
       // La comisión es sobre la utilidad del período, no sobre el monto
-      // bruto facturado — usar monto_facturado acá inflaba varias veces
-      // lo que realmente corresponde pagar.
-      const sumaUtilidad=factsMes.reduce((s,o)=>s+((Number(o.monto_total)||0)-(Number(o.costo_total)||0)),0);
+      // bruto facturado. Las OC "venta propia" se pagan aparte: 100% de
+      // su utilidad menos el IVA de su propia factura, no el 50% general.
+      let sumaUtilidad=0, pagoVentasPropias=0;
+      factsMes.forEach(o=>{
+        const utilOC=(Number(o.monto_total)||0)-(Number(o.costo_total)||0);
+        if(o.es_venta_propia){
+          const montoFact=(o.eventos_factura||[])[0]?.monto||0;
+          const ivaFactura=montoFact-(montoFact/1.19);
+          pagoVentasPropias+=Math.max(0,Math.round(utilOC-ivaFactura));
+        }else{
+          sumaUtilidad+=utilOC;
+        }
+      });
       const ivaMes=ivaMensual.find(i=>i.mes===mesActual&&i.anio===anioActual);
       const impPagado=ivaMes?(ivaMes.iva_ventas-ivaMes.iva_compras):0;
-      const calculado=Math.round(sumaUtilidad/2 - impPagado/2);
+      const calculado=Math.round(sumaUtilidad/2 - impPagado/2)+pagoVentasPropias;
       const pagado=pagosVendedor.filter(p=>p.vendedor_id===v.id&&p.mes===mesActual&&p.anio===anioActual).reduce((s,p)=>s+(p.monto_pagado||0),0);
       return sv+Math.max(0,calculado-pagado);
     },0)||0;
