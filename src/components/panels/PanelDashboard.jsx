@@ -106,7 +106,10 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
     const gastosVendedores=pagosVendedor.reduce((s,p)=>s+(p.monto_pagado||0),0);
 
         // La app calcula su propio saldo con lo registrado.
-    const saldoCtaCte = cobrado + totalAportes - creditoPagadoTotal - gastosTotal - costoBFK;
+    // Antes no restaba gastosVendedores (pagos a vendedores como Matías) —
+    // esa plata sí sale de la cuenta real, y no descontarla infla el
+    // saldo calculado bien por encima de lo que hay en el banco.
+    const saldoCtaCte = cobrado + totalAportes - creditoPagadoTotal - gastosTotal - costoBFK - gastosVendedores;
 
     // Y se compara con el saldo real del banco: la diferencia es
     // lo que se movió en la cuenta y no está registrado acá.
