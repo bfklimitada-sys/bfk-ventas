@@ -37,6 +37,7 @@ export function FormEditarDatosOC({ oc, onSave, entidadesCatalogo, perfil, ocs, 
   const [rutCliente,setRutCliente]=useState(oc.rut_cliente||"");
   const [correo,setCorreo]=useState(oc.correo_cliente||"");
   const [vendedorId,setVendedorId]=useState(oc.vendedor_id||"");
+  const [ventaPropia,setVentaPropia]=useState(!!oc.es_venta_propia);
   const fechaActual=(oc.eventos_compra||[])[0]?.fecha||"";
   const [fechaOC,setFechaOC]=useState(fechaActual?String(fechaActual).slice(0,10):"");
   const [autocompletado,setAutocompletado]=useState(false);
@@ -61,7 +62,7 @@ export function FormEditarDatosOC({ oc, onSave, entidadesCatalogo, perfil, ocs, 
     if(codigoRepetido){ setErr("Ya existe otra OC con ese código"); return; }
     setErr(""); setSaving(true);
     try { await onSave({ numeroOc:numeroOc.trim(), resincronizar:resincronizar&&codigoCambio,
-      cliente:cliente.toUpperCase(), entidad:entidad.toUpperCase(), comuna:comuna.toUpperCase(), contacto, rutCliente, correo, fechaOC:fechaOC||null, vendedorId:vendedorId||null }); }
+      cliente:cliente.toUpperCase(), entidad:entidad.toUpperCase(), comuna:comuna.toUpperCase(), contacto, rutCliente, correo, fechaOC:fechaOC||null, vendedorId:vendedorId||null, ventaPropia }); }
     catch(e){ setErr(e.message); } finally{ setSaving(false); }
   };
   return (
@@ -74,6 +75,18 @@ export function FormEditarDatosOC({ oc, onSave, entidadesCatalogo, perfil, ocs, 
           ))}
         </select>
       </Field>
+
+      {vendedorId&&(
+        <label style={{display:"flex",alignItems:"flex-start",gap:9,marginBottom:14,cursor:"pointer",
+          background:C.paper,borderRadius:10,padding:"10px 12px"}}>
+          <input type="checkbox" checked={ventaPropia} onChange={e=>setVentaPropia(e.target.checked)}
+            style={{marginTop:2,width:16,height:16,flexShrink:0}} />
+          <span>
+            <span style={{display:"block",fontSize:12.5,fontWeight:700,color:C.ink}}>Es venta propia del vendedor</span>
+            <span style={{display:"block",fontSize:11,color:C.inkFaint,marginTop:1}}>Se lleva el 100% de la utilidad de esta OC (menos el IVA de su propia factura), en vez del 50% general</span>
+          </span>
+        </label>
+      )}
 
       {perfil?.rol==="admin"&&(
         <Field label="Código de la OC" hint="Corrígelo si se ingresó mal. Debe ser único.">
