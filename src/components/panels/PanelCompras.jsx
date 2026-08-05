@@ -667,6 +667,9 @@ export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded
     const cobrada=oc.estado_pago_cliente==="pagado";
     const finPagado=oc.estado_pago_financiamiento==="pagado";
     const plazo=Number(oc.dias_pago)>0?Number(oc.dias_pago):30;
+    // El cliente entregó un vale vista o cheque, pero todavía no se
+    // fue a cobrar al banco — esa plata no es real todavía.
+    const valeVistaPendiente=(oc.eventos_pago_cliente||[]).some(ev=>ev.medio_pago&&ev.medio_pago!=="transferencia"&&!ev.cobrado_en_banco);
 
     // El ciclo saltó una etapa: el registro quedó incompleto
     if(facturada&&!entregada)
@@ -674,6 +677,8 @@ export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded
     if(cobrada&&!facturada)
       return {color:C.warn, bg:C.warnLight, icono:"⚠", texto:"Cobrada sin registrar la factura"};
 
+    if(cobrada&&valeVistaPendiente)
+      return {color:C.warn, bg:C.warnLight, icono:"📄", texto:"Cobrada · vale vista/cheque sin cobrar en el banco"};
     if(cobrada&&finPagado)  return {color:C.ok,      bg:C.okLight,      icono:"✓", texto:"Cerrada"};
     if(cobrada&&!finPagado) return {color:C.purple,  bg:C.purpleLight,  icono:"🏦", texto:"Cobrada · falta pagar financiamiento"};
     if(facturada&&dias!==null){
