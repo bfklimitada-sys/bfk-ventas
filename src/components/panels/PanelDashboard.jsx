@@ -266,6 +266,32 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
     const plazo=(o)=>Number(o.dias_pago)>0?Number(o.dias_pago):30;
     const items=[];
 
+    // Vale vistas o cheques que el cliente ya entregó, pero que todavía
+    // no se han cobrado en el banco — esa plata no cuenta como real
+    // hasta que alguien vaya físicamente a cobrarlos. Va primero: es
+    // plata ya en la mano, solo falta el trámite de cobrarla.
+    const valeVistas=[];
+    ocs.forEach(o=>{
+      (o.eventos_pago_cliente||[]).forEach(ev=>{
+        if(ev.medio_pago&&ev.medio_pago!=="transferencia"&&!ev.cobrado_en_banco){
+          valeVistas.push({oc:o,ev});
+        }
+      });
+    });
+    if(valeVistas.length){
+      const porInstitucion={};
+      valeVistas.forEach(({ev})=>{
+        const inst=ev.institucion||"sin especificar";
+        porInstitucion[inst]=(porInstitucion[inst]||0)+1;
+      });
+      const detalleInst=Object.entries(porInstitucion).map(([inst,n])=>`${n} en ${inst}`).join(" · ");
+      items.push({
+        label:`${valeVistas.length} vale vista${valeVistas.length>1?"s":""}/cheque${valeVistas.length>1?"s":""} por cobrar`,
+        detalle:detalleInst,
+        monto:valeVistas.reduce((s,{ev})=>s+(ev.monto||0),0),
+        color:C.danger,tab:"compras",filtro:null});
+    }
+
     const vencidas=ocsPorCobrar.filter(o=>(o.diasDesde||0)>=plazo(o));
     if(vencidas.length) items.push({
       label:`${vencidas.length} factura${vencidas.length>1?"s":""} vencida${vencidas.length>1?"s":""}`,
@@ -293,31 +319,6 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
       detalle:"Comprado, pendiente de entregar",
       monto:sinEntregar.reduce((s,o)=>s+(o.monto_total||0),0),
       color:C.transit,tab:"compras",filtro:"entrega"});
-
-    // Vale vistas o cheques que el cliente ya entregó, pero que todavía
-    // no se han cobrado en el banco — esa plata no cuenta como real
-    // hasta que alguien vaya físicamente a cobrarlos.
-    const valeVistas=[];
-    ocs.forEach(o=>{
-      (o.eventos_pago_cliente||[]).forEach(ev=>{
-        if(ev.medio_pago&&ev.medio_pago!=="transferencia"&&!ev.cobrado_en_banco){
-          valeVistas.push({oc:o,ev});
-        }
-      });
-    });
-    if(valeVistas.length){
-      const porInstitucion={};
-      valeVistas.forEach(({ev})=>{
-        const inst=ev.institucion||"sin especificar";
-        porInstitucion[inst]=(porInstitucion[inst]||0)+1;
-      });
-      const detalleInst=Object.entries(porInstitucion).map(([inst,n])=>`${n} en ${inst}`).join(" · ");
-      items.push({
-        label:`${valeVistas.length} vale vista${valeVistas.length>1?"s":""}/cheque${valeVistas.length>1?"s":""} por cobrar`,
-        detalle:detalleInst,
-        monto:valeVistas.reduce((s,{ev})=>s+(ev.monto||0),0),
-        color:C.purple,tab:"compras",filtro:null});
-    }
 
     // OCs que llegaron desde Mercado Público (aceptadas y cargadas) pero
     // a las que todavía nadie les registró la compra — quedan "colgadas"
