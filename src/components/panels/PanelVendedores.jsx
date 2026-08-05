@@ -15,15 +15,21 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
     });
     return Array.from(mesSet).sort((a,b)=>b.localeCompare(a)).map(ym=>{
       const [y,m]=[Number(ym.split("-")[0]),Number(ym.split("-")[1])];
-      const sumaFacts=ocs.filter(o=>o.vendedor_id===v.id&&o.estado_factura_propia==="emitida").reduce((s,o)=>{
+      // La comisión es sobre la UTILIDAD del período (venta − costo), no
+      // sobre el monto bruto facturado — usar sumaFacts acá inflaba el
+      // cálculo varias veces por encima de lo real.
+      let sumaFacts=0, sumaUtilidad=0;
+      ocs.filter(o=>o.vendedor_id===v.id&&o.estado_factura_propia==="emitida").forEach(o=>{
         const factsMes=(o.eventos_factura||[]).filter(ef=>{ const f=new Date(ef.fecha); return f.getFullYear()===y&&f.getMonth()+1===m; });
-        return s+factsMes.reduce((ss,ef)=>ss+(ef.monto||0),0);
-      },0);
-      const ivaMesV2=ivaMensual.find(i=>i.mes===m&&i.anio===y); const impPagadoV2=ivaMesV2?Math.max(0,(ivaMesV2.iva_ventas||0)-(ivaMesV2.iva_compras||0)):0; const pagoCalculado=Math.max(0,Math.round(sumaFacts/2 - impPagadoV2/2));
+        if(!factsMes.length) return;
+        sumaFacts+=factsMes.reduce((ss,ef)=>ss+(ef.monto||0),0);
+        sumaUtilidad+=(Number(o.monto_total)||0)-(Number(o.costo_total)||0);
+      });
+      const ivaMesV2=ivaMensual.find(i=>i.mes===m&&i.anio===y); const impPagadoV2=ivaMesV2?Math.max(0,(ivaMesV2.iva_ventas||0)-(ivaMesV2.iva_compras||0)):0; const pagoCalculado=Math.max(0,Math.round(sumaUtilidad/2 - impPagadoV2/2));
       const pagosDelMes=pagosVendedor.filter(p=>p.vendedor_id===v.id&&p.mes===m&&p.anio===y);
       const pagado=pagosDelMes.reduce((s,p)=>s+(p.monto_pagado||0),0);
       const estado=pagado>=pagoCalculado?"pagado":"pendiente";
-      return {mes:m,anio:y,label:fmt.monthYear(m,y),sumaFacts,pagoCalculado,pagado,estado,deuda:Math.max(0,pagoCalculado-pagado)};
+      return {mes:m,anio:y,label:fmt.monthYear(m,y),sumaFacts,sumaUtilidad,pagoCalculado,pagado,estado,deuda:Math.max(0,pagoCalculado-pagado)};
     });
   };
 
@@ -55,7 +61,7 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
               <div key={d.label} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
                 <div>
                   <div style={{fontSize:12.5,fontWeight:700,color:C.ink}}>{d.label}</div>
-                  <div style={{fontSize:11,color:C.inkFaint}}>Calculado {fmt.money(d.pagoCalculado)} · Facturas {fmt.money(d.sumaFacts)}</div>
+                  <div style={{fontSize:11,color:C.inkFaint}}>Calculado {fmt.money(d.pagoCalculado)} · Utilidad {fmt.money(d.sumaUtilidad)} · Facturas {fmt.money(d.sumaFacts)}</div>
                 </div>
                 <div style={{textAlign:"right"}}>
                   <div style={{fontSize:12,fontWeight:800,color:d.estado==="pagado"?C.ok:C.warn}}>{d.estado==="pagado"?"Pagado":"Pendiente"} {fmt.money(d.pagado)}</div>
