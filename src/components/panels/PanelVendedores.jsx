@@ -92,7 +92,8 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
 
             {estaAbierto&&meses>0&&(
               <div style={{padding:"0 14px 14px"}}>
-                <div style={{fontSize:11,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",marginBottom:6,paddingTop:6,borderTop:`1px solid ${C.border}`}}>Comisión mes a mes</div>
+                <div style={{fontSize:11,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",marginBottom:2,paddingTop:6,borderTop:`1px solid ${C.border}`}}>Comisión mes a mes</div>
+                <div style={{fontSize:10,color:C.inkFaint,marginBottom:6}}>Solo se listan los meses con al menos una venta facturada — el resto no tuvo actividad.</div>
                 {datos.map(d=>(
                   <div key={d.label} style={{padding:"9px 0",borderBottom:`1px solid ${C.border}`}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:3}}>
