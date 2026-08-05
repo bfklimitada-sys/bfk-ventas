@@ -36,6 +36,7 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
   const [links, setLinks] = useState([""]);
   const [direccion, setDireccion] = useState("");
   const [correo, setCorreo] = useState("");
+  const [vendedorId, setVendedorId] = useState(perfil?.vendedor_id || "");
   const [guardando, setGuardando] = useState(false);
 
   const buscar = async (codigoForzado) => {
@@ -87,6 +88,7 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
         links: links.map(l => l.trim()).filter(Boolean),
         direccion_entrega: direccion.trim(),
         correo_cliente: correo.trim(),
+        vendedorId: vendedorId || null,
       });
     } catch (e) {
       setErr(e.message); setGuardando(false);
@@ -224,6 +226,15 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
             placeholder="contacto@entidad.cl" />
         </Field>
       )}
+
+      <Field label="Vendedor" hint="Quién trajo esta venta — no necesariamente quien la está cargando">
+        <select style={selStyle} value={vendedorId} onChange={e => setVendedorId(e.target.value)}>
+          <option value="">Sin vendedor asignado</option>
+          {(vendedores || []).map(v => (
+            <option key={v.id} value={v.id}>{v.nombre}</option>
+          ))}
+        </select>
+      </Field>
 
       {err && <div style={{ background: C.dangerLight, color: C.danger, borderRadius: 8, padding: "8px 12px", fontSize: 12.5, marginBottom: 10, fontWeight: 600 }}>{err}</div>}
 
