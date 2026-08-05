@@ -123,6 +123,19 @@ export function calcularAlertas(ocs) {
       }
     }
 
+    // 1.5 Vale vista o cheque que el cliente ya entregó, pero que
+    // todavía no se ha ido a cobrar al banco — esa plata no es real
+    // hasta que se cobre.
+    (oc.eventos_pago_cliente || []).forEach(ev => {
+      if (ev.medio_pago && ev.medio_pago !== "transferencia" && !ev.cobrado_en_banco) {
+        const tipo = ev.medio_pago === "vale_vista" ? "Vale vista" : "Cheque";
+        alertas.push({ ocId:oc.id, nivel:"medio", icono:"📄", oc:oc.numero_oc, cliente:oc.cliente,
+          titulo:`${tipo} sin cobrar en el banco`,
+          detalle:ev.institucion?`Hay que ir a cobrarlo en ${ev.institucion}`:"Falta ir a cobrarlo",
+          monto:ev.monto, tab:"compras", filtro:null, orden:2 });
+      }
+    });
+
     // 2. Entregas atrasadas respecto de la fecha estimada
     const fEst = (oc.eventos_compra || [])[0]?.fecha_entrega_estimada;
     const entregada = oc.estado_entrega === "confirmada" || oc.estado_entrega === "entregado";
