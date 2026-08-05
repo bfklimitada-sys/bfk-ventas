@@ -924,17 +924,40 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, onSincroniz
             const ultimoReclamo=reclamos[0];
             const hrsDesde=ultimoReclamo?Math.floor((new Date()-new Date(ultimoReclamo.fecha))/(1000*60*60)):null;
             const reclamadaHoy=hrsDesde!==null&&hrsDesde<24;
+            const conRespuesta=!!ultimoReclamo?.respondido_en;
             return (
-              <div key={o.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6,background:"rgba(255,255,255,0.5)",borderRadius:8,padding:"7px 10px"}}>
+              <div key={o.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6,
+                background:conRespuesta?C.okLight:"rgba(255,255,255,0.5)",
+                border:conRespuesta?`1px solid ${C.ok}55`:"none",
+                borderRadius:8,padding:"7px 10px"}}>
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{display:"flex",alignItems:"center",gap:6}}>
-                    <span style={{fontFamily:MONO,fontWeight:700,fontSize:12,color:C.ink}}>{o.numero_oc}</span>
+                    <button onClick={()=>{
+                        setVista("todas"); setFiltros({}); setComunaSel("");
+                        setBusq(o.numero_oc); setExpId(o.id);
+                        setBannerAbierto(false);
+                      }}
+                      style={{background:"none",border:"none",padding:0,cursor:"pointer",
+                        fontFamily:MONO,fontWeight:700,fontSize:12,color:C.ink,textDecoration:"underline dotted"}}>
+                      {o.numero_oc}
+                    </button>
                     <span style={{fontSize:10,color:C.danger,fontWeight:600}}>{dias}d</span>
                     {reclamos.length>0&&<span style={{fontSize:10,color:C.inkFaint}}>· {reclamos.length} reclamo{reclamos.length>1?"s":""}</span>}
                   </div>
                   {ultimoReclamo&&<div style={{fontSize:10,color:C.inkMuted,marginTop:1}}>Último: {ultimoReclamo.correo} · {fmt.datetime(ultimoReclamo.fecha)}</div>}
+                  {conRespuesta&&ultimoReclamo.respuesta_notas&&<div style={{fontSize:10,color:C.ok,marginTop:2,lineHeight:1.35}}>{ultimoReclamo.respuesta_notas}</div>}
                 </div>
-                {reclamadaHoy
+                {conRespuesta
+                  ? <div style={{display:"flex",alignItems:"center",gap:4,background:"#fff",borderRadius:6,padding:"4px 8px",flexShrink:0,border:`1px solid ${C.ok}`}}>
+                      <span style={{fontSize:12}}>💚</span>
+                      <div>
+                        <div style={{fontSize:10,fontWeight:700,color:C.ok,lineHeight:1.2}}>
+                          {ultimoReclamo.fecha_prometida?`Paga ${fmt.date(ultimoReclamo.fecha_prometida)}`:"Respondió"}
+                        </div>
+                        <div style={{fontSize:9,color:C.inkMuted}}>a la espera de pago</div>
+                      </div>
+                    </div>
+                  : reclamadaHoy
                   ? <div style={{display:"flex",alignItems:"center",gap:4,background:C.okLight,borderRadius:6,padding:"4px 8px",flexShrink:0}}>
                       <span style={{fontSize:12}}>✅</span>
                       <div>
