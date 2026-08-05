@@ -288,7 +288,7 @@ export default function App() {
     showToast(data.esNueva?"OC creada correctamente":"Compra registrada"); setAccion(null); await cargarTodo();
   };
   // ─── NUEVA OC RÁPIDA (datos desde Mercado Público) ───────────
-  const handleNuevaOCRapida=async({pendienteSync, oc, links, direccion_entrega, correo_cliente})=>{
+  const handleNuevaOCRapida=async({pendienteSync, oc, links, direccion_entrega, correo_cliente, vendedorId: vendedorIdElegido})=>{
     const t=session.access_token;
     const numero=oc.numero_oc;
 
@@ -296,8 +296,11 @@ export default function App() {
     const yaExiste=ocs.find(o=>String(o.numero_oc).toUpperCase().replace(/[^A-Z0-9]/g,"")===String(numero).toUpperCase().replace(/[^A-Z0-9]/g,""));
     if(yaExiste) throw new Error(`La OC ${numero} ya está cargada`);
 
-    // Vendedor: el del perfil que está creando, si tiene uno asociado
-    const vendedorId = perfil?.vendedor_id || null;
+    // Vendedor: el que se eligió en el formulario. Antes se usaba siempre
+    // el del perfil que está logueado creando la OC — eso hacía que
+    // cargas masivas quedaran mal atribuidas a quien estuviera con la
+    // sesión abierta, sin importar quién hizo la venta de verdad.
+    const vendedorId = vendedorIdElegido!==undefined ? vendedorIdElegido : (perfil?.vendedor_id || null);
 
     const fila = pendienteSync
       ? { id:genId("ocv2"), numero_oc:numero, cliente:"POR COMPLETAR",
