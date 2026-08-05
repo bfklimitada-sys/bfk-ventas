@@ -14,7 +14,7 @@ export function FormCompraRapida({ ocs, financiadores, perfil, onSave, ocPresele
   const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10));
   const [fechaEst, setFechaEst] = useState("");
   const [financiadorId, setFinanciadorId] = useState(
-    perfil?.financiador_default || financiadores[0]?.id || ""
+    perfil?.financiador_default || financiadores.find(f=>f.id==="fin_byron")?.id || financiadores[0]?.id || ""
   );
   const [proveedor, setProveedor] = useState("");
   const [err, setErr] = useState("");
