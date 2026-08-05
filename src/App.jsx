@@ -1285,8 +1285,9 @@ export default function App() {
     try { await ins("contactos_cobranza",session.access_token,{id:genId("cob"),rut,nombre_cliente:nombreCliente,correo,creado_por:session.user.id}); await cargarTodo(); }
     catch(e){ /* si ya existe el RUT (unique), no es un error fatal */ }
   };
-  const handleEnviarReclamo=async({correo,asunto,cuerpo,ocId,rut})=>{
-    const url=`mailto:${encodeURIComponent(correo)}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
+  const handleEnviarReclamo=async({correo,cc,asunto,cuerpo,ocId,rut})=>{
+    const ccLimpio=(cc||"").split(",").map(s=>s.trim()).filter(Boolean).join(",");
+    const url=`mailto:${encodeURIComponent(correo)}?${ccLimpio?`cc=${encodeURIComponent(ccLimpio)}&`:""}subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
     const ahora=new Date().toISOString();
     const t=session.access_token;
     const oc=ocs.find(o=>o.id===ocId);
@@ -1297,7 +1298,7 @@ export default function App() {
       });
       await ins("oc_reclamos",t,{
         id:genId("rec"),oc_id:ocId,oc_numero:oc?.numero_oc,
-        correo,fecha:ahora,
+        correo,cc:ccLimpio||null,fecha:ahora,
         usuario_id:session.user.id,usuario_nombre:perfil?.nombre||"",
       });
     } catch {}
