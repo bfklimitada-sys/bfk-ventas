@@ -5,6 +5,7 @@ import { C, MONO, btnG, btnP, fmt, iMono, selStyle } from "../../lib/theme";
 
 export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, onGuardarIva, onPagoVendedor }) {
   const [editIva,setEditIva]=useState(false);
+  const [abierto,setAbierto]=useState(null); // id del vendedor desplegado
   const hoy=new Date(); const mesActual=hoy.getMonth()+1; const anioActual=hoy.getFullYear();
   const MESES=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 
@@ -60,25 +61,43 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
         const datos=datosVendedor(v);
         const ultimoPagado=datos.find(d=>d.estado==="pagado");
         const deudaTotal=datos.reduce((s,d)=>s+d.deuda,0);
+        const meses=datos.filter(d=>(d.pagoCalculado||0)>0||d.pagado>0).length;
+        const estaAbierto=abierto===v.id;
         return (
-          <div key={v.id} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:16,marginBottom:12}}>
-            <div style={{fontWeight:800,fontSize:15,color:C.ink,marginBottom:4}}>{v.nombre}</div>
-            {ultimoPagado&&<div style={{fontSize:12,color:C.ok,fontWeight:700,marginBottom:6}}>Último pagado: {ultimoPagado.label} · {fmt.money(ultimoPagado.pagado)}</div>}
-            {deudaTotal>0&&<div style={{fontSize:12,color:C.warn,fontWeight:700,marginBottom:10}}>Deuda pendiente: {fmt.money(deudaTotal)}</div>}
-            <div style={{fontSize:11.5,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",marginBottom:6}}>Cartola de pagos</div>
-            {datos.length===0&&<div style={{fontSize:12,color:C.inkFaint}}>Sin facturas registradas.</div>}
-            {datos.map(d=>(
-              <div key={d.label} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
-                <div>
-                  <div style={{fontSize:12.5,fontWeight:700,color:C.ink}}>{d.label}</div>
-                  <div style={{fontSize:11,color:C.inkFaint}}>Calculado {fmt.money(d.pagoCalculado)} · Utilidad {fmt.money(d.sumaUtilidad)} · Facturas {fmt.money(d.sumaFacts)}</div>
-                </div>
-                <div style={{textAlign:"right"}}>
-                  <div style={{fontSize:12,fontWeight:800,color:d.estado==="pagado"?C.ok:C.warn}}>{d.estado==="pagado"?"Pagado":"Pendiente"} {fmt.money(d.pagado)}</div>
-                  {d.deuda>0&&<div style={{fontSize:11,color:C.danger}}>Debe {fmt.money(d.deuda)}</div>}
-                </div>
+          <div key={v.id} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,marginBottom:10,overflow:"hidden"}}>
+            <button onClick={()=>setAbierto(estaAbierto?null:v.id)}
+              style={{width:"100%",background:"none",border:"none",padding:14,textAlign:"left",cursor:"pointer",
+                display:"flex",alignItems:"center",gap:10}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontWeight:800,fontSize:14.5,color:C.ink}}>{v.nombre}</div>
+                {deudaTotal>0
+                  ? <div style={{fontSize:11.5,color:C.warn,fontWeight:700,marginTop:2}}>Debe {fmt.money(deudaTotal)}</div>
+                  : meses>0
+                    ? <div style={{fontSize:11.5,color:C.ok,fontWeight:700,marginTop:2}}>✓ Al día{ultimoPagado?` · último ${ultimoPagado.label}`:""}</div>
+                    : <div style={{fontSize:11.5,color:C.inkFaint,marginTop:2}}>Sin facturas registradas</div>
+                }
               </div>
-            ))}
+              {meses>0&&<span style={{fontSize:10.5,color:C.inkFaint,flexShrink:0}}>{meses} mes{meses>1?"es":""}</span>}
+              <span style={{fontSize:11,color:C.inkFaint,flexShrink:0}}>{estaAbierto?"▲":"▼"}</span>
+            </button>
+
+            {estaAbierto&&meses>0&&(
+              <div style={{padding:"0 14px 14px"}}>
+                <div style={{fontSize:11,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",marginBottom:6,paddingTop:6,borderTop:`1px solid ${C.border}`}}>Cartola de pagos</div>
+                {datos.map(d=>(
+                  <div key={d.label} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
+                    <div>
+                      <div style={{fontSize:12.5,fontWeight:700,color:C.ink}}>{d.label}</div>
+                      <div style={{fontSize:11,color:C.inkFaint}}>Calculado {fmt.money(d.pagoCalculado)} · Utilidad {fmt.money(d.sumaUtilidad)} · Facturas {fmt.money(d.sumaFacts)}</div>
+                    </div>
+                    <div style={{textAlign:"right",flexShrink:0}}>
+                      <div style={{fontSize:12,fontWeight:800,color:d.estado==="pagado"?C.ok:C.warn}}>{d.estado==="pagado"?"Pagado":"Pendiente"} {fmt.money(d.pagado)}</div>
+                      {d.deuda>0&&<div style={{fontSize:11,color:C.danger}}>Debe {fmt.money(d.deuda)}</div>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         );
       })}
