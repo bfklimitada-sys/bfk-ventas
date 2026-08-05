@@ -152,10 +152,13 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
         const evF=(o.eventos_factura||[])[0]; if(!evF) return false;
         const f=new Date(evF.fecha); return f.getMonth()+1===mesActual&&f.getFullYear()===anioActual;
       });
-      const sumaFacts=factsMes.reduce((s,o)=>s+(o.monto_facturado||0),0);
+      // La comisión es sobre la utilidad del período, no sobre el monto
+      // bruto facturado — usar monto_facturado acá inflaba varias veces
+      // lo que realmente corresponde pagar.
+      const sumaUtilidad=factsMes.reduce((s,o)=>s+((Number(o.monto_total)||0)-(Number(o.costo_total)||0)),0);
       const ivaMes=ivaMensual.find(i=>i.mes===mesActual&&i.anio===anioActual);
       const impPagado=ivaMes?(ivaMes.iva_ventas-ivaMes.iva_compras):0;
-      const calculado=Math.round(sumaFacts/2 - impPagado/2);
+      const calculado=Math.round(sumaUtilidad/2 - impPagado/2);
       const pagado=pagosVendedor.filter(p=>p.vendedor_id===v.id&&p.mes===mesActual&&p.anio===anioActual).reduce((s,p)=>s+(p.monto_pagado||0),0);
       return sv+Math.max(0,calculado-pagado);
     },0)||0;
