@@ -164,10 +164,13 @@ export function calcularAlertas(ocs) {
     }
 
     // 4. OCs a medias y sin movimiento
+    // Se prioriza la fecha real del evento (fecha) sobre cuándo se
+    // guardó en la base (creadoEn) — si no, todo lo que se cargó junto
+    // en un import masivo queda con el mismo "días sin avance" falso.
     const fechas = [
       ...(oc.eventos_compra||[]), ...(oc.eventos_entrega||[]),
       ...(oc.eventos_factura||[]), ...(oc.eventos_pago_cliente||[]),
-    ].map(e => e.creadoEn || e.fecha).filter(Boolean).sort();
+    ].map(e => e.fecha || e.creadoEn).filter(Boolean).sort();
     const etapas = [
       (oc.eventos_compra||[]).length > 0, entregada,
       oc.estado_factura_propia === "emitida",
