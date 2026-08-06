@@ -65,7 +65,8 @@ function VerMasAvisoMP({n}){
   return <div style={{fontSize:10.5,color:C.inkFaint,marginTop:6,textAlign:"center"}}>y {n} más</div>;
 }
 
-export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, aportes: aportesLista, onNavigate, onAccion, onSincronizar, onCorregirFechas, sincronizando, porAceptar, onActualizarPorAceptar, verificandoPorAceptar, aceptadasSinCargar, onCargarOC, onCargarTodasAceptadas, cargandoAceptadas, onActualizarAceptadas, verificandoAceptadas, canceladasEnMP, onEliminarCancelada, onActualizarCanceladas, verificandoCanceladas, onValidarTodo, validandoTodo, usoMP, actMP, esCodigoMP, ultimaCartola, saldoBanco, bancoMensual, onEditarSaldo }) {
+export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, aportes: aportesLista, perfil, onNavigate, onAccion, onSincronizar, onCorregirFechas, sincronizando, porAceptar, onActualizarPorAceptar, verificandoPorAceptar, aceptadasSinCargar, onCargarOC, onCargarTodasAceptadas, cargandoAceptadas, onActualizarAceptadas, verificandoAceptadas, canceladasEnMP, onEliminarCancelada, onActualizarCanceladas, verificandoCanceladas, onValidarTodo, validandoTodo, usoMP, actMP, esCodigoMP, ultimaCartola, saldoBanco, bancoMensual, onEditarSaldo }) {
+  const esAdmin=perfil?.rol==="admin";
   const [verMP,setVerMP]=useState(false);
 
   const kpis=useMemo(()=>{
@@ -474,7 +475,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
                   {verificandoAlgo?"Revisando…":"↻ Revisar de nuevo"}
                 </button>
 
-                {onValidarTodo&&(
+                {onValidarTodo&&esAdmin&&(
                   <button onClick={()=>onValidarTodo()} disabled={!!validandoTodo}
                     style={{display:"block",margin:"0 auto 12px",background:"none",border:"none",
                       color:C.inkFaint,fontSize:10.5,cursor:validandoTodo?"default":"pointer",
@@ -577,12 +578,14 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
           Discreto a propósito: es para validar una vez que las fechas ──
           quedaron bien, no una acción de uso diario — las OC nuevas ya ──
           entran con la fecha correcta desde que se cargan. ── */}
-      <button onClick={()=>onCorregirFechas&&onCorregirFechas()} disabled={!!sincronizando}
-        style={{display:"block",margin:"0 auto 14px",background:"none",border:"none",
-          color:C.inkFaint,fontSize:10.5,cursor:sincronizando?"default":"pointer",
-          textDecoration:sincronizando?"none":"underline"}}>
-        {sincronizando?`Revisando ${sincronizando.hechas} de ${sincronizando.total}…`:"Corregir fechas de todas contra Mercado Público"}
-      </button>
+      {esAdmin&&(
+        <button onClick={()=>onCorregirFechas&&onCorregirFechas()} disabled={!!sincronizando}
+          style={{display:"block",margin:"0 auto 14px",background:"none",border:"none",
+            color:C.inkFaint,fontSize:10.5,cursor:sincronizando?"default":"pointer",
+            textDecoration:sincronizando?"none":"underline"}}>
+          {sincronizando?`Revisando ${sincronizando.hechas} de ${sincronizando.total}…`:"Corregir fechas de todas contra Mercado Público"}
+        </button>
+      )}
 
       {/* ── Prioridades de hoy ── */}
       <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px",marginBottom:12}}>
