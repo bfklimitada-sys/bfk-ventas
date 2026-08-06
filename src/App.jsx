@@ -329,6 +329,9 @@ export default function App() {
     }
     const ocId=(Array.isArray(nueva)?nueva[0]:nueva).id;
 
+    await registrarCambio(t,{ocId,ocNumero:numero,usuarioId:perfil?.id,
+      usuarioNombre:perfil?.nombre,accion:"OC creada",campo:"numero_oc",valorNuevo:numero});
+
     // Productos: uno por cada ítem de la OC, con su link
     const productos = (oc.productos||[]);
     if(productos.length){
@@ -898,15 +901,19 @@ export default function App() {
   };
 
   const handleEntrega=async(data)=>{
-    const t=session.access_token;
+    const t=session.access_token; const oc=ocs.find(o=>o.id===data.ocId);
     await ins("eventos_entrega",t,{id:genId("eve"),oc_id:data.ocId,fecha:data.fecha,persona_recibe:data.personaRecibe,creado_por:session.user.id});
     await upd("ordenes_compra_v2",t,data.ocId,{estado_entrega:"confirmada"});
+    await registrarCambio(t,{ocId:data.ocId,ocNumero:oc?.numero_oc,usuarioId:perfil?.id,
+      usuarioNombre:perfil?.nombre,accion:"Entrega confirmada",campo:"estado_entrega",valorNuevo:data.personaRecibe||"confirmada"});
     showToast("Entrega confirmada"); setAccion(null); await cargarTodo();
   };
   const handleFactura=async(data)=>{
-    const t=session.access_token;
+    const t=session.access_token; const oc=ocs.find(o=>o.id===data.ocId);
     await ins("eventos_factura",t,{id:genId("evf"),oc_id:data.ocId,fecha:data.fecha,numero_factura:data.numeroFactura,monto:data.monto,nota_credito:data.notaCredito||null,factura_anulada_numero:data.facturaAnuladaNumero||null,motivo_diferencia:data.motivoDiferencia||null,creado_por:session.user.id});
     await upd("ordenes_compra_v2",t,data.ocId,{estado_factura_propia:"emitida",monto_facturado:data.monto});
+    await registrarCambio(t,{ocId:data.ocId,ocNumero:oc?.numero_oc,usuarioId:perfil?.id,
+      usuarioNombre:perfil?.nombre,accion:data.esReemision?"Factura reemitida":"Factura registrada",campo:"numero_factura",valorNuevo:`N°${data.numeroFactura} · ${fmt.money(data.monto)}`});
     showToast(data.esReemision?`Factura reemitida (anula N°${data.facturaAnuladaNumero} con NC ${data.notaCredito})`:"Factura registrada"); setAccion(null); await cargarTodo();
   };
   const handlePagoCliente=async(data)=>{
@@ -916,14 +923,18 @@ export default function App() {
       creado_por:session.user.id});
     const nuevoCobrado=(oc?.monto_cobrado||0)+data.monto;
     await upd("ordenes_compra_v2",t,data.ocId,{monto_cobrado:nuevoCobrado,estado_pago_cliente:nuevoCobrado>=(oc?.monto_facturado||0)?"pagado":"parcial"});
+    await registrarCambio(t,{ocId:data.ocId,ocNumero:oc?.numero_oc,usuarioId:perfil?.id,
+      usuarioNombre:perfil?.nombre,accion:"Pago de cliente registrado",campo:"monto_cobrado",valorNuevo:fmt.money(data.monto)});
     showToast("Pago registrado"); setAccion(null); await cargarTodo();
   };
   const handlePagoFin=async(data)=>{
-    const t=session.access_token;
+    const t=session.access_token; const oc=data.ocId?ocs.find(o=>o.id===data.ocId):null;
     await ins("eventos_pago_financiamiento",t,{id:genId("evpf"),financiador_id:data.financiadorId,oc_id:data.ocId,fecha:data.fecha,monto:data.monto,creado_por:session.user.id});
     const fin=financiadores.find(f=>f.id===data.financiadorId);
     if(fin) await upd("financiadores",t,fin.id,{saldo_deuda:Math.max(0,Number(fin.saldo_deuda)-data.monto)});
     if(data.ocId) await upd("ordenes_compra_v2",t,data.ocId,{estado_pago_financiamiento:"pagado"});
+    await registrarCambio(t,{ocId:data.ocId||null,ocNumero:oc?.numero_oc||null,usuarioId:perfil?.id,
+      usuarioNombre:perfil?.nombre,accion:"Pago a financiador registrado",campo:"financiamiento",valorNuevo:`${fin?.nombre||""} · ${fmt.money(data.monto)}`});
     showToast("Pago a financiador registrado"); setAccion(null); await cargarTodo();
   };
   const handleAjusteSaldo=async({financiadorId,fecha,montoAjuste,motivo})=>{
