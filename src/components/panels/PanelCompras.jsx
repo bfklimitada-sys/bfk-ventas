@@ -212,6 +212,9 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
   const [dCompra,setDCompra]=useState(""); const [dVenta,setDVenta]=useState("");
   const [dUrl,setDUrl]=useState(""); const [dDir,setDDir]=useState("");
   const [nuevo,setNuevo]=useState(false);
+  const [repartiendo,setRepartiendo]=useState(false);
+  const [montoTotal,setMontoTotal]=useState("");
+  const [guardandoReparto,setGuardandoReparto]=useState(false);
   const [sincronizando,setSincronizando]=useState(false);
   const [copiado,setCopiado]=useState(false);
   const esAdmin=perfil?.rol==="admin";
@@ -243,6 +246,34 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
   const vendidos=todos.filter(l=>(l.origen||"venta")==="venta");
   const comprados=todos.filter(l=>l.origen==="compra");
   const links=todos;
+
+  const repartirInversion=async()=>{
+    const total=Number(montoTotal);
+    if(!total||total<=0||!comprados.length) return;
+    setGuardandoReparto(true);
+    try{
+      // Se reparte a prorrata del valor de venta de cada producto — si
+      // vale más, probablemente costó más también. Si ningún producto
+      // tiene precio de venta cargado, se reparte en partes iguales.
+      const baseVenta=comprados.reduce((s,l)=>s+(Number(l.precio_venta)||0),0);
+      let acumulado=0;
+      for(let i=0;i<comprados.length;i++){
+        const l=comprados[i];
+        const esUltimo=i===comprados.length-1;
+        let parte;
+        if(esUltimo){
+          parte=total-acumulado; // el último se lleva el resto exacto, sin perder pesos por redondeo
+        }else if(baseVenta>0){
+          parte=Math.round(total*((Number(l.precio_venta)||0)/baseVenta));
+        }else{
+          parte=Math.round(total/comprados.length);
+        }
+        acumulado+=parte;
+        await onEditarLink(l.id,{precio_compra:parte},oc);
+      }
+      setRepartiendo(false); setMontoTotal("");
+    } finally { setGuardandoReparto(false); }
+  };
   const evC=(oc.eventos_compra||[])[0];
   const evE=(oc.eventos_entrega||[])[0];
   const evF=(oc.eventos_factura||[])[0];
@@ -416,6 +447,28 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
                     </div>
                   );
                 })}
+
+                {comprados.length>1&&!repartiendo&&!nuevo&&!editando&&(
+                  <button onClick={()=>setRepartiendo(true)}
+                    style={{fontSize:11,background:C.purpleLight,border:`1px solid ${C.purple}55`,borderRadius:8,
+                      padding:"7px 12px",color:C.purple,cursor:"pointer",width:"100%",fontWeight:700,marginBottom:6}}>
+                    💰 Solo sé cuánto invertí en total — repartir
+                  </button>
+                )}
+                {repartiendo&&(
+                  <div style={{background:C.purpleLight,borderRadius:9,padding:"11px",marginBottom:6}}>
+                    <div style={{fontSize:11,color:C.inkMuted,marginBottom:8,lineHeight:1.4}}>
+                      Ingresa el total que pagaste por los {comprados.length} productos — se reparte a prorrata
+                      del precio de venta de cada uno{comprados.every(l=>!l.precio_venta)?" (en partes iguales, ninguno tiene precio de venta cargado)":""}.
+                    </div>
+                    <Field label="Total invertido ($)"><input style={iMono} type="number" value={montoTotal} onChange={e=>setMontoTotal(e.target.value)} autoFocus /></Field>
+                    <div style={{display:"flex",gap:6}}>
+                      <button onClick={repartirInversion} disabled={guardandoReparto||!montoTotal}
+                        style={btnP(guardandoReparto?C.inkFaint:C.purple)}>{guardandoReparto?"Repartiendo…":"Repartir"}</button>
+                      <button onClick={()=>{setRepartiendo(false);setMontoTotal("");}} style={btnP(C.inkFaint)}>Cancelar</button>
+                    </div>
+                  </div>
+                )}
 
                 {/* Formulario de alta y edición */}
                 {(nuevo||editando)&&(
