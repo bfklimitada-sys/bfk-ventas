@@ -780,7 +780,11 @@ export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded
             {saldo>0&&oc.monto_facturado>0&&<>Por cobrar <b style={{color:C.danger}}>{fmt.money(saldo)}</b> · </>}
             {(()=>{
               const f=oc.fecha_emision_mp||(oc.eventos_compra||[])[0]?.fecha||oc.creadoEn;
-              return f?<>Emitida {fmt.date(String(f).slice(0,10))}</>:null;
+              const creador=perfiles?.find(p=>p.id===oc.creado_por)?.nombre;
+              return <>
+                {f&&<>Emitida {fmt.date(String(f).slice(0,10))}</>}
+                {creador&&<> · Creada por {creador}</>}
+              </>;
             })()}
           </div>
 
