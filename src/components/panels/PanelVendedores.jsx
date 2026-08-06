@@ -48,11 +48,19 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
       // regla empezó a aplicarse recién desde mayo 2025 en adelante.
       const sinIva=(y===2025&&m===4);
       const ivaMesV2=sinIva?null:ivaMensual.find(i=>i.mes===m&&i.anio===y); const impPagadoV2=ivaMesV2?Math.max(0,(ivaMesV2.iva_ventas||0)-(ivaMesV2.iva_compras||0)):0;
-      const pagoCalculado=Math.max(0,Math.round(sumaUtilidad/2 - impPagadoV2/2))+pagoVentasPropias;
+      const pagoCalculadoFormula=Math.max(0,Math.round(sumaUtilidad/2 - impPagadoV2/2))+pagoVentasPropias;
       const pagosDelMes=pagosVendedor.filter(p=>p.vendedor_id===v.id&&p.mes===m&&p.anio===y);
       const pagado=pagosDelMes.reduce((s,p)=>s+(p.monto_pagado||0),0);
+      // Si el mes ya fue investigado y confirmado (contra la planilla
+      // histórica o contra la cartola real), se usa ese monto verificado
+      // en vez de recalcular en vivo — la fórmula genérica no puede
+      // reconstruir casos como ventas propias sin OC o errores de la
+      // planilla original que ya se investigaron a mano.
+      const verificado=pagosDelMes.find(p=>p.monto_verificado!=null)?.monto_verificado;
+      const esVerificado=verificado!=null;
+      const pagoCalculado=esVerificado?verificado:pagoCalculadoFormula;
       const estado=pagado>=pagoCalculado?"pagado":"pendiente";
-      return {mes:m,anio:y,label:fmt.monthYear(m,y),sumaFacts,sumaUtilidad,pagoVentasPropias,pagoCalculado,pagado,estado,deuda:Math.max(0,pagoCalculado-pagado)};
+      return {mes:m,anio:y,label:fmt.monthYear(m,y),sumaFacts,sumaUtilidad,pagoVentasPropias,pagoCalculado,pagado,estado,esVerificado,deuda:Math.max(0,pagoCalculado-pagado)};
     });
   };
 
@@ -106,13 +114,16 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
                       </span>
                     </div>
                     <div style={{fontSize:11,color:C.inkFaint,marginBottom:3}}>
-                      Comisión del mes: <b style={{color:C.ink}}>{fmt.money(d.pagoCalculado)}</b> (mitad de la utilidad, {fmt.money(d.sumaUtilidad)}, de {fmt.money(d.sumaFacts)} facturados{d.pagoVentasPropias>0?` · + ${fmt.money(d.pagoVentasPropias)} de ventas propias`:""})
+                      {d.esVerificado
+                        ? <>Comisión del mes: <b style={{color:C.ink}}>{fmt.money(d.pagoCalculado)}</b> <span style={{color:C.ok}}>✓ verificado contra planilla histórica / cartola real</span></>
+                        : <>Comisión del mes: <b style={{color:C.ink}}>{fmt.money(d.pagoCalculado)}</b> (mitad de la utilidad, {fmt.money(d.sumaUtilidad)}, de {fmt.money(d.sumaFacts)} facturados{d.pagoVentasPropias>0?` · + ${fmt.money(d.pagoVentasPropias)} de ventas propias`:""})</>
+                      }
                     </div>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
                       <span style={{fontSize:11,color:C.inkMuted}}>Ya se le pagó: {fmt.money(d.pagado)}</span>
                       {d.deuda>0&&<span style={{fontSize:11.5,fontWeight:700,color:C.danger}}>Falta pagarle: {fmt.money(d.deuda)}</span>}
                     </div>
-                    {d.pagado>d.pagoCalculado+1000&&(
+                    {!d.esVerificado&&d.pagado>d.pagoCalculado+1000&&(
                       <div style={{fontSize:10.5,color:C.warn,marginTop:3,lineHeight:1.4}}>
                         ⚠ Se pagó {fmt.money(d.pagado-d.pagoCalculado)} más de lo que calcula la fórmula automática — probablemente venta propia o extra no marcado en el sistema. Revisa la nota del pago para el detalle.
                       </div>
