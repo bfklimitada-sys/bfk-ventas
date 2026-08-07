@@ -23,7 +23,7 @@ export const FILTROS=[
   {key:"compra",label:"Compra",okField:"estado_compra",okValue:"comprado",okLabel:"Comprado",pendLabel:"Pendiente"},
   {key:"entrega",label:"Entrega",okField:"estado_entrega",okValue:"confirmada",okLabel:"Confirmada",pendLabel:"Sin confirmar"},
   {key:"factura",label:"Factura",okField:"estado_factura_propia",okValue:"emitida",okLabel:"Emitida",pendLabel:"Por emitir"},
-  {key:"cobro",label:"Cobro",okField:"estado_pago_cliente",okValue:"pagado",okLabel:"Cobrado",pendLabel:"Por cobrar"},
+  {key:"cobro",label:"Pagada",okField:"estado_pago_cliente",okValue:"pagado",okLabel:"Cobrado",pendLabel:"Por cobrar"},
   {key:"financ",label:"Financ.",okField:"estado_pago_financiamiento",okValue:"pagado",okLabel:"Pagado",pendLabel:"Con deuda"},
 ];
 
@@ -583,7 +583,7 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
               </div>
             </div>
           )}
-          <Dato k="Cobro"            v={evP?.fecha?fmt.date(String(evP.fecha).slice(0,10)):null} />
+          <Dato k="Factura pagada"  v={evP?.fecha?fmt.date(String(evP.fecha).slice(0,10)):null} />
           <Dato k="Proveedor"        v={evC?.proveedor} />
         </div>
       )}
