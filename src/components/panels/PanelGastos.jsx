@@ -25,7 +25,7 @@ export function PanelGastos({ gastos, categorias, vendedores, pagosVendedor, ocs
           <div key={c.id} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 15px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
             <div>
               <div style={{fontWeight:700,fontSize:13.5,color:C.ink}}>{c.nombre}</div>
-              {u?<div style={{fontSize:11.5,color:C.inkMuted}}>{u.subcategoria||"—"} · {fmt.monthYear(u.mes,u.anio)}</div>:<div style={{fontSize:11.5,color:C.inkFaint}}>Sin pagos</div>}
+              {u?<div style={{fontSize:11.5,color:C.inkMuted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{u.subcategoria||u.detalle||"—"} · {fmt.monthYear(u.mes,u.anio)}</div>:<div style={{fontSize:11.5,color:C.inkFaint}}>Sin pagos</div>}
             </div>
             {u&&<div style={{fontFamily:MONO,fontWeight:800,fontSize:15,color:C.warn}}>{fmt.money(u.monto)}</div>}
           </div>
