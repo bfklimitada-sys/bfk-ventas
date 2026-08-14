@@ -19,6 +19,12 @@ function fmtFechaHora(raw){
   return fecha;
 }
 
+// La factura vigente de una OC es la más reciente por fecha — si hubo
+// una reemisión (NC de por medio), la primera del arreglo sería la
+// anulada, no la que realmente hay que cobrar.
+export const facturaVigente=(oc)=>
+  (oc.eventos_factura||[]).slice().sort((a,b)=>new Date(b.fecha)-new Date(a.fecha))[0];
+
 export const FILTROS=[
   {key:"compra",label:"Compra",okField:"estado_compra",okValue:"comprado",okLabel:"Comprado",pendLabel:"Pendiente"},
   {key:"entrega",label:"Entrega",okField:"estado_entrega",okValue:"confirmada",okLabel:"Confirmada",pendLabel:"Sin confirmar"},
@@ -276,7 +282,7 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
   };
   const evC=(oc.eventos_compra||[])[0];
   const evE=(oc.eventos_entrega||[])[0];
-  const evF=(oc.eventos_factura||[])[0];
+  const evF=facturaVigente(oc);
   const evP=(oc.eventos_pago_cliente||[])[0];
   const margen=calcMargen(oc.monto_total,oc.costo_total);
 
@@ -673,7 +679,7 @@ function proximaAccionCobranza(oc){
 }
 
 export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded, onToggle, contactos, onEnviarReclamo, onRegistrarRespuestaReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, bloqueos, perfil, historialCambios, onAgregarComentario, onEliminarComentario, onBloquear, onLiberar, onEliminarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa }) {
-  const evF=(oc.eventos_factura||[])[0];
+  const evF=facturaVigente(oc);
   const dias=fmt.diasDesde(evF?.fecha);
   const saldo=(oc.monto_facturado||0)-(oc.monto_cobrado||0);
   const [reclamando,setReclamando]=useState(false);
@@ -1002,7 +1008,7 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, onSincroniz
   const filtered=useMemo(()=>ocs.filter(oc=>{
     if(busq.trim()){
       const q=busq.toLowerCase();
-      const numFactura=(oc.eventos_factura||[])[0]?.numero_factura;
+      const numFactura=facturaVigente(oc)?.numero_factura;
       const coincide=
         oc.numero_oc.toLowerCase().includes(q) ||
         (oc.cliente||"").toLowerCase().includes(q) ||
@@ -1031,12 +1037,12 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, onSincroniz
 
   const alertas=useMemo(()=>ocs.filter(o=>{
     if(o.estado_pago_cliente==="pagado") return false;
-    const evF=(o.eventos_factura||[])[0]; if(!evF) return false;
+    const evF=facturaVigente(o); if(!evF) return false;
     const plazo=Number(o.dias_pago)>0?Number(o.dias_pago):30;
     return (fmt.diasDesde(evF.fecha)||0)>=plazo;
   }).sort((a,b)=>{
-    const dA=fmt.diasDesde((a.eventos_factura||[])[0]?.fecha)||0;
-    const dB=fmt.diasDesde((b.eventos_factura||[])[0]?.fecha)||0;
+    const dA=fmt.diasDesde(facturaVigente(a)?.fecha)||0;
+    const dB=fmt.diasDesde(facturaVigente(b)?.fecha)||0;
     return dB-dA;
   }),[ocs]);
 
@@ -1063,7 +1069,7 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, onSincroniz
           {bannerAbierto&&(
             <div style={{padding:"0 12px 10px"}}>
               {alertas.map(o=>{
-            const evF=(o.eventos_factura||[])[0];
+            const evF=facturaVigente(o);
             const dias=fmt.diasDesde(evF?.fecha);
             const reclamos=(o.oc_reclamos||[]).slice().sort((a,b)=>(b.fecha||"").localeCompare(a.fecha||""));
             const accion=proximaAccionCobranza(o);
@@ -1105,7 +1111,7 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, onSincroniz
       )}
       {reclamandoBanner&&(
         <Modal title="Reclamar pago de factura" onClose={()=>setReclamandoBanner(null)}>
-          <FormReclamarFactura oc={reclamandoBanner} evF={(reclamandoBanner.eventos_factura||[])[0]} dias={fmt.diasDesde((reclamandoBanner.eventos_factura||[])[0]?.fecha)} contactos={contactos||[]}
+          <FormReclamarFactura oc={reclamandoBanner} evF={facturaVigente(reclamandoBanner)} dias={fmt.diasDesde(facturaVigente(reclamandoBanner)?.fecha)} contactos={contactos||[]}
             onGuardarContacto={onGuardarContacto}
             onEnviar={async(data)=>{ await onEnviarReclamo(data); setReclamandoBanner(null); }} />
         </Modal>

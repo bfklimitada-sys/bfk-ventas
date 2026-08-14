@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { DiasBadge, Leyenda } from "../ui/Basicos";
 import { gananciaReal, costoPostventa } from "../../lib/theme";
 import { del } from "../../lib/supabase";
+import { facturaVigente } from "./PanelCompras";
 import { C, MONO, SANS, btnP, fmt } from "../../lib/theme";
 
 // Agrupa el contenido bajo un título discreto
@@ -65,7 +66,7 @@ function VerMasAvisoMP({n}){
   return <div style={{fontSize:10.5,color:C.inkFaint,marginTop:6,textAlign:"center"}}>y {n} más</div>;
 }
 
-export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, aportes: aportesLista, perfil, onNavigate, onAccion, onSincronizar, onCorregirFechas, sincronizando, porAceptar, onActualizarPorAceptar, verificandoPorAceptar, aceptadasSinCargar, onCargarOC, onCargarTodasAceptadas, cargandoAceptadas, onActualizarAceptadas, verificandoAceptadas, canceladasEnMP, onEliminarCancelada, onActualizarCanceladas, verificandoCanceladas, onValidarTodo, validandoTodo, usoMP, actMP, esCodigoMP, ultimaCartola, saldoBanco, bancoMensual, onEditarSaldo }) {
+export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, aportes: aportesLista, perfil, onExportarTodo, exportando, onNavigate, onAccion, onSincronizar, onCorregirFechas, sincronizando, porAceptar, onActualizarPorAceptar, verificandoPorAceptar, aceptadasSinCargar, onCargarOC, onCargarTodasAceptadas, cargandoAceptadas, onActualizarAceptadas, verificandoAceptadas, canceladasEnMP, onEliminarCancelada, onActualizarCanceladas, verificandoCanceladas, onValidarTodo, validandoTodo, usoMP, actMP, esCodigoMP, ultimaCartola, saldoBanco, bancoMensual, onEditarSaldo }) {
   const esAdmin=perfil?.rol==="admin";
   const [verMP,setVerMP]=useState(false);
 
@@ -150,7 +151,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
     const deudaVendedoresMes=vendedores?.reduce((sv,v)=>{
       const factsMes=ocs.filter(o=>{
         if(o.vendedor_id!==v.id||o.estado_factura_propia!=="emitida"||o.vendedor_pagado) return false;
-        const evF=(o.eventos_factura||[])[0]; if(!evF) return false;
+        const evF=facturaVigente(o); if(!evF) return false;
         // Leer año/mes del texto, no de un Date — evita el corrimiento de
         // zona horaria que hacía caer facturas del día 1 en el mes anterior.
         const [ay,am]=String(evF.fecha).slice(0,10).split("-");
@@ -163,7 +164,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
       factsMes.forEach(o=>{
         const utilOC=(Number(o.monto_total)||0)-(Number(o.costo_total)||0);
         if(o.es_venta_propia){
-          const montoFact=(o.eventos_factura||[])[0]?.monto||0;
+          const montoFact=facturaVigente(o)?.monto||0;
           const ivaFactura=montoFact-(montoFact/1.19);
           pagoVentasPropias+=Math.max(0,Math.round(utilOC-ivaFactura));
         }else{
@@ -217,7 +218,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
   // ── Proyección del mes: promedio histórico completo, para tener ──
   // algo que mostrar desde el día 1, antes de que existan ventas reales.
   const ocsPorCobrar=useMemo(()=>ocs.filter(o=>(o.tipo_registro||"venta")==="venta"&&o.estado_factura_propia==="emitida"&&o.estado_pago_cliente!=="pagado").map(o=>{
-    const evF=(o.eventos_factura||[])[0]; const dias=fmt.diasDesde(evF?.fecha);
+    const evF=facturaVigente(o); const dias=fmt.diasDesde(evF?.fecha);
     return {...o,fechaFactura:evF?.fecha,diasDesde:dias};
   }),[ocs]);
 
@@ -584,6 +585,14 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
             color:C.inkFaint,fontSize:10.5,cursor:sincronizando?"default":"pointer",
             textDecoration:sincronizando?"none":"underline"}}>
           {sincronizando?`Revisando ${sincronizando.hechas} de ${sincronizando.total}…`:"Corregir fechas de todas contra Mercado Público"}
+        </button>
+      )}
+      {esAdmin&&onExportarTodo&&(
+        <button onClick={()=>onExportarTodo()} disabled={!!exportando}
+          style={{display:"block",margin:"0 auto 14px",background:C.tealLight,border:`1px solid ${C.teal}55`,
+            borderRadius:8,padding:"9px 16px",color:C.tealDark,fontSize:11.5,fontWeight:700,
+            cursor:exportando?"default":"pointer"}}>
+          {exportando?"Armando el Excel…":"⬇ Exportar todo a Excel"}
         </button>
       )}
 
