@@ -79,6 +79,37 @@ export default function App() {
   };
   const handleLogout=async()=>{ await supaSignOut(session.access_token); setSession(null); setPerfil(null); storageSet(SESSION_KEY,""); };
 
+  // Renovar el token automáticamente cada 45 minutos mientras la app
+  // sigue abierta — antes solo se renovaba una vez, al iniciar, y por
+  // eso el token expiraba a la hora (limite de Supabase) si se dejaba
+  // la app abierta más tiempo, dando error "JWT expired".
+  useEffect(()=>{
+    if(!session?.refresh_token) return;
+    const intervalo=setInterval(async()=>{
+      try{
+        const s=await supaRefresh(session.refresh_token);
+        setSession(s); storageSet(SESSION_KEY,JSON.stringify(s));
+      }catch{}
+    }, 45*60*1000);
+    return ()=>clearInterval(intervalo);
+  },[session?.refresh_token]);
+
+  // Cuando el celular estuvo bloqueado o la app en segundo plano, el
+  // navegador pausa los temporizadores — por eso el intervalo de arriba
+  // solo no basta. Al volver a la pantalla, renovar también ahí.
+  useEffect(()=>{
+    if(!session?.refresh_token) return;
+    const alVolver=async()=>{
+      if(document.visibilityState!=="visible") return;
+      try{
+        const s=await supaRefresh(session.refresh_token);
+        setSession(s); storageSet(SESSION_KEY,JSON.stringify(s));
+      }catch{}
+    };
+    document.addEventListener("visibilitychange",alVolver);
+    return ()=>document.removeEventListener("visibilitychange",alVolver);
+  },[session?.refresh_token]);
+
   // Reintenta una función asíncrona hasta 2 veces antes de rendirse.
   // Para datos críticos (OCs, perfiles) que no queremos dejar vacíos
   // solo porque Supabase tuvo un mal momento con tantas conexiones.
