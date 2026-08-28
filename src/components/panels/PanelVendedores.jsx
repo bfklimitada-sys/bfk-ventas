@@ -76,7 +76,7 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
           <button onClick={()=>{setEditandoIvaExistente(ivaMensual.find(i=>i.mes===mesActual&&i.anio===anioActual)||null);setEditIva(true);}} style={btnG}>{ivaMensual.find(i=>i.mes===mesActual&&i.anio===anioActual)?"Editar":"Registrar"}</button>
         </div>
         {ivaMensual.find(i=>i.mes===mesActual&&i.anio===anioActual)?
-          <div style={{fontFamily:MONO,fontWeight:800,fontSize:18,color:C.info}}>{fmt.money(ivaMensual.find(i=>i.mes===mesActual&&i.anio===anioActual).iva_pagado)}</div>:
+          <div style={{fontFamily:MONO,fontWeight:800,fontSize:18,color:C.info}}>{fmt.money(Math.max(0,(ivaMensual.find(i=>i.mes===mesActual&&i.anio===anioActual).iva_ventas||0)-(ivaMensual.find(i=>i.mes===mesActual&&i.anio===anioActual).iva_compras||0)))}</div>:
           <div style={{fontSize:12.5,color:C.inkFaint}}>Sin registrar.</div>
         }
         <div style={{display:"flex",gap:14,marginTop:10,paddingTop:10,borderTop:`1px solid ${C.border}`}}>
@@ -90,7 +90,7 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
                 style={{width:"100%",background:"none",border:"none",padding:"7px 0",borderBottom:`1px solid ${C.border}`,
                   display:"flex",justifyContent:"space-between",cursor:"pointer",textAlign:"left"}}>
                 <span style={{fontSize:12,color:C.ink,fontWeight:700}}>{fmt.monthYear(i.mes,i.anio)}</span>
-                <span style={{fontFamily:MONO,fontSize:12,color:C.info,fontWeight:700}}>{fmt.money(i.iva_pagado)}</span>
+                <span style={{fontFamily:MONO,fontSize:12,color:C.info,fontWeight:700}}>{fmt.money(Math.max(0,(i.iva_ventas||0)-(i.iva_compras||0)))}</span>
               </button>
             ))}
           </div>
