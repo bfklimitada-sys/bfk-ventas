@@ -60,7 +60,7 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
       const esVerificado=verificado!=null;
       const pagoCalculado=esVerificado?verificado:pagoCalculadoFormula;
       const estado=pagado>=pagoCalculado?"pagado":"pendiente";
-      return {mes:m,anio:y,label:fmt.monthYear(m,y),sumaFacts,sumaUtilidad,pagoVentasPropias,pagoCalculado,pagado,estado,esVerificado,deuda:Math.max(0,pagoCalculado-pagado)};
+      return {mes:m,anio:y,label:fmt.monthYear(m,y),sumaFacts,sumaUtilidad,pagoVentasPropias,pagoCalculado,pagado,estado,esVerificado,impIva:impPagadoV2,sinIva,ivaRegistrado:!!ivaMesV2,deuda:Math.max(0,pagoCalculado-pagado)};
     });
   };
 
@@ -133,11 +133,23 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
                         {d.estado==="pagado"?"✓ Comisión pagada":"Comisión pendiente"}
                       </span>
                     </div>
-                    <div style={{fontSize:11,color:C.inkFaint,marginBottom:3}}>
-                      {d.esVerificado
-                        ? <>Comisión del mes: <b style={{color:C.ink}}>{fmt.money(d.pagoCalculado)}</b> <span style={{color:C.ok}}>✓ verificado contra planilla histórica / cartola real</span></>
-                        : <>Comisión del mes: <b style={{color:C.ink}}>{fmt.money(d.pagoCalculado)}</b> (mitad de la utilidad, {fmt.money(d.sumaUtilidad)}, de {fmt.money(d.sumaFacts)} facturados{d.pagoVentasPropias>0?` · + ${fmt.money(d.pagoVentasPropias)} de ventas propias`:""})</>
-                      }
+                    <div style={{fontSize:11,color:C.inkFaint,marginBottom:5,lineHeight:1.7}}>
+                      {d.esVerificado ? (
+                        <>Comisión del mes: <b style={{color:C.ink}}>{fmt.money(d.pagoCalculado)}</b> <span style={{color:C.ok}}>✓ verificado contra planilla histórica / cartola real</span></>
+                      ) : (
+                        <>
+                          <div>Utilidad del mes: <b style={{color:C.ink}}>+{fmt.money(d.sumaUtilidad)}</b> <span style={{color:C.inkFaint}}>(de {fmt.money(d.sumaFacts)} facturados)</span></div>
+                          {d.sinIva
+                            ? <div style={{color:C.inkFaint}}>Sin descuento de IVA (regla especial de ese mes)</div>
+                            : d.ivaRegistrado
+                              ? <div>IVA del mes a descontar: <b style={{color:C.danger}}>−{fmt.money(d.impIva)}</b></div>
+                              : <div style={{color:C.warn}}>⚠ IVA de este mes sin registrar todavía — se está calculando sin descontarlo, va a bajar cuando lo cargues</div>
+                          }
+                          <div>Mitad de (utilidad − IVA): <b style={{color:C.ink}}>{fmt.money(Math.round((d.sumaUtilidad-(d.sinIva?0:d.impIva))/2))}</b></div>
+                          {d.pagoVentasPropias>0&&<div>+ Ventas propias (100% de esa utilidad, sin repartir): <b style={{color:C.ink}}>+{fmt.money(d.pagoVentasPropias)}</b></div>}
+                          <div style={{fontWeight:800,color:C.ink,marginTop:2}}>= Comisión del mes: {fmt.money(d.pagoCalculado)}</div>
+                        </>
+                      )}
                     </div>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
                       <span style={{fontSize:11,color:C.inkMuted}}>Ya se le pagó: {fmt.money(d.pagado)}</span>
