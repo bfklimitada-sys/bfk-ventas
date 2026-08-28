@@ -5,10 +5,18 @@ import { C, MONO, btnP, fmt, iMono, iStyle, selStyle } from "../../lib/theme";
 export function PanelGastos({ gastos, categorias, vendedores, pagosVendedor, ocs, onNuevoGasto, onPagoVendedor }) {
   const [showForm,setShowForm]=useState(false);
   const [tipoForm,setTipoForm]=useState("gasto");
+  const [abierta,setAbierta]=useState(null);
 
   const ultimoPorCat=useMemo(()=>{
     const map={};
     for(const g of gastos){ const k=g.categoria_id; if(!map[k]||`${g.anio}-${g.mes}`>`${map[k].anio}-${map[k].mes}`) map[k]=g; }
+    return map;
+  },[gastos]);
+
+  const historialPorCat=useMemo(()=>{
+    const map={};
+    for(const g of gastos){ (map[g.categoria_id]=map[g.categoria_id]||[]).push(g); }
+    for(const k in map) map[k].sort((a,b)=>`${b.anio}-${String(b.mes).padStart(2,"0")}`.localeCompare(`${a.anio}-${String(a.mes).padStart(2,"0")}`));
     return map;
   },[gastos]);
 
@@ -18,16 +26,37 @@ export function PanelGastos({ gastos, categorias, vendedores, pagosVendedor, ocs
         <button onClick={()=>{setTipoForm("gasto");setShowForm(true);}} style={btnP(C.warn)}>+ Registrar gasto</button>
         <button onClick={()=>{setTipoForm("vendedor");setShowForm(true);}} style={{...btnP(C.teal),flex:1}}>+ Pago a vendedor</button>
       </div>
-      <div style={{fontSize:12.5,fontWeight:800,color:C.inkMuted,marginBottom:8,textTransform:"uppercase",letterSpacing:0.4}}>Último pago por categoría</div>
+      <div style={{fontSize:12.5,fontWeight:800,color:C.inkMuted,marginBottom:8,textTransform:"uppercase",letterSpacing:0.4}}>Gastos por categoría</div>
       {categorias.map(c=>{
         const u=ultimoPorCat[c.id];
+        const historial=historialPorCat[c.id]||[];
+        const estaAbierta=abierta===c.id;
         return (
-          <div key={c.id} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 15px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
-            <div style={{flex:1,minWidth:0}}>
-              <div style={{fontWeight:700,fontSize:13.5,color:C.ink}}>{c.nombre}</div>
-              {u?<div style={{fontSize:11.5,color:C.inkMuted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{u.subcategoria||u.detalle||"—"} · {fmt.monthYear(u.mes,u.anio)}</div>:<div style={{fontSize:11.5,color:C.inkFaint}}>Sin pagos</div>}
-            </div>
-            {u&&<div style={{fontFamily:MONO,fontWeight:800,fontSize:15,color:C.warn,flexShrink:0,whiteSpace:"nowrap"}}>{fmt.money(u.monto)}</div>}
+          <div key={c.id} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,marginBottom:8,overflow:"hidden"}}>
+            <button onClick={()=>historial.length&&setAbierta(estaAbierta?null:c.id)}
+              style={{width:"100%",background:"none",border:"none",padding:"12px 15px",cursor:historial.length?"pointer":"default",
+                display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,textAlign:"left"}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontWeight:700,fontSize:13.5,color:C.ink}}>{c.nombre}</div>
+                {u?<div style={{fontSize:11.5,color:C.inkMuted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{u.subcategoria||u.detalle||"—"} · {fmt.monthYear(u.mes,u.anio)}</div>:<div style={{fontSize:11.5,color:C.inkFaint}}>Sin pagos</div>}
+              </div>
+              {u&&<div style={{fontFamily:MONO,fontWeight:800,fontSize:15,color:C.warn,flexShrink:0,whiteSpace:"nowrap"}}>{fmt.money(u.monto)}</div>}
+              {historial.length>1&&<span style={{fontSize:11,color:C.inkFaint,flexShrink:0}}>{estaAbierta?"▲":"▼"}</span>}
+            </button>
+            {estaAbierta&&historial.length>0&&(
+              <div style={{padding:"0 15px 12px"}}>
+                <div style={{fontSize:10.5,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",marginBottom:6,paddingTop:8,borderTop:`1px solid ${C.border}`}}>Historial completo ({historial.length})</div>
+                {historial.map(g=>(
+                  <div key={g.id} style={{padding:"7px 0",borderBottom:`1px solid ${C.border}`}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:8}}>
+                      <span style={{fontSize:12,fontWeight:700,color:C.ink}}>{fmt.monthYear(g.mes,g.anio)}</span>
+                      <span style={{fontFamily:MONO,fontWeight:800,fontSize:13,color:C.warn,flexShrink:0}}>{fmt.money(g.monto)}</span>
+                    </div>
+                    {(g.detalle||g.subcategoria)&&<div style={{fontSize:11,color:C.inkMuted}}>{g.subcategoria||g.detalle}</div>}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         );
       })}
