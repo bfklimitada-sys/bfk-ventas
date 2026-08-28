@@ -64,17 +64,37 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
     });
   };
 
+  const [verHistorialIva,setVerHistorialIva]=useState(false);
+  const ivaOrdenado=useMemo(()=>ivaMensual.slice().sort((a,b)=>`${b.anio}-${String(b.mes).padStart(2,"0")}`.localeCompare(`${a.anio}-${String(a.mes).padStart(2,"0")}`)),[ivaMensual]);
+  const [editandoIvaExistente,setEditandoIvaExistente]=useState(null); // null = nuevo mes actual, o el registro a editar
+
   return (
     <div>
       <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:16,marginBottom:16}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
           <div style={{fontWeight:800,fontSize:14,color:C.ink}}>IVA del mes ({fmt.monthYear(mesActual,anioActual)})</div>
-          <button onClick={()=>setEditIva(true)} style={btnG}>{ivaMensual.find(i=>i.mes===mesActual&&i.anio===anioActual)?"Editar":"Registrar"}</button>
+          <button onClick={()=>{setEditandoIvaExistente(ivaMensual.find(i=>i.mes===mesActual&&i.anio===anioActual)||null);setEditIva(true);}} style={btnG}>{ivaMensual.find(i=>i.mes===mesActual&&i.anio===anioActual)?"Editar":"Registrar"}</button>
         </div>
         {ivaMensual.find(i=>i.mes===mesActual&&i.anio===anioActual)?
           <div style={{fontFamily:MONO,fontWeight:800,fontSize:18,color:C.info}}>{fmt.money(ivaMensual.find(i=>i.mes===mesActual&&i.anio===anioActual).iva_pagado)}</div>:
           <div style={{fontSize:12.5,color:C.inkFaint}}>Sin registrar.</div>
         }
+        <div style={{display:"flex",gap:14,marginTop:10,paddingTop:10,borderTop:`1px solid ${C.border}`}}>
+          <button onClick={()=>{setEditandoIvaExistente(null);setEditIva(true);}} style={{background:"none",border:"none",color:C.info,fontSize:11.5,fontWeight:700,cursor:"pointer",textDecoration:"underline",padding:0}}>+ Registrar IVA de otro mes</button>
+          {ivaMensual.length>0&&<button onClick={()=>setVerHistorialIva(v=>!v)} style={{background:"none",border:"none",color:C.inkFaint,fontSize:11.5,fontWeight:700,cursor:"pointer",textDecoration:"underline",padding:0}}>{verHistorialIva?"Ocultar historial":`Ver historial (${ivaMensual.length})`}</button>}
+        </div>
+        {verHistorialIva&&(
+          <div style={{marginTop:10}}>
+            {ivaOrdenado.map(i=>(
+              <button key={i.id} onClick={()=>{setEditandoIvaExistente(i);setEditIva(true);}}
+                style={{width:"100%",background:"none",border:"none",padding:"7px 0",borderBottom:`1px solid ${C.border}`,
+                  display:"flex",justifyContent:"space-between",cursor:"pointer",textAlign:"left"}}>
+                <span style={{fontSize:12,color:C.ink,fontWeight:700}}>{fmt.monthYear(i.mes,i.anio)}</span>
+                <span style={{fontFamily:MONO,fontSize:12,color:C.info,fontWeight:700}}>{fmt.money(i.iva_pagado)}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {vendedores.map(v=>{
@@ -138,7 +158,7 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
 
       {editIva&&(
         <Modal title="IVA mensual" onClose={()=>setEditIva(false)}>
-          <FormIvaMensual ivaExistente={ivaMensual.find(i=>i.mes===mesActual&&i.anio===anioActual)} onSave={async(d)=>{await onGuardarIva(d);setEditIva(false);}} />
+          <FormIvaMensual ivaExistente={editandoIvaExistente} onSave={async(d)=>{await onGuardarIva(d);setEditIva(false);}} />
         </Modal>
       )}
     </div>
