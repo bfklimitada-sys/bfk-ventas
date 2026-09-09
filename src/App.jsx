@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import * as XLSX from "xlsx";
 import { LoginScreen } from "./components/auth/LoginScreen";
 import { FormIngresarCompra } from "./components/forms/FormIngresarCompra";
 import { NuevaOCRapida } from "./components/forms/NuevaOCRapida";
@@ -38,6 +39,7 @@ export default function App() {
   const [accion,setAccion]=useState(null);
   const [menuMas,setMenuMas]=useState(false);
   const [toast,setToast]=useState(null);
+  const [exportando,setExportando]=useState(false);
   const [ocs,setOcs]=useState([]); const [financiadores,setFinanciadores]=useState([]); const [vendedores,setVendedores]=useState([]);
   const [categoriasGasto,setCategoriasGasto]=useState([]); const [gastos,setGastos]=useState([]); const [ivaMensual,setIvaMensual]=useState([]);
   const [pagosVendedor,setPagosVendedor]=useState([]); const [ajustesSaldo,setAjustesSaldo]=useState([]); const [perfiles,setPerfiles]=useState([]);
@@ -931,6 +933,56 @@ export default function App() {
     showToast("Compra registrada"); setAccion(null); await cargarTodo();
   };
 
+  const handleExportarTodo=async()=>{
+    setExportando(true);
+    try{
+      const t=session.access_token;
+      const contactosCobranza=await sel("contactos_cobranza",t).catch(()=>[]);
+      const perfilesTabla=await selPerfiles(t).catch(()=>[]);
+      const historialCambios=await sel("historial_cambios",t).catch(()=>[]);
+
+      // Las OC guardan sus eventos anidados (oc.eventos_compra, etc.) —
+      // hay que aplanarlos en hojas separadas, igual que las tablas reales.
+      const flatOC=[], evCompra=[], evEntrega=[], evFactura=[], evPagoCli=[], evPagoFin=[];
+      ocs.forEach(o=>{
+        const {eventos_compra,eventos_entrega,eventos_factura,eventos_pago_cliente,eventos_pago_financiamiento,...resto}=o;
+        flatOC.push(resto);
+        (eventos_compra||[]).forEach(e=>evCompra.push({...e,oc_id:o.id}));
+        (eventos_entrega||[]).forEach(e=>evEntrega.push({...e,oc_id:o.id}));
+        (eventos_factura||[]).forEach(e=>evFactura.push({...e,oc_id:o.id}));
+        (eventos_pago_cliente||[]).forEach(e=>evPagoCli.push({...e,oc_id:o.id}));
+        (eventos_pago_financiamiento||[]).forEach(e=>evPagoFin.push({...e,oc_id:o.id}));
+      });
+
+      // Perfiles: se agrega el nombre a cada fila del historial, para no
+      // tener que cruzar el UUID a mano cada vez que se revisa un cambio.
+      const nombrePorId=Object.fromEntries(perfilesTabla.map(p=>[p.id,p.nombre]));
+      const historialConNombre=historialCambios.map(h=>({...h,usuario_nombre_actual:nombrePorId[h.usuario_id]||h.usuario_nombre||"(desconocido)"}));
+
+      const hojas={
+        OrdenesCompra:flatOC, EventosCompra:evCompra, EventosEntrega:evEntrega,
+        EventosFactura:evFactura, EventosPagoCliente:evPagoCli, EventosPagoFinanciamiento:evPagoFin,
+        Financiadores:financiadores, Vendedores:vendedores, CategoriasGasto:categoriasGasto,
+        GastosIndirectos:gastos, IvaMensual:ivaMensual, PagosVendedor:pagosVendedor,
+        AjustesSaldo:ajustesSaldo, ContactosCobranza:contactosCobranza,
+        Perfiles:perfilesTabla, HistorialCambios:historialConNombre,
+      };
+
+      const wb=XLSX.utils.book_new();
+      Object.entries(hojas).forEach(([nombre,filas])=>{
+        const ws=XLSX.utils.json_to_sheet(filas.length?filas:[{}]);
+        XLSX.utils.book_append_sheet(wb,ws,nombre.slice(0,31));
+      });
+
+      const ahora=new Date();
+      const pad=n=>String(n).padStart(2,"0");
+      const nombreArchivo=`bfk-datos-${ahora.getFullYear()}-${pad(ahora.getMonth()+1)}-${pad(ahora.getDate())}-${pad(ahora.getHours())}-${pad(ahora.getMinutes())}.xlsx`;
+      XLSX.writeFile(wb,nombreArchivo);
+      showToast("Excel descargado");
+    }catch(e){ showToast("Error al exportar: "+e.message); }
+    finally{ setExportando(false); }
+  };
+
   const handleEntrega=async(data)=>{
     const t=session.access_token; const oc=ocs.find(o=>o.id===data.ocId);
     await ins("eventos_entrega",t,{id:genId("eve"),oc_id:data.ocId,fecha:data.fecha,persona_recibe:data.personaRecibe,creado_por:session.user.id});
@@ -1436,7 +1488,7 @@ export default function App() {
 
       {/* CONTENIDO */}
       <div style={{padding:16}}>
-        {tab==="panel"&&<PanelDashboard ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} aportes={aportes} perfil={perfil} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setTab(t);}} onAccion={(k)=>setAccion(k)} onSincronizar={completarTodasDesdeMP} onCorregirFechas={corregirFechasTodas} sincronizando={sincronizando} porAceptar={porAceptar} onActualizarPorAceptar={revisarPorAceptar} verificandoPorAceptar={verificandoPorAceptar} aceptadasSinCargar={aceptadasSinCargar} onCargarOC={(numero)=>{setCodigoOcRapida(numero);setAccion("compra_oc");}} onCargarTodasAceptadas={handleCargarTodasAceptadas} cargandoAceptadas={cargandoAceptadas} onActualizarAceptadas={revisarAceptadasSinCargar} verificandoAceptadas={verificandoAceptadas} canceladasEnMP={canceladasEnMP} onEliminarCancelada={handleEliminarOC} onActualizarCanceladas={revisarCanceladasEnMP} verificandoCanceladas={verificandoCanceladas} onValidarTodo={validarTodoContraMP} validandoTodo={validandoTodo} usoMP={usoMP} actMP={actMP} esCodigoMP={esCodigoMP} ultimaCartola={ultimaCartola} saldoBanco={saldoBanco} bancoMensual={bancoMensual} onEditarSaldo={()=>setAccion("saldo_banco")} />}
+        {tab==="panel"&&<PanelDashboard ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} aportes={aportes} perfil={perfil} onExportarTodo={handleExportarTodo} exportando={exportando} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setTab(t);}} onAccion={(k)=>setAccion(k)} onSincronizar={completarTodasDesdeMP} onCorregirFechas={corregirFechasTodas} sincronizando={sincronizando} porAceptar={porAceptar} onActualizarPorAceptar={revisarPorAceptar} verificandoPorAceptar={verificandoPorAceptar} aceptadasSinCargar={aceptadasSinCargar} onCargarOC={(numero)=>{setCodigoOcRapida(numero);setAccion("compra_oc");}} onCargarTodasAceptadas={handleCargarTodasAceptadas} cargandoAceptadas={cargandoAceptadas} onActualizarAceptadas={revisarAceptadasSinCargar} verificandoAceptadas={verificandoAceptadas} canceladasEnMP={canceladasEnMP} onEliminarCancelada={handleEliminarOC} onActualizarCanceladas={revisarCanceladasEnMP} verificandoCanceladas={verificandoCanceladas} onValidarTodo={validarTodoContraMP} validandoTodo={validandoTodo} usoMP={usoMP} actMP={actMP} esCodigoMP={esCodigoMP} ultimaCartola={ultimaCartola} saldoBanco={saldoBanco} bancoMensual={bancoMensual} onEditarSaldo={()=>setAccion("saldo_banco")} />}
         {tab==="compras"&&<PanelCompras ocs={ocs} perfiles={perfiles} filtroInicial={filtroCompras} ocFoco={ocFoco} contactos={contactos} onEnviarReclamo={handleEnviarReclamo} onRegistrarRespuestaReclamo={handleRegistrarRespuestaReclamo} onGuardarContacto={handleGuardarContacto} onGuardarDatosOC={handleGuardarDatosOC} onEditarEvento={handleEditarEvento} financiadores={financiadores} onConfirmarEntrega={handleEntrega} onEmitirFactura={handleFactura} onPagoCliente={handlePagoCliente} onPagoFinanciamiento={handlePagoFin} entidadesCatalogo={entidadesCatalogo} onGuardarLink={handleGuardarLink} onEliminarLink={handleEliminarLink} onEditarLink={handleEditarLink} onSincronizarFecha={handleSincronizarFecha} bloqueos={bloqueos} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={handleAgregarComentario} onEliminarComentario={handleEliminarComentario} onBloquear={handleBloquear} onLiberar={handleLiberar} onEliminarOC={handleEliminarOC} onEliminarFactura={handleEliminarFactura} onEliminarEvento={handleEliminarEvento} vendedores={vendedores} onIngresarCompra={handleIngresarCompra} onAsignarResponsable={handleAsignarResponsable} onGuardarPostventa={handleGuardarPostventa} />}
         {tab==="notif"&&<PanelNotificaciones notificaciones={notificaciones} ocs={ocs} onMarcarLeidas={handleMarcarNotificacionesLeidas} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setTab(t);}} />}
         {tab==="agenda"&&<PanelCalendario ocs={ocs} onMarcarFecha={handleMarcarFecha} />}
