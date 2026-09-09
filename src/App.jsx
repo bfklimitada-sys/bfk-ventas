@@ -976,7 +976,20 @@ export default function App() {
     showToast("Saldo ajustado"); await cargarTodo();
   };
   const handleNuevoGasto=async(data)=>{
-    await ins("gastos_indirectos",session.access_token,{id:genId("gas"),categoria_id:data.categoriaId,subcategoria:data.subcategoria,monto:data.monto,mes:data.mes,anio:data.anio,fecha:data.fecha,detalle:data.detalle,creado_por:session.user.id});
+    const t=session.access_token;
+    await ins("gastos_indirectos",t,{id:genId("gas"),categoria_id:data.categoriaId,subcategoria:data.subcategoria,monto:data.monto,mes:data.mes,anio:data.anio,fecha:data.fecha,detalle:data.detalle,creado_por:session.user.id});
+    // Si el gasto es de la categoría "Impuesto SII", se asume que es el IVA
+    // mensual — se refleja también en la tabla que usa el cálculo de
+    // comisión de vendedores, para que dé lo mismo por dónde se cargue y
+    // nunca quede desincronizado (como pasó varias veces antes).
+    if(data.categoriaId==="cat_impuesto"){
+      const existe=ivaMensual.find(i=>i.mes===data.mes&&i.anio===data.anio);
+      if(existe){
+        await upd("iva_mensual",t,existe.id,{iva_ventas:(Number(existe.iva_ventas)||0)+Number(data.monto),iva_pagado:(Number(existe.iva_pagado)||0)+Number(data.monto)});
+      }else{
+        await ins("iva_mensual",t,{id:genId("iva"),anio:data.anio,mes:data.mes,ventas_netas:0,iva_ventas:data.monto,compras_netas:0,iva_compras:0,iva_pagado:data.monto});
+      }
+    }
     showToast("Gasto registrado"); await cargarTodo();
   };
   const handlePagoVendedorSimple=async(data)=>{
