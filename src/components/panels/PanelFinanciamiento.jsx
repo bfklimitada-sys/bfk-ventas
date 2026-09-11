@@ -82,6 +82,28 @@ export function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onA
           <div style={{fontSize:11,color:C.inkFaint,marginTop:4}}>Deuda actual</div>
         </div>
         <button onClick={()=>setAjustando(fin)} style={{...btnP(C.nightSoft),marginBottom:16}}>Ajustar saldo manualmente</button>
+
+        {(()=>{
+          const compras=movs.filter(m=>m.tipo==="compra");
+          const pagos=movs.filter(m=>m.tipo==="pago");
+          const totalCompras=compras.reduce((s,m)=>s+m.monto,0);
+          const totalPagos=pagos.reduce((s,m)=>s-m.monto,0); // los pagos se guardan en negativo
+          return (
+            <div style={{display:"flex",gap:8,marginBottom:16}}>
+              <div style={{flex:1,background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"11px 13px"}}>
+                <div style={{fontSize:10.5,fontWeight:800,color:C.inkFaint,textTransform:"uppercase",marginBottom:4}}>Compras realizadas</div>
+                <div style={{fontFamily:MONO,fontWeight:800,fontSize:16,color:C.ink}}>{fmt.money(totalCompras)}</div>
+                <div style={{fontSize:11,color:C.inkMuted,marginTop:2}}>{compras.length} compra{compras.length!==1?"s":""}</div>
+              </div>
+              <div style={{flex:1,background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"11px 13px"}}>
+                <div style={{fontSize:10.5,fontWeight:800,color:C.inkFaint,textTransform:"uppercase",marginBottom:4}}>Abonos realizados</div>
+                <div style={{fontFamily:MONO,fontWeight:800,fontSize:16,color:C.ok}}>{fmt.money(totalPagos)}</div>
+                <div style={{fontSize:11,color:C.inkMuted,marginTop:2}}>{pagos.length} abono{pagos.length!==1?"s":""}</div>
+              </div>
+            </div>
+          );
+        })()}
+
         <div style={{fontSize:12,fontWeight:800,color:C.inkMuted,marginBottom:8,textTransform:"uppercase"}}>Cartola de movimientos</div>
         {movs.length===0&&<div style={{textAlign:"center",padding:20,color:C.inkFaint,fontSize:13}}>Sin movimientos registrados.</div>}
         {movs.map((m,i)=>(
