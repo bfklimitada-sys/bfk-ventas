@@ -1025,6 +1025,10 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, onSincroniz
     if(desde&&(!f||f<desde)) return false;
     if(hasta&&(!f||f>hasta)) return false;
     for(const f of FILTROS){ const s=filtros[f.key]; if(!s) continue; const ok=oc[f.okField]===f.okValue; if(s==="ok"&&!ok) return false; if(s==="pend"&&ok) return false; }
+    // Si se está filtrando "entrega pendiente" en particular, no tiene
+    // sentido mostrar OC que ni siquiera se han comprado todavía —
+    // deben ya estar compradas para que "falte entregar" signifique algo.
+    if(filtros.entrega==="pend"&&(oc.eventos_compra||[]).length===0) return false;
     return true;
   }).sort((a,b)=>{
     if(orden==="ganancia") return gananciaReal(b).pesos-gananciaReal(a).pesos;
