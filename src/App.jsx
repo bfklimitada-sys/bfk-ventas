@@ -317,7 +317,8 @@ export default function App() {
     }
     await ins("eventos_compra",t,{id:genId("evc"),oc_id:ocId,fecha:data.fecha,monto_venta:data.montoVenta,costo_compra:data.costoCompra,fecha_entrega_estimada:data.fechaEst,financiador_id:data.financiadorId,proveedor:data.proveedor,creado_por:session.user.id});
     const fin=financiadores.find(f=>f.id===data.financiadorId);
-    if(fin) await upd("financiadores",t,fin.id,{saldo_deuda:Number(fin.saldo_deuda)+data.costoCompra});
+    const esVentaPropia=ocs.find(o=>o.id===ocId)?.es_venta_propia;
+    if(fin&&!esVentaPropia) await upd("financiadores",t,fin.id,{saldo_deuda:Number(fin.saldo_deuda)+data.costoCompra});
     showToast(data.esNueva?"OC creada correctamente":"Compra registrada"); setAccion(null); await cargarTodo();
   };
   // ─── NUEVA OC RÁPIDA (datos desde Mercado Público) ───────────
@@ -924,7 +925,7 @@ export default function App() {
     await upd("ordenes_compra_v2",t,ocId,{estado_compra:"comprado",costo_total:costoCompra,financiador_id:financiadorId});
 
     const fin=financiadores.find(f=>f.id===financiadorId);
-    if(fin) await upd("financiadores",t,fin.id,{saldo_deuda:Number(fin.saldo_deuda||0)+costoCompra});
+    if(fin&&!oc?.es_venta_propia) await upd("financiadores",t,fin.id,{saldo_deuda:Number(fin.saldo_deuda||0)+costoCompra});
 
     await registrarCambio(t,{ocId,ocNumero:oc?.numero_oc,usuarioId:perfil?.id,
       usuarioNombre:perfil?.nombre,accion:"Compra registrada",campo:"costo_total",
