@@ -56,6 +56,7 @@ export function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onA
   const [editAporte,setEditAporte]=useState(null);
   const [selFin,setSelFin]=useState(null);
   const [ajustando,setAjustando]=useState(null);
+  const [verSolo,setVerSolo]=useState(null);
 
   const cartola=(finId)=>{
     const compras=(ocs||[]).filter(o=>o.financiador_id===finId).flatMap(o=>(o.eventos_compra||[]).map(e=>({
@@ -90,23 +91,30 @@ export function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onA
           const totalPagos=pagos.reduce((s,m)=>s-m.monto,0); // los pagos se guardan en negativo
           return (
             <div style={{display:"flex",gap:8,marginBottom:16}}>
-              <div style={{flex:1,background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"11px 13px"}}>
+              <button onClick={()=>setVerSolo(v=>v==="compra"?null:"compra")}
+                style={{flex:1,textAlign:"left",cursor:"pointer",background:verSolo==="compra"?C.infoLight:C.card,
+                  border:`1.5px solid ${verSolo==="compra"?C.info:C.border}`,borderRadius:12,padding:"11px 13px"}}>
                 <div style={{fontSize:10.5,fontWeight:800,color:C.inkFaint,textTransform:"uppercase",marginBottom:4}}>Compras realizadas</div>
                 <div style={{fontFamily:MONO,fontWeight:800,fontSize:16,color:C.ink}}>{fmt.money(totalCompras)}</div>
-                <div style={{fontSize:11,color:C.inkMuted,marginTop:2}}>{compras.length} compra{compras.length!==1?"s":""}</div>
-              </div>
-              <div style={{flex:1,background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"11px 13px"}}>
+                <div style={{fontSize:11,color:C.inkMuted,marginTop:2}}>{compras.length} compra{compras.length!==1?"s":""} · toca para ver{verSolo==="compra"?" (viendo)":""}</div>
+              </button>
+              <button onClick={()=>setVerSolo(v=>v==="pago"?null:"pago")}
+                style={{flex:1,textAlign:"left",cursor:"pointer",background:verSolo==="pago"?C.okLight:C.card,
+                  border:`1.5px solid ${verSolo==="pago"?C.ok:C.border}`,borderRadius:12,padding:"11px 13px"}}>
                 <div style={{fontSize:10.5,fontWeight:800,color:C.inkFaint,textTransform:"uppercase",marginBottom:4}}>Abonos realizados</div>
                 <div style={{fontFamily:MONO,fontWeight:800,fontSize:16,color:C.ok}}>{fmt.money(totalPagos)}</div>
-                <div style={{fontSize:11,color:C.inkMuted,marginTop:2}}>{pagos.length} abono{pagos.length!==1?"s":""}</div>
-              </div>
+                <div style={{fontSize:11,color:C.inkMuted,marginTop:2}}>{pagos.length} abono{pagos.length!==1?"s":""} · toca para ver{verSolo==="pago"?" (viendo)":""}</div>
+              </button>
             </div>
           );
         })()}
 
-        <div style={{fontSize:12,fontWeight:800,color:C.inkMuted,marginBottom:8,textTransform:"uppercase"}}>Cartola de movimientos</div>
-        {movs.length===0&&<div style={{textAlign:"center",padding:20,color:C.inkFaint,fontSize:13}}>Sin movimientos registrados.</div>}
-        {movs.map((m,i)=>(
+        <div style={{fontSize:12,fontWeight:800,color:C.inkMuted,marginBottom:8,textTransform:"uppercase"}}>
+          {verSolo==="compra"?`Solo compras (${movs.filter(m=>m.tipo==="compra").length})`:verSolo==="pago"?`Solo abonos (${movs.filter(m=>m.tipo==="pago").length})`:"Cartola de movimientos"}
+          {verSolo&&<button onClick={()=>setVerSolo(null)} style={{marginLeft:8,background:"none",border:"none",color:C.teal,fontSize:11,fontWeight:700,cursor:"pointer",textTransform:"none"}}>ver todo</button>}
+        </div>
+        {(verSolo?movs.filter(m=>m.tipo===verSolo):movs).length===0&&<div style={{textAlign:"center",padding:20,color:C.inkFaint,fontSize:13}}>Sin movimientos registrados.</div>}
+        {(verSolo?movs.filter(m=>m.tipo===verSolo):movs).map((m,i)=>(
           <div key={i} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"11px 14px",marginBottom:8}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <div>
