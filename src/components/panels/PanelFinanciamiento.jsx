@@ -128,7 +128,7 @@ export function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onA
               </thead>
               <tbody>
                 {(verSolo?movs.filter(m=>m.tipo===verSolo):movs).map((m,i)=>{
-                  const nombreQuien=perfiles?.find(p=>p.id===m.creadoPor)?.nombre||"—";
+                  const nombreQuien=perfiles?.find(p=>p.id===m.creadoPor)?.nombre||"Ajuste de validación";
                   return (
                     <tr key={i} style={{borderTop:`1px solid ${C.border}`,background:i%2?C.card:"transparent"}}>
                       <td style={{padding:"7px 10px",color:C.inkMuted,whiteSpace:"nowrap"}}>{fmt.date(m.fecha)}</td>
