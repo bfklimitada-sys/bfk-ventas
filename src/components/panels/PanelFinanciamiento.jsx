@@ -115,15 +115,15 @@ export function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onA
         </div>
         {(verSolo?movs.filter(m=>m.tipo===verSolo):movs).length===0&&<div style={{textAlign:"center",padding:20,color:C.inkFaint,fontSize:13}}>Sin movimientos registrados.</div>}
         {(verSolo?movs.filter(m=>m.tipo===verSolo):movs).length>0&&(
-          <div style={{overflowX:"auto",border:`1px solid ${C.border}`,borderRadius:12,marginBottom:16}}>
+          <div style={{overflowX:"auto",overflowY:"auto",maxHeight:440,border:`1px solid ${C.border}`,borderRadius:12,marginBottom:16}}>
             <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
               <thead>
                 <tr style={{background:C.nightSoft}}>
-                  <th style={{textAlign:"left",padding:"8px 10px",color:C.inkFaint,fontWeight:800,fontSize:10.5,textTransform:"uppercase",whiteSpace:"nowrap"}}>Fecha</th>
-                  <th style={{textAlign:"left",padding:"8px 10px",color:C.inkFaint,fontWeight:800,fontSize:10.5,textTransform:"uppercase"}}>Tipo</th>
-                  <th style={{textAlign:"left",padding:"8px 10px",color:C.inkFaint,fontWeight:800,fontSize:10.5,textTransform:"uppercase"}}>OC / Detalle</th>
-                  <th style={{textAlign:"left",padding:"8px 10px",color:C.inkFaint,fontWeight:800,fontSize:10.5,textTransform:"uppercase",whiteSpace:"nowrap"}}>Registrado por</th>
-                  <th style={{textAlign:"right",padding:"8px 10px",color:C.inkFaint,fontWeight:800,fontSize:10.5,textTransform:"uppercase",whiteSpace:"nowrap"}}>Monto</th>
+                  <th style={{position:"sticky",top:0,zIndex:1,background:C.nightSoft,textAlign:"left",padding:"8px 10px",color:C.inkFaint,fontWeight:800,fontSize:10.5,textTransform:"uppercase",whiteSpace:"nowrap"}}>Fecha</th>
+                  <th style={{position:"sticky",top:0,zIndex:1,background:C.nightSoft,textAlign:"left",padding:"8px 10px",color:C.inkFaint,fontWeight:800,fontSize:10.5,textTransform:"uppercase"}}>Tipo</th>
+                  <th style={{position:"sticky",top:0,zIndex:1,background:C.nightSoft,textAlign:"left",padding:"8px 10px",color:C.inkFaint,fontWeight:800,fontSize:10.5,textTransform:"uppercase"}}>OC / Detalle</th>
+                  <th style={{position:"sticky",top:0,zIndex:1,background:C.nightSoft,textAlign:"left",padding:"8px 10px",color:C.inkFaint,fontWeight:800,fontSize:10.5,textTransform:"uppercase",whiteSpace:"nowrap"}}>Registrado por</th>
+                  <th style={{position:"sticky",top:0,zIndex:1,background:C.nightSoft,textAlign:"right",padding:"8px 10px",color:C.inkFaint,fontWeight:800,fontSize:10.5,textTransform:"uppercase",whiteSpace:"nowrap"}}>Monto</th>
                 </tr>
               </thead>
               <tbody>
