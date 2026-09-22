@@ -114,20 +114,45 @@ export function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onA
           {verSolo&&<button onClick={()=>setVerSolo(null)} style={{marginLeft:8,background:"none",border:"none",color:C.teal,fontSize:11,fontWeight:700,cursor:"pointer",textTransform:"none"}}>ver todo</button>}
         </div>
         {(verSolo?movs.filter(m=>m.tipo===verSolo):movs).length===0&&<div style={{textAlign:"center",padding:20,color:C.inkFaint,fontSize:13}}>Sin movimientos registrados.</div>}
-        {(verSolo?movs.filter(m=>m.tipo===verSolo):movs).map((m,i)=>(
-          <div key={i} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"11px 14px",marginBottom:8}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <div>
-                <div style={{fontSize:12.5,fontWeight:700,color:C.ink}}>{m.categoria} {m.oc!=="—"?`· ${m.oc}`:""}</div>
-                <div style={{fontSize:11,color:C.inkFaint}}>{fmt.date(m.fecha)}{m.detalle?` · ${m.detalle}`:""}</div>
-                <div style={{fontSize:10.5,color:C.inkFaint,marginTop:2}}><Trazabilidad creadoPor={m.creadoPor} creadoEn={m.creadoEn} perfiles={perfiles} /></div>
-              </div>
-              <div style={{fontFamily:MONO,fontWeight:800,fontSize:14,color:m.monto>=0?C.danger:C.ok}}>
-                {m.monto>=0?"+":""}{fmt.money(m.monto)}
-              </div>
-            </div>
+        {(verSolo?movs.filter(m=>m.tipo===verSolo):movs).length>0&&(
+          <div style={{overflowX:"auto",border:`1px solid ${C.border}`,borderRadius:12,marginBottom:16}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+              <thead>
+                <tr style={{background:C.nightSoft}}>
+                  <th style={{textAlign:"left",padding:"8px 10px",color:C.inkFaint,fontWeight:800,fontSize:10.5,textTransform:"uppercase",whiteSpace:"nowrap"}}>Fecha</th>
+                  <th style={{textAlign:"left",padding:"8px 10px",color:C.inkFaint,fontWeight:800,fontSize:10.5,textTransform:"uppercase"}}>Tipo</th>
+                  <th style={{textAlign:"left",padding:"8px 10px",color:C.inkFaint,fontWeight:800,fontSize:10.5,textTransform:"uppercase"}}>OC / Detalle</th>
+                  <th style={{textAlign:"left",padding:"8px 10px",color:C.inkFaint,fontWeight:800,fontSize:10.5,textTransform:"uppercase",whiteSpace:"nowrap"}}>Registrado por</th>
+                  <th style={{textAlign:"right",padding:"8px 10px",color:C.inkFaint,fontWeight:800,fontSize:10.5,textTransform:"uppercase",whiteSpace:"nowrap"}}>Monto</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(verSolo?movs.filter(m=>m.tipo===verSolo):movs).map((m,i)=>{
+                  const nombreQuien=perfiles?.find(p=>p.id===m.creadoPor)?.nombre||"—";
+                  return (
+                    <tr key={i} style={{borderTop:`1px solid ${C.border}`,background:i%2?C.card:"transparent"}}>
+                      <td style={{padding:"7px 10px",color:C.inkMuted,whiteSpace:"nowrap"}}>{fmt.date(m.fecha)}</td>
+                      <td style={{padding:"7px 10px",color:C.ink,fontWeight:700}}>{m.categoria}</td>
+                      <td style={{padding:"7px 10px",color:C.inkMuted}}>{m.oc!=="—"?m.oc:(m.detalle||"—")}</td>
+                      <td style={{padding:"7px 10px",color:C.inkFaint,whiteSpace:"nowrap"}}>{nombreQuien}</td>
+                      <td style={{padding:"7px 10px",textAlign:"right",fontFamily:MONO,fontWeight:800,whiteSpace:"nowrap",color:m.monto>=0?C.danger:C.ok}}>
+                        {m.monto>=0?"+":""}{fmt.money(m.monto)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr style={{borderTop:`2px solid ${C.border}`,background:C.nightSoft}}>
+                  <td colSpan={4} style={{padding:"8px 10px",fontWeight:800,color:C.ink,fontSize:11.5}}>Total {verSolo==="compra"?"compras":verSolo==="pago"?"abonos":"neto"}</td>
+                  <td style={{padding:"8px 10px",textAlign:"right",fontFamily:MONO,fontWeight:800,fontSize:13,color:C.ink,whiteSpace:"nowrap"}}>
+                    {fmt.money((verSolo?movs.filter(m=>m.tipo===verSolo):movs).reduce((s,m)=>s+m.monto,0))}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
           </div>
-        ))}
+        )}
         {ajustando&&(
           <Modal title={`Ajustar saldo · ${ajustando.nombre}`} onClose={()=>setAjustando(null)}>
             <FormAjusteSaldo financiador={ajustando} onSave={async(data)=>{await onAjustar(data);setAjustando(null);}} />
