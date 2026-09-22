@@ -59,9 +59,13 @@ export function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onA
   const [verSolo,setVerSolo]=useState(null);
 
   const cartola=(finId)=>{
-    const compras=(ocs||[]).filter(o=>o.financiador_id===finId).flatMap(o=>(o.eventos_compra||[]).map(e=>({
-      tipo:"compra", fecha:e.fecha, oc:o.numero_oc, monto:e.costo_compra||0, categoria:"Compra", creadoEn:e.creadoEn, creadoPor:e.creado_por,
-    })));
+    const compras=(ocs||[]).filter(o=>o.financiador_id===finId&&(o.eventos_compra||[]).length>0).map(o=>{
+      const primerEvento=(o.eventos_compra||[]).slice().sort((a,b)=>new Date(a.fecha)-new Date(b.fecha))[0];
+      // El monto sale de costo_total (lo mismo que usa el saldo de deuda),
+      // no de sumar los eventos — así nunca pueden desalinearse si alguien
+      // corrige el costo desde "Editar datos" sin tocar el evento original.
+      return {tipo:"compra", fecha:primerEvento.fecha, oc:o.numero_oc, monto:o.costo_total||0, categoria:"Compra", creadoEn:primerEvento.creadoEn, creadoPor:primerEvento.creado_por};
+    });
     const pagos=(ocs||[]).flatMap(o=>(o.eventos_pago_financiamiento||[]).filter(e=>{
       return e.financiador_id===finId;
     }).map(e=>({tipo:"pago",fecha:e.fecha,oc:o.numero_oc||"—",monto:-(e.monto||0),categoria:"Pago",creadoEn:e.creadoEn,creadoPor:e.creado_por})));
