@@ -3,6 +3,7 @@ import { Field, Leyenda } from "../ui/Basicos";
 import { sel } from "../../lib/supabase";
 import { C, MONO, btnP, fmt, iMono } from "../../lib/theme";
 import { Ic } from "../ui/Iconos";
+import { facturaVigente, plazoPago } from "../../lib/calculos";
 
 export function PanelCalendario({ ocs, onMarcarFecha }) {
   const hoy=new Date();
@@ -16,6 +17,29 @@ export function PanelCalendario({ ocs, onMarcarFecha }) {
   const DIAS=["L","M","M","J","V","S","D"];
 
   const iso=(y,m,d)=>`${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+
+  // Vencimientos de factura y promesas de pago (solo lectura, derivados de las OC).
+  const sumarDias=(fechaStr,n)=>{ const d=new Date(String(fechaStr).slice(0,10)+"T00:00:00Z"); d.setUTCDate(d.getUTCDate()+n); return d.toISOString().slice(0,10); };
+  const {vencenPorDia,promesasPorDia,facturasVencidas}=useMemo(()=>{
+    const vp={},pp={},fv=[];
+    const hoyIso=iso(hoy.getFullYear(),hoy.getMonth(),hoy.getDate());
+    for(const oc of ocs){
+      if((oc.tipo_registro||"venta")!=="venta"||oc.estado_pago_cliente==="pagado") continue;
+      const evF=oc.estado_factura_propia==="emitida"?facturaVigente(oc):null;
+      if(evF?.fecha){
+        const k=sumarDias(evF.fecha,plazoPago(oc));
+        (vp[k]=vp[k]||[]).push({oc,evF});
+        if(k<hoyIso) fv.push({oc,evF,k});
+      }
+      const ultimo=(oc.oc_reclamos||[]).slice().sort((a,b)=>(b.fecha||"").localeCompare(a.fecha||""))[0];
+      if(ultimo?.fecha_prometida){
+        const k=String(ultimo.fecha_prometida).slice(0,10);
+        (pp[k]=pp[k]||[]).push({oc,k});
+      }
+    }
+    fv.sort((a,b)=>a.k.localeCompare(b.k));
+    return {vencenPorDia:vp,promesasPorDia:pp,facturasVencidas:fv};
+  },[ocs]);
 
   const {estimadasPorDia,realesPorDia,vencidas}=useMemo(()=>{
     const est={},rea={},ven=[];
@@ -78,6 +102,19 @@ export function PanelCalendario({ ocs, onMarcarFecha }) {
         </div>
       )}
 
+      {facturasVencidas.length>0&&(
+        <div style={{background:C.warnLight,border:`1px solid ${C.warn}`,borderRadius:12,padding:"10px 12px",marginBottom:12}}>
+          <div style={{fontWeight:800,color:C.warn,fontSize:12,marginBottom:6}}><Ic n="⚠"/> {facturasVencidas.length} factura{facturasVencidas.length>1?"s":""} vencida{facturasVencidas.length>1?"s":""} sin cobrar</div>
+          {facturasVencidas.slice(0,8).map(({oc,evF,k})=>(
+            <div key={oc.id} style={{fontSize:12,display:"flex",justifyContent:"space-between",marginBottom:3}}>
+              <span style={{fontFamily:MONO,fontWeight:700}}>{oc.numero_oc}</span>
+              <span style={{color:C.warn}}>venció {fmt.date(k)}</span>
+            </div>
+          ))}
+          {facturasVencidas.length>8&&<div style={{fontSize:12,color:C.inkMuted}}>y {facturasVencidas.length-8} más en Alertas</div>}
+        </div>
+      )}
+
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
         <button onClick={()=>cambiarMes(-1)} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 12px",fontSize:14,cursor:"pointer"}}><Ic n="chevL"/></button>
         <div style={{fontWeight:800,fontSize:14}}>{MESES[mes]} {anio}</div>
@@ -87,6 +124,8 @@ export function PanelCalendario({ ocs, onMarcarFecha }) {
       <div style={{display:"flex",gap:12,marginBottom:8,fontSize:12,color:C.inkMuted}}>
         <span><span style={{color:C.info}}>●</span> Estimada</span>
         <span><span style={{color:C.ok}}>●</span> Realizada</span>
+        <span><span style={{color:C.warn}}>●</span> Vence factura</span>
+        <span><span style={{color:C.purple}}>●</span> Promesa de pago</span>
       </div>
 
       <div style={{background:C.card,borderRadius:12,padding:"10px 8px",border:`1px solid ${C.border}`}}>
@@ -99,6 +138,8 @@ export function PanelCalendario({ ocs, onMarcarFecha }) {
             const k=iso(anio,mes,d);
             const tieneEst=(estimadasPorDia[k]||[]).length>0;
             const tieneReal=(realesPorDia[k]||[]).length>0;
+            const tieneVence=(vencenPorDia[k]||[]).length>0;
+            const tienePromesa=(promesasPorDia[k]||[]).length>0;
             const esHoy=d===hoyD;
             const sel=d===diaSel;
             return (
@@ -111,6 +152,8 @@ export function PanelCalendario({ ocs, onMarcarFecha }) {
                 <div style={{display:"flex",gap:2}}>
                   {tieneEst&&<span style={{width:5,height:5,borderRadius:"50%",background:C.info}} />}
                   {tieneReal&&<span style={{width:5,height:5,borderRadius:"50%",background:C.ok}} />}
+                  {tieneVence&&<span style={{width:5,height:5,borderRadius:"50%",background:C.warn}} />}
+                  {tienePromesa&&<span style={{width:5,height:5,borderRadius:"50%",background:C.purple}} />}
                 </div>
               </button>
             );
@@ -164,14 +207,38 @@ export function PanelCalendario({ ocs, onMarcarFecha }) {
               ))}
             </div>
           )}
-          {!(estimadasPorDia[kSel]||[]).length&&!(realesPorDia[kSel]||[]).length&&(
-            <div style={{fontSize:12,color:C.inkFaint}}>Sin entregas este día</div>
+          {(vencenPorDia[kSel]||[]).length>0&&(
+            <div style={{marginTop:8}}>
+              <div style={{fontSize:12,fontWeight:700,color:C.warn,textTransform:"uppercase",marginBottom:4}}>● Vencen facturas</div>
+              {(vencenPorDia[kSel]||[]).map(({oc,evF})=>(
+                <div key={oc.id} style={{fontSize:12,display:"flex",justifyContent:"space-between",marginBottom:3}}>
+                  <span style={{fontFamily:MONO,fontWeight:700}}>{oc.numero_oc}</span>
+                  <span style={{color:C.inkMuted}}>Factura {evF.numero_factura||"—"} · {fmt.money((oc.monto_facturado||0)-(oc.monto_cobrado||0))}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {(promesasPorDia[kSel]||[]).length>0&&(
+            <div style={{marginTop:8}}>
+              <div style={{fontSize:12,fontWeight:700,color:C.purple,textTransform:"uppercase",marginBottom:4}}>● Promesas de pago</div>
+              {(promesasPorDia[kSel]||[]).map(({oc})=>(
+                <div key={oc.id} style={{fontSize:12,display:"flex",justifyContent:"space-between",marginBottom:3}}>
+                  <span style={{fontFamily:MONO,fontWeight:700}}>{oc.numero_oc}</span>
+                  <span style={{color:C.inkMuted}}>{oc.cliente||""}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {!(estimadasPorDia[kSel]||[]).length&&!(realesPorDia[kSel]||[]).length&&!(vencenPorDia[kSel]||[]).length&&!(promesasPorDia[kSel]||[]).length&&(
+            <div style={{fontSize:12,color:C.inkFaint}}>Sin eventos este día</div>
           )}
         </div>
       )}
       <Leyenda titulo="¿Qué significan los puntos?" items={[
         {muestra:"●", color:C.info, bg:C.infoLight, texto:"Azul: entrega estimada, la fecha que se puso al registrar la compra."},
         {muestra:"●", color:C.ok, bg:C.okLight, texto:"Verde: entrega realizada, la fecha real en que se confirmó."},
+        {muestra:"●", color:C.warn, bg:C.warnLight, texto:"Amarillo: vence una factura (fecha de factura + plazo de pago de la OC)."},
+        {muestra:"●", color:C.purple, bg:C.purpleLight, texto:"Morado: fecha en que el cliente prometió pagar."},
         {muestra:"▢", texto:"Recuadro negro: hoy. Recuadro verde: el día que tienes seleccionado."},
       ]} />
     </div>
