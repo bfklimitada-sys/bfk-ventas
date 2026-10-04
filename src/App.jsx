@@ -1438,7 +1438,12 @@ export default function App() {
       {nodo}
     </div>
   ):nodo;
-  const imprimirTodo=()=>{ setTodo(true); setMenuMas(false); };
+  const imprimirTodo=()=>{
+    setMenuMas(false); setTodo(true);
+    window.scrollTo(0,0);
+    // Deja que se dibujen todas las pantallas y luego abre el diálogo de impresión.
+    setTimeout(()=>{ window.scrollTo(0,0); try{ lanzarImpresion(); }catch{} },900);
+  };
   const lanzarImpresion=()=>{
     const antes=document.title;
     document.title=`BFK Ltda - Todas las pantallas - ${new Date().toISOString().slice(0,10)}`;
@@ -1481,8 +1486,8 @@ export default function App() {
       </div>
 
       {todo&&(
-        <div data-noprint style={{position:"sticky",top:0,zIndex:30,background:C.card,borderBottom:`1px solid ${C.border}`,padding:"12px 16px calc(12px)",display:"flex",gap:10,alignItems:"center"}}>
-          <div style={{flex:1,fontSize:13,color:C.inkMuted,lineHeight:1.35}}>Vista de impresión con todas las pantallas.</div>
+        <div data-noprint style={{position:"sticky",top:0,zIndex:30,background:C.tealLight,borderBottom:`2px solid ${C.teal}`,padding:"12px 16px",display:"flex",gap:10,alignItems:"center"}}>
+          <div style={{flex:1,fontSize:13,color:C.ink,fontWeight:700,lineHeight:1.35}}>Vista de impresión con todas las pantallas.<span style={{display:"block",fontWeight:500,color:C.inkMuted,fontSize:12}}>Si no se abrió la impresión, toca "Imprimir / PDF".</span></div>
           <button onClick={lanzarImpresion} style={{background:C.tealDark||C.teal,color:"#fff",border:"none",borderRadius:10,padding:"10px 14px",fontSize:13,fontWeight:700,cursor:"pointer"}}>Imprimir / PDF</button>
           <button onClick={()=>setTodo(false)} style={{background:"transparent",color:C.inkMuted,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 14px",fontSize:13,fontWeight:600,cursor:"pointer"}}>Volver</button>
         </div>
