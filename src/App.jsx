@@ -22,6 +22,7 @@ import { PanelNotificaciones, calcularAlertas } from "./components/ui/Multiusuar
 import { SESSION_KEY, SUPABASE_URL, bloquearOC, crearNotificacion, del, genId, getBloqueosVigentes, getPerfil, hdrs, ins, liberarOC, registrarCambio, sel, selOCs, selPerfiles, storageGet, storageSet, supaRefresh, supaSignOut, upd, updRol } from "./lib/supabase";
 import { C, MONO, SANS, fmt } from "./lib/theme";
 import { Ic } from "./components/ui/Iconos";
+import { generarPdfPantallas } from "./lib/pdfPantallas";
 
 export const TABS=[
   {key:"panel",label:"Panel",icon:<Ic n="📊"/>},
@@ -36,6 +37,7 @@ export const TABS=[
 
 export default function App() {
   const [todo,setTodo]=useState(false); // vista de impresión de todas las pantallas
+  const [pdfEstado,setPdfEstado]=useState(null); // null | {fase:"generando",txt} | {fase:"listo",url,nombre} | {fase:"error",txt}
   const [session,setSession]=useState(null); const [perfil,setPerfil]=useState(null); const [loadingApp,setLoadingApp]=useState(true);
   const [tab,setTab]=useState("panel"); const [filtroCompras,setFiltroCompras]=useState(null); const [ocFoco,setOcFoco]=useState(null);
   // OCs ya consultadas a la API en esta sesión (para no reintentar en bucle)
@@ -1433,23 +1435,39 @@ export default function App() {
   // Imprimir / guardar como PDF TODAS las pantallas en un solo documento (solo lectura, no toca datos).
   // En iPhone: Compartir > Imprimir, y pellizcar la vista previa para obtener el PDF.
   const hoja=(k,nodo)=>todo?(
-    <div key={"hoja_"+k} style={{breakBefore:k==="panel"?"auto":"page",pageBreakBefore:k==="panel"?"auto":"always",marginBottom:28}}>
+    <div key={"hoja_"+k} data-hoja style={{breakBefore:k==="panel"?"auto":"page",pageBreakBefore:k==="panel"?"auto":"always",marginBottom:28}}>
       <div style={{fontWeight:800,fontSize:20,color:C.ink,margin:"4px 0 12px",paddingBottom:6,borderBottom:`2px solid ${C.teal}`}}>{TABS.find(t=>t.key===k)?.label||k}</div>
       {nodo}
     </div>
   ):nodo;
-  const imprimirTodo=()=>{
-    setMenuMas(false); setTodo(true);
-    window.scrollTo(0,0);
-    // Deja que se dibujen todas las pantallas y luego abre el diálogo de impresión.
-    setTimeout(()=>{ window.scrollTo(0,0); try{ lanzarImpresion(); }catch{} },900);
+  const cerrarVistaTodo=()=>{
+    setPdfEstado(prev=>{ if(prev?.url) URL.revokeObjectURL(prev.url); return null; });
+    setTodo(false);
   };
-  const lanzarImpresion=()=>{
-    const antes=document.title;
-    document.title=`BFK Ltda - Todas las pantallas - ${new Date().toISOString().slice(0,10)}`;
-    const restaurar=()=>{document.title=antes;window.removeEventListener("afterprint",restaurar);};
-    window.addEventListener("afterprint",restaurar);
-    window.print();
+  const generarPdfTodo=async()=>{
+    const els=[...document.querySelectorAll("[data-hoja]")];
+    if(!els.length){ setPdfEstado({fase:"error",txt:"No hay pantallas para exportar."}); return; }
+    setPdfEstado({fase:"generando",txt:"Generando PDF…"});
+    try{
+      window.scrollTo(0,0);
+      const blob=await generarPdfPantallas(els,{fondo:C.paper,alMedida:(n,t)=>setPdfEstado({fase:"generando",txt:`Generando PDF… pantalla ${n} de ${t}`})});
+      const nombre=`BFK Ltda - Todas las pantallas - ${new Date().toISOString().slice(0,10)}.pdf`;
+      setPdfEstado({fase:"listo",url:URL.createObjectURL(blob),nombre,blob});
+    }catch(e){ setPdfEstado({fase:"error",txt:"No se pudo generar el PDF. Intenta de nuevo."}); }
+  };
+  const compartirPdf=async()=>{
+    const e=pdfEstado; if(!e?.blob) return;
+    try{
+      const f=new File([e.blob],e.nombre,{type:"application/pdf"});
+      if(navigator.canShare&&navigator.canShare({files:[f]})){ await navigator.share({files:[f],title:e.nombre}); return; }
+    }catch(err){ if(err?.name==="AbortError") return; }
+    window.open(e.url,"_blank"); // respaldo: abre el PDF en el visor del navegador
+  };
+  const imprimirTodo=()=>{
+    setMenuMas(false); setTodo(true); setPdfEstado(null);
+    window.scrollTo(0,0);
+    // Espera a que se dibujen todas las pantallas y genera el PDF.
+    setTimeout(()=>{ generarPdfTodo(); },1200);
   };
 
   return (
@@ -1486,10 +1504,15 @@ export default function App() {
       </div>
 
       {todo&&(
-        <div data-noprint style={{position:"sticky",top:0,zIndex:30,background:C.tealLight,borderBottom:`2px solid ${C.teal}`,padding:"12px 16px",display:"flex",gap:10,alignItems:"center"}}>
-          <div style={{flex:1,fontSize:13,color:C.ink,fontWeight:700,lineHeight:1.35}}>Vista de impresión con todas las pantallas.<span style={{display:"block",fontWeight:500,color:C.inkMuted,fontSize:12}}>Si no se abrió la impresión, toca "Imprimir / PDF".</span></div>
-          <button onClick={lanzarImpresion} style={{background:C.tealDark||C.teal,color:"#fff",border:"none",borderRadius:10,padding:"10px 14px",fontSize:13,fontWeight:700,cursor:"pointer"}}>Imprimir / PDF</button>
-          <button onClick={()=>setTodo(false)} style={{background:"transparent",color:C.inkMuted,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 14px",fontSize:13,fontWeight:600,cursor:"pointer"}}>Volver</button>
+        <div data-noprint style={{position:"sticky",top:0,zIndex:30,background:C.tealLight,borderBottom:`2px solid ${C.teal}`,padding:"12px 16px",display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+          <div style={{flex:1,minWidth:180,fontSize:13,color:C.ink,fontWeight:700,lineHeight:1.35}}>
+            {pdfEstado?.fase==="generando"?pdfEstado.txt:pdfEstado?.fase==="listo"?"PDF listo con todas las pantallas.":pdfEstado?.fase==="error"?pdfEstado.txt:"Preparando todas las pantallas…"}
+            {pdfEstado?.fase==="listo"&&<span style={{display:"block",fontWeight:500,color:C.inkMuted,fontSize:12}}>Toca "Guardar PDF" y elige "Guardar en Archivos".</span>}
+          </div>
+          {pdfEstado?.fase==="listo"&&<button onClick={compartirPdf} style={{background:C.tealDark,color:"#fff",border:"none",borderRadius:10,padding:"10px 14px",fontSize:13,fontWeight:700,cursor:"pointer"}}>Guardar PDF</button>}
+          {pdfEstado?.fase==="listo"&&<a href={pdfEstado.url} target="_blank" rel="noreferrer" style={{color:C.tealDark,fontSize:13,fontWeight:700,padding:"10px 6px"}}>Abrir</a>}
+          {pdfEstado?.fase==="error"&&<button onClick={generarPdfTodo} style={{background:C.tealDark,color:"#fff",border:"none",borderRadius:10,padding:"10px 14px",fontSize:13,fontWeight:700,cursor:"pointer"}}>Reintentar</button>}
+          <button onClick={cerrarVistaTodo} style={{background:"transparent",color:C.inkMuted,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 14px",fontSize:13,fontWeight:600,cursor:"pointer"}}>Volver</button>
         </div>
       )}
       {/* CONTENIDO */}
