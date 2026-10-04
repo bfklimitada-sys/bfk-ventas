@@ -12,6 +12,21 @@ export const MONO = "'JetBrains Mono','SF Mono',Menlo,Consolas,monospace";
 
 export const SANS = "'Inter',system-ui,-apple-system,sans-serif";
 
+// ─── Reglas visuales únicas (Fase 4) ─────────────────────────
+// Escala de espaciado, radios, tamaños de texto y zona táctil mínima.
+export const S = { xs:4, sm:8, md:12, lg:16, xl:24 };
+export const R = { sm:8, md:10, lg:14, xl:18, pill:999 };
+export const T = { min:12, small:12, body:14, title:15, h2:18, h1:22 };
+export const TOUCH = 44;
+
+export const sombra = {
+  card:"0 1px 2px rgba(15,23,42,0.04), 0 1px 3px rgba(15,23,42,0.06)",
+  flotante:"0 8px 24px rgba(0,0,0,0.25)",
+};
+
+// Estilo de tarjeta reutilizable
+export const cardStyle = { background:C.card, border:`1px solid ${C.border}`, borderRadius:R.lg, boxShadow:sombra.card };
+
 export const fmt = {
   money: (n) => "$"+Math.round(Number(n)||0).toLocaleString("es-CL"),
   date: (d) => { if(!d) return "—"; const[y,m,dd]=d.split("-"); return `${dd}/${m}/${y.slice(2)}`; },
@@ -44,12 +59,12 @@ export const calcMargen=(venta,costo)=>{
   return {pesos,pct,color,bg};
 };
 
-export const iStyle = { width:"100%", padding:"10px 12px", borderRadius:9, border:`1.5px solid ${C.border}`, fontSize:14, color:C.ink, background:C.card, boxSizing:"border-box", fontFamily:SANS };
+export const iStyle = { width:"100%", padding:"10px 12px", minHeight:42, borderRadius:R.md, border:`1.5px solid ${C.border}`, fontSize:14, color:C.ink, background:C.card, boxSizing:"border-box", fontFamily:SANS };
 
 export const iMono = { ...iStyle, fontFamily:MONO };
 
 export const selStyle = { ...iStyle, cursor:"pointer" };
 
-export const btnP = (bg=C.teal) => ({ padding:"11px 16px", borderRadius:10, border:"none", background:bg, color:"#fff", fontWeight:700, fontSize:13.5, cursor:"pointer", width:"100%" });
+export const btnP = (bg=C.teal) => ({ padding:"11px 16px", minHeight:TOUCH, borderRadius:R.md, border:"none", background:bg, color:"#fff", fontWeight:700, fontSize:14, cursor:"pointer", width:"100%" });
 
-export const btnG = { padding:"11px 16px", borderRadius:10, border:`1.5px solid ${C.border}`, background:C.card, color:C.ink, fontWeight:600, fontSize:13.5, cursor:"pointer" };
+export const btnG = { padding:"11px 16px", minHeight:TOUCH, borderRadius:R.md, border:`1.5px solid ${C.border}`, background:C.card, color:C.ink, fontWeight:600, fontSize:14, cursor:"pointer" };

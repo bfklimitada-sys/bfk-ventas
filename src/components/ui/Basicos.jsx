@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { C, MONO, fmt, iMono } from "../../lib/theme";
+import { C, MONO, R, fmt, iMono } from "../../lib/theme";
 
 export function Modal({ title, onClose, children }) {
   return (
@@ -7,7 +7,7 @@ export function Modal({ title, onClose, children }) {
       <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:"18px 18px 0 0",width:"100%",maxWidth:480,maxHeight:"92vh",overflowY:"auto",boxShadow:"0 -8px 40px rgba(0,0,0,0.25)"}}>
         <div style={{position:"sticky",top:0,background:C.card,padding:"16px 20px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",zIndex:2}}>
           <span style={{fontWeight:800,fontSize:15,color:C.ink}}>{title}</span>
-          <button onClick={onClose} style={{background:C.paper,border:"none",borderRadius:8,width:30,height:30,cursor:"pointer",fontSize:15,color:C.inkMuted}}>✕</button>
+          <button onClick={onClose} style={{background:C.paper,border:"none",borderRadius:R.sm,width:40,height:40,cursor:"pointer",fontSize:15,color:C.inkMuted}}>✕</button>
         </div>
         <div style={{padding:20}}>{children}</div>
       </div>
