@@ -80,8 +80,8 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
           <div style={{fontSize:12.5,color:C.inkFaint}}>Sin registrar.</div>
         }
         <div style={{display:"flex",gap:14,marginTop:10,paddingTop:10,borderTop:`1px solid ${C.border}`}}>
-          <button onClick={()=>{setEditandoIvaExistente(null);setEditIva(true);}} style={{background:"none",border:"none",color:C.info,fontSize:11.5,fontWeight:700,cursor:"pointer",textDecoration:"underline",padding:0}}>+ Registrar IVA de otro mes</button>
-          {ivaMensual.length>0&&<button onClick={()=>setVerHistorialIva(v=>!v)} style={{background:"none",border:"none",color:C.inkFaint,fontSize:11.5,fontWeight:700,cursor:"pointer",textDecoration:"underline",padding:0}}>{verHistorialIva?"Ocultar historial":`Ver historial (${ivaMensual.length})`}</button>}
+          <button onClick={()=>{setEditandoIvaExistente(null);setEditIva(true);}} style={{background:"none",border:"none",color:C.info,fontSize:12,fontWeight:700,cursor:"pointer",textDecoration:"underline",padding:0}}>+ Registrar IVA de otro mes</button>
+          {ivaMensual.length>0&&<button onClick={()=>setVerHistorialIva(v=>!v)} style={{background:"none",border:"none",color:C.inkFaint,fontSize:12,fontWeight:700,cursor:"pointer",textDecoration:"underline",padding:0}}>{verHistorialIva?"Ocultar historial":`Ver historial (${ivaMensual.length})`}</button>}
         </div>
         {verHistorialIva&&(
           <div style={{marginTop:10}}>
@@ -111,20 +111,20 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontWeight:800,fontSize:14.5,color:C.ink}}>{v.nombre}</div>
                 {deudaTotal>0
-                  ? <div style={{fontSize:11.5,color:C.warn,fontWeight:700,marginTop:2}}>Falta pagarle {fmt.money(deudaTotal)}</div>
+                  ? <div style={{fontSize:12,color:C.warn,fontWeight:700,marginTop:2}}>Falta pagarle {fmt.money(deudaTotal)}</div>
                   : meses>0
-                    ? <div style={{fontSize:11.5,color:C.ok,fontWeight:700,marginTop:2}}>✓ Comisiones al día{ultimoPagado?` · último pago ${ultimoPagado.label}`:""}</div>
-                    : <div style={{fontSize:11.5,color:C.inkFaint,marginTop:2}}>Sin ventas registradas</div>
+                    ? <div style={{fontSize:12,color:C.ok,fontWeight:700,marginTop:2}}>✓ Comisiones al día{ultimoPagado?` · último pago ${ultimoPagado.label}`:""}</div>
+                    : <div style={{fontSize:12,color:C.inkFaint,marginTop:2}}>Sin ventas registradas</div>
                 }
               </div>
-              {meses>0&&<span style={{fontSize:10.5,color:C.inkFaint,flexShrink:0}}>{meses} mes{meses>1?"es":""}</span>}
-              <span style={{fontSize:11,color:C.inkFaint,flexShrink:0}}>{estaAbierto?"▲":"▼"}</span>
+              {meses>0&&<span style={{fontSize:12,color:C.inkFaint,flexShrink:0}}>{meses} mes{meses>1?"es":""}</span>}
+              <span style={{fontSize:12,color:C.inkFaint,flexShrink:0}}>{estaAbierto?"▲":"▼"}</span>
             </button>
 
             {estaAbierto&&meses>0&&(
               <div style={{padding:"0 14px 14px"}}>
-                <div style={{fontSize:11,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",marginBottom:2,paddingTop:6,borderTop:`1px solid ${C.border}`}}>Comisión mes a mes</div>
-                <div style={{fontSize:10,color:C.inkFaint,marginBottom:6}}>Solo se listan los meses con al menos una venta facturada — el resto no tuvo actividad.</div>
+                <div style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",marginBottom:2,paddingTop:6,borderTop:`1px solid ${C.border}`}}>Comisión mes a mes</div>
+                <div style={{fontSize:12,color:C.inkFaint,marginBottom:6}}>Solo se listan los meses con al menos una venta facturada — el resto no tuvo actividad.</div>
                 {datos.map(d=>(
                   <div key={d.label} style={{padding:"9px 0",borderBottom:`1px solid ${C.border}`}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:3}}>
@@ -133,7 +133,7 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
                         {d.estado==="pagado"?"✓ Comisión pagada":"Comisión pendiente"}
                       </span>
                     </div>
-                    <div style={{fontSize:11,color:C.inkFaint,marginBottom:5,lineHeight:1.7}}>
+                    <div style={{fontSize:12,color:C.inkFaint,marginBottom:5,lineHeight:1.7}}>
                       {d.esVerificado ? (
                         <>Comisión del mes: <b style={{color:C.ink}}>{fmt.money(d.pagoCalculado)}</b> <span style={{color:C.ok}}>✓ verificado contra planilla histórica / cartola real</span></>
                       ) : (
@@ -152,11 +152,11 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
                       )}
                     </div>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
-                      <span style={{fontSize:11,color:C.inkMuted}}>Ya se le pagó: {fmt.money(d.pagado)}</span>
-                      {d.deuda>0&&<span style={{fontSize:11.5,fontWeight:700,color:C.danger}}>Falta pagarle: {fmt.money(d.deuda)}</span>}
+                      <span style={{fontSize:12,color:C.inkMuted}}>Ya se le pagó: {fmt.money(d.pagado)}</span>
+                      {d.deuda>0&&<span style={{fontSize:12,fontWeight:700,color:C.danger}}>Falta pagarle: {fmt.money(d.deuda)}</span>}
                     </div>
                     {!d.esVerificado&&d.pagado>d.pagoCalculado+1000&&(
-                      <div style={{fontSize:10.5,color:C.warn,marginTop:3,lineHeight:1.4}}>
+                      <div style={{fontSize:12,color:C.warn,marginTop:3,lineHeight:1.4}}>
                         ⚠ Se pagó {fmt.money(d.pagado-d.pagoCalculado)} más de lo que calcula la fórmula automática — probablemente venta propia o extra no marcado en el sistema. Revisa la nota del pago para el detalle.
                       </div>
                     )}

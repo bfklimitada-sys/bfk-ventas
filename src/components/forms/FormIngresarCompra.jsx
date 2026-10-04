@@ -108,7 +108,7 @@ export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, ent
         <div style={lineStyle(3)} />
         <div style={stepStyle(4)}>✓</div>
       </div>
-      <div style={{fontSize:11,color:C.inkMuted,textAlign:"center",marginTop:-14,marginBottom:16}}>
+      <div style={{fontSize:12,color:C.inkMuted,textAlign:"center",marginTop:-14,marginBottom:16}}>
         {paso===1?"Datos de la OC":paso===2?"Productos":paso===3?"Compra":"Resumen y confirmación"}
       </div>
 
@@ -117,7 +117,7 @@ export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, ent
         <div>
           <Field label="Código OC (Mercado Público)" required>
             {ocExistente
-              ? <div style={{...iMono,background:C.paper,color:C.inkMuted,display:"flex",alignItems:"center"}}>{numOC} <span style={{fontSize:10,marginLeft:8,color:C.teal}}>✓ definida</span></div>
+              ? <div style={{...iMono,background:C.paper,color:C.inkMuted,display:"flex",alignItems:"center"}}>{numOC} <span style={{fontSize:12,marginLeft:8,color:C.teal}}>✓ definida</span></div>
               : <input style={iMono} value={numOC} onChange={e=>setNumOC(e.target.value)} placeholder="ej: 2436-690-AG26" />}
           </Field>
           <Field label="Vendedor" required>
@@ -129,7 +129,7 @@ export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, ent
           <Field label="RUT del cliente" hint="Escribe el RUT para autocompletar">
             <input style={iStyle} value={rutCliente} onChange={e=>handleRutChange(e.target.value)} placeholder="ej: 69.150.600-2" />
           </Field>
-          {autocompletado&&<div style={{background:C.okLight,borderRadius:8,padding:"7px 10px",fontSize:11.5,color:C.ok,fontWeight:600,marginBottom:10}}>✓ Datos autocompletados desde el catálogo</div>}
+          {autocompletado&&<div style={{background:C.okLight,borderRadius:8,padding:"7px 10px",fontSize:12,color:C.ok,fontWeight:600,marginBottom:10}}>✓ Datos autocompletados desde el catálogo</div>}
           <Field label="Institución / Cliente" required>
             <input style={iStyle} value={cliente} onChange={e=>setCliente(e.target.value)} placeholder="ej: Municipalidad de Concepción" />
           </Field>
@@ -174,7 +174,7 @@ export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, ent
                 </Field>
               </div>
               {(p.precioCompra||p.precioVenta)&&(
-                <div style={{fontSize:11,color:C.inkMuted,marginTop:4}}>
+                <div style={{fontSize:12,color:C.inkMuted,marginTop:4}}>
                   Subtotal compra: <b>${((Number(p.precioCompra)||0)*(Number(p.cantidad)||1)).toLocaleString("es-CL")}</b>
                   {" · "}Subtotal venta: <b>${((Number(p.precioVenta)||0)*(Number(p.cantidad)||1)).toLocaleString("es-CL")}</b>
                 </div>
@@ -185,9 +185,9 @@ export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, ent
           {ventaTotal>0&&(
             <div style={{background:C.tealLight,borderRadius:9,padding:"10px 14px",fontSize:12.5}}>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4}}>
-                <div><div style={{color:C.inkMuted,fontSize:10.5}}>Costo total</div><div style={{fontWeight:700,color:C.ink}}>${costoTotal.toLocaleString("es-CL")}</div></div>
-                <div><div style={{color:C.inkMuted,fontSize:10.5}}>Venta total</div><div style={{fontWeight:700,color:C.ink}}>${ventaTotal.toLocaleString("es-CL")}</div></div>
-                <div><div style={{color:C.inkMuted,fontSize:10.5}}>Utilidad ({margen}%)</div><div style={{fontWeight:700,color:utilidad>=0?C.ok:C.danger}}>${utilidad.toLocaleString("es-CL")}</div></div>
+                <div><div style={{color:C.inkMuted,fontSize:12}}>Costo total</div><div style={{fontWeight:700,color:C.ink}}>${costoTotal.toLocaleString("es-CL")}</div></div>
+                <div><div style={{color:C.inkMuted,fontSize:12}}>Venta total</div><div style={{fontWeight:700,color:C.ink}}>${ventaTotal.toLocaleString("es-CL")}</div></div>
+                <div><div style={{color:C.inkMuted,fontSize:12}}>Utilidad ({margen}%)</div><div style={{fontWeight:700,color:utilidad>=0?C.ok:C.danger}}>${utilidad.toLocaleString("es-CL")}</div></div>
               </div>
             </div>
           )}
@@ -215,11 +215,11 @@ export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, ent
           </Field>
           {/* Resumen de montos */}
           <div style={{background:C.paper,borderRadius:9,padding:"12px 14px",marginTop:8}}>
-            <div style={{fontSize:11,fontWeight:700,color:C.inkMuted,marginBottom:8,textTransform:"uppercase"}}>Resumen financiero</div>
+            <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,marginBottom:8,textTransform:"uppercase"}}>Resumen financiero</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4,fontSize:12.5}}>
-              <div><div style={{color:C.inkMuted,fontSize:10.5}}>Costo</div><div style={{fontWeight:700}}>${costoTotal.toLocaleString("es-CL")}</div></div>
-              <div><div style={{color:C.inkMuted,fontSize:10.5}}>Venta</div><div style={{fontWeight:700}}>${ventaTotal.toLocaleString("es-CL")}</div></div>
-              <div><div style={{color:C.inkMuted,fontSize:10.5}}>Utilidad ({margen}%)</div><div style={{fontWeight:700,color:utilidad>=0?C.ok:C.danger}}>${utilidad.toLocaleString("es-CL")}</div></div>
+              <div><div style={{color:C.inkMuted,fontSize:12}}>Costo</div><div style={{fontWeight:700}}>${costoTotal.toLocaleString("es-CL")}</div></div>
+              <div><div style={{color:C.inkMuted,fontSize:12}}>Venta</div><div style={{fontWeight:700}}>${ventaTotal.toLocaleString("es-CL")}</div></div>
+              <div><div style={{color:C.inkMuted,fontSize:12}}>Utilidad ({margen}%)</div><div style={{fontWeight:700,color:utilidad>=0?C.ok:C.danger}}>${utilidad.toLocaleString("es-CL")}</div></div>
             </div>
           </div>
         </div>
@@ -229,7 +229,7 @@ export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, ent
       {paso===4&&(
         <div>
           <div style={{background:C.paper,borderRadius:10,padding:"12px 14px",marginBottom:12}}>
-            <div style={{fontSize:11,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:8}}>Datos de la OC</div>
+            <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:8}}>Datos de la OC</div>
             <div style={{fontSize:12.5,lineHeight:1.8}}>
               <b>OC:</b> {numOC}<br/>
               <b>Vendedor:</b> {vendedores.find(v=>v.id===vendedorId)?.nombre}<br/>
@@ -240,21 +240,21 @@ export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, ent
             </div>
           </div>
           <div style={{background:C.paper,borderRadius:10,padding:"12px 14px",marginBottom:12}}>
-            <div style={{fontSize:11,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:8}}>{productos.length} Producto{productos.length!==1?"s":""}</div>
+            <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:8}}>{productos.length} Producto{productos.length!==1?"s":""}</div>
             {productos.map((p,i)=>(
               <div key={i} style={{borderLeft:`2px solid ${C.teal}`,paddingLeft:10,marginBottom:8}}>
                 <div style={{fontSize:12.5,fontWeight:600}}>{p.desc} × {p.cantidad}</div>
-                <div style={{fontSize:11,color:C.inkMuted}}>Compra: ${(Number(p.precioCompra)*Number(p.cantidad)).toLocaleString("es-CL")} · Venta: ${(Number(p.precioVenta)*Number(p.cantidad)).toLocaleString("es-CL")}</div>
-                {p.link&&<div style={{fontSize:10.5,color:C.teal,wordBreak:"break-all"}}>{p.link.slice(0,60)}{p.link.length>60?"…":""}</div>}
+                <div style={{fontSize:12,color:C.inkMuted}}>Compra: ${(Number(p.precioCompra)*Number(p.cantidad)).toLocaleString("es-CL")} · Venta: ${(Number(p.precioVenta)*Number(p.cantidad)).toLocaleString("es-CL")}</div>
+                {p.link&&<div style={{fontSize:12,color:C.teal,wordBreak:"break-all"}}>{p.link.slice(0,60)}{p.link.length>60?"…":""}</div>}
               </div>
             ))}
           </div>
           <div style={{background:C.tealLight,borderRadius:10,padding:"12px 14px",marginBottom:12}}>
-            <div style={{fontSize:11,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:8}}>Resumen financiero</div>
+            <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:8}}>Resumen financiero</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4,fontSize:13}}>
-              <div><div style={{color:C.inkMuted,fontSize:10.5}}>Costo</div><div style={{fontWeight:800}}>${costoTotal.toLocaleString("es-CL")}</div></div>
-              <div><div style={{color:C.inkMuted,fontSize:10.5}}>Venta</div><div style={{fontWeight:800}}>${ventaTotal.toLocaleString("es-CL")}</div></div>
-              <div><div style={{color:C.inkMuted,fontSize:10.5}}>Utilidad</div><div style={{fontWeight:800,color:utilidad>=0?C.ok:C.danger}}>${utilidad.toLocaleString("es-CL")} ({margen}%)</div></div>
+              <div><div style={{color:C.inkMuted,fontSize:12}}>Costo</div><div style={{fontWeight:800}}>${costoTotal.toLocaleString("es-CL")}</div></div>
+              <div><div style={{color:C.inkMuted,fontSize:12}}>Venta</div><div style={{fontWeight:800}}>${ventaTotal.toLocaleString("es-CL")}</div></div>
+              <div><div style={{color:C.inkMuted,fontSize:12}}>Utilidad</div><div style={{fontWeight:800,color:utilidad>=0?C.ok:C.danger}}>${utilidad.toLocaleString("es-CL")} ({margen}%)</div></div>
             </div>
             <div style={{marginTop:8,fontSize:12,color:C.inkMuted}}>
               <b>Financiador:</b> {financiadores.find(f=>f.id===financiadorId)?.nombre} · <b>Fecha:</b> {fechaCompra}

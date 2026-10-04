@@ -120,28 +120,28 @@ export function EtapasOC({ oc, perfil, perfiles, onEditarEvento, onEliminarFactu
             {etapa.key==="factura"&&oc.estado_factura_propia==="emitida"&&(
               <div style={{background:C.card,borderRadius:8,padding:"10px 12px",marginBottom:8}}>
                 <div style={{fontSize:12.5,fontWeight:600}}>🧾 Factura registrada</div>
-                <div style={{fontSize:11.5,color:C.inkMuted}}>Monto: <b>{fmt.money(oc.monto_facturado)}</b></div>
-                <div style={{fontSize:11,color:C.warn,marginTop:4}}>Sin detalle de número y fecha — usa Re-emitir para agregar</div>
+                <div style={{fontSize:12,color:C.inkMuted}}>Monto: <b>{fmt.money(oc.monto_facturado)}</b></div>
+                <div style={{fontSize:12,color:C.warn,marginTop:4}}>Sin detalle de número y fecha — usa Re-emitir para agregar</div>
               </div>
             )}
             {etapa.key==="cobro"&&oc.estado_pago_cliente==="pagado"&&(
               <div style={{background:C.card,borderRadius:8,padding:"10px 12px",marginBottom:8}}>
                 <div style={{fontSize:12.5,fontWeight:600}}>💰 Cobro registrado</div>
-                <div style={{fontSize:11.5,color:C.inkMuted}}>Monto: <b>{fmt.money(oc.monto_cobrado||oc.monto_facturado||oc.monto_total)}</b></div>
-                <div style={{fontSize:11,color:C.warn,marginTop:4}}>Registro histórico — sin fecha detallada</div>
+                <div style={{fontSize:12,color:C.inkMuted}}>Monto: <b>{fmt.money(oc.monto_cobrado||oc.monto_facturado||oc.monto_total)}</b></div>
+                <div style={{fontSize:12,color:C.warn,marginTop:4}}>Registro histórico — sin fecha detallada</div>
               </div>
             )}
             {etapa.key==="entrega"&&(oc.estado_entrega==="confirmada"||oc.estado_entrega==="entregado")&&(
               <div style={{background:C.card,borderRadius:8,padding:"10px 12px",marginBottom:8}}>
                 <div style={{fontSize:12.5,fontWeight:600}}>🚚 Entrega confirmada</div>
-                <div style={{fontSize:11,color:C.warn,marginTop:4}}>Registro histórico — sin fecha detallada</div>
+                <div style={{fontSize:12,color:C.warn,marginTop:4}}>Registro histórico — sin fecha detallada</div>
               </div>
             )}
             {etapa.key==="financ"&&oc.estado_pago_financiamiento==="pagado"&&(
               <div style={{background:C.card,borderRadius:8,padding:"10px 12px",marginBottom:8}}>
                 <div style={{fontSize:12.5,fontWeight:600}}>🏦 Financiamiento pagado</div>
-                <div style={{fontSize:11.5,color:C.inkMuted}}>Monto: <b>{fmt.money(oc.costo_total)}</b> · A: <b>{oc.financiadores?.nombre||"—"}</b></div>
-                <div style={{fontSize:11,color:C.warn,marginTop:4}}>Registro histórico — sin fecha detallada</div>
+                <div style={{fontSize:12,color:C.inkMuted}}>Monto: <b>{fmt.money(oc.costo_total)}</b> · A: <b>{oc.financiadores?.nombre||"—"}</b></div>
+                <div style={{fontSize:12,color:C.warn,marginTop:4}}>Registro histórico — sin fecha detallada</div>
               </div>
             )}
             {/* Mensaje solo cuando realmente no hay nada */}
@@ -152,7 +152,7 @@ export function EtapasOC({ oc, perfil, perfiles, onEditarEvento, onEliminarFactu
               (etapa.key==="financ"&&oc.estado_pago_financiamiento==="pagado")
             )&&(
               etapa.key==="cobro"&&oc.estado_factura_propia!=="emitida"
-                ? <div style={{fontSize:11.5,color:C.warn,padding:"4px 0 8px",fontWeight:600}}>⚠ Primero emite la factura para poder registrar el cobro</div>
+                ? <div style={{fontSize:12,color:C.warn,padding:"4px 0 8px",fontWeight:600}}>⚠ Primero emite la factura para poder registrar el cobro</div>
                 : <div style={{fontSize:12,color:C.inkFaint,padding:"4px 0 8px"}}>Sin registros aún</div>
             )}
             {/* Botón de acción inmediato cuando no hay registro */}
@@ -174,23 +174,23 @@ export function EtapasOC({ oc, perfil, perfiles, onEditarEvento, onEliminarFactu
           <div key={ev.id||i} style={{background:C.card,borderRadius:8,padding:"10px 12px",marginBottom:6}}>
             {etapa.key==="compra"&&<>
               <div style={{fontSize:12.5,fontWeight:600}}>📅 {fmt.date(ev.fecha)||"—"}</div>
-              <div style={{fontSize:11.5,color:C.inkMuted}}>Venta: <b>{fmt.money(ev.monto_venta||oc.monto_total)}</b> · Costo: <b>{fmt.money(ev.costo_compra||oc.costo_total)}</b></div>
-              {ev.fecha_entrega_estimada&&<div style={{fontSize:11,color:C.inkMuted}}>Entrega est.: {fmt.date(ev.fecha_entrega_estimada)}</div>}
-              {ev.proveedor&&<div style={{fontSize:11,color:C.inkMuted}}>Proveedor: {ev.proveedor}</div>}
-              <div style={{fontSize:11,color:C.inkMuted}}>Financiador: <b>{oc.financiadores?.nombre||"—"}</b> · Vendedor: <b>{oc.vendedores?.nombre||"—"}</b></div>
+              <div style={{fontSize:12,color:C.inkMuted}}>Venta: <b>{fmt.money(ev.monto_venta||oc.monto_total)}</b> · Costo: <b>{fmt.money(ev.costo_compra||oc.costo_total)}</b></div>
+              {ev.fecha_entrega_estimada&&<div style={{fontSize:12,color:C.inkMuted}}>Entrega est.: {fmt.date(ev.fecha_entrega_estimada)}</div>}
+              {ev.proveedor&&<div style={{fontSize:12,color:C.inkMuted}}>Proveedor: {ev.proveedor}</div>}
+              <div style={{fontSize:12,color:C.inkMuted}}>Financiador: <b>{oc.financiadores?.nombre||"—"}</b> · Vendedor: <b>{oc.vendedores?.nombre||"—"}</b></div>
               {/* Links de productos dentro de Compra */}
               <div style={{marginTop:8,borderTop:`1px solid ${C.border}`,paddingTop:8}}>
-                <div style={{fontSize:10.5,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:6}}>🔗 Productos</div>
+                <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:6}}>🔗 Productos</div>
                 {(oc.oc_productos_link||[]).sort((a,b)=>a.orden-b.orden).map((l,li)=>(
                   <div key={l.id} style={{display:"flex",alignItems:"center",gap:6,marginBottom:4,background:C.card,borderRadius:7,padding:"6px 8px"}}>
-                    <span style={{fontSize:10.5,color:C.inkMuted,fontWeight:700,minWidth:14}}>{li+1}</span>
+                    <span style={{fontSize:12,color:C.inkMuted,fontWeight:700,minWidth:14}}>{li+1}</span>
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{fontSize:12,fontWeight:600,color:C.ink}}>{l.descripcion}</div>
-                      {l.url&&l.url!=="sin-link"&&<a href={l.url} target="_blank" rel="noopener noreferrer" style={{fontSize:10,color:C.teal,textDecoration:"none"}}>{l.url.length>40?l.url.slice(0,40)+"…":l.url}</a>}
+                      {l.url&&l.url!=="sin-link"&&<a href={l.url} target="_blank" rel="noopener noreferrer" style={{fontSize:12,color:C.teal,textDecoration:"none"}}>{l.url.length>40?l.url.slice(0,40)+"…":l.url}</a>}
                     </div>
-                    {l.url&&l.url!=="sin-link"&&<button onClick={()=>window.open(l.url,'_blank')} style={{background:C.tealLight,border:"none",borderRadius:5,padding:"3px 6px",fontSize:11,color:C.teal,cursor:"pointer",flexShrink:0}}>↗</button>}
-                    <button onClick={()=>{const nd=prompt("Nueva descripción:",l.descripcion);if(nd)onEditarLink&&onEditarLink(l.id,{descripcion:nd,url:l.url});}} style={{background:"none",border:"none",fontSize:11,cursor:"pointer",flexShrink:0}}>✏️</button>
-                    <button onClick={async()=>{if(window.confirm("¿Eliminar este link?"))await onEliminarLink&&onEliminarLink(l.id);}} style={{background:"none",border:"none",fontSize:11,color:C.danger,cursor:"pointer",flexShrink:0}}>✕</button>
+                    {l.url&&l.url!=="sin-link"&&<button onClick={()=>window.open(l.url,'_blank')} style={{background:C.tealLight,border:"none",borderRadius:5,padding:"3px 6px",fontSize:12,color:C.teal,cursor:"pointer",flexShrink:0}}>↗</button>}
+                    <button onClick={()=>{const nd=prompt("Nueva descripción:",l.descripcion);if(nd)onEditarLink&&onEditarLink(l.id,{descripcion:nd,url:l.url});}} style={{background:"none",border:"none",fontSize:12,cursor:"pointer",flexShrink:0}}>✏️</button>
+                    <button onClick={async()=>{if(window.confirm("¿Eliminar este link?"))await onEliminarLink&&onEliminarLink(l.id);}} style={{background:"none",border:"none",fontSize:12,color:C.danger,cursor:"pointer",flexShrink:0}}>✕</button>
                   </div>
                 ))}
                 <MiniFormLink ocId={oc.id} onGuardar={onGuardarLink} orden={(oc.oc_productos_link||[]).length} />
@@ -198,56 +198,56 @@ export function EtapasOC({ oc, perfil, perfiles, onEditarEvento, onEliminarFactu
             </>}
             {etapa.key==="entrega"&&<>
               <div style={{fontSize:12.5,fontWeight:600}}>✅ Entregado el {fmt.date(ev.fecha)||"—"}</div>
-              {ev.persona_recibe&&<div style={{fontSize:11.5,color:C.inkMuted}}>Recibe: {ev.persona_recibe}</div>}
-              {ev.notas&&<div style={{fontSize:11,color:C.inkMuted}}>{ev.notas}</div>}
-              {!ev.persona_recibe&&!ev.notas&&<div style={{fontSize:11,color:C.inkFaint}}>Sin detalle adicional</div>}
+              {ev.persona_recibe&&<div style={{fontSize:12,color:C.inkMuted}}>Recibe: {ev.persona_recibe}</div>}
+              {ev.notas&&<div style={{fontSize:12,color:C.inkMuted}}>{ev.notas}</div>}
+              {!ev.persona_recibe&&!ev.notas&&<div style={{fontSize:12,color:C.inkFaint}}>Sin detalle adicional</div>}
             </>}
             {etapa.key==="factura"&&<>
               <div style={{fontSize:12.5,fontWeight:600}}>🧾 Factura N°{ev.numero_factura||"—"} · {fmt.money(ev.monto||oc.monto_facturado)}</div>
-              <div style={{fontSize:11.5,color:C.inkMuted}}>Emitida el {fmt.date(ev.fecha)||"—"}</div>
-              {ev.nota_credito&&<div style={{fontSize:11,color:C.warn}}>NC N°{ev.nota_credito} · anula factura N°{ev.factura_anulada_numero}</div>}
-              {ev.motivo_diferencia&&<div style={{fontSize:11,color:C.warn,marginTop:3}}>⚠ Difiere de la OC: {ev.motivo_diferencia}</div>}
+              <div style={{fontSize:12,color:C.inkMuted}}>Emitida el {fmt.date(ev.fecha)||"—"}</div>
+              {ev.nota_credito&&<div style={{fontSize:12,color:C.warn}}>NC N°{ev.nota_credito} · anula factura N°{ev.factura_anulada_numero}</div>}
+              {ev.motivo_diferencia&&<div style={{fontSize:12,color:C.warn,marginTop:3}}>⚠ Difiere de la OC: {ev.motivo_diferencia}</div>}
             </>}
             {etapa.key==="cobro"&&<>
               <div style={{fontSize:12.5,fontWeight:600}}>💰 {fmt.money(ev.monto||oc.monto_cobrado)} cobrado</div>
-              <div style={{fontSize:11.5,color:C.inkMuted}}>{fmt.date(ev.fecha)||"—"}</div>
-              {ev.referencia&&<div style={{fontSize:11,color:C.inkMuted}}>Ref: {ev.referencia}</div>}
+              <div style={{fontSize:12,color:C.inkMuted}}>{fmt.date(ev.fecha)||"—"}</div>
+              {ev.referencia&&<div style={{fontSize:12,color:C.inkMuted}}>Ref: {ev.referencia}</div>}
             </>}
             {etapa.key==="financ"&&<>
               <div style={{fontSize:12.5,fontWeight:600}}>🏦 {fmt.money(ev.monto||oc.costo_total)} pagado</div>
-              <div style={{fontSize:11.5,color:C.inkMuted}}>{fmt.date(ev.fecha)||"—"}</div>
-              {ev.financiador_id&&<div style={{fontSize:11,color:C.inkMuted}}>A: {oc.financiadores?.nombre||"—"}</div>}
+              <div style={{fontSize:12,color:C.inkMuted}}>{fmt.date(ev.fecha)||"—"}</div>
+              {ev.financiador_id&&<div style={{fontSize:12,color:C.inkMuted}}>A: {oc.financiadores?.nombre||"—"}</div>}
             </>}
             {etapa.key==="postventa"&&<>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:6}}>
                 <div style={{fontSize:12.5,fontWeight:600}}>🛠 {TIPOS_PV[ev.tipo]||ev.tipo||"Incidencia"}</div>
-                <span style={{fontSize:9.5,fontWeight:700,borderRadius:5,padding:"2px 6px",background:ev.estado==="resuelto"?C.okLight:ev.estado==="en_gestion"?C.warnLight:C.dangerLight,color:ev.estado==="resuelto"?C.ok:ev.estado==="en_gestion"?C.warn:C.danger}}>
+                <span style={{fontSize:12,fontWeight:700,borderRadius:5,padding:"2px 6px",background:ev.estado==="resuelto"?C.okLight:ev.estado==="en_gestion"?C.warnLight:C.dangerLight,color:ev.estado==="resuelto"?C.ok:ev.estado==="en_gestion"?C.warn:C.danger}}>
                   {ev.estado==="resuelto"?"✓ Resuelto":ev.estado==="en_gestion"?"En gestión":"Abierto"}
                 </span>
               </div>
-              <div style={{fontSize:11.5,color:C.inkMuted}}>{fmt.date(ev.fecha)||"—"}</div>
-              {ev.descripcion&&<div style={{fontSize:11.5,color:C.ink,marginTop:3}}>{ev.descripcion}</div>}
-              {ev.solucion&&<div style={{fontSize:11,color:C.ok,marginTop:3}}>Solución: {ev.solucion}{ev.fecha_resolucion?` · ${fmt.date(ev.fecha_resolucion)}`:""}</div>}
+              <div style={{fontSize:12,color:C.inkMuted}}>{fmt.date(ev.fecha)||"—"}</div>
+              {ev.descripcion&&<div style={{fontSize:12,color:C.ink,marginTop:3}}>{ev.descripcion}</div>}
+              {ev.solucion&&<div style={{fontSize:12,color:C.ok,marginTop:3}}>Solución: {ev.solucion}{ev.fecha_resolucion?` · ${fmt.date(ev.fecha_resolucion)}`:""}</div>}
               {Number(ev.costo_extra)>0&&(
-                <div style={{fontSize:11,color:C.danger,marginTop:3,fontWeight:600}}>
+                <div style={{fontSize:12,color:C.danger,marginTop:3,fontWeight:600}}>
                   Costo extra: {fmt.money(ev.costo_extra)}{ev.detalle_costo?` · ${ev.detalle_costo}`:""}
                 </div>
               )}
             </>}
             <div style={{display:"flex",gap:6,marginTop:8}}>
               <button onClick={()=>onEditarEvento&&onEditarEvento({tipo:etapa.label,e:ev,tabla:etapa.tabla})}
-                style={{fontSize:11,background:C.tealLight,color:C.teal,border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontWeight:600}}>✏️ Editar</button>
+                style={{fontSize:12,background:C.tealLight,color:C.teal,border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontWeight:600}}>✏️ Editar</button>
               {perfil?.rol==="admin"&&etapa.key==="factura"&&(
                 <button onClick={async()=>{
                   if(!window.confirm(`¿Eliminar factura N°${ev.numero_factura}?\nEsto revertirá el estado a pendiente.`)) return;
                   await onEliminarFactura(oc.id, ev.id); setDetalle(null);
-                }} style={{fontSize:11,background:C.dangerLight,color:C.danger,border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontWeight:600}}>🗑 Eliminar</button>
+                }} style={{fontSize:12,background:C.dangerLight,color:C.danger,border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontWeight:600}}>🗑 Eliminar</button>
               )}
               {perfil?.rol==="admin"&&etapa.key!=="factura"&&(
                 <button onClick={async()=>{
                   if(!window.confirm(`¿Eliminar este registro de ${etapa.label}?`)) return;
                   if(onEliminarEvento) await onEliminarEvento(etapa.tabla, ev.id, oc.id, etapa.key); setDetalle(null);
-                }} style={{fontSize:11,background:C.dangerLight,color:C.danger,border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontWeight:600}}>🗑 Eliminar</button>
+                }} style={{fontSize:12,background:C.dangerLight,color:C.danger,border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontWeight:600}}>🗑 Eliminar</button>
               )}
             </div>
           </div>
@@ -267,7 +267,7 @@ export function EtapasOC({ oc, perfil, perfiles, onEditarEvento, onEliminarFactu
         ))}
         {/* Responsable de la etapa */}
         <div style={{marginTop:10,paddingTop:8,borderTop:`1px solid ${C.border}`}}>
-          <div style={{fontSize:10,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:5}}>Responsable</div>
+          <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:5}}>Responsable</div>
           <select
             value={(oc.oc_responsables||[]).find(r=>r.etapa===etapa.key)?.usuario_id||""}
             onChange={e=>onAsignarResponsable&&onAsignarResponsable(oc.id,etapa.key,e.target.value)}
@@ -291,8 +291,8 @@ export function EtapasOC({ oc, perfil, perfiles, onEditarEvento, onEliminarFactu
                 fontSize:12,background:detalle===e.key?C.teal:e.ok?C.ok:C.paper,
                 border:`2px solid ${detalle===e.key?C.teal:e.ok?C.ok:C.border}`,
                 cursor:"pointer",transition:"all 0.2s",padding:0,boxShadow:detalle===e.key?"0 2px 8px rgba(20,184,166,0.3)":"none",
-              }}>{e.ok?<span style={{color:"#fff",fontWeight:800,fontSize:13}}>✓</span>:<span style={{fontSize:10.5,color:C.inkFaint}}>{i+1}</span>}</button>
-              <span style={{fontSize:8.5,color:detalle===e.key?C.teal:e.ok?C.ok:C.inkFaint,fontWeight:e.ok||detalle===e.key?700:400,textAlign:"center",lineHeight:1.1}}>{e.label}</span>
+              }}>{e.ok?<span style={{color:"#fff",fontWeight:800,fontSize:13}}>✓</span>:<span style={{fontSize:12,color:C.inkFaint}}>{i+1}</span>}</button>
+              <span style={{fontSize:12,color:detalle===e.key?C.teal:e.ok?C.ok:C.inkFaint,fontWeight:e.ok||detalle===e.key?700:400,textAlign:"center",lineHeight:1.1}}>{e.label}</span>
             </div>
             {i<etapas.length-1&&(
               <div style={{height:2,flex:0.5,background:etapas[i+1].ok&&e.ok?C.ok:C.border,marginBottom:14,transition:"all 0.2s"}} />
@@ -303,7 +303,7 @@ export function EtapasOC({ oc, perfil, perfiles, onEditarEvento, onEliminarFactu
       {detalle&&(
         <div style={{background:C.tealLight,borderRadius:10,padding:"10px 12px",marginBottom:8}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-            <span style={{fontSize:11,fontWeight:700,color:C.tealDark,textTransform:"uppercase"}}>
+            <span style={{fontSize:12,fontWeight:700,color:C.tealDark,textTransform:"uppercase"}}>
               {etapas.find(e=>e.key===detalle)?.icon} {etapas.find(e=>e.key===detalle)?.label}
             </span>
             <button onClick={()=>setDetalle(null)} style={{background:"none",border:"none",color:C.inkFaint,cursor:"pointer",fontSize:16,lineHeight:1}}>✕</button>
@@ -312,7 +312,7 @@ export function EtapasOC({ oc, perfil, perfiles, onEditarEvento, onEliminarFactu
         </div>
       )}
       {(oc.eventos_postventa||[]).some(e=>e.estado!=="resuelto")&&(
-        <div style={{fontSize:10,color:C.warn,textAlign:"right",fontWeight:700}}>🛠 post-venta abierta</div>
+        <div style={{fontSize:12,color:C.warn,textAlign:"right",fontWeight:700}}>🛠 post-venta abierta</div>
       )}
     </div>
   );
@@ -321,7 +321,7 @@ export function EtapasOC({ oc, perfil, perfiles, onEditarEvento, onEliminarFactu
 export function MiniFormLink({ ocId, onGuardar, orden }) {
   const [show,setShow]=useState(false);
   const [desc,setDesc]=useState(""); const [url,setUrl]=useState(""); const [saving,setSaving]=useState(false);
-  if(!show) return <button onClick={()=>setShow(true)} style={{fontSize:11,background:"none",border:`1px dashed ${C.border}`,borderRadius:6,padding:"4px 10px",color:C.teal,cursor:"pointer",width:"100%",marginTop:4}}>+ Agregar producto</button>;
+  if(!show) return <button onClick={()=>setShow(true)} style={{fontSize:12,background:"none",border:`1px dashed ${C.border}`,borderRadius:6,padding:"4px 10px",color:C.teal,cursor:"pointer",width:"100%",marginTop:4}}>+ Agregar producto</button>;
   return (
     <div style={{background:C.tealLight,borderRadius:7,padding:"8px 10px",marginTop:4}}>
       <input style={{...iStyle,marginBottom:6}} value={desc} onChange={e=>setDesc(e.target.value)} placeholder="Descripción del producto" />

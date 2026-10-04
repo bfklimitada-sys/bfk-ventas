@@ -71,7 +71,7 @@ export function FormCompraRapida({ ocs, financiadores, perfil, onSave, ocPresele
           display: "flex", justifyContent: "space-between", alignItems: "center"
         }}>
           <div>
-            <div style={{ fontSize: 10.5, color: C.inkMuted, fontWeight: 700, textTransform: "uppercase" }}>Utilidad</div>
+            <div style={{ fontSize: 12, color: C.inkMuted, fontWeight: 700, textTransform: "uppercase" }}>Utilidad</div>
             <div style={{ fontFamily: MONO, fontWeight: 800, fontSize: 16, color: colorMargen }}>{fmt.money(utilidad)}</div>
           </div>
           <div style={{ fontFamily: MONO, fontWeight: 800, fontSize: 20, color: colorMargen }}>{margenPct}%</div>

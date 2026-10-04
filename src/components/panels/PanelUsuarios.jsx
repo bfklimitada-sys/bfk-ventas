@@ -61,8 +61,8 @@ export function PanelUsuarios({ perfiles, ocs, onChangeRol, session, showToast, 
                 <span style={{width:7,height:7,borderRadius:"50%",background:activo?C.ok:C.inkFaint,display:"inline-block"}} />
                 <span style={{fontWeight:700,fontSize:13.5,color:C.ink}}>{p.nombre}</span>
               </div>
-              <div style={{fontSize:11.5,color:C.inkMuted,marginTop:2}}>{p.rol==="admin"?"Administrador":"Usuario"}</div>
-              <div style={{fontSize:10.5,color:C.inkFaint,marginTop:2}}>{ultima?`Última actividad: ${fmt.datetime(ultima)}`:"Sin actividad registrada"}</div>
+              <div style={{fontSize:12,color:C.inkMuted,marginTop:2}}>{p.rol==="admin"?"Administrador":"Usuario"}</div>
+              <div style={{fontSize:12,color:C.inkFaint,marginTop:2}}>{ultima?`Última actividad: ${fmt.datetime(ultima)}`:"Sin actividad registrada"}</div>
             </div>
             <button onClick={()=>onChangeRol(p.id,p.rol==="admin"?"usuario":"admin")} style={btnG}>{p.rol==="admin"?"Quitar admin":"Hacer admin"}</button>
           </div>
@@ -80,7 +80,7 @@ export function PanelUsuarios({ perfiles, ocs, onChangeRol, session, showToast, 
         ):(
           <div style={{background:C.tealLight,borderRadius:10,padding:"12px 14px"}}>
             <div style={{fontSize:12.5,fontWeight:700,color:C.tealDark,marginBottom:8}}>Importar entidades desde CSV</div>
-            <div style={{fontSize:11.5,color:C.inkMuted,marginBottom:10}}>
+            <div style={{fontSize:12,color:C.inkMuted,marginBottom:10}}>
               El archivo debe tener columnas: <b>rut</b>, <b>nombre</b> (o entidad), y opcionalmente <b>comuna</b>, <b>contacto</b>, <b>correo</b>. Primera fila = encabezados.
             </div>
             <input type="file" accept=".csv,.txt" onChange={e=>setImportFile(e.target.files[0])} style={{marginBottom:10,fontSize:12}} />

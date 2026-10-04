@@ -98,7 +98,7 @@ export function FormAbonoFinanciador({ ocs, financiadores, onSave }) {
       {/* Vista previa del reparto */}
       {reparto.length > 0 && (
         <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 11, fontWeight: 800, color: C.inkMuted, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>
+          <div style={{ fontSize: 12, fontWeight: 800, color: C.inkMuted, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>
             Cubre {reparto.length} OC{reparto.length !== 1 ? "s" : ""}
           </div>
           <div style={{ maxHeight: 230, overflowY: "auto", border: `1px solid ${C.border}`, borderRadius: 10 }}>
@@ -109,8 +109,8 @@ export function FormAbonoFinanciador({ ocs, financiadores, onSave }) {
                 background: r.completa ? C.card : C.warnLight,
               }}>
                 <span style={{ minWidth: 0 }}>
-                  <span style={{ display: "block", fontFamily: MONO, fontSize: 11.5, fontWeight: 700, color: C.ink }}>{r.oc.numero_oc}</span>
-                  <span style={{ display: "block", fontSize: 10.5, color: r.completa ? C.inkFaint : C.warn }}>
+                  <span style={{ display: "block", fontFamily: MONO, fontSize: 12, fontWeight: 700, color: C.ink }}>{r.oc.numero_oc}</span>
+                  <span style={{ display: "block", fontSize: 12, color: r.completa ? C.inkFaint : C.warn }}>
                     {r.completa ? "Queda saldada" : `Parcial · quedan ${fmt.money(r.debe - r.asignado)}`}
                   </span>
                 </span>
@@ -122,7 +122,7 @@ export function FormAbonoFinanciador({ ocs, financiadores, onSave }) {
           </div>
 
           {sobrante > 0 && (
-            <div style={{ background: C.infoLight, borderRadius: 9, padding: "9px 12px", marginTop: 8, fontSize: 11.5, color: C.info, fontWeight: 600 }}>
+            <div style={{ background: C.infoLight, borderRadius: 9, padding: "9px 12px", marginTop: 8, fontSize: 12, color: C.info, fontWeight: 600 }}>
               Sobran {fmt.money(sobrante)} — el abono supera lo adeudado. Se registrará como pago sin OC asociada.
             </div>
           )}

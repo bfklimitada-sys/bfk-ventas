@@ -99,7 +99,7 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
 
   const Dato = ({ label, valor, alerta }) => (
     <div style={{ marginBottom: 7 }}>
-      <div style={{ fontSize: 10, color: C.inkMuted, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.3 }}>{label}</div>
+      <div style={{ fontSize: 12, color: C.inkMuted, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.3 }}>{label}</div>
       <div style={{ fontSize: 13, color: alerta ? C.warn : C.ink, fontWeight: alerta ? 700 : 500 }}>{valor || "—"}</div>
     </div>
   );
@@ -131,7 +131,7 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
               style={{marginTop:2,width:16,height:16,flexShrink:0}} />
             <span>
               <span style={{display:"block",fontSize:12.5,fontWeight:700,color:C.ink}}>Es venta propia del vendedor</span>
-              <span style={{display:"block",fontSize:11,color:C.inkFaint,marginTop:1}}>Se lleva el 100% de la utilidad (menos el IVA de su propia factura), en vez del 50% general</span>
+              <span style={{display:"block",fontSize:12,color:C.inkFaint,marginTop:1}}>Se lleva el 100% de la utilidad (menos el IVA de su propia factura), en vez del 50% general</span>
             </span>
           </label>
         )}
@@ -193,16 +193,16 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
       {/* Productos que trajo la API */}
       {!pendiente && (oc.productos || []).length > 0 && (
         <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 11, fontWeight: 800, color: C.inkMuted, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>
+          <div style={{ fontSize: 12, fontWeight: 800, color: C.inkMuted, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>
             {oc.productos.length} producto{oc.productos.length > 1 ? "s" : ""}
           </div>
           {oc.productos.map((p, i) => (
             <div key={i} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 9, padding: "10px 12px", marginBottom: 6 }}>
               <div style={{ fontSize: 12.5, fontWeight: 600, color: C.ink, lineHeight: 1.4 }}>{p.descripcion}</div>
-              <div style={{ fontSize: 11, color: C.inkMuted, marginTop: 4 }}>
+              <div style={{ fontSize: 12, color: C.inkMuted, marginTop: 4 }}>
                 {p.cantidad} × {fmt.money(p.precio_venta_unitario)} = <b>{fmt.money(p.total_linea)}</b>
               </div>
-              {p.categoria && <div style={{ fontSize: 10.5, color: C.inkFaint, marginTop: 2 }}>{p.categoria}</div>}
+              {p.categoria && <div style={{ fontSize: 12, color: C.inkFaint, marginTop: 2 }}>{p.categoria}</div>}
             </div>
           ))}
         </div>
@@ -210,7 +210,7 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
 
       {/* Links de compra — lo único obligatorio para Mati */}
       <div style={{ marginBottom: 14 }}>
-        <div style={{ fontSize: 11, fontWeight: 800, color: C.inkMuted, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>
+        <div style={{ fontSize: 12, fontWeight: 800, color: C.inkMuted, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>
           Link de compra <span style={{ color: C.danger }}>*</span>
         </div>
         {links.map((l, i) => (
@@ -225,7 +225,7 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
           </div>
         ))}
         <button onClick={() => setLinks(ls => [...ls, ""])}
-          style={{ fontSize: 11.5, background: "none", border: `1px dashed ${C.border}`, borderRadius: 8, padding: "6px 12px", color: C.teal, cursor: "pointer", width: "100%" }}>
+          style={{ fontSize: 12, background: "none", border: `1px dashed ${C.border}`, borderRadius: 8, padding: "6px 12px", color: C.teal, cursor: "pointer", width: "100%" }}>
           + Otro link
         </button>
       </div>
@@ -264,7 +264,7 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
         </button>
       </div>
 
-      <div style={{ fontSize: 11, color: C.inkFaint, textAlign: "center", marginTop: 10 }}>
+      <div style={{ fontSize: 12, color: C.inkFaint, textAlign: "center", marginTop: 10 }}>
         La venta queda registrada a nombre de {perfil?.nombre || "tu usuario"}
       </div>
     </div>

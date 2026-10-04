@@ -84,7 +84,7 @@ export function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onA
         <div style={{background:`linear-gradient(135deg,${C.night},${C.nightSoft})`,borderRadius:16,padding:"18px 20px",marginBottom:16}}>
           <div style={{fontSize:12,color:C.inkFaint,marginBottom:4}}>{fin?.nombre}</div>
           <div style={{fontFamily:MONO,fontWeight:800,fontSize:30,color:C.danger,letterSpacing:-1}}>{fmt.money(fin?.saldo_deuda)}</div>
-          <div style={{fontSize:11,color:C.inkFaint,marginTop:4}}>Deuda actual</div>
+          <div style={{fontSize:12,color:C.inkFaint,marginTop:4}}>Deuda actual</div>
         </div>
         <button onClick={()=>setAjustando(fin)} style={{...btnP(C.nightSoft),marginBottom:16}}>Ajustar saldo manualmente</button>
 
@@ -98,16 +98,16 @@ export function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onA
               <button onClick={()=>setVerSolo(v=>v==="compra"?null:"compra")}
                 style={{flex:1,textAlign:"left",cursor:"pointer",background:verSolo==="compra"?C.infoLight:C.card,
                   border:`1.5px solid ${verSolo==="compra"?C.info:C.border}`,borderRadius:12,padding:"11px 13px"}}>
-                <div style={{fontSize:10.5,fontWeight:800,color:C.inkFaint,textTransform:"uppercase",marginBottom:4}}>Compras realizadas</div>
+                <div style={{fontSize:12,fontWeight:800,color:C.inkFaint,textTransform:"uppercase",marginBottom:4}}>Compras realizadas</div>
                 <div style={{fontFamily:MONO,fontWeight:800,fontSize:16,color:C.ink}}>{fmt.money(totalCompras)}</div>
-                <div style={{fontSize:11,color:C.inkMuted,marginTop:2}}>{compras.length} compra{compras.length!==1?"s":""} · toca para ver{verSolo==="compra"?" (viendo)":""}</div>
+                <div style={{fontSize:12,color:C.inkMuted,marginTop:2}}>{compras.length} compra{compras.length!==1?"s":""} · toca para ver{verSolo==="compra"?" (viendo)":""}</div>
               </button>
               <button onClick={()=>setVerSolo(v=>v==="pago"?null:"pago")}
                 style={{flex:1,textAlign:"left",cursor:"pointer",background:verSolo==="pago"?C.okLight:C.card,
                   border:`1.5px solid ${verSolo==="pago"?C.ok:C.border}`,borderRadius:12,padding:"11px 13px"}}>
-                <div style={{fontSize:10.5,fontWeight:800,color:C.inkFaint,textTransform:"uppercase",marginBottom:4}}>Abonos realizados</div>
+                <div style={{fontSize:12,fontWeight:800,color:C.inkFaint,textTransform:"uppercase",marginBottom:4}}>Abonos realizados</div>
                 <div style={{fontFamily:MONO,fontWeight:800,fontSize:16,color:C.ok}}>{fmt.money(totalPagos)}</div>
-                <div style={{fontSize:11,color:C.inkMuted,marginTop:2}}>{pagos.length} abono{pagos.length!==1?"s":""} · toca para ver{verSolo==="pago"?" (viendo)":""}</div>
+                <div style={{fontSize:12,color:C.inkMuted,marginTop:2}}>{pagos.length} abono{pagos.length!==1?"s":""} · toca para ver{verSolo==="pago"?" (viendo)":""}</div>
               </button>
             </div>
           );
@@ -115,7 +115,7 @@ export function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onA
 
         <div style={{fontSize:12,fontWeight:800,color:C.inkMuted,marginBottom:8,textTransform:"uppercase"}}>
           {verSolo==="compra"?`Solo compras (${movs.filter(m=>m.tipo==="compra").length})`:verSolo==="pago"?`Solo abonos (${movs.filter(m=>m.tipo==="pago").length})`:"Cartola de movimientos"}
-          {verSolo&&<button onClick={()=>setVerSolo(null)} style={{marginLeft:8,background:"none",border:"none",color:C.teal,fontSize:11,fontWeight:700,cursor:"pointer",textTransform:"none"}}>ver todo</button>}
+          {verSolo&&<button onClick={()=>setVerSolo(null)} style={{marginLeft:8,background:"none",border:"none",color:C.teal,fontSize:12,fontWeight:700,cursor:"pointer",textTransform:"none"}}>ver todo</button>}
         </div>
         {(verSolo?movs.filter(m=>m.tipo===verSolo):movs).length===0&&<div style={{textAlign:"center",padding:20,color:C.inkFaint,fontSize:13}}>Sin movimientos registrados.</div>}
         {(verSolo?movs.filter(m=>m.tipo===verSolo):movs).length>0&&(
@@ -123,11 +123,11 @@ export function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onA
             <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
               <thead>
                 <tr style={{background:C.nightSoft}}>
-                  <th style={{position:"sticky",top:0,zIndex:1,background:C.nightSoft,textAlign:"left",padding:"8px 10px",color:C.inkFaint,fontWeight:800,fontSize:10.5,textTransform:"uppercase",whiteSpace:"nowrap"}}>Fecha</th>
-                  <th style={{position:"sticky",top:0,zIndex:1,background:C.nightSoft,textAlign:"left",padding:"8px 10px",color:C.inkFaint,fontWeight:800,fontSize:10.5,textTransform:"uppercase"}}>Tipo</th>
-                  <th style={{position:"sticky",top:0,zIndex:1,background:C.nightSoft,textAlign:"left",padding:"8px 10px",color:C.inkFaint,fontWeight:800,fontSize:10.5,textTransform:"uppercase"}}>OC / Detalle</th>
-                  <th style={{position:"sticky",top:0,zIndex:1,background:C.nightSoft,textAlign:"left",padding:"8px 10px",color:C.inkFaint,fontWeight:800,fontSize:10.5,textTransform:"uppercase",whiteSpace:"nowrap"}}>Registrado por</th>
-                  <th style={{position:"sticky",top:0,zIndex:1,background:C.nightSoft,textAlign:"right",padding:"8px 10px",color:C.inkFaint,fontWeight:800,fontSize:10.5,textTransform:"uppercase",whiteSpace:"nowrap"}}>Monto</th>
+                  <th style={{position:"sticky",top:0,zIndex:1,background:C.nightSoft,textAlign:"left",padding:"8px 10px",color:C.inkFaint,fontWeight:800,fontSize:12,textTransform:"uppercase",whiteSpace:"nowrap"}}>Fecha</th>
+                  <th style={{position:"sticky",top:0,zIndex:1,background:C.nightSoft,textAlign:"left",padding:"8px 10px",color:C.inkFaint,fontWeight:800,fontSize:12,textTransform:"uppercase"}}>Tipo</th>
+                  <th style={{position:"sticky",top:0,zIndex:1,background:C.nightSoft,textAlign:"left",padding:"8px 10px",color:C.inkFaint,fontWeight:800,fontSize:12,textTransform:"uppercase"}}>OC / Detalle</th>
+                  <th style={{position:"sticky",top:0,zIndex:1,background:C.nightSoft,textAlign:"left",padding:"8px 10px",color:C.inkFaint,fontWeight:800,fontSize:12,textTransform:"uppercase",whiteSpace:"nowrap"}}>Registrado por</th>
+                  <th style={{position:"sticky",top:0,zIndex:1,background:C.nightSoft,textAlign:"right",padding:"8px 10px",color:C.inkFaint,fontWeight:800,fontSize:12,textTransform:"uppercase",whiteSpace:"nowrap"}}>Monto</th>
                 </tr>
               </thead>
               <tbody>
@@ -148,7 +148,7 @@ export function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onA
               </tbody>
               <tfoot>
                 <tr style={{borderTop:`2px solid ${C.border}`,background:C.nightSoft}}>
-                  <td colSpan={4} style={{padding:"8px 10px",fontWeight:800,color:C.ink,fontSize:11.5}}>Total {verSolo==="compra"?"compras":verSolo==="pago"?"abonos":"neto"}</td>
+                  <td colSpan={4} style={{padding:"8px 10px",fontWeight:800,color:C.ink,fontSize:12}}>Total {verSolo==="compra"?"compras":verSolo==="pago"?"abonos":"neto"}</td>
                   <td style={{padding:"8px 10px",textAlign:"right",fontFamily:MONO,fontWeight:800,fontSize:13,color:C.ink,whiteSpace:"nowrap"}}>
                     {fmt.money((verSolo?movs.filter(m=>m.tipo===verSolo):movs).reduce((s,m)=>s+m.monto,0))}
                   </td>
@@ -178,14 +178,14 @@ export function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onA
         <button key={f.id} onClick={()=>setSelFin(f.id)} style={{width:"100%",background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:16,marginBottom:10,textAlign:"left",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div>
             <div style={{fontWeight:800,fontSize:15,color:C.ink}}>{f.nombre}</div>
-            <div style={{fontSize:11.5,color:C.inkFaint,marginTop:2}}>Toca para ver cartola →</div>
+            <div style={{fontSize:12,color:C.inkFaint,marginTop:2}}>Toca para ver cartola →</div>
           </div>
           <div style={{fontFamily:MONO,fontWeight:800,fontSize:20,color:Number(f.saldo_deuda)>0?C.danger:C.ok}}>{fmt.money(f.saldo_deuda)}</div>
         </button>
       ))}
       {enCero.length>0&&(
         <details style={{marginTop:4}}>
-          <summary style={{fontSize:11,color:C.inkFaint,cursor:"pointer",padding:"6px 0",listStyle:"none"}}>
+          <summary style={{fontSize:12,color:C.inkFaint,cursor:"pointer",padding:"6px 0",listStyle:"none"}}>
             + {enCero.length} financiador{enCero.length>1?"es":""} sin deuda
           </summary>
           {enCero.map(f=>(
@@ -203,9 +203,9 @@ export function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onA
       <div style={{marginTop:20}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
           <span style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4}}>Aportes de socios</span>
-          <button onClick={()=>setNuevoAporte(true)} style={{fontSize:11,background:C.okLight,color:C.ok,border:"none",borderRadius:7,padding:"5px 10px",fontWeight:700,cursor:"pointer"}}>+ Registrar</button>
+          <button onClick={()=>setNuevoAporte(true)} style={{fontSize:12,background:C.okLight,color:C.ok,border:"none",borderRadius:7,padding:"5px 10px",fontWeight:700,cursor:"pointer"}}>+ Registrar</button>
         </div>
-        <div style={{fontSize:11.5,color:C.inkFaint,marginBottom:10,lineHeight:1.45}}>
+        <div style={{fontSize:12,color:C.inkFaint,marginBottom:10,lineHeight:1.45}}>
           Capital que entra o sale de la empresa. Suma a la caja pero no cuenta como venta ni utilidad. Toca un movimiento para editarlo.
         </div>
 
@@ -241,7 +241,7 @@ export function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onA
                   display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
                 <span style={{minWidth:0}}>
                   <span style={{display:"block",fontSize:12,fontWeight:600,color:C.ink}}>{a.socio}{a.medio?` · ${a.medio}`:""}</span>
-                  <span style={{display:"block",fontSize:10.5,color:C.inkFaint}}>{fmt.date(String(a.fecha).slice(0,10))}{a.notas?` · ${a.notas.slice(0,50)}`:""}</span>
+                  <span style={{display:"block",fontSize:12,color:C.inkFaint}}>{fmt.date(String(a.fecha).slice(0,10))}{a.notas?` · ${a.notas.slice(0,50)}`:""}</span>
                 </span>
                 <span style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
                   <span style={{fontFamily:MONO,fontWeight:800,fontSize:12.5,color:a.tipo==="retiro"?C.danger:C.ok}}>

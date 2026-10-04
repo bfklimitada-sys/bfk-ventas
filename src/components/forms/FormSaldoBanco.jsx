@@ -62,7 +62,7 @@ export function FormSaldoBanco({ actual, onSave }) {
         {saving ? "Guardando…" : "✓ Fijar este saldo"}
       </button>
 
-      <div style={{ fontSize: 11, color: C.inkFaint, marginTop: 12, lineHeight: 1.5 }}>
+      <div style={{ fontSize: 12, color: C.inkFaint, marginTop: 12, lineHeight: 1.5 }}>
         Conviene actualizarlo cada vez que subas una cartola, para que la base
         siempre esté al día.
       </div>

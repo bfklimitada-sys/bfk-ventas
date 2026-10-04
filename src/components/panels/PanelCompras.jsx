@@ -89,7 +89,7 @@ export function FormEditarDatosOC({ oc, onSave, entidadesCatalogo, perfil, ocs, 
             style={{marginTop:2,width:16,height:16,flexShrink:0}} />
           <span>
             <span style={{display:"block",fontSize:12.5,fontWeight:700,color:C.ink}}>Es venta propia del vendedor</span>
-            <span style={{display:"block",fontSize:11,color:C.inkFaint,marginTop:1}}>Se lleva el 100% de la utilidad de esta OC (menos el IVA de su propia factura), en vez del 50% general</span>
+            <span style={{display:"block",fontSize:12,color:C.inkFaint,marginTop:1}}>Se lleva el 100% de la utilidad de esta OC (menos el IVA de su propia factura), en vez del 50% general</span>
           </span>
         </label>
       )}
@@ -98,7 +98,7 @@ export function FormEditarDatosOC({ oc, onSave, entidadesCatalogo, perfil, ocs, 
         <Field label="Código de la OC" hint="Corrígelo si se ingresó mal. Debe ser único.">
           <input style={iMono} value={numeroOc} onChange={e=>{setNumeroOc(e.target.value);setErr("");}} />
           {codigoRepetido&&(
-            <div style={{fontSize:11.5,color:C.danger,fontWeight:700,marginTop:5}}>
+            <div style={{fontSize:12,color:C.danger,fontWeight:700,marginTop:5}}>
               ⚠ Ya hay otra OC con ese código
             </div>
           )}
@@ -106,7 +106,7 @@ export function FormEditarDatosOC({ oc, onSave, entidadesCatalogo, perfil, ocs, 
             <label style={{display:"flex",alignItems:"flex-start",gap:7,marginTop:8,cursor:"pointer",
               background:C.tealLight,borderRadius:8,padding:"8px 10px"}}>
               <input type="checkbox" checked={resincronizar} onChange={e=>setResincronizar(e.target.checked)} style={{marginTop:2}} />
-              <span style={{fontSize:11.5,color:C.tealDark,fontWeight:600}}>
+              <span style={{fontSize:12,color:C.tealDark,fontWeight:600}}>
                 Traer de nuevo los datos desde Mercado Público con el código corregido
               </span>
             </label>
@@ -115,7 +115,7 @@ export function FormEditarDatosOC({ oc, onSave, entidadesCatalogo, perfil, ocs, 
       )}
 
       <Field label="RUT del cliente" hint="Si ya existe en el catálogo, autocompleta los demás datos"><input style={iStyle} value={rutCliente} onChange={e=>handleRutChange(e.target.value)} placeholder="ej: 12.345.678-9" /></Field>
-      {autocompletado&&<div style={{background:C.okLight,borderRadius:8,padding:"8px 12px",fontSize:11.5,color:C.ok,fontWeight:600,marginBottom:12}}>✓ Datos autocompletados desde el catálogo de entidades</div>}
+      {autocompletado&&<div style={{background:C.okLight,borderRadius:8,padding:"8px 12px",fontSize:12,color:C.ok,fontWeight:600,marginBottom:12}}>✓ Datos autocompletados desde el catálogo de entidades</div>}
       <Field label="Nombre del cliente" hint="Se guarda en mayúscula"><input style={iStyle} value={cliente} onChange={e=>setCliente(e.target.value)} placeholder="Nombre del cliente" /></Field>
       <Field label="Entidad (organismo público)" hint="Se guarda en mayúscula"><input style={iStyle} value={entidad} onChange={e=>setEntidad(e.target.value)} placeholder="ej: I. Municipalidad de..." /></Field>
       <Field label="Comuna" hint="Se guarda en mayúscula"><input style={iStyle} value={comuna} onChange={e=>setComuna(e.target.value)} placeholder="ej: Concepción" /></Field>
@@ -193,7 +193,7 @@ export function FormEditarEvento({ item, onSave, onCancel }) {
               style={{marginTop:2,width:16,height:16,flexShrink:0}} />
             <span>
               <span style={{display:"block",fontSize:12.5,fontWeight:700,color:C.ink}}>Ya lo cobré / depositó en el banco</span>
-              <span style={{display:"block",fontSize:11,color:C.inkFaint,marginTop:1}}>
+              <span style={{display:"block",fontSize:12,color:C.inkFaint,marginTop:1}}>
                 {cobradoEnBanco?"Se cuenta como plata real en la cuenta.":"Aparecerá en \"Vale vistas por cobrar\" hasta que la marques cobrada."}
               </span>
             </span>
@@ -288,8 +288,8 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
 
   const Dato=({k,v})=> v ? (
     <div style={{display:"flex",justifyContent:"space-between",gap:10,padding:"5px 0",borderBottom:`1px solid ${C.border}`}}>
-      <span style={{fontSize:11.5,color:C.inkMuted,flexShrink:0}}>{k}</span>
-      <span style={{fontSize:11.5,color:C.ink,fontWeight:600,textAlign:"right",wordBreak:"break-word"}}>{v}</span>
+      <span style={{fontSize:12,color:C.inkMuted,flexShrink:0}}>{k}</span>
+      <span style={{fontSize:12,color:C.ink,fontWeight:600,textAlign:"right",wordBreak:"break-word"}}>{v}</span>
     </div>
   ) : null;
 
@@ -298,7 +298,7 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
       <button onClick={()=>setAbierto(v=>!v)}
         style={{width:"100%",background:C.card,border:`1px solid ${C.border}`,borderRadius:10,
           padding:"9px 12px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <span style={{fontSize:11.5,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4}}>
+        <span style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4}}>
           Detalle de la OC{vendidos.length>0&&<span style={{color:C.teal}}> · {vendidos.length} producto{vendidos.length>1?"s":""}</span>}
         </span>
         <span style={{color:C.inkFaint,fontSize:12}}>{abierto?"▲":"▼"}</span>
@@ -313,7 +313,7 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
             <button onClick={async()=>{ setSincronizando(true); await onSincronizarFecha(oc); setSincronizando(false); }}
               disabled={sincronizando}
               style={{width:"100%",background:C.infoLight,border:`1px solid ${C.info}44`,color:C.info,
-                borderRadius:9,padding:"8px 12px",fontSize:11.5,fontWeight:700,cursor:"pointer",marginBottom:12}}>
+                borderRadius:9,padding:"8px 12px",fontSize:12,fontWeight:700,cursor:"pointer",marginBottom:12}}>
               {sincronizando?"Consultando…":"Actualizar fecha y datos desde Mercado Público"}
             </button>
           )}
@@ -321,11 +321,11 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
           {/* Productos: cantidad y precio separados del nombre */}
           {links.length>0&&(
             <div style={{marginBottom:12}}>
-              <div style={{fontSize:10,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Productos</div>
+              <div style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Productos</div>
               {/* ═══ LO QUE VENDEMOS — viene de la OC de Mercado Público ═══ */}
               {vendidos.length>0&&(
                 <>
-                  <div style={{fontSize:9.5,fontWeight:800,color:C.inkFaint,textTransform:"uppercase",
+                  <div style={{fontSize:12,fontWeight:800,color:C.inkFaint,textTransform:"uppercase",
                     letterSpacing:0.5,marginBottom:6}}>Lo que vendemos · según la OC</div>
 
                   {vendidos.map(l=>{
@@ -338,22 +338,22 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
                             {l.descripcion}
                           </span>
                           <span style={{width:34,flexShrink:0,textAlign:"center",fontFamily:MONO,
-                            fontSize:11.5,fontWeight:800,color:cant?C.tealDark:C.inkFaint}}>
+                            fontSize:12,fontWeight:800,color:cant?C.tealDark:C.inkFaint}}>
                             {cant?`×${cant}`:"—"}
                           </span>
                           <span style={{width:76,flexShrink:0,textAlign:"right",fontFamily:MONO,
-                            fontSize:11.5,fontWeight:800,color:C.ink}}>
+                            fontSize:12,fontWeight:800,color:C.ink}}>
                             {venta?fmt.money(venta):"—"}
                           </span>
                         </div>
                         {cant>1&&venta>0&&(
-                          <div style={{fontSize:10.5,color:C.inkMuted,marginTop:3}}>Unit. {fmt.money(Math.round(venta/cant))}</div>
+                          <div style={{fontSize:12,color:C.inkMuted,marginTop:3}}>Unit. {fmt.money(Math.round(venta/cant))}</div>
                         )}
                         {l.categoria&&(
-                          <div style={{fontSize:10,color:C.inkFaint,marginTop:2,lineHeight:1.35}}>{l.categoria}</div>
+                          <div style={{fontSize:12,color:C.inkFaint,marginTop:2,lineHeight:1.35}}>{l.categoria}</div>
                         )}
                         {(l.direccion_entrega||oc.direccion_entrega)&&(
-                          <div style={{fontSize:10.5,marginTop:4,lineHeight:1.4,
+                          <div style={{fontSize:12,marginTop:4,lineHeight:1.4,
                             color:l.direccion_entrega?C.warn:C.info,fontWeight:l.direccion_entrega?700:400}}>
                             {l.direccion_entrega?"Despacho distinto: ":"Entregar en: "}
                             {l.direccion_entrega||oc.direccion_entrega}
@@ -362,7 +362,7 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
                         {esAdmin&&(
                           <div style={{marginTop:5}}>
                             <button onClick={()=>abrirEdicion(l)}
-                              style={{background:"none",border:"none",color:C.inkFaint,fontSize:10.5,cursor:"pointer",fontWeight:600,padding:0}}>Corregir</button>
+                              style={{background:"none",border:"none",color:C.inkFaint,fontSize:12,cursor:"pointer",fontWeight:600,padding:0}}>Corregir</button>
                           </div>
                         )}
                       </div>
@@ -371,7 +371,7 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
 
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",
                     padding:"6px 11px 10px"}}>
-                    <span style={{fontSize:10.5,color:C.inkMuted}}>Total vendido</span>
+                    <span style={{fontSize:12,color:C.inkMuted}}>Total vendido</span>
                     <span style={{textAlign:"right"}}>
                       <span style={{fontFamily:MONO,fontWeight:800,fontSize:12.5,color:C.ink}}>
                         {fmt.money(vendidos.reduce((s,l)=>s+(Number(l.precio_venta)||0),0))}
@@ -380,11 +380,11 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
                         const tv=vendidos.reduce((s,l)=>s+(Number(l.precio_venta)||0),0);
                         const neto=Math.round((Number(oc.monto_total)||0)/1.19);
                         return Math.abs(tv-neto)>1&&Math.abs(tv-(Number(oc.monto_total)||0))>1?(
-                          <span style={{display:"block",fontSize:10,color:C.warn,fontWeight:700}}>
+                          <span style={{display:"block",fontSize:12,color:C.warn,fontWeight:700}}>
                             ⚠ la OC dice {fmt.money(oc.monto_total)}
                           </span>
                         ):(
-                          <span style={{display:"block",fontSize:10,color:C.inkFaint}}>
+                          <span style={{display:"block",fontSize:12,color:C.inkFaint}}>
                             con IVA {fmt.money(oc.monto_total)}
                           </span>
                         );
@@ -396,11 +396,11 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
 
               {/* ═══ LO QUE COMPRAMOS — lo carga el vendedor ═══ */}
               <div style={{borderTop:`1px solid ${C.border}`,paddingTop:11,marginTop:4}}>
-                <div style={{fontSize:9.5,fontWeight:800,color:C.inkFaint,textTransform:"uppercase",
+                <div style={{fontSize:12,fontWeight:800,color:C.inkFaint,textTransform:"uppercase",
                   letterSpacing:0.5,marginBottom:6}}>Lo que compramos · proveedor y link</div>
 
                 {comprados.length===0&&!nuevo&&(
-                  <div style={{fontSize:11,color:C.inkFaint,marginBottom:7,lineHeight:1.45}}>
+                  <div style={{fontSize:12,color:C.inkFaint,marginBottom:7,lineHeight:1.45}}>
                     Sin productos comprados registrados.
                     {Number(oc.costo_total)>0&&<> El costo total de la OC es <b>{fmt.money(oc.costo_total)}</b>.</>}
                   </div>
@@ -422,32 +422,32 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
                           {l.descripcion}
                         </span>
                         <span style={{width:34,flexShrink:0,textAlign:"center",fontFamily:MONO,
-                          fontSize:11.5,fontWeight:800,color:cant?C.tealDark:C.inkFaint}}>
+                          fontSize:12,fontWeight:800,color:cant?C.tealDark:C.inkFaint}}>
                           {cant?`×${cant}`:"—"}
                         </span>
                         <span style={{width:76,flexShrink:0,textAlign:"right",fontFamily:MONO,
-                          fontSize:11.5,fontWeight:800,color:C.danger}}>
+                          fontSize:12,fontWeight:800,color:C.danger}}>
                           {costo?fmt.money(costo):"—"}
                         </span>
                       </div>
-                      {l.proveedor&&<div style={{fontSize:10.5,color:C.inkMuted,marginTop:3}}>{l.proveedor}</div>}
+                      {l.proveedor&&<div style={{fontSize:12,color:C.inkMuted,marginTop:3}}>{l.proveedor}</div>}
 
                       <div style={{display:"flex",alignItems:"center",gap:8,marginTop:6,
                         paddingTop:6,borderTop:`1px solid ${C.border}`}}>
                         {tieneUrl?(
                           <a href={l.url} target="_blank" rel="noopener noreferrer"
-                            style={{flex:1,minWidth:0,fontSize:11,color:C.teal,textDecoration:"none",fontWeight:600,
+                            style={{flex:1,minWidth:0,fontSize:12,color:C.teal,textDecoration:"none",fontWeight:600,
                               overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                             🔗 {dominio||l.url} ↗
                           </a>
                         ):(
-                          <span style={{flex:1,fontSize:10.5,color:C.inkFaint}}>Sin link</span>
+                          <span style={{flex:1,fontSize:12,color:C.inkFaint}}>Sin link</span>
                         )}
                         <button onClick={()=>abrirEdicion(l)}
-                          style={{flexShrink:0,background:"none",border:"none",color:C.inkMuted,fontSize:11,cursor:"pointer",fontWeight:600,padding:0}}>Editar</button>
+                          style={{flexShrink:0,background:"none",border:"none",color:C.inkMuted,fontSize:12,cursor:"pointer",fontWeight:600,padding:0}}>Editar</button>
                         {esAdmin&&(
                           <button onClick={async()=>{ if(window.confirm("¿Eliminar este producto?")) await onEliminarLink(l.id,oc); }}
-                            style={{flexShrink:0,background:"none",border:"none",color:C.danger,fontSize:11,cursor:"pointer",fontWeight:600,padding:0}}>Eliminar</button>
+                            style={{flexShrink:0,background:"none",border:"none",color:C.danger,fontSize:12,cursor:"pointer",fontWeight:600,padding:0}}>Eliminar</button>
                         )}
                       </div>
                     </div>
@@ -456,14 +456,14 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
 
                 {comprados.length>1&&!repartiendo&&!nuevo&&!editando&&(
                   <button onClick={()=>setRepartiendo(true)}
-                    style={{fontSize:11,background:C.purpleLight,border:`1px solid ${C.purple}55`,borderRadius:8,
+                    style={{fontSize:12,background:C.purpleLight,border:`1px solid ${C.purple}55`,borderRadius:8,
                       padding:"7px 12px",color:C.purple,cursor:"pointer",width:"100%",fontWeight:700,marginBottom:6}}>
                     💰 Solo sé cuánto invertí en total — repartir
                   </button>
                 )}
                 {repartiendo&&(
                   <div style={{background:C.purpleLight,borderRadius:9,padding:"11px",marginBottom:6}}>
-                    <div style={{fontSize:11,color:C.inkMuted,marginBottom:8,lineHeight:1.4}}>
+                    <div style={{fontSize:12,color:C.inkMuted,marginBottom:8,lineHeight:1.4}}>
                       Ingresa el total que pagaste por los {comprados.length} productos — se reparte a prorrata
                       del precio de venta de cada uno{comprados.every(l=>!l.precio_venta)?" (en partes iguales, ninguno tiene precio de venta cargado)":""}.
                     </div>
@@ -511,7 +511,7 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
 
                 {!nuevo&&!editando&&(
                   <button onClick={()=>{setNuevo(true);limpiar();}}
-                    style={{fontSize:11,background:"none",border:`1px dashed ${C.teal}66`,borderRadius:8,
+                    style={{fontSize:12,background:"none",border:`1px dashed ${C.teal}66`,borderRadius:8,
                       padding:"7px 12px",color:C.tealDark,cursor:"pointer",width:"100%",fontWeight:700}}>
                     + Agregar producto comprado
                   </button>
@@ -525,10 +525,10 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
                   return (
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",
                       marginTop:10,paddingTop:9,borderTop:`2px solid ${C.border}`}}>
-                      <span style={{fontSize:10.5,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4}}>Ganancia de la OC</span>
+                      <span style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4}}>Ganancia de la OC</span>
                       <span style={{textAlign:"right"}}>
                         <span style={{fontFamily:MONO,fontWeight:800,fontSize:16,color:col}}>{fmt.money(util)}</span>
-                        <span style={{display:"block",fontSize:10.5,color:C.inkFaint,marginTop:1}}>
+                        <span style={{display:"block",fontSize:12,color:C.inkFaint,marginTop:1}}>
                           {pct}% · venta {fmt.money(venta)} · costo {fmt.money(costo)}
                           {g.extra>0&&<span style={{color:C.danger}}> (incluye {fmt.money(g.extra)} de post-venta)</span>}
                         </span>
@@ -541,7 +541,7 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
           )}
 
           {/* Datos comerciales */}
-          <div style={{fontSize:10,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:4}}>Datos</div>
+          <div style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:4}}>Datos</div>
           <Dato k="Cliente"      v={oc.cliente} />
           <Dato k="Unidad"       v={oc.entidad} />
           <Dato k="RUT"          v={oc.rut_cliente} />
@@ -555,7 +555,7 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
           <Dato k="Financiador"  v={oc.financiadores?.nombre} />
 
           {/* Números */}
-          <div style={{fontSize:10,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,margin:"10px 0 4px"}}>Números</div>
+          <div style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,margin:"10px 0 4px"}}>Números</div>
           <Dato k="Venta"     v={fmt.money(oc.monto_total)} />
           <Dato k="Costo"     v={oc.costo_total?fmt.money(oc.costo_total):null} />
           <Dato k="Utilidad"  v={oc.costo_total?`${fmt.money(margen.pesos)} (${margen.pct}%)`:null} />
@@ -563,15 +563,15 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
           <Dato k="Cobrado"   v={oc.monto_cobrado?fmt.money(oc.monto_cobrado):null} />
 
           {/* Línea de tiempo */}
-          <div style={{fontSize:10,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,margin:"10px 0 4px"}}>Fechas</div>
+          <div style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,margin:"10px 0 4px"}}>Fechas</div>
           <Dato k="Compra"           v={evC?.fecha?fmt.date(String(evC.fecha).slice(0,10)):null} />
           <Dato k="Entrega estimada" v={evC?.fecha_entrega_estimada?fmt.date(String(evC.fecha_entrega_estimada).slice(0,10)):null} />
           <Dato k="Entrega real"     v={evE?.fecha?fmt.date(String(evE.fecha).slice(0,10)):null} />
           <Dato k="Factura"          v={evF?.fecha?`N°${evF.numero_factura} · ${fmt.date(String(evF.fecha).slice(0,10))}`:null} />
           {evF?.numero_factura&&(
             <div style={{background:C.infoLight,border:`1px solid ${C.info}33`,borderRadius:9,padding:"10px 11px",margin:"8px 0"}}>
-              <div style={{fontSize:10,fontWeight:800,color:C.info,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Verificar en el SII</div>
-              <div style={{fontSize:11.5,color:C.inkMuted,lineHeight:1.7,marginBottom:9}}>
+              <div style={{fontSize:12,fontWeight:800,color:C.info,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Verificar en el SII</div>
+              <div style={{fontSize:12,color:C.inkMuted,lineHeight:1.7,marginBottom:9}}>
                 RUT emisor <b style={{color:C.ink}}>77.322.317-3</b> (BFK Ltda) · Factura electrónica<br/>
                 Folio{" "}
                 <b onClick={()=>copiarFolio(evF.numero_factura)}
@@ -581,10 +581,10 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
               </div>
               <a href="https://palena.sii.cl/dte/mn_verif_doc.html" target="_blank" rel="noopener noreferrer"
                 style={{display:"block",textAlign:"center",background:C.info,color:"#fff",borderRadius:8,
-                  padding:"9px 12px",fontSize:11.5,fontWeight:700,textDecoration:"none"}}>
+                  padding:"9px 12px",fontSize:12,fontWeight:700,textDecoration:"none"}}>
                 Abrir verificador del SII ↗
               </a>
-              <div style={{fontSize:10,color:C.inkFaint,marginTop:6,lineHeight:1.4}}>
+              <div style={{fontSize:12,color:C.inkFaint,marginTop:6,lineHeight:1.4}}>
                 El SII pide iniciar sesión con tu RUT y clave (o ClaveÚnica) antes de buscar el folio — no se puede precargar por link.
               </div>
             </div>
@@ -607,26 +607,26 @@ function HistorialReclamos({ reclamos, onRegistrarRespuesta }){
 
   return (
     <div style={{marginBottom:10}}>
-      <div style={{fontSize:10.5,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>
+      <div style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>
         Historial de reclamos ({ordenados.length})
       </div>
       {ordenados.map(r=>(
         <div key={r.id} style={{background:C.paper,borderRadius:10,padding:"10px 12px",marginBottom:6,border:`1px solid ${C.border}`}}>
-          <span style={{fontSize:11.5,fontWeight:700,color:C.ink}}>📧 {fmt.datetime(r.fecha)}</span>
-          <div style={{fontSize:10.5,color:C.inkMuted,marginTop:2}}>Enviado a {r.correo}</div>
+          <span style={{fontSize:12,fontWeight:700,color:C.ink}}>📧 {fmt.datetime(r.fecha)}</span>
+          <div style={{fontSize:12,color:C.inkMuted,marginTop:2}}>Enviado a {r.correo}</div>
 
           {r.respondido_en ? (
             <div style={{marginTop:8,paddingTop:8,borderTop:`1px solid ${C.border}`}}>
-              <div style={{fontSize:10.5,fontWeight:700,color:C.ok}}>↩ Respondió</div>
-              {r.fecha_prometida&&<div style={{fontSize:11.5,color:C.ink,marginTop:2}}>Prometió pagar: <b>{fmt.date(r.fecha_prometida)}</b></div>}
-              {r.respuesta_notas&&<div style={{fontSize:11,color:C.inkMuted,marginTop:2,lineHeight:1.4}}>{r.respuesta_notas}</div>}
+              <div style={{fontSize:12,fontWeight:700,color:C.ok}}>↩ Respondió</div>
+              {r.fecha_prometida&&<div style={{fontSize:12,color:C.ink,marginTop:2}}>Prometió pagar: <b>{fmt.date(r.fecha_prometida)}</b></div>}
+              {r.respuesta_notas&&<div style={{fontSize:12,color:C.inkMuted,marginTop:2,lineHeight:1.4}}>{r.respuesta_notas}</div>}
             </div>
           ) : editando===r.id ? (
             <div style={{marginTop:8,paddingTop:8,borderTop:`1px solid ${C.border}`}}>
-              <label style={{fontSize:10,color:C.inkFaint,fontWeight:700,display:"block",marginBottom:3}}>Fecha que prometió pagar (opcional)</label>
+              <label style={{fontSize:12,color:C.inkFaint,fontWeight:700,display:"block",marginBottom:3}}>Fecha que prometió pagar (opcional)</label>
               <input type="date" value={fecha} onChange={e=>setFecha(e.target.value)}
                 style={{...iStyle,fontSize:12,padding:"7px 9px",marginBottom:8}} />
-              <label style={{fontSize:10,color:C.inkFaint,fontWeight:700,display:"block",marginBottom:3}}>Notas (opcional)</label>
+              <label style={{fontSize:12,color:C.inkFaint,fontWeight:700,display:"block",marginBottom:3}}>Notas (opcional)</label>
               <textarea value={notas} onChange={e=>setNotas(e.target.value)} rows={2}
                 placeholder="Ej: dice que pasó a contabilidad, pagan los viernes…"
                 style={{...iStyle,fontSize:12,padding:"7px 9px",marginBottom:8,resize:"vertical",width:"100%",boxSizing:"border-box"}} />
@@ -641,7 +641,7 @@ function HistorialReclamos({ reclamos, onRegistrarRespuesta }){
             </div>
           ) : (
             <button onClick={()=>{setEditando(r.id);setFecha("");setNotas("");}}
-              style={{marginTop:6,background:"none",border:"none",color:C.info,fontSize:11,fontWeight:700,cursor:"pointer",padding:0}}>
+              style={{marginTop:6,background:"none",border:"none",color:C.info,fontSize:12,fontWeight:700,cursor:"pointer",padding:0}}>
               📩 Registrar respuesta
             </button>
           )}
@@ -777,7 +777,7 @@ export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded
             <div style={{fontFamily:MONO,fontWeight:800,fontSize:13.5,color:C.ink}}>{oc.numero_oc}</div>
             {(()=>{
               const f=fmtFechaHora(oc.fecha_hora_emision_mp||oc.fecha_emision_mp||(oc.eventos_compra||[])[0]?.fecha||oc.creadoEn);
-              return f ? <div style={{fontSize:10,color:C.inkFaint,marginTop:2}}>{f}</div> : null;
+              return f ? <div style={{fontSize:12,color:C.inkFaint,marginTop:2}}>{f}</div> : null;
             })()}
           </div>
           <div style={{flexShrink:0,textAlign:"right"}}>
@@ -786,7 +786,7 @@ export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded
               return oc.costo_total?(
                 <div style={{marginTop:2}}>
                   <span style={{display:"block",fontFamily:MONO,fontSize:12,fontWeight:800,color:mg.color}}>+{fmt.money(mg.pesos)}</span>
-                  <span style={{display:"block",fontSize:9.5,color:mg.color,opacity:0.8}}>{mg.pct}%{mg.extra>0?" · con post-venta":" margen"}</span>
+                  <span style={{display:"block",fontSize:12,color:mg.color,opacity:0.8}}>{mg.pct}%{mg.extra>0?" · con post-venta":" margen"}</span>
                 </div>
               ):null;})()}
           </div>
@@ -794,7 +794,7 @@ export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded
 
         {/* Línea 2 — cliente y comuna, a todo el ancho */}
         <div style={{marginTop:7}}>
-          <span style={{fontSize:11.5,color:C.inkMuted,display:"block",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+          <span style={{fontSize:12,color:C.inkMuted,display:"block",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
             {(()=>{
               const esPorCompletar=oc.cliente?.toUpperCase().includes("POR COMPLETAR");
               const nombre=esPorCompletar?(oc.entidad||null):oc.cliente;
@@ -808,10 +808,10 @@ export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded
         {/* Línea 3 — un solo estado, con el progreso al lado */}
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,marginTop:7}}>
           <span style={{display:"inline-flex",alignItems:"center",gap:5,background:estadoOC.bg,color:estadoOC.color,
-            padding:"3px 9px",borderRadius:20,fontSize:11,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+            padding:"3px 9px",borderRadius:20,fontSize:12,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
             {estadoOC.icono} {estadoOC.texto}
           </span>
-          <span style={{fontSize:10.5,color:C.inkFaint,flexShrink:0}}>
+          <span style={{fontSize:12,color:C.inkFaint,flexShrink:0}}>
             {estancada&&<span style={{color:C.warn,fontWeight:700}}>⏸ {diasEstancada}d · </span>}
             {oc.vendedores?.nombre&&<>{oc.vendedores.nombre.split(" ")[0]} · </>}
             {completadas}/5
@@ -833,7 +833,7 @@ export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded
           )}
 
           {/* Datos, en una sola línea y sin repetir lo que ya está arriba */}
-          <div style={{fontSize:11.5,color:C.inkMuted,marginBottom:12,lineHeight:1.6}}>
+          <div style={{fontSize:12,color:C.inkMuted,marginBottom:12,lineHeight:1.6}}>
             {[oc.entidad,oc.contacto].filter(Boolean).join(" · ")}
             {(oc.entidad||oc.contacto)&&<br/>}
             {saldo>0&&oc.monto_facturado>0&&<>Por cobrar <b style={{color:C.danger}}>{fmt.money(saldo)}</b> · </>}
@@ -850,7 +850,7 @@ export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded
           {oc.direccion_entrega&&(
             <div style={{background:C.infoLight,border:`1px solid ${C.info}33`,borderRadius:9,
               padding:"9px 11px",marginBottom:12}}>
-              <div style={{fontSize:10,fontWeight:800,color:C.info,textTransform:"uppercase",letterSpacing:0.4,marginBottom:3}}>Dirección de despacho</div>
+              <div style={{fontSize:12,fontWeight:800,color:C.info,textTransform:"uppercase",letterSpacing:0.4,marginBottom:3}}>Dirección de despacho</div>
               <div style={{fontSize:12,color:C.ink,lineHeight:1.45}}>{oc.direccion_entrega}</div>
             </div>
           )}
@@ -872,7 +872,7 @@ export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded
 
           {puedeReclamar&&(
             hrsDesdeReclamo!==null&&hrsDesdeReclamo<24
-              ? <div style={{background:C.okLight,borderRadius:8,padding:"8px 12px",fontSize:11.5,color:C.ok,fontWeight:600,marginBottom:10}}>
+              ? <div style={{background:C.okLight,borderRadius:8,padding:"8px 12px",fontSize:12,color:C.ok,fontWeight:600,marginBottom:10}}>
                   ✅ Reclamada hace {hrsDesdeReclamo}h · {ultimoReclamo.correo}
                 </div>
               : <button onClick={()=>setReclamando(true)} style={{...btnP(C.danger),marginBottom:10}}>
@@ -886,7 +886,7 @@ export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded
           <HistorialCambiosOC ocId={oc.id} historialCambios={historialCambios} />
 
           <details style={{marginTop:6}}>
-            <summary style={{fontSize:11.5,color:C.inkFaint,cursor:"pointer",padding:"6px 0",listStyle:"none"}}>⋯ Más acciones</summary>
+            <summary style={{fontSize:12,color:C.inkFaint,cursor:"pointer",padding:"6px 0",listStyle:"none"}}>⋯ Más acciones</summary>
             <div style={{display:"flex",gap:6,marginTop:6,flexWrap:"wrap"}}>
               <button onClick={()=>setEditandoDatos(true)} style={{...btnG,flex:1,fontSize:12}}>Editar datos</button>
               <button onClick={()=>setCorreoFallida(true)} style={{...btnG,flex:1,fontSize:12}}>Entrega fallida</button>
@@ -1095,15 +1095,15 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, onSincroniz
                         fontFamily:MONO,fontWeight:700,fontSize:12,color:C.ink,textDecoration:"underline dotted"}}>
                       {o.numero_oc}
                     </button>
-                    <span style={{fontSize:10,color:C.danger,fontWeight:600}}>{dias}d vencida</span>
-                    {reclamos.length>0&&<span style={{fontSize:10,color:C.inkFaint}}>· {reclamos.length} reclamo{reclamos.length>1?"s":""}</span>}
+                    <span style={{fontSize:12,color:C.danger,fontWeight:600}}>{dias}d vencida</span>
+                    {reclamos.length>0&&<span style={{fontSize:12,color:C.inkFaint}}>· {reclamos.length} reclamo{reclamos.length>1?"s":""}</span>}
                   </div>
-                  <div style={{fontSize:10,fontWeight:700,color:colorNivel,marginTop:2}}>{accion.texto}</div>
+                  <div style={{fontSize:12,fontWeight:700,color:colorNivel,marginTop:2}}>{accion.texto}</div>
                 </div>
                 {accion.boton
                   ? <button onClick={()=>setReclamandoBanner(o)}
                       style={{flexShrink:0,background:accion.nivel==="critico"?C.danger:C.warn,border:"none",color:"#fff",
-                        borderRadius:7,padding:"6px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}}>{accion.boton}</button>
+                        borderRadius:7,padding:"6px 10px",fontSize:12,fontWeight:700,cursor:"pointer"}}>{accion.boton}</button>
                   : <div style={{fontSize:16,flexShrink:0}}>{accion.nivel==="ok"?"💚":"⏳"}</div>
                 }
               </div>
@@ -1132,7 +1132,7 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, onSincroniz
           const activa=vista===v.key;
           return (
             <button key={v.key} onClick={()=>{setVista(v.key);setFiltros({});}}
-              style={{flexShrink:0,fontSize:11,fontWeight:700,padding:"7px 12px",borderRadius:20,cursor:"pointer",
+              style={{flexShrink:0,fontSize:12,fontWeight:700,padding:"7px 12px",borderRadius:20,cursor:"pointer",
                 border:`1.5px solid ${activa?v.color:C.border}`,
                 background:activa?v.bg:C.card, color:activa?v.color:C.inkMuted,whiteSpace:"nowrap"}}>
               {v.label}{v.n>0?` ${v.n}`:""}
@@ -1151,12 +1151,12 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, onSincroniz
         return (<>
           <button onClick={()=>setMasFiltros(m=>!m)}
             style={{display:"flex",alignItems:"center",gap:7,background:"none",border:"none",
-              color:totalActivos>0?C.info:C.inkFaint,fontSize:11.5,fontWeight:700,cursor:"pointer",
+              color:totalActivos>0?C.info:C.inkFaint,fontSize:12,fontWeight:700,cursor:"pointer",
               padding:"3px 2px",marginBottom:masFiltros?10:14}}>
-            <span style={{fontSize:10}}>{masFiltros?"▾":"▸"}</span>
+            <span style={{fontSize:12}}>{masFiltros?"▾":"▸"}</span>
             Filtros avanzados
             {totalActivos>0&&(
-              <span style={{background:C.info,color:"#fff",borderRadius:20,fontSize:10,fontWeight:800,
+              <span style={{background:C.info,color:"#fff",borderRadius:20,fontSize:12,fontWeight:800,
                 padding:"1.5px 7px",lineHeight:1.5}}>{totalActivos}</span>
             )}
           </button>
@@ -1164,24 +1164,24 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, onSincroniz
           {masFiltros&&(
             <div style={{background:C.paper,border:`1px solid ${C.border}`,borderRadius:12,padding:"13px 14px",marginBottom:12}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-                <span style={{fontSize:10.5,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4}}>Filtros avanzados</span>
+                <span style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4}}>Filtros avanzados</span>
                 {totalActivos>0&&(
                   <button onClick={limpiarTodo}
-                    style={{background:"none",border:"none",color:C.danger,fontSize:10.5,fontWeight:700,cursor:"pointer",padding:0}}>
+                    style={{background:"none",border:"none",color:C.danger,fontSize:12,fontWeight:700,cursor:"pointer",padding:0}}>
                     ✕ Limpiar todo
                   </button>
                 )}
               </div>
 
               {comunas.length>0&&(<>
-                <div style={{fontSize:10,fontWeight:800,color:C.inkFaint,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Comuna</div>
+                <div style={{fontSize:12,fontWeight:800,color:C.inkFaint,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Comuna</div>
                 <select style={{...selStyle,fontSize:12,padding:"8px 10px",marginBottom:12}} value={comunaSel} onChange={e=>setComunaSel(e.target.value)}>
                   <option value="">Todas las comunas</option>
                   {comunas.map(c=><option key={c} value={c}>{c}</option>)}
                 </select>
               </>)}
 
-              <div style={{fontSize:10,fontWeight:800,color:C.inkFaint,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Período</div>
+              <div style={{fontSize:12,fontWeight:800,color:C.inkFaint,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Período</div>
               <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:12}}>
                 {[
                   {t:"Este mes",d:()=>{const h=new Date();return [`${h.getFullYear()}-${String(h.getMonth()+1).padStart(2,"0")}-01`,h.toISOString().slice(0,10)];}},
@@ -1192,34 +1192,34 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, onSincroniz
                   const [i,f]=b.d(); const activo=desde===i&&hasta===f;
                   return (
                     <button key={b.t} onClick={()=>{ if(activo){setDesde("");setHasta("");} else {setDesde(i);setHasta(f);} }}
-                      style={{fontSize:10.5,fontWeight:700,padding:"5px 10px",borderRadius:8,cursor:"pointer",
+                      style={{fontSize:12,fontWeight:700,padding:"5px 10px",borderRadius:8,cursor:"pointer",
                         border:`1.5px solid ${activo?C.info:C.border}`,
                         background:activo?C.infoLight:C.card, color:activo?C.info:C.inkMuted}}>{b.t}</button>
                   );
                 })}
               </div>
 
-              <div style={{fontSize:10,fontWeight:800,color:C.inkFaint,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Fechas exactas</div>
+              <div style={{fontSize:12,fontWeight:800,color:C.inkFaint,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Fechas exactas</div>
               <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:12}}>
                 <input type="date" value={desde} onChange={e=>setDesde(e.target.value)}
                   style={{...iStyle,flex:1,fontSize:12,padding:"7px 9px"}} />
-                <span style={{fontSize:11,color:C.inkFaint}}>a</span>
+                <span style={{fontSize:12,color:C.inkFaint}}>a</span>
                 <input type="date" value={hasta} onChange={e=>setHasta(e.target.value)}
                   style={{...iStyle,flex:1,fontSize:12,padding:"7px 9px"}} />
               </div>
 
-              <div style={{fontSize:10,fontWeight:800,color:C.inkFaint,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Por etapa</div>
+              <div style={{fontSize:12,fontWeight:800,color:C.inkFaint,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Por etapa</div>
               <div style={{display:"flex",flexDirection:"column",gap:6}}>
                 {FILTROS.map(f=>(
                   <div key={f.key} style={{display:"flex",alignItems:"center",gap:8}}>
-                    <span style={{fontSize:10.5,fontWeight:700,color:C.inkMuted,width:52,flexShrink:0}}>{f.label}</span>
+                    <span style={{fontSize:12,fontWeight:700,color:C.inkMuted,width:52,flexShrink:0}}>{f.label}</span>
                     <button onClick={()=>{setVista("todas");toggle(f.key,"pend");}}
-                      style={{flex:1,fontSize:10.5,fontWeight:700,padding:"6px 8px",borderRadius:7,cursor:"pointer",
+                      style={{flex:1,fontSize:12,fontWeight:700,padding:"6px 8px",borderRadius:7,cursor:"pointer",
                         border:`1.5px solid ${filtros[f.key]==="pend"?C.danger:C.border}`,
                         background:filtros[f.key]==="pend"?C.dangerLight:C.card,
                         color:filtros[f.key]==="pend"?C.danger:C.inkMuted}}>{f.pendLabel}</button>
                     <button onClick={()=>{setVista("todas");toggle(f.key,"ok");}}
-                      style={{flex:1,fontSize:10.5,fontWeight:700,padding:"6px 8px",borderRadius:7,cursor:"pointer",
+                      style={{flex:1,fontSize:12,fontWeight:700,padding:"6px 8px",borderRadius:7,cursor:"pointer",
                         border:`1.5px solid ${filtros[f.key]==="ok"?C.ok:C.border}`,
                         background:filtros[f.key]==="ok"?C.okLight:C.card,
                         color:filtros[f.key]==="ok"?C.ok:C.inkMuted}}>{f.okLabel}</button>
@@ -1233,7 +1233,7 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, onSincroniz
 
       {/* ── Resumen y orden ── */}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:10}}>
-        <span style={{fontSize:11,color:C.inkFaint,minWidth:0,lineHeight:1.5}}>
+        <span style={{fontSize:12,color:C.inkFaint,minWidth:0,lineHeight:1.5}}>
           {(()=>{
             const gan=filtered.reduce((s,o)=>s+gananciaReal(o).pesos,0);
             const ven=filtered.reduce((s,o)=>s+(Number(o.monto_total)||0),0);
@@ -1246,7 +1246,7 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, onSincroniz
           })()}
         </span>
         <button onClick={()=>setOrden(o=>o==="fecha"?"ganancia":"fecha")}
-          style={{flexShrink:0,fontSize:10.5,fontWeight:700,padding:"4px 9px",borderRadius:7,cursor:"pointer",
+          style={{flexShrink:0,fontSize:12,fontWeight:700,padding:"4px 9px",borderRadius:7,cursor:"pointer",
             border:`1px solid ${orden==="ganancia"?C.ok:C.border}`,
             background:orden==="ganancia"?C.okLight:C.card,
             color:orden==="ganancia"?C.ok:C.inkMuted}}>

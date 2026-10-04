@@ -10,9 +10,9 @@ function Seccion({titulo,children,sub,ocultarSiVacio}){
   if(ocultarSiVacio) return null;
   return (
   <div style={{marginBottom:18}}>
-    <div style={{fontSize:10.5,fontWeight:800,color:C.inkFaint,textTransform:"uppercase",
+    <div style={{fontSize:12,fontWeight:800,color:C.inkFaint,textTransform:"uppercase",
       letterSpacing:0.6,marginBottom:8,paddingLeft:2}}>{titulo}</div>
-    {sub&&<div style={{fontSize:11.5,color:C.inkFaint,marginBottom:8,paddingLeft:2}}>{sub}</div>}
+    {sub&&<div style={{fontSize:12,color:C.inkFaint,marginBottom:8,paddingLeft:2}}>{sub}</div>}
     {children}
   </div>
   );
@@ -39,7 +39,7 @@ function AvisoMP({icon,color,bg,titulo,descripcion,onActualizar,verificando,chil
         )}
       </div>
       <div style={{padding:"12px 14px"}}>
-        {descripcion&&<div style={{fontSize:11.5,color:C.inkMuted,marginBottom:11,lineHeight:1.5}}>{descripcion}</div>}
+        {descripcion&&<div style={{fontSize:12,color:C.inkMuted,marginBottom:11,lineHeight:1.5}}>{descripcion}</div>}
         {children}
       </div>
     </div>
@@ -55,15 +55,15 @@ function FilaAvisoMP({codigo,nombre,accion,onClick,color,ultima}){
       borderBottom:ultima?"none":`1px solid ${C.border}`}}>
       <span style={{minWidth:0}}>
         <span style={{fontFamily:MONO,fontSize:12,fontWeight:700,color:C.ink,display:"block"}}>{codigo}</span>
-        <span style={{fontSize:10.5,color:C.inkFaint,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"block"}}>{nombre||""}</span>
+        <span style={{fontSize:12,color:C.inkFaint,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"block"}}>{nombre||""}</span>
       </span>
-      {accion&&<span style={{flexShrink:0,fontSize:11,fontWeight:700,color}}>{accion} ›</span>}
+      {accion&&<span style={{flexShrink:0,fontSize:12,fontWeight:700,color}}>{accion} ›</span>}
     </Tag>
   );
 }
 
 function VerMasAvisoMP({n}){
-  return <div style={{fontSize:10.5,color:C.inkFaint,marginTop:6,textAlign:"center"}}>y {n} más</div>;
+  return <div style={{fontSize:12,color:C.inkFaint,marginTop:6,textAlign:"center"}}>y {n} más</div>;
 }
 
 export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, aportes: aportesLista, perfil, onExportarTodo, exportando, onNavigate, onAccion, onSincronizar, onCorregirFechas, sincronizando, porAceptar, onActualizarPorAceptar, verificandoPorAceptar, aceptadasSinCargar, onCargarOC, onCargarTodasAceptadas, cargandoAceptadas, onActualizarAceptadas, verificandoAceptadas, canceladasEnMP, onEliminarCancelada, onActualizarCanceladas, verificandoCanceladas, onValidarTodo, validandoTodo, usoMP, actMP, esCodigoMP, ultimaCartola, saldoBanco, bancoMensual, onEditarSaldo }) {
@@ -357,15 +357,15 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
               alignItems:"center",gap:4}}>
             {a.paso!==null&&(
               <span style={{position:"absolute",top:4,left:5,width:13,height:13,borderRadius:"50%",
-                background:a.color,color:"#fff",fontSize:8.5,fontWeight:800,
+                background:a.color,color:"#fff",fontSize:12,fontWeight:800,
                 display:"flex",alignItems:"center",justifyContent:"center"}}>{a.paso}</span>
             )}
             <span style={{fontSize:19}}>{a.icon}</span>
-            <span style={{fontSize:9.5,fontWeight:700,color:a.color,textAlign:"center",lineHeight:1.2}}>{a.label}</span>
+            <span style={{fontSize:12,fontWeight:700,color:a.color,textAlign:"center",lineHeight:1.2}}>{a.label}</span>
           </button>
         ))}
       </div>
-      <div style={{fontSize:10,color:C.inkFaint,textAlign:"center",marginBottom:14}}>
+      <div style={{fontSize:12,color:C.inkFaint,textAlign:"center",marginBottom:14}}>
         Pasos ① a ④ de una OC ya creada — "Banco" es aparte, para conciliar la cartola
       </div>
       </Seccion>
@@ -373,19 +373,19 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
       <Seccion titulo="Situación">
       {/* ── Saldo Proyectado: solo lo esencial ── */}
       <div style={{background:`linear-gradient(135deg,${C.night},${C.nightSoft})`,borderRadius:16,padding:"18px 20px",marginBottom:12}}>
-        <div style={{fontSize:11.5,color:C.inkFaint,fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:0.5}}>Saldo Proyectado</div>
+        <div style={{fontSize:12,color:C.inkFaint,fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:0.5}}>Saldo Proyectado</div>
         <div style={{fontFamily:MONO,fontWeight:800,fontSize:28,color:kpis.saldoProyectado>=0?C.teal:C.danger,letterSpacing:-1}}>{fmt.money(kpis.saldoProyectado)}</div>
-        <div style={{fontSize:11,color:C.inkFaint,marginTop:4}}>Cuánto quedaría si se cobra todo lo pendiente y se paga todo lo que se debe</div>
+        <div style={{fontSize:12,color:C.inkFaint,marginTop:4}}>Cuánto quedaría si se cobra todo lo pendiente y se paga todo lo que se debe</div>
 
         <button onClick={()=>onNavigate&&onNavigate("compras",null)}
           style={{marginTop:14,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.12)",
-            borderRadius:9,padding:"7px 12px",color:"#B8C4D9",fontSize:11.5,fontWeight:600,cursor:"pointer",width:"100%"}}>
+            borderRadius:9,padding:"7px 12px",color:"#B8C4D9",fontSize:12,fontWeight:600,cursor:"pointer",width:"100%"}}>
           {kpis.ocsAbiertas} órdenes en curso ›
         </button>
 
-        <div style={{fontSize:10.5,color:C.inkFaint,marginTop:10,paddingTop:9,borderTop:"1px solid rgba(255,255,255,0.08)",lineHeight:1.6}}>
+        <div style={{fontSize:12,color:C.inkFaint,marginTop:10,paddingTop:9,borderTop:"1px solid rgba(255,255,255,0.08)",lineHeight:1.6}}>
           <button onClick={onEditarSaldo}
-            style={{background:"none",border:"none",color:C.teal,fontSize:10.5,fontWeight:700,cursor:"pointer",padding:"3px 0"}}>
+            style={{background:"none",border:"none",color:C.teal,fontSize:12,fontWeight:700,cursor:"pointer",padding:"3px 0"}}>
             {kpis.saldoReal!==null?"Actualizar el saldo del banco":"Registrar el saldo del banco para conciliar"}
           </button>
         </div>
@@ -399,7 +399,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
         const pct=Math.min(100,Math.round(usoMP.solicitudes/10000*100));
         const color=usoMP.solicitudes>9000?C.danger:usoMP.solicitudes>7000?C.warn:C.inkFaint;
         return (
-          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10,fontSize:10}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10,fontSize:12}}>
             <span style={{color,fontWeight:700,flexShrink:0}}>MP hoy: {usoMP.solicitudes.toLocaleString("es-CL")}/10.000</span>
             <div style={{flex:1,height:4,borderRadius:2,background:C.border,overflow:"hidden"}}>
               <div style={{width:`${pct}%`,height:"100%",background:color,borderRadius:2}} />
@@ -441,7 +441,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
               display:"flex",alignItems:"center",justifyContent:"center",fontSize:13}}>↻</span>
             <span style={{flex:1,minWidth:0}}>
               <span style={{display:"block",fontSize:12,fontWeight:700,color:C.ink}}>Revisar Mercado Público de nuevo</span>
-              {ultimaGeneral&&<span style={{display:"block",fontSize:10,color:C.inkFaint,marginTop:1}}>Última consulta exitosa: {hace(ultimaGeneral)}</span>}
+              {ultimaGeneral&&<span style={{display:"block",fontSize:12,color:C.inkFaint,marginTop:1}}>Última consulta exitosa: {hace(ultimaGeneral)}</span>}
             </span>
           </button>
         );
@@ -454,12 +454,12 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
                 <span style={{display:"block",fontSize:13,fontWeight:800,color:C.ink}}>
                   {verificandoAlgo?"Revisando Mercado Público…":"Mercado Público"}
                 </span>
-                {!verificandoAlgo&&ultimaGeneral&&<span style={{display:"block",fontSize:10,color:C.inkFaint,marginTop:1}}>Última consulta exitosa: {hace(ultimaGeneral)}</span>}
+                {!verificandoAlgo&&ultimaGeneral&&<span style={{display:"block",fontSize:12,color:C.inkFaint,marginTop:1}}>Última consulta exitosa: {hace(ultimaGeneral)}</span>}
               </span>
-              {nPorAceptar>0&&<span style={{fontSize:11,fontWeight:800,color:C.warn,background:C.warnLight,borderRadius:20,padding:"2px 8px"}}>⏳ {nPorAceptar}</span>}
-              {nAceptadas>0&&<span style={{fontSize:11,fontWeight:800,color:C.ok,background:C.okLight,borderRadius:20,padding:"2px 8px"}}>✓ {nAceptadas}</span>}
-              {nCanceladas>0&&<span style={{fontSize:11,fontWeight:800,color:C.danger,background:C.dangerLight,borderRadius:20,padding:"2px 8px"}}>✕ {nCanceladas}</span>}
-              <span style={{fontSize:11,color:C.inkFaint,flexShrink:0}}>{verMP?"▲":"▼"}</span>
+              {nPorAceptar>0&&<span style={{fontSize:12,fontWeight:800,color:C.warn,background:C.warnLight,borderRadius:20,padding:"2px 8px"}}>⏳ {nPorAceptar}</span>}
+              {nAceptadas>0&&<span style={{fontSize:12,fontWeight:800,color:C.ok,background:C.okLight,borderRadius:20,padding:"2px 8px"}}>✓ {nAceptadas}</span>}
+              {nCanceladas>0&&<span style={{fontSize:12,fontWeight:800,color:C.danger,background:C.dangerLight,borderRadius:20,padding:"2px 8px"}}>✕ {nCanceladas}</span>}
+              <span style={{fontSize:12,color:C.inkFaint,flexShrink:0}}>{verMP?"▲":"▼"}</span>
             </button>
 
             {verMP&&(
@@ -472,14 +472,14 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
                   disabled={verificandoAlgo}
                   style={{width:"100%",background:"none",border:`1px dashed ${C.border}`,
                     color:verificandoAlgo?C.inkFaint:C.inkMuted,borderRadius:10,padding:"8px 12px",
-                    fontSize:11,fontWeight:700,cursor:verificandoAlgo?"default":"pointer",marginBottom:8}}>
+                    fontSize:12,fontWeight:700,cursor:verificandoAlgo?"default":"pointer",marginBottom:8}}>
                   {verificandoAlgo?"Revisando…":"↻ Revisar de nuevo"}
                 </button>
 
                 {onValidarTodo&&esAdmin&&(
                   <button onClick={()=>onValidarTodo()} disabled={!!validandoTodo}
                     style={{display:"block",margin:"0 auto 12px",background:"none",border:"none",
-                      color:C.inkFaint,fontSize:10.5,cursor:validandoTodo?"default":"pointer",
+                      color:C.inkFaint,fontSize:12,cursor:validandoTodo?"default":"pointer",
                       textDecoration:validandoTodo?"none":"underline"}}>
                     {validandoTodo?`Validando ${validandoTodo.hechas} de ${validandoTodo.total}…`:"Validar todas mis OC contra Mercado Público"}
                   </button>
@@ -503,7 +503,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
                     descripcion="Ya las aceptaron en Mercado Público, pero todavía no existen como registro en la app. Revísalas una a una, o cárgalas todas de una vez (sin link de compra — lo agregas después en cada una)."
                     onActualizar={onActualizarAceptadas} verificando={verificandoAceptadas}>
                     {cargandoAceptadas?(
-                      <div style={{background:C.paper,borderRadius:10,padding:"10px 12px",fontSize:11.5,fontWeight:700,color:C.ok,textAlign:"center",marginBottom:2}}>
+                      <div style={{background:C.paper,borderRadius:10,padding:"10px 12px",fontSize:12,fontWeight:700,color:C.ok,textAlign:"center",marginBottom:2}}>
                         Cargando {cargandoAceptadas.hechas} de {cargandoAceptadas.total}…
                       </div>
                     ):(
@@ -532,7 +532,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
                         borderBottom:i<nCanceladas-1?`1px solid ${C.border}`:"none"}}>
                         <span style={{minWidth:0}}>
                           <span style={{fontFamily:MONO,fontSize:12,fontWeight:700,color:C.ink,display:"block"}}>{o.numero_oc}</span>
-                          <span style={{fontSize:10.5,color:C.inkFaint,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"block"}}>{o.cliente||o.nombre||""}</span>
+                          <span style={{fontSize:12,color:C.inkFaint,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"block"}}>{o.cliente||o.nombre||""}</span>
                         </span>
                         {esAdmin&&(
                         <button onClick={()=>{
@@ -540,7 +540,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
                               onEliminarCancelada&&onEliminarCancelada(o.id);
                           }}
                           style={{flexShrink:0,background:C.card,border:`1px solid ${C.danger}55`,color:C.danger,borderRadius:8,
-                            padding:"6px 11px",fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                            padding:"6px 11px",fontSize:12,fontWeight:700,cursor:"pointer"}}>
                           🗑 Eliminar
                         </button>
                         )}
@@ -563,7 +563,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
             <div style={{fontSize:12.5,fontWeight:700,color:C.info,marginBottom:3}}>
               {sincronizando?`Revisando ${sincronizando.hechas} de ${sincronizando.total}…`:`${sinDatos} OC${sinDatos>1?"s":""} sin datos de cliente`}
             </div>
-            <div style={{fontSize:11.5,color:C.inkMuted,marginBottom:sincronizando?0:9,lineHeight:1.45}}>
+            <div style={{fontSize:12,color:C.inkMuted,marginBottom:sincronizando?0:9,lineHeight:1.45}}>
               Mercado Público tiene el cliente, RUT, comuna, contacto, fecha de emisión y productos de estas órdenes. Solo se consultan las que tienen código de Mercado Público; las ventas directas quedan fuera.
             </div>
             {!sincronizando&&(
@@ -584,7 +584,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
       {esAdmin&&(
         <button onClick={()=>onCorregirFechas&&onCorregirFechas()} disabled={!!sincronizando}
           style={{display:"block",margin:"0 auto 14px",background:"none",border:"none",
-            color:C.inkFaint,fontSize:10.5,cursor:sincronizando?"default":"pointer",
+            color:C.inkFaint,fontSize:12,cursor:sincronizando?"default":"pointer",
             textDecoration:sincronizando?"none":"underline"}}>
           {sincronizando?`Revisando ${sincronizando.hechas} de ${sincronizando.total}…`:"Corregir fechas de todas contra Mercado Público"}
         </button>
@@ -592,7 +592,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
       {esAdmin&&onExportarTodo&&(
         <button onClick={()=>onExportarTodo()} disabled={!!exportando}
           style={{display:"block",margin:"0 auto 14px",background:C.tealLight,border:`1px solid ${C.teal}55`,
-            borderRadius:8,padding:"9px 16px",color:C.tealDark,fontSize:11.5,fontWeight:700,
+            borderRadius:8,padding:"9px 16px",color:C.tealDark,fontSize:12,fontWeight:700,
             cursor:exportando?"default":"pointer"}}>
           {exportando?"Armando el Excel…":"⬇ Exportar todo a Excel"}
         </button>
@@ -600,8 +600,8 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
 
       {/* ── Prioridades de hoy ── */}
       <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px",marginBottom:12}}>
-        <div style={{fontSize:11.5,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:2}}>Prioridades de hoy</div>
-        <div style={{fontSize:10.5,color:C.inkFaint,marginBottom:10}}>Toca cualquiera para ver esas órdenes</div>
+        <div style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:2}}>Prioridades de hoy</div>
+        <div style={{fontSize:12,color:C.inkFaint,marginBottom:10}}>Toca cualquiera para ver esas órdenes</div>
         {prioridades.length===0&&<div style={{fontSize:12.5,color:C.inkFaint}}>✓ Sin pendientes urgentes</div>}
         {prioridades.map((p,i)=>(
           <button key={i} onClick={()=>onNavigate&&onNavigate(p.tab,p.filtro)}
@@ -610,7 +610,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
               borderBottom:i<prioridades.length-1?`1px solid ${C.border}`:"none"}}>
             <span style={{minWidth:0}}>
               <span style={{fontSize:12.5,color:C.ink,fontWeight:600,display:"block"}}>{p.label}</span>
-              {p.detalle&&<span style={{fontSize:10.5,color:C.inkFaint,display:"block",marginTop:1}}>{p.detalle}</span>}
+              {p.detalle&&<span style={{fontSize:12,color:C.inkFaint,display:"block",marginTop:1}}>{p.detalle}</span>}
             </span>
             <span style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
               <span style={{fontSize:12.5,fontWeight:800,color:p.color,fontFamily:MONO}}>{fmt.money(p.monto)}</span>
@@ -633,11 +633,11 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
         const max=Math.max(1,...barras.map(b=>Math.abs(b.v)));
         return (
           <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"16px 16px 14px"}}>
-            <div style={{fontSize:11.5,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:16}}>Utilidad</div>
+            <div style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:16}}>Utilidad</div>
             <div style={{display:"flex",alignItems:"flex-end",gap:10,height:110}}>
               {barras.map(b=>(
                 <div key={b.label} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-end",height:"100%"}}>
-                  <span style={{fontSize:11,fontWeight:800,fontFamily:MONO,color:b.v>=0?C.ink:C.danger,marginBottom:4,textAlign:"center"}}>{fmt.money(b.v)}</span>
+                  <span style={{fontSize:12,fontWeight:800,fontFamily:MONO,color:b.v>=0?C.ink:C.danger,marginBottom:4,textAlign:"center"}}>{fmt.money(b.v)}</span>
                   <div style={{width:"64%",minHeight:4,height:`${Math.max(4,Math.min(100,Math.abs(b.v)/max*100))}%`,
                     background:b.v>=0?C.teal:C.danger,borderRadius:"7px 7px 2px 2px"}} />
                 </div>
@@ -646,8 +646,8 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
             <div style={{display:"flex",gap:10,marginTop:8}}>
               {barras.map(b=>(
                 <div key={b.label} style={{flex:1,textAlign:"center"}}>
-                  <div style={{fontSize:9.5,color:C.inkFaint,lineHeight:1.3}}>{b.label}</div>
-                  {b.pct>0&&<div style={{fontSize:9.5,fontWeight:700,color:C.inkMuted}}>{b.pct}%</div>}
+                  <div style={{fontSize:12,color:C.inkFaint,lineHeight:1.3}}>{b.label}</div>
+                  {b.pct>0&&<div style={{fontSize:12,fontWeight:700,color:C.inkMuted}}>{b.pct}%</div>}
                 </div>
               ))}
             </div>
@@ -660,7 +660,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
       {/* Deuda a terceros — el detalle vive en Vendedores y Financiamiento */}
       {(kpis.deudaVendedoresMes>0||kpis.f29>0)&&(
         <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"12px 15px",marginBottom:12}}>
-          <div style={{fontSize:11,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:8}}>Compromisos del mes</div>
+          <div style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:8}}>Compromisos del mes</div>
           {kpis.deudaVendedoresMes>0&&(
             <button onClick={()=>onNavigate&&onNavigate("vendedores",null)}
               style={{width:"100%",background:"none",border:"none",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",textAlign:"left"}}>

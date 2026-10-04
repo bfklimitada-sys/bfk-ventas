@@ -10,7 +10,7 @@ export function BloqueoBanner({ bloqueo }) {
       <span style={{fontSize:18}}>🔒</span>
       <div>
         <div style={{fontSize:12.5,fontWeight:700,color:C.warn}}>{bloqueo.usuario_nombre} está editando esta OC</div>
-        <div style={{fontSize:11,color:C.inkMuted}}>Disponible en ~{segs} segundos</div>
+        <div style={{fontSize:12,color:C.inkMuted}}>Disponible en ~{segs} segundos</div>
       </div>
     </div>
   );
@@ -21,12 +21,12 @@ export function HistorialCambiosOC({ ocId, historialCambios }) {
   if(!items.length) return null;
   return (
     <div style={{marginBottom:14}}>
-      <div style={{fontSize:11,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>📋 Historial de cambios</div>
+      <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>📋 Historial de cambios</div>
       {items.map(h=>(
         <div key={h.id} style={{borderLeft:`2px solid ${C.border}`,paddingLeft:10,marginBottom:8}}>
           <div style={{fontSize:12,fontWeight:600,color:C.ink}}>{h.accion}</div>
-          {h.campo&&<div style={{fontSize:11,color:C.inkMuted}}>{h.campo}: <span style={{color:C.danger,textDecoration:"line-through"}}>{h.valor_anterior||"—"}</span> → <span style={{color:C.ok}}>{h.valor_nuevo||"—"}</span></div>}
-          <div style={{fontSize:10.5,color:C.inkFaint}}>{h.usuario_nombre} · {fmt.datetime(h.creadoEn)}</div>
+          {h.campo&&<div style={{fontSize:12,color:C.inkMuted}}>{h.campo}: <span style={{color:C.danger,textDecoration:"line-through"}}>{h.valor_anterior||"—"}</span> → <span style={{color:C.ok}}>{h.valor_nuevo||"—"}</span></div>}
+          <div style={{fontSize:12,color:C.inkFaint}}>{h.usuario_nombre} · {fmt.datetime(h.creadoEn)}</div>
         </div>
       ))}
     </div>
@@ -46,7 +46,7 @@ export function ComentariosOC({ oc, perfil, onAgregar, onEliminar }) {
   return (
     <div style={{marginBottom:10,background:C.card,borderRadius:9,overflow:"hidden",border:`1px solid ${C.border}`}}>
       <div onClick={()=>setAbierto(v=>!v)} style={{padding:"9px 12px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <span style={{fontSize:11,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.5}}>
+        <span style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.5}}>
           💬 Notas del equipo {comentarios.length>0&&<span style={{color:C.teal}}>({comentarios.length})</span>}
         </span>
         <span style={{color:C.inkFaint,fontSize:12}}>{abierto?"▲":"▼"}</span>
@@ -57,7 +57,7 @@ export function ComentariosOC({ oc, perfil, onAgregar, onEliminar }) {
             <div key={c.id} style={{background:C.paper,borderRadius:8,padding:"8px 12px",marginBottom:6}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
                 <div style={{flex:1}}>
-                  <div style={{fontSize:10.5,color:C.teal,fontWeight:700,marginBottom:3}}>{c.usuario_nombre} · {fmt.datetime(c.creadoEn)}</div>
+                  <div style={{fontSize:12,color:C.teal,fontWeight:700,marginBottom:3}}>{c.usuario_nombre} · {fmt.datetime(c.creadoEn)}</div>
                   <div style={{fontSize:12.5,color:C.ink,lineHeight:1.5}}>{c.texto}</div>
                 </div>
                 {perfil?.rol==="admin"&&(
@@ -245,7 +245,7 @@ export function PanelNotificaciones({ notificaciones, ocs, onMarcarLeidas, onNav
 
   const Chip = ({ id, label, n, color }) => (
     <button onClick={() => setFiltro(id)}
-      style={{fontSize:11,fontWeight:700,padding:"5px 10px",borderRadius:8,cursor:"pointer",
+      style={{fontSize:12,fontWeight:700,padding:"5px 10px",borderRadius:8,cursor:"pointer",
         border:`1.5px solid ${filtro===id?color:C.border}`,
         background:filtro===id?C.paper:C.card, color:filtro===id?color:C.inkMuted}}>
       {label}{n !== undefined ? ` ${n}` : ""}
@@ -256,7 +256,7 @@ export function PanelNotificaciones({ notificaciones, ocs, onMarcarLeidas, onNav
     <div style={{fontFamily:SANS}}>
       <div style={{marginBottom:12}}>
         <div style={{fontWeight:800,fontSize:14,color:C.ink}}>Alertas</div>
-        <div style={{fontSize:11.5,color:C.inkFaint,marginTop:2}}>
+        <div style={{fontSize:12,color:C.inkFaint,marginTop:2}}>
           {alertas.length === 0 ? "Todo al día" : `${alertas.length} cosa${alertas.length>1?"s":""} que revisar · toca para ir a la OC`}
         </div>
       </div>
@@ -282,8 +282,8 @@ export function PanelNotificaciones({ notificaciones, ocs, onMarcarLeidas, onNav
           <span style={{fontSize:16,flexShrink:0,lineHeight:1.2}}>{a.icono}</span>
           <span style={{flex:1,minWidth:0}}>
             <span style={{display:"block",fontSize:12.5,fontWeight:700,color:C.ink}}>{a.titulo}</span>
-            <span style={{display:"block",fontSize:11,color:C.inkMuted,marginTop:2}}>{a.detalle}</span>
-            <span style={{display:"block",fontSize:10.5,color:C.inkFaint,marginTop:3,fontFamily:MONO}}>
+            <span style={{display:"block",fontSize:12,color:C.inkMuted,marginTop:2}}>{a.detalle}</span>
+            <span style={{display:"block",fontSize:12,color:C.inkFaint,marginTop:3,fontFamily:MONO}}>
               {a.oc}{a.cliente ? ` · ${a.cliente}` : ""}
             </span>
           </span>
@@ -298,17 +298,17 @@ export function PanelNotificaciones({ notificaciones, ocs, onMarcarLeidas, onNav
       {noLeidas.length > 0 && (
         <div style={{marginTop:18}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-            <span style={{fontSize:11,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4}}>
+            <span style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4}}>
               Para ti ({noLeidas.length})
             </span>
-            <button onClick={onMarcarLeidas} style={{fontSize:11,color:C.teal,background:"none",border:"none",cursor:"pointer",fontWeight:600}}>
+            <button onClick={onMarcarLeidas} style={{fontSize:12,color:C.teal,background:"none",border:"none",cursor:"pointer",fontWeight:600}}>
               Marcar leídas
             </button>
           </div>
           {noLeidas.map(n => (
             <div key={n.id} style={{background:C.tealLight,borderRadius:10,padding:"10px 12px",marginBottom:6,borderLeft:`3px solid ${C.teal}`}}>
               <div style={{fontSize:12.5,color:C.ink,fontWeight:600}}>{n.mensaje}</div>
-              <div style={{fontSize:10.5,color:C.inkFaint,marginTop:3}}>{fmt.datetime(n.creadoEn)}</div>
+              <div style={{fontSize:12,color:C.inkFaint,marginTop:3}}>{fmt.datetime(n.creadoEn)}</div>
             </div>
           ))}
         </div>

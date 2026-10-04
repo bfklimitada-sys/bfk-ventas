@@ -69,7 +69,7 @@ export function PanelCalendario({ ocs, onMarcarFecha }) {
         <div style={{background:C.dangerLight,border:`1px solid ${C.danger}`,borderRadius:12,padding:"10px 12px",marginBottom:12}}>
           <div style={{fontWeight:800,color:C.danger,fontSize:12,marginBottom:6}}>⚠ {vencidas.length} entrega{vencidas.length>1?"s":""} atrasada{vencidas.length>1?"s":""}</div>
           {vencidas.map(({oc,fEst})=>(
-            <div key={oc.id} style={{fontSize:11.5,display:"flex",justifyContent:"space-between",marginBottom:3}}>
+            <div key={oc.id} style={{fontSize:12,display:"flex",justifyContent:"space-between",marginBottom:3}}>
               <span style={{fontFamily:MONO,fontWeight:700}}>{oc.numero_oc}</span>
               <span style={{color:C.danger}}>estimada {fmt.date(fEst)}</span>
             </div>
@@ -83,14 +83,14 @@ export function PanelCalendario({ ocs, onMarcarFecha }) {
         <button onClick={()=>cambiarMes(1)} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 12px",fontSize:14,cursor:"pointer"}}>▶</button>
       </div>
 
-      <div style={{display:"flex",gap:12,marginBottom:8,fontSize:10.5,color:C.inkMuted}}>
+      <div style={{display:"flex",gap:12,marginBottom:8,fontSize:12,color:C.inkMuted}}>
         <span><span style={{color:C.info}}>●</span> Estimada</span>
         <span><span style={{color:C.ok}}>●</span> Realizada</span>
       </div>
 
       <div style={{background:C.card,borderRadius:12,padding:"10px 8px",border:`1px solid ${C.border}`}}>
         <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2,marginBottom:4}}>
-          {DIAS.map((d,i)=><div key={i} style={{textAlign:"center",fontSize:10,fontWeight:700,color:C.inkFaint}}>{d}</div>)}
+          {DIAS.map((d,i)=><div key={i} style={{textAlign:"center",fontSize:12,fontWeight:700,color:C.inkFaint}}>{d}</div>)}
         </div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2}}>
           {celdas.map((d,i)=>{
@@ -106,7 +106,7 @@ export function PanelCalendario({ ocs, onMarcarFecha }) {
                 borderRadius:8,background:sel?C.tealLight:C.paper,cursor:"pointer",
                 display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:1,padding:2,
               }}>
-                <span style={{fontSize:11.5,fontWeight:esHoy||sel?800:500,color:C.ink}}>{d}</span>
+                <span style={{fontSize:12,fontWeight:esHoy||sel?800:500,color:C.ink}}>{d}</span>
                 <div style={{display:"flex",gap:2}}>
                   {tieneEst&&<span style={{width:5,height:5,borderRadius:"50%",background:C.info}} />}
                   {tieneReal&&<span style={{width:5,height:5,borderRadius:"50%",background:C.ok}} />}
@@ -121,7 +121,7 @@ export function PanelCalendario({ ocs, onMarcarFecha }) {
         <div style={{background:C.card,borderRadius:12,padding:"12px 14px",marginTop:10,border:`1px solid ${C.border}`}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
             <span style={{fontWeight:800,fontSize:13}}>{diaSel} de {MESES[mes]}</span>
-            <button onClick={()=>{setMarcando(v=>!v);setErr("");}} style={{fontSize:11,background:C.teal,color:"#fff",border:"none",borderRadius:7,padding:"5px 10px",fontWeight:700,cursor:"pointer"}}>
+            <button onClick={()=>{setMarcando(v=>!v);setErr("");}} style={{fontSize:12,background:C.teal,color:"#fff",border:"none",borderRadius:7,padding:"5px 10px",fontWeight:700,cursor:"pointer"}}>
               {marcando?"Cancelar":"+ Marcar entrega estimada"}
             </button>
           </div>
@@ -131,7 +131,7 @@ export function PanelCalendario({ ocs, onMarcarFecha }) {
               <Field label="Código de la OC">
                 <input style={iMono} value={codOC} onChange={e=>setCodOC(e.target.value)} placeholder="ej: 2436-690-AG26" />
               </Field>
-              {err&&<div style={{fontSize:11.5,color:C.danger,fontWeight:600,marginBottom:8}}>{err}</div>}
+              {err&&<div style={{fontSize:12,color:C.danger,fontWeight:600,marginBottom:8}}>{err}</div>}
               <button onClick={handleMarcar} disabled={saving} style={btnP(saving?C.inkFaint:C.teal)}>
                 {saving?"Guardando…":`✓ Marcar entrega estimada para el ${diaSel}/${mes+1}`}
               </button>
@@ -140,13 +140,13 @@ export function PanelCalendario({ ocs, onMarcarFecha }) {
 
           {(estimadasPorDia[kSel]||[]).length>0&&(
             <div style={{marginBottom:8}}>
-              <div style={{fontSize:10.5,fontWeight:700,color:C.info,textTransform:"uppercase",marginBottom:4}}>● Entregas estimadas</div>
+              <div style={{fontSize:12,fontWeight:700,color:C.info,textTransform:"uppercase",marginBottom:4}}>● Entregas estimadas</div>
               {(estimadasPorDia[kSel]||[]).map(oc=>{
                 const entregada=oc.estado_entrega==="confirmada"||oc.estado_entrega==="entregado";
                 return (
                   <div key={oc.id} style={{fontSize:12,display:"flex",justifyContent:"space-between",marginBottom:3}}>
                     <span style={{fontFamily:MONO,fontWeight:700}}>{oc.numero_oc}</span>
-                    <span style={{color:entregada?C.ok:C.warn,fontSize:11,fontWeight:600}}>{entregada?"✓ Entregada":"Pendiente"}</span>
+                    <span style={{color:entregada?C.ok:C.warn,fontSize:12,fontWeight:600}}>{entregada?"✓ Entregada":"Pendiente"}</span>
                   </div>
                 );
               })}
@@ -154,11 +154,11 @@ export function PanelCalendario({ ocs, onMarcarFecha }) {
           )}
           {(realesPorDia[kSel]||[]).length>0&&(
             <div>
-              <div style={{fontSize:10.5,fontWeight:700,color:C.ok,textTransform:"uppercase",marginBottom:4}}>● Entregas realizadas</div>
+              <div style={{fontSize:12,fontWeight:700,color:C.ok,textTransform:"uppercase",marginBottom:4}}>● Entregas realizadas</div>
               {(realesPorDia[kSel]||[]).map(oc=>(
                 <div key={oc.id} style={{fontSize:12,display:"flex",justifyContent:"space-between",marginBottom:3}}>
                   <span style={{fontFamily:MONO,fontWeight:700}}>{oc.numero_oc}</span>
-                  <span style={{color:C.ok,fontSize:11}}>✓</span>
+                  <span style={{color:C.ok,fontSize:12}}>✓</span>
                 </div>
               ))}
             </div>

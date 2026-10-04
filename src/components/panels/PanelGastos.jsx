@@ -38,21 +38,21 @@ export function PanelGastos({ gastos, categorias, vendedores, pagosVendedor, ocs
                 display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,textAlign:"left"}}>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontWeight:700,fontSize:13.5,color:C.ink}}>{c.nombre}</div>
-                {u?<div style={{fontSize:11.5,color:C.inkMuted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{u.subcategoria||u.detalle||"—"} · {fmt.monthYear(u.mes,u.anio)}</div>:<div style={{fontSize:11.5,color:C.inkFaint}}>Sin pagos</div>}
+                {u?<div style={{fontSize:12,color:C.inkMuted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{u.subcategoria||u.detalle||"—"} · {fmt.monthYear(u.mes,u.anio)}</div>:<div style={{fontSize:12,color:C.inkFaint}}>Sin pagos</div>}
               </div>
               {u&&<div style={{fontFamily:MONO,fontWeight:800,fontSize:15,color:C.warn,flexShrink:0,whiteSpace:"nowrap"}}>{fmt.money(u.monto)}</div>}
-              {historial.length>1&&<span style={{fontSize:11,color:C.inkFaint,flexShrink:0}}>{estaAbierta?"▲":"▼"}</span>}
+              {historial.length>1&&<span style={{fontSize:12,color:C.inkFaint,flexShrink:0}}>{estaAbierta?"▲":"▼"}</span>}
             </button>
             {estaAbierta&&historial.length>0&&(
               <div style={{padding:"0 15px 12px"}}>
-                <div style={{fontSize:10.5,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",marginBottom:6,paddingTop:8,borderTop:`1px solid ${C.border}`}}>Historial completo ({historial.length})</div>
+                <div style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",marginBottom:6,paddingTop:8,borderTop:`1px solid ${C.border}`}}>Historial completo ({historial.length})</div>
                 {historial.map(g=>(
                   <div key={g.id} style={{padding:"7px 0",borderBottom:`1px solid ${C.border}`}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:8}}>
                       <span style={{fontSize:12,fontWeight:700,color:C.ink}}>{fmt.monthYear(g.mes,g.anio)}</span>
                       <span style={{fontFamily:MONO,fontWeight:800,fontSize:13,color:C.warn,flexShrink:0}}>{fmt.money(g.monto)}</span>
                     </div>
-                    {(g.detalle||g.subcategoria)&&<div style={{fontSize:11,color:C.inkMuted}}>{g.subcategoria||g.detalle}</div>}
+                    {(g.detalle||g.subcategoria)&&<div style={{fontSize:12,color:C.inkMuted}}>{g.subcategoria||g.detalle}</div>}
                   </div>
                 ))}
               </div>

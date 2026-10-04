@@ -18,11 +18,11 @@ export function Modal({ title, onClose, children }) {
 export function Field({ label, required, hint, children }) {
   return (
     <div style={{marginBottom:14}}>
-      <label style={{display:"block",fontSize:11.5,fontWeight:700,color:C.inkMuted,marginBottom:5,textTransform:"uppercase",letterSpacing:0.3}}>
+      <label style={{display:"block",fontSize:12,fontWeight:700,color:C.inkMuted,marginBottom:5,textTransform:"uppercase",letterSpacing:0.3}}>
         {label}{required&&<span style={{color:C.danger}}> *</span>}
       </label>
       {children}
-      {hint&&<div style={{fontSize:11,color:C.inkFaint,marginTop:4}}>{hint}</div>}
+      {hint&&<div style={{fontSize:12,color:C.inkFaint,marginTop:4}}>{hint}</div>}
     </div>
   );
 }
@@ -34,7 +34,7 @@ export function Toast({ toast }) {
 
 export function Trazabilidad({ creadoPor, creadoEn, perfiles }) {
   const u=perfiles?.find(p=>p.id===creadoPor);
-  return <span style={{fontSize:10.5,color:C.inkFaint}}>{u?u.nombre:"Usuario"} · {fmt.datetime(creadoEn)}</span>;
+  return <span style={{fontSize:12,color:C.inkFaint}}>{u?u.nombre:"Usuario"} · {fmt.datetime(creadoEn)}</span>;
 }
 
 export function DiasBadge({ dias, diasPago }) {
@@ -51,7 +51,7 @@ export function DiasBadge({ dias, diasPago }) {
 
   return (
     <span title={`Plazo de pago: ${plazo} días`}
-      style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:20,fontSize:11,fontWeight:700,background:bg,color}}>
+      style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:20,fontSize:12,fontWeight:700,background:bg,color}}>
       {dias}d / {plazo}d · {label}
     </span>
   );
@@ -64,7 +64,7 @@ export function Leyenda({ items, titulo="¿Qué significan los colores?" }) {
   return (
     <div style={{marginTop:14,marginBottom:6}}>
       <button onClick={()=>setAbierta(v=>!v)}
-        style={{background:"none",border:"none",color:C.inkFaint,fontSize:11,cursor:"pointer",padding:"4px 0",display:"flex",alignItems:"center",gap:5}}>
+        style={{background:"none",border:"none",color:C.inkFaint,fontSize:12,cursor:"pointer",padding:"4px 0",display:"flex",alignItems:"center",gap:5}}>
         <span style={{fontSize:12}}>{abierta?"▾":"▸"}</span> {titulo}
       </button>
       {abierta&&(
@@ -73,10 +73,10 @@ export function Leyenda({ items, titulo="¿Qué significan los colores?" }) {
             <div key={i} style={{display:"flex",alignItems:"flex-start",gap:8,marginBottom:i<items.length-1?7:0}}>
               <span style={{flexShrink:0,minWidth:58,textAlign:"center"}}>
                 {it.color
-                  ? <span style={{display:"inline-block",padding:"2px 7px",borderRadius:12,fontSize:10,fontWeight:700,background:it.bg,color:it.color}}>{it.muestra}</span>
+                  ? <span style={{display:"inline-block",padding:"2px 7px",borderRadius:12,fontSize:12,fontWeight:700,background:it.bg,color:it.color}}>{it.muestra}</span>
                   : <span style={{fontSize:13}}>{it.muestra}</span>}
               </span>
-              <span style={{fontSize:11.5,color:C.inkMuted,lineHeight:1.45}}>{it.texto}</span>
+              <span style={{fontSize:12,color:C.inkMuted,lineHeight:1.45}}>{it.texto}</span>
             </div>
           ))}
         </div>
@@ -89,7 +89,7 @@ export function NotifBadge({ notificaciones, urgentes=0 }) {
   const noLeidas=(notificaciones||[]).filter(n=>!n.leida).length + Number(urgentes||0);
   if(!noLeidas) return null;
   return (
-    <span style={{background:C.danger,color:"#fff",borderRadius:10,fontSize:9.5,fontWeight:800,padding:"1px 5px",marginLeft:4,verticalAlign:"top"}}>
+    <span style={{background:C.danger,color:"#fff",borderRadius:10,fontSize:12,fontWeight:800,padding:"1px 5px",marginLeft:4,verticalAlign:"top"}}>
       {noLeidas>9?"9+":noLeidas}
     </span>
   );
@@ -101,7 +101,7 @@ export function BuscadorOC({ ocs, ocId, setOcId, permitirNueva, numeroNueva, set
   const selected=ocs.find(o=>o.id===ocId);
   if(selected) return (
     <div style={{background:C.tealLight,border:`1.5px solid ${C.teal}`,borderRadius:9,padding:"10px 12px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-      <div><div style={{fontWeight:700,fontSize:13.5,color:C.ink,fontFamily:MONO}}>{selected.numero_oc}</div><div style={{fontSize:11.5,color:C.inkMuted}}>{selected.cliente}</div></div>
+      <div><div style={{fontWeight:700,fontSize:13.5,color:C.ink,fontFamily:MONO}}>{selected.numero_oc}</div><div style={{fontSize:12,color:C.inkMuted}}>{selected.cliente}</div></div>
       <button onClick={()=>{setOcId(null);setQuery("");}} style={{background:"none",border:"none",color:C.tealDark,fontSize:12,fontWeight:700,cursor:"pointer"}}>Cambiar</button>
     </div>
   );
@@ -119,7 +119,7 @@ export function BuscadorOC({ ocs, ocId, setOcId, permitirNueva, numeroNueva, set
           {matches.map(o=>(
             <div key={o.id} onClick={()=>{setOcId(o.id);setOpen(false);}} style={{padding:"9px 12px",cursor:"pointer",borderBottom:`1px solid ${C.border}`}}>
               <div style={{fontWeight:700,fontSize:13,fontFamily:MONO}}>{o.numero_oc}</div>
-              <div style={{fontSize:11.5,color:C.inkMuted}}>{o.cliente}</div>
+              <div style={{fontSize:12,color:C.inkMuted}}>{o.cliente}</div>
             </div>
           ))}
         </div>

@@ -1469,14 +1469,14 @@ export default function App() {
                   <div style={{fontWeight:800,fontSize:15,letterSpacing:-0.3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
                     {(()=>{ const h=new Date().getHours(); return h<12?"Buenos días":h<19?"Buenas tardes":"Buenas noches"; })()}, {perfil?.nombre?.split(" ")[0]||""} 👋
                   </div>
-                  <div style={{fontSize:10.5,color:"#8B9AB5"}}>
+                  <div style={{fontSize:12,color:"#8B9AB5"}}>
                     {new Date().toLocaleDateString("es-CL",{weekday:"long",day:"numeric",month:"long"})}
                   </div>
                 </>
               ):(
                 <>
                   <div style={{fontWeight:800,fontSize:15,letterSpacing:-0.3}}>{TABS.find(t=>t.key===tab)?.label||"BFK Ltda"}</div>
-                  <div style={{fontSize:10.5,color:"#8B9AB5"}}>{perfil?.nombre} · {perfil?.rol==="admin"?"Administrador":"Usuario"}</div>
+                  <div style={{fontSize:12,color:"#8B9AB5"}}>{perfil?.nombre} · {perfil?.rol==="admin"?"Administrador":"Usuario"}</div>
                 </>
               )}
             </div>
@@ -1515,7 +1515,7 @@ export default function App() {
                     {secundarias.map(t=>(
                       <button key={t.key} onClick={()=>{setTab(t.key);setFiltroCompras(null);setOcFoco(null);setMenuMas(false);}} style={{background:tab===t.key?C.tealLight:C.paper,border:"none",borderRadius:12,padding:"12px 6px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:5}}>
                         <span style={{fontSize:20}}>{t.icon}</span>
-                        <span style={{fontSize:10,fontWeight:700,color:tab===t.key?C.tealDark:C.inkMuted}}>{t.label}</span>
+                        <span style={{fontSize:12,fontWeight:700,color:tab===t.key?C.tealDark:C.inkMuted}}>{t.label}</span>
                       </button>
                     ))}
                   </div>
@@ -1531,14 +1531,14 @@ export default function App() {
                       {t.icon}
                       {t.key==="notif"&&<NotifBadge notificaciones={notificaciones} urgentes={alertasUrgentes} />}
                     </span>
-                    <span style={{fontSize:9.5,fontWeight:activo?800:600,color:activo?C.tealDark:C.inkFaint}}>{t.label}</span>
+                    <span style={{fontSize:12,fontWeight:activo?800:600,color:activo?C.tealDark:C.inkFaint}}>{t.label}</span>
                   </button>
                 );
               })}
               {secundarias.length>0&&(
                 <button onClick={()=>setMenuMas(v=>!v)} style={{flex:1,background:"none",border:"none",padding:"6px 1px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
                   <span style={{fontSize:17,display:"flex",alignItems:"center",justifyContent:"center",width:44,height:28,borderRadius:14,background:enMas||menuMas?C.tealLight:"transparent",transition:"all 0.18s"}}>☰</span>
-                  <span style={{fontSize:9.5,fontWeight:enMas||menuMas?800:600,color:enMas||menuMas?C.tealDark:C.inkFaint}}>Más</span>
+                  <span style={{fontSize:12,fontWeight:enMas||menuMas?800:600,color:enMas||menuMas?C.tealDark:C.inkFaint}}>Más</span>
                 </button>
               )}
             </div>
@@ -1553,7 +1553,7 @@ export default function App() {
             codigoInicial={codigoOcRapida}
             onGuardar={handleNuevaOCRapida} onCerrar={()=>{setAccion(null);setCodigoOcRapida("");}} />
           <button onClick={()=>setAccion("compra_manual")}
-            style={{width:"100%",background:"none",border:"none",color:C.inkFaint,fontSize:11.5,cursor:"pointer",marginTop:14,textDecoration:"underline"}}>
+            style={{width:"100%",background:"none",border:"none",color:C.inkFaint,fontSize:12,cursor:"pointer",marginTop:14,textDecoration:"underline"}}>
             Ingresar manualmente (formulario completo)
           </button>
         </Modal>

@@ -53,7 +53,7 @@ export function LoginScreen({ onLogin }) {
         <button onClick={submit} disabled={loading} style={btnP(loading?C.inkFaint:C.night)}>{loading?"Procesando…":mode==="login"?"Ingresar":mode==="signup"?"Crear cuenta":"Enviar correo de recuperación"}</button>
         {mode==="login"&&<div style={{textAlign:"center",marginTop:14}}><button onClick={()=>{setMode("recover");setErr("");setInfo("");}} style={{background:"none",border:"none",color:C.teal,fontSize:12,fontWeight:700,cursor:"pointer"}}>¿Olvidaste tu contraseña?</button></div>}
         {mode==="recover"&&<div style={{textAlign:"center",marginTop:14}}><button onClick={()=>{setMode("login");setErr("");setInfo("");}} style={{background:"none",border:"none",color:C.teal,fontSize:12,fontWeight:700,cursor:"pointer"}}>← Volver a iniciar sesión</button></div>}
-        <div style={{textAlign:"center",fontSize:11,color:C.inkFaint,marginTop:16}}>{mode==="login"?'¿Sin cuenta? Usa "Crear cuenta"':mode==="signup"?"El primer usuario será administrador.":""}</div>
+        <div style={{textAlign:"center",fontSize:12,color:C.inkFaint,marginTop:16}}>{mode==="login"?'¿Sin cuenta? Usa "Crear cuenta"':mode==="signup"?"El primer usuario será administrador.":""}</div>
       </div>
     </div>
   );

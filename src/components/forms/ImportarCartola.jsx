@@ -332,7 +332,7 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, re
             onChange={e => procesar(Array.from(e.target.files || []))} style={{ display: "none" }} />
         </label>
         {err && <div style={{ background: C.dangerLight, color: C.danger, borderRadius: 8, padding: "8px 12px", fontSize: 12.5, marginTop: 12, fontWeight: 600 }}>{err}</div>}
-        <div style={{ fontSize: 11.5, color: C.inkFaint, marginTop: 14, lineHeight: 1.5 }}>
+        <div style={{ fontSize: 12, color: C.inkFaint, marginTop: 14, lineHeight: 1.5 }}>
           Los abonos se cruzan por monto, y el RUT o el nombre del pagador
           desempatan cuando hay varias facturas del mismo valor.
         </div>
@@ -383,7 +383,7 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, re
                 borderRadius: 10, padding: "10px 12px", marginBottom: 7,
               }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
-                  <span style={{ fontSize: 11.5, color: C.inkMuted, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <span style={{ fontSize: 12, color: C.inkMuted, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {fmt.date(it.mov.fecha)} · {it.mov.descripcion}
                   </span>
                   <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: 12.5, color: C.ok, flexShrink: 0 }}>
@@ -392,7 +392,7 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, re
                 </div>
 
                 {!it.claro && (
-                  <div style={{ fontSize: 10.5, color: C.warn, fontWeight: 700, margin: "5px 0 3px" }}>
+                  <div style={{ fontSize: 12, color: C.warn, fontWeight: 700, margin: "5px 0 3px" }}>
                     ⚠ {it.candidatos.length} facturas de ese monto — elige cuál corresponde
                   </div>
                 )}
@@ -428,17 +428,17 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, re
         ) : (
           <>
             {egresos.filter(e => e.antiguo).length > 0 && (
-              <div style={{ background: C.warnLight, border: `1px solid ${C.warn}`, borderRadius: 9, padding: "10px 12px", marginBottom: 10, fontSize: 11.5, color: C.warn, fontWeight: 600, lineHeight: 1.45 }}>
+              <div style={{ background: C.warnLight, border: `1px solid ${C.warn}`, borderRadius: 9, padding: "10px 12px", marginBottom: 10, fontSize: 12, color: C.warn, fontWeight: 600, lineHeight: 1.45 }}>
                 {egresos.filter(e => e.antiguo).length} movimiento(s) anteriores al {fmt.date(CORTE_EGRESOS)} vienen desmarcados.
                 Los saldos de los financistas ya los incluyen — cargarlos los descuadraría.
               </div>
             )}
             {egresos.filter(e => e.duplicado).length > 0 && (
-              <div style={{ background: C.infoLight, borderRadius: 9, padding: "9px 12px", marginBottom: 10, fontSize: 11.5, color: C.info, fontWeight: 600 }}>
+              <div style={{ background: C.infoLight, borderRadius: 9, padding: "9px 12px", marginBottom: 10, fontSize: 12, color: C.info, fontWeight: 600 }}>
                 {egresos.filter(e => e.duplicado).length} movimiento(s) ya estaban registrados — vienen desmarcados
               </div>
             )}
-            <div style={{ fontSize: 11.5, color: C.inkFaint, marginBottom: 10, lineHeight: 1.5 }}>
+            <div style={{ fontSize: 12, color: C.inkFaint, marginBottom: 10, lineHeight: 1.5 }}>
               Plata que salió de la cuenta. Las devoluciones a financistas se reparten
               entre sus OCs pendientes; el resto queda como gasto.
             </div>
@@ -453,21 +453,21 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, re
                   <input type="checkbox" checked={e.incluir} style={{ marginTop: 3 }}
                     onChange={ev => setEgresos(l => l.map((x, ix) => ix === i ? { ...x, incluir: ev.target.checked } : x))} />
                   <span style={{ flex: 1, minWidth: 0 }}>
-                    <span style={{ display: "block", fontSize: 11.5, color: C.inkMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <span style={{ display: "block", fontSize: 12, color: C.inkMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {fmt.date(e.mov.fecha)} · {e.mov.descripcion}
                     </span>
                     {e.antiguo ? (
-                      <span style={{ display: "block", fontSize: 10.5, color: C.inkFaint, fontWeight: 600, marginTop: 2 }}>
+                      <span style={{ display: "block", fontSize: 12, color: C.inkFaint, fontWeight: 600, marginTop: 2 }}>
                         Anterior al {fmt.date(CORTE_EGRESOS)} — ya está en los saldos históricos
                       </span>
                     ) : e.duplicado ? (
-                      <span style={{ display: "block", fontSize: 10.5, color: C.info, fontWeight: 700, marginTop: 2 }}>
+                      <span style={{ display: "block", fontSize: 12, color: C.info, fontWeight: 700, marginTop: 2 }}>
                         {e.duplicado.agrupado
                           ? "Ya registrado (repartido entre varias OCs) — no se volverá a cargar"
                           : `Ya registrado el ${fmt.date(String(e.duplicado.fecha).slice(0, 10))} — no se volverá a cargar`}
                       </span>
                     ) : !e.seguro && (
-                      <span style={{ display: "block", fontSize: 10.5, color: C.warn, fontWeight: 700, marginTop: 2 }}>
+                      <span style={{ display: "block", fontSize: 12, color: C.warn, fontWeight: 700, marginTop: 2 }}>
                         ⚠ No se pudo identificar — revisa el destino
                       </span>
                     )}
@@ -481,7 +481,7 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, re
                   <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
                     <select value={e.tipo}
                       onChange={ev => setEgresos(l => l.map((x, ix) => ix === i ? { ...x, tipo: ev.target.value, destinoId: "" } : x))}
-                      style={{ flex: 1, padding: "6px 8px", borderRadius: 8, fontSize: 11.5, border: `1px solid ${C.border}`, background: C.card, color: C.ink, fontFamily: SANS }}>
+                      style={{ flex: 1, padding: "6px 8px", borderRadius: 8, fontSize: 12, border: `1px solid ${C.border}`, background: C.card, color: C.ink, fontFamily: SANS }}>
                       <option value="financiador">Devolución a financista</option>
                       <option value="vendedor">Pago a vendedor</option>
                       <option value="gasto">Gasto</option>
@@ -490,13 +490,13 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, re
                     {e.tipo === "gasto" ? (
                       <select value={e.categoriaId || "cat_otros"}
                         onChange={ev => setEgresos(l => l.map((x, ix) => ix === i ? { ...x, categoriaId: ev.target.value } : x))}
-                        style={{ flex: 1, padding: "6px 8px", borderRadius: 8, fontSize: 11.5, border: `1px solid ${C.border}`, background: C.card, color: C.ink, fontFamily: SANS }}>
+                        style={{ flex: 1, padding: "6px 8px", borderRadius: 8, fontSize: 12, border: `1px solid ${C.border}`, background: C.card, color: C.ink, fontFamily: SANS }}>
                         {(categorias || []).map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
                       </select>
                     ) : (
                       <select value={e.destinoId || ""}
                         onChange={ev => setEgresos(l => l.map((x, ix) => ix === i ? { ...x, destinoId: ev.target.value } : x))}
-                        style={{ flex: 1, padding: "6px 8px", borderRadius: 8, fontSize: 11.5, border: `1px solid ${C.border}`, background: C.card, color: C.ink, fontFamily: SANS }}>
+                        style={{ flex: 1, padding: "6px 8px", borderRadius: 8, fontSize: 12, border: `1px solid ${C.border}`, background: C.card, color: C.ink, fontFamily: SANS }}>
                         <option value="">Elige…</option>
                         {(e.tipo === "financiador" ? (financiadores || []) : (vendedores || []))
                           .map(x => <option key={x.id} value={x.id}>{x.nombre}</option>)}

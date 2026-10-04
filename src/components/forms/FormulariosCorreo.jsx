@@ -29,10 +29,10 @@ export function FormEntregaFallida({ oc, onEnviar, entidadesCatalogo }) {
       <Field label="Lugar de entrega" required hint="ej: bodega de farmacología, bodega central"><input style={iStyle} value={lugar} onChange={e=>setLugar(e.target.value)} /></Field>
       <Field label="Motivo de la entrega fallida" required hint="ej: usted no estaba en el lugar, bodega estaba cerrada"><input style={iStyle} value={motivo} onChange={e=>setMotivo(e.target.value)} /></Field>
       <div style={{background:C.paper,borderRadius:9,padding:"10px 12px",marginBottom:14}}>
-        <div style={{fontSize:10.5,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:4}}>Asunto</div>
+        <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:4}}>Asunto</div>
         <div style={{fontSize:12.5,color:C.ink,marginBottom:8}}>{asunto}</div>
-        <div style={{fontSize:10.5,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:4}}>Vista previa</div>
-        <div style={{fontSize:11.5,color:C.ink,whiteSpace:"pre-wrap"}}>{cuerpo}</div>
+        <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:4}}>Vista previa</div>
+        <div style={{fontSize:12,color:C.ink,whiteSpace:"pre-wrap"}}>{cuerpo}</div>
       </div>
       {err&&<div style={{background:C.dangerLight,color:C.danger,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}
       <button onClick={handleEnviar} disabled={sending} style={btnP(sending?C.inkFaint:C.warn)}>{sending?"Abriendo correo…":"📧 Enviar aviso de entrega fallida"}</button>
@@ -68,10 +68,10 @@ export function FormFechaEntrega({ oc, onEnviar, entidadesCatalogo }) {
       <Field label="Correo del destinatario" required hint={oc.correo_cliente?"Correo guardado en esta OC":matchCatalogo?"Autocompletado desde el catálogo de entidades":""}><input style={iStyle} type="email" value={correo} onChange={e=>setCorreo(e.target.value)} placeholder="contacto@entidad.cl" /></Field>
       <Field label="Fecha estimada de entrega" required hint={fechaEstimadaDefault?"Autocompletado con la fecha estimada registrada":""}><input style={iStyle} type="date" value={fechaEntrega} onChange={e=>setFechaEntrega(e.target.value)} /></Field>
       <div style={{background:C.paper,borderRadius:9,padding:"10px 12px",marginBottom:14}}>
-        <div style={{fontSize:10.5,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:4}}>Asunto</div>
+        <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:4}}>Asunto</div>
         <div style={{fontSize:12.5,color:C.ink,marginBottom:8}}>{asunto}</div>
-        <div style={{fontSize:10.5,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:4}}>Vista previa</div>
-        <div style={{fontSize:11.5,color:C.ink,whiteSpace:"pre-wrap"}}>{cuerpo}</div>
+        <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:4}}>Vista previa</div>
+        <div style={{fontSize:12,color:C.ink,whiteSpace:"pre-wrap"}}>{cuerpo}</div>
       </div>
       {err&&<div style={{background:C.dangerLight,color:C.danger,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}
       <button onClick={handleEnviar} disabled={sending} style={btnP(sending?C.inkFaint:C.transit)}>{sending?"Abriendo correo…":"📅 Enviar fecha estimada de entrega"}</button>
@@ -105,15 +105,15 @@ export function FormReclamarFactura({ oc, evF, dias, contactos, onEnviar, onGuar
       <div style={{background:C.dangerLight,borderRadius:9,padding:"10px 12px",fontSize:12.5,color:C.danger,fontWeight:700,marginBottom:14}}>
         Factura {evF?.numero_factura} · {dias} días desde emisión
       </div>
-      {oc.ultimo_reclamo_fecha&&<div style={{background:C.warnLight,borderRadius:9,padding:"8px 12px",fontSize:11.5,color:C.warn,fontWeight:600,marginBottom:14}}>Ya se reclamó esta factura el {fmt.datetime(oc.ultimo_reclamo_fecha)}</div>}
+      {oc.ultimo_reclamo_fecha&&<div style={{background:C.warnLight,borderRadius:9,padding:"8px 12px",fontSize:12,color:C.warn,fontWeight:600,marginBottom:14}}>Ya se reclamó esta factura el {fmt.datetime(oc.ultimo_reclamo_fecha)}</div>}
       <Field label="RUT del cliente" hint="Para guardar el correo y reutilizarlo después"><input style={iStyle} value={rut} onChange={e=>setRut(e.target.value)} placeholder="ej: 12.345.678-9" /></Field>
       <Field label="Nombre del cliente" required><input style={iStyle} value={nombreCliente} onChange={e=>setNombreCliente(e.target.value)} /></Field>
       <Field label="Correo del cliente" required hint={oc.correo_cliente?"Correo ya guardado en esta OC":contactoExistente?"Correo guardado encontrado para este RUT":"Se guardará para futuras facturas"}><input style={iStyle} type="email" value={correo} onChange={e=>setCorreo(e.target.value)} placeholder="contacto@entidad.cl" /></Field>
       <Field label="Con copia (CC)" hint="Opcional — separa varios correos con coma"><input style={iStyle} value={cc} onChange={e=>setCc(e.target.value)} placeholder="jefatura@bfk.cl, contador@bfk.cl" /></Field>
       <div style={{background:C.paper,borderRadius:9,padding:"10px 12px",marginBottom:14}}>
-        <div style={{fontSize:10.5,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:4}}>Asunto</div>
+        <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:4}}>Asunto</div>
         <div style={{fontSize:12.5,color:C.ink,marginBottom:8}}>{asunto}</div>
-        <div style={{fontSize:10.5,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:4}}>Mensaje</div>
+        <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:4}}>Mensaje</div>
         <div style={{fontSize:12,color:C.ink,whiteSpace:"pre-wrap"}}>{cuerpo}</div>
       </div>
       {err&&<div style={{background:C.dangerLight,color:C.danger,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}

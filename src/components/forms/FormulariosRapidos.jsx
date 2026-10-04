@@ -60,13 +60,13 @@ export function FormEmitirFactura({ ocs, onSave, ocPreseleccionada }) {
       {selected&&!entregada&&(
         <div style={{background:C.warnLight,border:`1px solid ${C.warn}`,borderRadius:9,padding:"10px 12px",marginBottom:14}}>
           <div style={{fontSize:12,fontWeight:700,color:C.warn,marginBottom:6}}>⚠ Sin entrega registrada</div>
-          <div style={{fontSize:11.5,color:C.inkMuted,lineHeight:1.45,marginBottom:8}}>
+          <div style={{fontSize:12,color:C.inkMuted,lineHeight:1.45,marginBottom:8}}>
             Lo normal es registrar la entrega antes de facturar. Si ya se entregó y solo faltó anotarlo,
             puedes continuar — pero conviene registrarla para que quede la fecha y el respaldo.
           </div>
           <label style={{display:"flex",alignItems:"flex-start",gap:7,cursor:"pointer"}}>
             <input type="checkbox" checked={confirmoSinEntrega} onChange={e=>{setConfirmoSinEntrega(e.target.checked);setErr("");}} style={{marginTop:2}} />
-            <span style={{fontSize:11.5,color:C.ink,fontWeight:600}}>Facturar igual, la entrega se registra después</span>
+            <span style={{fontSize:12,color:C.ink,fontWeight:600}}>Facturar igual, la entrega se registra después</span>
           </label>
         </div>
       )}
@@ -79,7 +79,7 @@ export function FormEmitirFactura({ ocs, onSave, ocPreseleccionada }) {
             <span style={{fontSize:12,color:C.inkMuted}}>Difiere de la OC ({fmt.money(montoOC)})</span>
             <span style={{fontSize:13,fontWeight:800,fontFamily:MONO,color:difGrande?C.warn:C.inkMuted}}>{dif>0?"+":""}{fmt.money(dif)}</span>
           </div>
-          {difGrande&&<div style={{fontSize:11.5,color:C.warn,fontWeight:600}}>⚠ Diferencia relevante — deja registrado por qué</div>}
+          {difGrande&&<div style={{fontSize:12,color:C.warn,fontWeight:600}}>⚠ Diferencia relevante — deja registrado por qué</div>}
         </div>
       )}
       {hayDif&&(
@@ -145,7 +145,7 @@ export function FormPagoCliente({ ocs, onSave, ocPreseleccionada }) {
             style={{marginTop:2,width:16,height:16,flexShrink:0}} />
           <span>
             <span style={{display:"block",fontSize:12.5,fontWeight:700,color:C.ink}}>Ya lo cobré / depositó en el banco</span>
-            <span style={{display:"block",fontSize:11,color:C.inkFaint,marginTop:1}}>
+            <span style={{display:"block",fontSize:12,color:C.inkFaint,marginTop:1}}>
               {cobradoEnBanco?"Se cuenta como plata real en la cuenta.":"El cliente pagó, pero esta plata todavía no está en el banco — aparecerá en \"Vale vistas por cobrar\" hasta que la marques cobrada."}
             </span>
           </span>
