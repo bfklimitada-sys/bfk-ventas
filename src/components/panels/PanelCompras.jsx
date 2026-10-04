@@ -1068,7 +1068,7 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, onSincroniz
       {alertas.length>0&&(
         <div style={{background:C.dangerLight,border:`1px solid ${C.danger}`,borderRadius:12,marginBottom:14,overflow:"hidden"}}>
           <div onClick={()=>setBannerAbierto(v=>!v)} style={{padding:"10px 12px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <span style={{fontWeight:800,color:C.dangerText,fontSize:12}}><Ic n="⚠"/> {alertas.length} factura{alertas.length>1?"s":""} vencida{alertas.length>1?"s":""} sin pagar</span>
+            <span style={{fontWeight:800,color:C.dangerText,fontSize:12}}><Ic n="⚠"/> {alertas.length} factura{alertas.length>1?"s":""} vencida{alertas.length>1?"s":""} sin cobrar</span>
             <span style={{color:C.dangerText,fontSize:13,fontWeight:700}}>{bannerAbierto?"▲":"▼"}</span>
           </div>
           {bannerAbierto&&(
