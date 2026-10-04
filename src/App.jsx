@@ -1429,10 +1429,21 @@ export default function App() {
     ...(aportes||[]).map(a=>({fecha:a.fecha,monto:a.monto,destino:`ap_${a.socio}`})),
   ].filter(m=>m.fecha&&m.monto);
 
+  // Imprimir / guardar como PDF la pantalla actual (solo lectura, no toca datos).
+  // En iPhone: Compartir > Imprimir, o pellizcar la vista previa para obtener el PDF.
+  const imprimirPantalla=()=>{
+    const antes=document.title;
+    const nombre=TABS.find(t=>t.key===tab)?.label||"BFK";
+    document.title=`BFK Ltda - ${nombre} - ${new Date().toISOString().slice(0,10)}`;
+    const restaurar=()=>{document.title=antes;window.removeEventListener("afterprint",restaurar);};
+    window.addEventListener("afterprint",restaurar);
+    window.print();
+  };
+
   return (
     <div style={{minHeight:"100vh",background:C.paper,fontFamily:SANS,paddingBottom:"calc(104px + env(safe-area-inset-bottom))"}}>
       {/* HEADER */}
-      <div style={{background:`linear-gradient(135deg,${C.night} 0%,#16213E 100%)`,padding:"calc(16px + env(safe-area-inset-top)) 16px 14px",color:"#fff",boxShadow:"0 2px 12px rgba(11,17,32,0.25)",position:"sticky",top:0,zIndex:30}}>
+      <div data-noprint style={{background:`linear-gradient(135deg,${C.night} 0%,#16213E 100%)`,padding:"calc(16px + env(safe-area-inset-top)) 16px 14px",color:"#fff",boxShadow:"0 2px 12px rgba(11,17,32,0.25)",position:"sticky",top:0,zIndex:30}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0,flex:1}}>
             <div style={{width:38,height:38,background:"rgba(20,184,166,0.15)",border:`1.5px solid ${C.teal}`,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:MONO,color:C.teal,fontWeight:800,fontSize:13}}>BFK</div>
@@ -1456,6 +1467,7 @@ export default function App() {
           </div>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
             <button onClick={()=>setAccion("compra_oc")} style={{background:C.teal,border:"none",color:"#fff",borderRadius:10,padding:"9px 14px",fontSize:12.5,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0,boxShadow:"0 3px 10px rgba(20,184,166,0.35)"}}>+ Nueva OC</button>
+            {perfil?.rol==="admin"&&<button onClick={imprimirPantalla} aria-label="Imprimir o guardar como PDF esta pantalla" style={{background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.12)",color:"#B8C4D9",borderRadius:9,padding:"8px 10px",fontSize:12,fontWeight:600,cursor:"pointer"}}><Ic n="printer" /></button>}
             <button onClick={handleLogout} style={{background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.12)",color:"#B8C4D9",borderRadius:9,padding:"8px 10px",fontSize:12,fontWeight:600,cursor:"pointer"}}>⏻</button>
           </div>
         </div>
@@ -1481,7 +1493,7 @@ export default function App() {
         return (
           <>
             {menuMas&&(
-              <div onClick={()=>setMenuMas(false)} style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.35)",zIndex:40}}>
+              <div data-noprint onClick={()=>setMenuMas(false)} style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.35)",zIndex:40}}>
                 <div onClick={e=>e.stopPropagation()} style={{position:"fixed",bottom:"calc(64px + env(safe-area-inset-bottom))",left:12,right:12,background:C.card,borderRadius:16,padding:"12px",boxShadow:"0 -10px 40px rgba(15,23,42,0.2)",zIndex:41}}>
                   <div style={{width:36,height:4,background:C.border,borderRadius:2,margin:"0 auto 12px"}} />
                   <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
@@ -1495,7 +1507,7 @@ export default function App() {
                 </div>
               </div>
             )}
-            <div style={{position:"fixed",bottom:0,left:0,right:0,background:"rgba(255,255,255,0.96)",backdropFilter:"blur(12px)",borderTop:`1px solid ${C.border}`,display:"flex",padding:"6px 4px calc(6px + env(safe-area-inset-bottom))",boxShadow:"0 -4px 20px rgba(15,23,42,0.06)",zIndex:42}}>
+            <div data-noprint style={{position:"fixed",bottom:0,left:0,right:0,background:"rgba(255,255,255,0.96)",backdropFilter:"blur(12px)",borderTop:`1px solid ${C.border}`,display:"flex",padding:"6px 4px calc(6px + env(safe-area-inset-bottom))",boxShadow:"0 -4px 20px rgba(15,23,42,0.06)",zIndex:42}}>
               {principales.map(t=>{
                 const activo=tab===t.key;
                 return (

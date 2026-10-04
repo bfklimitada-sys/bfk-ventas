@@ -29,6 +29,7 @@ const P = {
   lock: <><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></>,
   building: <><rect x="5" y="3" width="14" height="18" rx="1"/><path d="M9 7h2M13 7h2M9 11h2M13 11h2M9 15h2M13 15h2M10 21v-3h4v3"/></>,
   download: <><path d="M12 4v11M7 11l5 5 5-5M4 20h16"/></>,
+  printer: <><path d="M7 9V3h10v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M7 14h10v7H7z"/></>,
   chevD: <path d="M5 9l7 7 7-7"/>,
   chevL: <path d="M15 5l-7 7 7 7"/>,
   chevR: <path d="M9 5l7 7-7 7"/>,
