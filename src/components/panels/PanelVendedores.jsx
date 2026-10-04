@@ -1,12 +1,13 @@
 import { useState, useMemo } from "react";
 import { Field, Modal } from "../ui/Basicos";
 import { del } from "../../lib/supabase";
-import { C, MONO, btnG, btnP, fmt, iMono, selStyle } from "../../lib/theme";
+import { C, MONO, btnG, btnP, fmt, iMono, iStyle, selStyle } from "../../lib/theme";
 import { Ic } from "../ui/Iconos";
-import { calcularPagoVendedor, mesesConFactura } from "../../lib/calculos";
+import { anioMesDe, calcularPagoVendedor, facturaVigente, mesesConFactura } from "../../lib/calculos";
 
 export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, onGuardarIva, onPagoVendedor }) {
   const [editIva,setEditIva]=useState(false);
+  const [pagando,setPagando]=useState(false);
   const [abierto,setAbierto]=useState(null); // id del vendedor desplegado
   const hoy=new Date(); const mesActual=hoy.getMonth()+1; const anioActual=hoy.getFullYear();
   const MESES=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
@@ -21,6 +22,7 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
 
   return (
     <div>
+      <button onClick={()=>setPagando(true)} style={{...btnP(C.teal),marginBottom:12}}>+ Pago a vendedor</button>
       <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:16,marginBottom:16}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
           <div style={{fontWeight:800,fontSize:14,color:C.ink}}>IVA del mes ({fmt.monthYear(mesActual,anioActual)})</div>
@@ -119,6 +121,11 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
         );
       })}
 
+      {pagando&&(
+        <Modal title="Pago a vendedor" onClose={()=>setPagando(false)}>
+          <FormPagoVendedorSimple vendedores={vendedores} ocs={ocs} onSave={async(d)=>{await onPagoVendedor(d);setPagando(false);}} />
+        </Modal>
+      )}
       {editIva&&(
         <Modal title="IVA mensual" onClose={()=>setEditIva(false)}>
           <FormIvaMensual ivaExistente={editandoIvaExistente} onSave={async(d)=>{await onGuardarIva(d);setEditIva(false);}} />
@@ -155,6 +162,48 @@ export function FormIvaMensual({ ivaExistente, onSave }) {
       <div style={{background:C.tealLight,borderRadius:9,padding:"10px 12px",fontSize:13,color:C.tealDark,fontWeight:700,marginBottom:14}}>IVA a pagar: {fmt.money(ivaPagado)}</div>
       {err&&<div style={{background:C.dangerLight,color:C.danger,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}
       <button onClick={handleSave} disabled={saving} style={btnP(saving?C.inkFaint:C.info)}>{saving?"Guardando…":"✓ Guardar IVA"}</button>
+    </div>
+  );
+}
+
+export function FormPagoVendedorSimple({ vendedores, ocs, onSave }) {
+  const [vendedorId,setVendedorId]=useState(vendedores[0]?.id||"");
+  const [monto,setMonto]=useState(""); const [fecha,setFecha]=useState(new Date().toISOString().slice(0,10));
+  const [mes,setMes]=useState(new Date().getMonth()+1); const [anio,setAnio]=useState(new Date().getFullYear());
+  const [marcarPagadas,setMarcarPagadas]=useState(true);
+  const [err,setErr]=useState(""); const [saving,setSaving]=useState(false);
+  const vend=vendedores.find(v=>v.id===vendedorId);
+  const MESES=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+  const labelMes=`Ventas de ${MESES[mes-1]}/${anio}`;
+  const ocsDelMes=ocs?.filter(o=>{
+    if(o.vendedor_id!==vendedorId||o.estado_factura_propia!=="emitida"||o.vendedor_pagado) return false;
+    const evF=facturaVigente(o); if(!evF) return false;
+    const f=anioMesDe(evF.fecha); return f.mes===Number(mes)&&f.anio===Number(anio);
+  })||[];
+  const handleSave=async()=>{
+    if(!monto||Number(monto)<=0){setErr("Indica el monto");return;}
+    setErr(""); setSaving(true);
+    try{await onSave({vendedorId,monto:Number(monto),fecha,mes:Number(mes),anio:Number(anio),label:labelMes,ocIdsAMarcar:marcarPagadas?ocsDelMes.map(o=>o.id):[]});}
+    catch(e){setErr(e.message);}finally{setSaving(false);};
+  };
+  return (
+    <div>
+      <Field label="Vendedor" required><select style={selStyle} value={vendedorId} onChange={e=>setVendedorId(e.target.value)}>{vendedores.map(v=><option key={v.id} value={v.id}>{v.nombre}</option>)}</select></Field>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+        <Field label="Mes" required><select style={selStyle} value={mes} onChange={e=>setMes(e.target.value)}>{MESES.map((m,i)=><option key={i} value={i+1}>{m}</option>)}</select></Field>
+        <Field label="Año" required><input style={iMono} type="number" value={anio} onChange={e=>setAnio(e.target.value)} /></Field>
+      </div>
+      <div style={{background:C.tealLight,borderRadius:9,padding:"10px 12px",fontSize:12.5,color:C.tealDark,fontWeight:700,marginBottom:12}}>{labelMes}</div>
+      <Field label="Fecha de pago" required><input style={iStyle} type="date" value={fecha} onChange={e=>setFecha(e.target.value)} /></Field>
+      <Field label="Monto pagado ($)" required><input style={iMono} type="number" value={monto} onChange={e=>setMonto(e.target.value)} /></Field>
+      {ocs&&(
+        <label style={{display:"flex",alignItems:"flex-start",gap:8,background:C.paper,borderRadius:9,padding:"10px 12px",marginBottom:12,cursor:"pointer"}}>
+          <input type="checkbox" checked={marcarPagadas} onChange={e=>setMarcarPagadas(e.target.checked)} style={{marginTop:2}} />
+          <span style={{fontSize:12,color:C.inkMuted}}>Marcar las {ocsDelMes.length} OC{ocsDelMes.length!==1?"s":""} facturadas este mes como "vendedor pagado" — evita que se vuelvan a contar si se re-emite la factura en otro mes</span>
+        </label>
+      )}
+      {err&&<div style={{background:C.dangerLight,color:C.danger,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}
+      <button onClick={handleSave} disabled={saving} style={btnP(saving?C.inkFaint:C.teal)}>{saving?"Guardando…":"✓ Registrar pago"}</button>
     </div>
   );
 }
