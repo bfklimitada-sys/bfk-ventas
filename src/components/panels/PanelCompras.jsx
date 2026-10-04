@@ -807,12 +807,12 @@ export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded
         </div>
 
         {/* Línea 3 — un solo estado, con el progreso al lado */}
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,marginTop:7}}>
-          <span style={{display:"inline-flex",alignItems:"center",gap:5,background:estadoOC.bg,color:estadoOC.color,
-            padding:"3px 9px",borderRadius:20,fontSize:12,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-            {estadoOC.icono} {estadoOC.texto}
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",columnGap:10,rowGap:4,marginTop:7}}>
+          <span style={{display:"inline-flex",alignItems:"flex-start",gap:5,background:estadoOC.bg,color:estadoOC.color,
+            padding:"3px 9px",borderRadius:12,fontSize:12,fontWeight:700,lineHeight:1.35,minWidth:0,maxWidth:"100%"}}>
+            <span style={{flexShrink:0}}>{estadoOC.icono}</span><span style={{minWidth:0}}>{estadoOC.texto}</span>
           </span>
-          <span style={{fontSize:12,color:C.inkFaint,flexShrink:0}}>
+          <span style={{fontSize:12,color:C.inkFaint,flexShrink:0,whiteSpace:"nowrap",lineHeight:1.35,padding:"3px 0",marginLeft:"auto"}}>
             {estancada&&<span style={{color:C.warnText,fontWeight:700}}><Ic n="⏸"/> {diasEstancada}d · </span>}
             {oc.vendedores?.nombre&&<>{oc.vendedores.nombre.split(" ")[0]} · </>}
             {completadas}/5

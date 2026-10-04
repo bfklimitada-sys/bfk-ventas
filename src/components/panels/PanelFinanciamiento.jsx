@@ -57,6 +57,7 @@ export function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onA
   const [nuevoAporte,setNuevoAporte]=useState(false);
   const [editAporte,setEditAporte]=useState(null);
   const [selFin,setSelFin]=useState(null);
+  const [verSinDeuda,setVerSinDeuda]=useState(false);
   const [ajustando,setAjustando]=useState(null);
   const [verSolo,setVerSolo]=useState(null);
 
@@ -197,25 +198,27 @@ export function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onA
         </Tarjeta>
       ))}
       {enCero.length>0&&(
-        <details style={{marginTop:4}}>
-          <summary style={{fontSize:12,color:C.inkMuted,cursor:"pointer",padding:"10px 2px",listStyle:"none",minHeight:36}}>
-            + {enCero.length} financiador{enCero.length>1?"es":""} sin deuda
-          </summary>
-          {enCero.map(f=>(
+        <div style={{marginTop:4,marginBottom:6}}>
+          <button type="button" onClick={()=>setVerSinDeuda(v=>!v)} aria-expanded={verSinDeuda}
+            style={{display:"block",width:"100%",textAlign:"left",background:"none",border:"none",fontSize:12,color:C.inkMuted,cursor:"pointer",padding:"10px 2px",minHeight:36,font:"inherit",fontSize:12}}>
+            {verSinDeuda?"− Ocultar":"+"} {enCero.length} financiador{enCero.length>1?"es":""} sin deuda
+          </button>
+          {verSinDeuda&&enCero.map(f=>(
             <Tarjeta key={f.id} onClick={()=>setSelFin(f.id)} padding="11px 14px" style={{background:C.paper,marginBottom:6}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <span style={{fontWeight:600,fontSize:14,color:C.inkMuted}}>{f.nombre}</span>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
+                <span style={{fontWeight:600,fontSize:14,color:C.inkMuted,minWidth:0,overflowWrap:"anywhere"}}>{f.nombre}</span>
                 <Monto tam="sm" tono="ok">{fmt.money(f.saldo_deuda)}</Monto>
               </div>
             </Tarjeta>
           ))}
-        </details>
+        </div>
       )}
         </>);
       })()}
       </Seccion>
 
       {/* ── 2. Aportes de socios ── */}
+      <div style={{display:"flow-root",clear:"both",position:"relative",marginTop:24}}>
       <Seccion titulo="Aportes de socios"
         nota="Capital que entra o sale de la empresa. Suma a la caja pero no cuenta como venta ni utilidad."
         accion={<button onClick={()=>setNuevoAporte(true)} style={{fontSize:13,background:C.okLight,color:"#047857",border:"none",borderRadius:10,minHeight:36,padding:"6px 12px",fontWeight:700,cursor:"pointer"}}>+ Registrar</button>}>
@@ -246,6 +249,7 @@ export function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onA
           );
         })()}
       </Seccion>
+      </div>
 
       {/* ── 3. Movimientos de socios ── */}
       {(aportes||[]).length>0&&(
