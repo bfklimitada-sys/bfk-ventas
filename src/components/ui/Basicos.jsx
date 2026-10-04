@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { C, MONO, R, fmt, iMono } from "../../lib/theme";
+import { estadoVencimiento, plazoPago } from "../../lib/calculos";
 import { I } from "./Iconos";
 
 export function Modal({ title, onClose, children }) {
@@ -41,10 +42,8 @@ export function Trazabilidad({ creadoPor, creadoEn, perfiles }) {
 export function DiasBadge({ dias, diasPago }) {
   if(dias===null||dias===undefined) return null;
   // Plazo real de la OC (15, 30, 50 o 60 días según Mercado Público). 30 por defecto.
-  const plazo = Number(diasPago) > 0 ? Number(diasPago) : 30;
-  const vencida  = dias >= plazo;
-  const reclamar = dias >= plazo + 9;
-  const porVencer= !vencida && dias >= plazo - 5;
+  const plazo = plazoPago({ dias_pago: diasPago });
+  const { vencida, reclamar, porVencer } = estadoVencimiento(dias, plazo);
 
   const color = reclamar ? C.danger : vencida ? C.danger : porVencer ? C.warn : C.ok;
   const bg    = reclamar ? C.dangerLight : vencida ? C.dangerLight : porVencer ? C.warnLight : C.okLight;

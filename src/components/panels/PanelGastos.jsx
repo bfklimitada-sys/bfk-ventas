@@ -117,8 +117,8 @@ export function FormPagoVendedorSimple({ vendedores, ocs, onSave }) {
   const labelMes=`Ventas de ${MESES[mes-1]}/${anio}`;
   const ocsDelMes=ocs?.filter(o=>{
     if(o.vendedor_id!==vendedorId||o.estado_factura_propia!=="emitida"||o.vendedor_pagado) return false;
-    const evF=(o.eventos_factura||[])[0]; if(!evF) return false;
-    const f=new Date(evF.fecha); return f.getMonth()+1===Number(mes)&&f.getFullYear()===Number(anio);
+    const evF=facturaVigente(o); if(!evF) return false;
+    const f=anioMesDe(evF.fecha); return f.mes===Number(mes)&&f.anio===Number(anio);
   })||[];
   const handleSave=async()=>{
     if(!monto||Number(monto)<=0){setErr("Indica el monto");return;}

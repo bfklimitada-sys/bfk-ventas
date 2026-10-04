@@ -6,7 +6,8 @@ import { DiasBadge, Field, Leyenda, Modal, Trazabilidad } from "../ui/Basicos";
 import { EtapasOC, FormPostventa } from "../ui/EtapasOC";
 import { BloqueoBanner, ComentariosOC, HistorialCambiosOC } from "../ui/Multiusuario";
 import { del } from "../../lib/supabase";
-import { C, MONO, btnG, btnP, calcMargen, gananciaReal, fmt, iMono, iStyle, selStyle } from "../../lib/theme";
+import { C, MONO, btnG, btnP, fmt, iMono, iStyle, selStyle } from "../../lib/theme";
+import { calcMargen, estadoVencimiento, facturaVigente, gananciaReal, plazoPago } from "../../lib/calculos";
 import { Ic, I } from "../ui/Iconos";
 
 // Fecha de creación de la OC para mostrar en la lista: si el dato viene
@@ -23,8 +24,7 @@ function fmtFechaHora(raw){
 // La factura vigente de una OC es la más reciente por fecha — si hubo
 // una reemisión (NC de por medio), la primera del arreglo sería la
 // anulada, no la que realmente hay que cobrar.
-export const facturaVigente=(oc)=>
-  (oc.eventos_factura||[]).slice().sort((a,b)=>new Date(b.fecha)-new Date(a.fecha))[0];
+export { facturaVigente };
 
 export const FILTROS=[
   {key:"compra",label:"Compra",okField:"estado_compra",okValue:"comprado",okLabel:"Comprado",pendLabel:"Pendiente"},
@@ -689,7 +689,7 @@ export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded
   const [accionRapida,setAccionRapida]=useState(null);
   const [correoFallida,setCorreoFallida]=useState(false);
   const [correoFecha,setCorreoFecha]=useState(false);
-  const plazoOC = Number(oc.dias_pago)>0?Number(oc.dias_pago):30;
+  const plazoOC = plazoPago(oc);
   const puedeReclamar = oc.estado_pago_cliente!=="pagado" && evF && dias!==null && dias>=plazoOC;
 
   const ultimoReclamo=(oc.oc_reclamos||[]).slice().sort((a,b)=>b.fecha?.localeCompare(a.fecha))[0];
@@ -726,7 +726,7 @@ export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded
     const facturada=oc.estado_factura_propia==="emitida";
     const cobrada=oc.estado_pago_cliente==="pagado";
     const finPagado=oc.estado_pago_financiamiento==="pagado";
-    const plazo=Number(oc.dias_pago)>0?Number(oc.dias_pago):30;
+    const plazo=plazoPago(oc);
     // El cliente entregó un vale vista o cheque, pero todavía no se
     // fue a cobrar al banco — esa plata no es real todavía.
     const valeVistaPendiente=(oc.eventos_pago_cliente||[]).some(ev=>ev.medio_pago&&ev.medio_pago!=="transferencia"&&!ev.cobrado_en_banco);
@@ -742,9 +742,9 @@ export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded
     if(cobrada&&finPagado)  return {color:C.ok,      bg:C.okLight,      icono:"✓", texto:"Cerrada"};
     if(cobrada&&!finPagado) return {color:C.purple,  bg:C.purpleLight,  icono:<Ic n="🏦"/>, texto:"Cobrada · falta pagar financiamiento"};
     if(facturada&&dias!==null){
-      if(dias>=plazo+9)     return {color:C.danger,  bg:C.dangerLight,  icono:<Ic n="⚠"/>, texto:`Reclamar pago · ${dias} de ${plazo} días`};
-      if(dias>=plazo)       return {color:C.danger,  bg:C.dangerLight,  icono:<Ic n="🔴"/>, texto:`Vencida · ${dias} de ${plazo} días`};
-      if(dias>=plazo-5)     return {color:C.warn,    bg:C.warnLight,    icono:<Ic n="🟡"/>, texto:`Por vencer · quedan ${plazo-dias} días`};
+      if(estadoVencimiento(dias,plazo).reclamar) return {color:C.danger,  bg:C.dangerLight,  icono:<Ic n="⚠"/>, texto:`Reclamar pago · ${dias} de ${plazo} días`};
+      if(estadoVencimiento(dias,plazo).vencida) return {color:C.danger,  bg:C.dangerLight,  icono:<Ic n="🔴"/>, texto:`Vencida · ${dias} de ${plazo} días`};
+      if(estadoVencimiento(dias,plazo).porVencer) return {color:C.warn,    bg:C.warnLight,    icono:<Ic n="🟡"/>, texto:`Por vencer · quedan ${plazo-dias} días`};
       return {color:C.warn, bg:C.warnLight, icono:<Ic n="🧾"/>, texto:`Facturada · ${dias} de ${plazo} días`};
     }
     if(facturada)           return {color:C.warn,    bg:C.warnLight,    icono:<Ic n="🧾"/>, texto:"Facturada · esperando pago"};
@@ -1043,8 +1043,8 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, onSincroniz
   const alertas=useMemo(()=>ocs.filter(o=>{
     if(o.estado_pago_cliente==="pagado") return false;
     const evF=facturaVigente(o); if(!evF) return false;
-    const plazo=Number(o.dias_pago)>0?Number(o.dias_pago):30;
-    return (fmt.diasDesde(evF.fecha)||0)>=plazo;
+    const plazo=plazoPago(o);
+    return estadoVencimiento(fmt.diasDesde(evF.fecha)||0,plazo).vencida;
   }).sort((a,b)=>{
     const dA=fmt.diasDesde(facturaVigente(a)?.fecha)||0;
     const dB=fmt.diasDesde(facturaVigente(b)?.fecha)||0;

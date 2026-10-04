@@ -1,3 +1,4 @@
+import { facturaVigente } from "../../lib/calculos";
 import { useState } from "react";
 import * as XLSX from "xlsx";
 import { C, MONO, SANS, btnP, btnG, fmt } from "../../lib/theme";
@@ -88,7 +89,7 @@ function puntuar(abono, oc) {
   if (palabras.some(p => desc.includes(p))) puntos += 40;
 
   // Cercanía con la fecha de la factura: lo normal es cobrar después de emitir
-  const evF = (oc.eventos_factura || [])[0];
+  const evF = facturaVigente(oc);
   if (evF?.fecha) {
     const dias = (new Date(abono.fecha) - new Date(String(evF.fecha).slice(0, 10))) / 86400000;
     if (dias >= 0 && dias <= 90) puntos += 10;

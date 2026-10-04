@@ -1,3 +1,4 @@
+import { facturaVigente } from "../../lib/calculos";
 import { useState, useEffect } from "react";
 import { BuscadorOC, Field } from "../ui/Basicos";
 import { C, MONO, btnP, fmt, iMono, iStyle, selStyle } from "../../lib/theme";
@@ -24,7 +25,7 @@ export function FormEmitirFactura({ ocs, onSave, ocPreseleccionada }) {
   const [notaCredito,setNotaCredito]=useState(""); const [motivoDif,setMotivoDif]=useState("");
   const [err,setErr]=useState(""); const [saving,setSaving]=useState(false);
   const selected=ocs.find(o=>o.id===ocId);
-  const facturaAnterior=(selected?.eventos_factura||[])[0];
+  const facturaAnterior=selected?facturaVigente(selected):undefined;
   const esReemision=!!facturaAnterior;
   useEffect(()=>{ if(selected&&!monto) setMonto(String(selected.monto_total||"")); },[selected]);
 

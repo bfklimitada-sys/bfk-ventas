@@ -3,6 +3,7 @@ import { Field, Modal } from "../ui/Basicos";
 import { del } from "../../lib/supabase";
 import { C, MONO, btnG, btnP, fmt, iMono, selStyle } from "../../lib/theme";
 import { Ic } from "../ui/Iconos";
+import { calcularPagoVendedor, mesesConFactura } from "../../lib/calculos";
 
 export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, onGuardarIva, onPagoVendedor }) {
   const [editIva,setEditIva]=useState(false);
@@ -10,60 +11,9 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
   const hoy=new Date(); const mesActual=hoy.getMonth()+1; const anioActual=hoy.getFullYear();
   const MESES=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 
-  // Leer año/mes directo del texto "YYYY-MM-DD" en vez de construir un
-  // Date y usar .getFullYear()/.getMonth() — esos métodos leen en la
-  // zona horaria local del navegador, y una fecha guardada como
-  // medianoche UTC se corre un día para atrás en Chile (UTC-4), haciendo
-  // que facturas del día 1 del mes queden contadas en el mes anterior.
-  const anioMesDe=(fechaStr)=>{
-    const [y,m]=String(fechaStr).slice(0,10).split("-");
-    return {anio:Number(y),mes:Number(m)};
-  };
-
-  const datosVendedor=(v)=>{
-    const mesSet=new Set();
-    ocs.filter(o=>o.vendedor_id===v.id&&o.estado_factura_propia==="emitida").forEach(o=>{
-      (o.eventos_factura||[]).forEach(ef=>{ const {anio,mes}=anioMesDe(ef.fecha); mesSet.add(`${anio}-${String(mes).padStart(2,"0")}`); });
-    });
-    return Array.from(mesSet).sort((a,b)=>b.localeCompare(a)).map(ym=>{
-      const [y,m]=[Number(ym.split("-")[0]),Number(ym.split("-")[1])];
-      // La comisión es sobre la UTILIDAD del período (venta − costo), no
-      // sobre el monto bruto facturado. Las OC marcadas "venta propia"
-      // se pagan aparte, 100% de su utilidad menos el IVA de su propia
-      // factura — no entran al reparto general del 50%.
-      let sumaFacts=0, sumaUtilidad=0, pagoVentasPropias=0;
-      ocs.filter(o=>o.vendedor_id===v.id&&o.estado_factura_propia==="emitida").forEach(o=>{
-        const factsMes=(o.eventos_factura||[]).filter(ef=>{ const {anio,mes}=anioMesDe(ef.fecha); return anio===y&&mes===m; });
-        if(!factsMes.length) return;
-        const montoFacts=factsMes.reduce((ss,ef)=>ss+(ef.monto||0),0);
-        const utilOC=(Number(o.monto_total)||0)-(Number(o.costo_total)||0);
-        if(o.es_venta_propia){
-          const ivaFactura=montoFacts-(montoFacts/1.19);
-          pagoVentasPropias+=Math.max(0,Math.round(utilOC-ivaFactura));
-        }else{
-          sumaFacts+=montoFacts;
-          sumaUtilidad+=utilOC;
-        }
-      });
-      // Abril 2025 fue el único mes donde no se descontaba IVA — esa
-      // regla empezó a aplicarse recién desde mayo 2025 en adelante.
-      const sinIva=(y===2025&&m===4);
-      const ivaMesV2=sinIva?null:ivaMensual.find(i=>i.mes===m&&i.anio===y); const impPagadoV2=ivaMesV2?Math.max(0,(ivaMesV2.iva_ventas||0)-(ivaMesV2.iva_compras||0)):0;
-      const pagoCalculadoFormula=Math.max(0,Math.round(sumaUtilidad/2 - impPagadoV2/2))+pagoVentasPropias;
-      const pagosDelMes=pagosVendedor.filter(p=>p.vendedor_id===v.id&&p.mes===m&&p.anio===y);
-      const pagado=pagosDelMes.reduce((s,p)=>s+(p.monto_pagado||0),0);
-      // Si el mes ya fue investigado y confirmado (contra la planilla
-      // histórica o contra la cartola real), se usa ese monto verificado
-      // en vez de recalcular en vivo — la fórmula genérica no puede
-      // reconstruir casos como ventas propias sin OC o errores de la
-      // planilla original que ya se investigaron a mano.
-      const verificado=pagosDelMes.find(p=>p.monto_verificado!=null)?.monto_verificado;
-      const esVerificado=verificado!=null;
-      const pagoCalculado=esVerificado?verificado:pagoCalculadoFormula;
-      const estado=pagado>=pagoCalculado?"pagado":"pendiente";
-      return {mes:m,anio:y,label:fmt.monthYear(m,y),sumaFacts,sumaUtilidad,pagoVentasPropias,pagoCalculado,pagado,estado,esVerificado,impIva:impPagadoV2,sinIva,ivaRegistrado:!!ivaMesV2,deuda:Math.max(0,pagoCalculado-pagado)};
-    });
-  };
+  // La regla de comisión vive en lib/calculos.js (una sola para toda la app).
+  const datosVendedor=(v)=>mesesConFactura(v.id,ocs).map(({anio,mes})=>
+    calcularPagoVendedor({vendedorId:v.id,ocs,anio,mes,ivaMensual,pagosVendedor}));
 
   const [verHistorialIva,setVerHistorialIva]=useState(false);
   const ivaOrdenado=useMemo(()=>ivaMensual.slice().sort((a,b)=>`${b.anio}-${String(b.mes).padStart(2,"0")}`.localeCompare(`${a.anio}-${String(a.mes).padStart(2,"0")}`)),[ivaMensual]);

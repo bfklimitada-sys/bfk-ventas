@@ -1,8 +1,7 @@
 import { useState, useMemo } from "react";
 import { DiasBadge, Leyenda } from "../ui/Basicos";
-import { gananciaReal, costoPostventa } from "../../lib/theme";
 import { del } from "../../lib/supabase";
-import { facturaVigente } from "./PanelCompras";
+import { calcularPagoVendedor, costoPostventa, estadoVencimiento, facturaVigente, gananciaReal, plazoPago } from "../../lib/calculos";
 import { C, MONO, SANS, btnP, fmt } from "../../lib/theme";
 import { Ic } from "../ui/Iconos";
 
@@ -149,39 +148,9 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
     }
 
     const deudaFin=financiadores.reduce((s,f)=>s+(Number(f.saldo_deuda)||0),0);
-    const deudaVendedoresMes=vendedores?.reduce((sv,v)=>{
-      const factsMes=ocs.filter(o=>{
-        if(o.vendedor_id!==v.id||o.estado_factura_propia!=="emitida"||o.vendedor_pagado) return false;
-        const evF=facturaVigente(o); if(!evF) return false;
-        // Leer año/mes del texto, no de un Date — evita el corrimiento de
-        // zona horaria que hacía caer facturas del día 1 en el mes anterior.
-        const [ay,am]=String(evF.fecha).slice(0,10).split("-");
-        return Number(am)===mesActual&&Number(ay)===anioActual;
-      });
-      // La comisión es sobre la utilidad del período, no sobre el monto
-      // bruto facturado. Las OC "venta propia" se pagan aparte: 100% de
-      // su utilidad menos el IVA de su propia factura, no el 50% general.
-      let sumaUtilidad=0, pagoVentasPropias=0;
-      factsMes.forEach(o=>{
-        const utilOC=(Number(o.monto_total)||0)-(Number(o.costo_total)||0);
-        if(o.es_venta_propia){
-          const montoFact=facturaVigente(o)?.monto||0;
-          const ivaFactura=montoFact-(montoFact/1.19);
-          pagoVentasPropias+=Math.max(0,Math.round(utilOC-ivaFactura));
-        }else{
-          sumaUtilidad+=utilOC;
-        }
-      });
-      // Abril 2025 fue el único mes sin descuento de IVA (la regla
-      // empezó recién en mayo 2025) — se mantiene por consistencia,
-      // aunque en la práctica esto ya no aplica al mes actual.
-      const sinIvaMes=(mesActual===4&&anioActual===2025);
-      const ivaMes=sinIvaMes?null:ivaMensual.find(i=>i.mes===mesActual&&i.anio===anioActual);
-      const impPagado=ivaMes?(ivaMes.iva_ventas-ivaMes.iva_compras):0;
-      const calculado=Math.round(sumaUtilidad/2 - impPagado/2)+pagoVentasPropias;
-      const pagado=pagosVendedor.filter(p=>p.vendedor_id===v.id&&p.mes===mesActual&&p.anio===anioActual).reduce((s,p)=>s+(p.monto_pagado||0),0);
-      return sv+Math.max(0,calculado-pagado);
-    },0)||0;
+    // Misma regla que el panel Vendedores (lib/calculos.js).
+    const deudaVendedoresMes=vendedores?.reduce((sv,v)=>
+      sv+(calcularPagoVendedor({vendedorId:v.id,ocs,anio:anioActual,mes:mesActual,ivaMensual,pagosVendedor})?.deuda||0),0)||0;
     const ivaMes=ivaMensual.find(i=>i.mes===mesActual&&i.anio===anioActual);
     const f29=ivaMes?Math.max(0,(ivaMes.iva_ventas||0)-(ivaMes.iva_compras||0)):0;
     const deudaContadorMes=0;
@@ -270,7 +239,6 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
 
   // ── Prioridades de hoy (reales, derivadas de las OCs) ──
   const prioridades=useMemo(()=>{
-    const plazo=(o)=>Number(o.dias_pago)>0?Number(o.dias_pago):30;
     const items=[];
 
     // Vale vistas o cheques que el cliente ya entregó, pero que todavía
@@ -299,14 +267,14 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
         color:C.danger,tab:"compras",filtro:null});
     }
 
-    const vencidas=ocsPorCobrar.filter(o=>(o.diasDesde||0)>=plazo(o));
+    const vencidas=ocsPorCobrar.filter(o=>estadoVencimiento(o.diasDesde||0,plazoPago(o)).vencida);
     if(vencidas.length) items.push({
       label:`${vencidas.length} factura${vencidas.length>1?"s":""} vencida${vencidas.length>1?"s":""}`,
       detalle:"Ya se pasó el plazo de pago",
       monto:vencidas.reduce((s,o)=>s+((o.monto_facturado||0)-(o.monto_cobrado||0)),0),
       color:C.danger,tab:"compras",filtro:"cobro"});
 
-    const porVencer=ocsPorCobrar.filter(o=>(o.diasDesde||0)<plazo(o)&&(o.diasDesde||0)>=plazo(o)-5);
+    const porVencer=ocsPorCobrar.filter(o=>estadoVencimiento(o.diasDesde||0,plazoPago(o)).porVencer);
     if(porVencer.length) items.push({
       label:`${porVencer.length} factura${porVencer.length>1?"s":""} por vencer`,
       detalle:"Vencen dentro de 5 días",

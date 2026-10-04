@@ -1,3 +1,4 @@
+import { estadoVencimiento, facturaVigente, plazoPago } from "../../lib/calculos";
 import { useState } from "react";
 import { del } from "../../lib/supabase";
 import { C, MONO, SANS, fmt } from "../../lib/theme";
@@ -94,29 +95,29 @@ export function ComentariosOC({ oc, perfil, onAgregar, onEliminar }) {
 // ═══════════════════════════════════════════════
 export function calcularAlertas(ocs) {
   const alertas = [];
-  const plazoDe = (o) => Number(o.dias_pago) > 0 ? Number(o.dias_pago) : 30;
 
   for (const oc of (ocs || [])) {
     // Aportes de socios y ventas externas no generan alertas de gestión
     if ((oc.tipo_registro || "venta") !== "venta") continue;
-    const evF = (oc.eventos_factura || [])[0];
+    const evF = facturaVigente(oc);
     const dias = evF ? fmt.diasDesde(evF.fecha) : null;
-    const plazo = plazoDe(oc);
+    const plazo = plazoPago(oc);
     const saldo = (oc.monto_facturado || 0) - (oc.monto_cobrado || 0);
 
     // 1. Facturas vencidas o por vencer
     if (evF && oc.estado_pago_cliente !== "pagado" && dias !== null) {
-      if (dias >= plazo + 9) {
+      const venc = estadoVencimiento(dias, plazo);
+      if (venc.reclamar) {
         alertas.push({ ocId:oc.id, nivel:"alto", icono:<Ic n="🔴"/>, oc:oc.numero_oc, cliente:oc.cliente,
           titulo:`Factura ${evF.numero_factura} lleva ${dias} días`,
           detalle:`El plazo era ${plazo} días — corresponde reclamar el pago`,
           monto:saldo, tab:"compras", filtro:"cobro", orden:1 });
-      } else if (dias >= plazo) {
+      } else if (venc.vencida) {
         alertas.push({ ocId:oc.id, nivel:"alto", icono:<Ic n="🟠"/>, oc:oc.numero_oc, cliente:oc.cliente,
           titulo:`Factura ${evF.numero_factura} vencida`,
           detalle:`${dias} días de ${plazo} de plazo`,
           monto:saldo, tab:"compras", filtro:"cobro", orden:2 });
-      } else if (dias >= plazo - 5) {
+      } else if (venc.porVencer) {
         alertas.push({ ocId:oc.id, nivel:"medio", icono:<Ic n="🟡"/>, oc:oc.numero_oc, cliente:oc.cliente,
           titulo:`Factura ${evF.numero_factura} vence pronto`,
           detalle:`Quedan ${plazo - dias} día${plazo - dias === 1 ? "" : "s"}`,
