@@ -3,7 +3,7 @@ import { PanelDatos } from "./PanelDatos";
 import { C, btnG, btnP, fmt } from "../../lib/theme";
 import { Ic } from "../ui/Iconos";
 
-export function PanelUsuarios({ perfiles, ocs, onChangeRol, session, showToast, entidadesCatalogo, onImportarEntidades }) {
+export function PanelUsuarios({ perfiles, ocs, onChangeRol, session, showToast, entidadesCatalogo, onImportarEntidades, usoMP, sincronizando, validandoTodo, exportando, onCorregirFechas, onValidarTodo, onExportarTodo }) {
   const [showImport,setShowImport]=useState(false);
   const [importFile,setImportFile]=useState(null);
   const [importMsg,setImportMsg]=useState("");
@@ -69,6 +69,38 @@ export function PanelUsuarios({ perfiles, ocs, onChangeRol, session, showToast, 
           </div>
         );
       })}
+      {/* ── Administración: herramientas que salieron del Panel ── */}
+      <div style={{marginTop:20,background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px"}}>
+        <div style={{fontWeight:800,fontSize:13,color:C.ink,marginBottom:10}}>Mantenimiento de Mercado Público</div>
+        {usoMP&&(
+          <div style={{fontSize:12,color:C.inkMuted,marginBottom:10}}>Consultas de hoy: <b style={{color:C.ink}}>{(usoMP.solicitudes||0).toLocaleString("es-CL")}</b> de 10.000</div>
+        )}
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {onValidarTodo&&(
+            <button onClick={()=>onValidarTodo()} disabled={!!validandoTodo} style={btnG}>
+              {validandoTodo?`Validando ${validandoTodo.hechas} de ${validandoTodo.total}…`:"Validar todas mis OC contra Mercado Público"}
+            </button>
+          )}
+          {onCorregirFechas&&(
+            <button onClick={()=>onCorregirFechas()} disabled={!!sincronizando} style={btnG}>
+              {sincronizando?`Revisando ${sincronizando.hechas} de ${sincronizando.total}…`:"Corregir fechas de todas contra Mercado Público"}
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div style={{marginTop:12,background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px"}}>
+        <div style={{fontWeight:800,fontSize:13,color:C.ink,marginBottom:6}}>Datos y respaldo</div>
+        <div style={{fontSize:12,color:C.inkMuted,marginBottom:10,lineHeight:1.5}}>
+          Se hace un respaldo cifrado de la base de datos todos los días, automáticamente, con una prueba de restauración. El estado se revisa en el repositorio de respaldos (GitHub → Actions).
+        </div>
+        {onExportarTodo&&(
+          <button onClick={()=>onExportarTodo()} disabled={!!exportando} style={btnG}>
+            {exportando?"Armando el Excel…":"Exportar todo a Excel"}
+          </button>
+        )}
+      </div>
+
       <PanelDatos session={session} showToast={showToast} />
 
       <div style={{marginTop:20}}>
