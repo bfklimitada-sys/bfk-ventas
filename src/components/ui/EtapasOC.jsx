@@ -179,23 +179,7 @@ export function EtapasOC({ oc, perfil, perfiles, onEditarEvento, onEliminarFactu
               {ev.fecha_entrega_estimada&&<div style={{fontSize:12,color:C.inkMuted}}>Entrega est.: {fmt.date(ev.fecha_entrega_estimada)}</div>}
               {ev.proveedor&&<div style={{fontSize:12,color:C.inkMuted}}>Proveedor: {ev.proveedor}</div>}
               <div style={{fontSize:12,color:C.inkMuted}}>Financiador: <b>{oc.financiadores?.nombre||"—"}</b> · Vendedor: <b>{oc.vendedores?.nombre||"—"}</b></div>
-              {/* Links de productos dentro de Compra */}
-              <div style={{marginTop:8,borderTop:`1px solid ${C.border}`,paddingTop:8}}>
-                <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:6}}><Ic n="🔗"/> Productos</div>
-                {(oc.oc_productos_link||[]).sort((a,b)=>a.orden-b.orden).map((l,li)=>(
-                  <div key={l.id} style={{display:"flex",alignItems:"center",gap:6,marginBottom:4,background:C.card,borderRadius:7,padding:"6px 8px"}}>
-                    <span style={{fontSize:12,color:C.inkMuted,fontWeight:700,minWidth:14}}>{li+1}</span>
-                    <div style={{flex:1,minWidth:0}}>
-                      <div style={{fontSize:12,fontWeight:600,color:C.ink}}>{l.descripcion}</div>
-                      {l.url&&l.url!=="sin-link"&&<a href={l.url} target="_blank" rel="noopener noreferrer" style={{fontSize:12,color:C.teal,textDecoration:"none"}}>{l.url.length>40?l.url.slice(0,40)+"…":l.url}</a>}
-                    </div>
-                    {l.url&&l.url!=="sin-link"&&<button onClick={()=>window.open(l.url,'_blank')} style={{background:C.tealLight,border:"none",borderRadius:5,padding:"3px 6px",fontSize:12,color:C.teal,cursor:"pointer",flexShrink:0}}>↗</button>}
-                    <button onClick={()=>{const nd=prompt("Nueva descripción:",l.descripcion);if(nd)onEditarLink&&onEditarLink(l.id,{descripcion:nd,url:l.url});}} style={{background:"none",border:"none",fontSize:12,cursor:"pointer",flexShrink:0}}><Ic n="✏️"/></button>
-                    <button onClick={async()=>{if(window.confirm("¿Eliminar este link?"))await onEliminarLink&&onEliminarLink(l.id);}} style={{background:"none",border:"none",fontSize:12,color:C.danger,cursor:"pointer",flexShrink:0}}>✕</button>
-                  </div>
-                ))}
-                <MiniFormLink ocId={oc.id} onGuardar={onGuardarLink} orden={(oc.oc_productos_link||[]).length} />
-              </div>
+              <div style={{fontSize:12,color:C.inkFaint,marginTop:6}}>Los productos y links se gestionan en «Detalle de la OC».</div>
             </>}
             {etapa.key==="entrega"&&<>
               <div style={{fontSize:12.5,fontWeight:600}}><Ic n="✅"/> Entregado el {fmt.date(ev.fecha)||"—"}</div>
@@ -315,22 +299,6 @@ export function EtapasOC({ oc, perfil, perfiles, onEditarEvento, onEliminarFactu
       {(oc.eventos_postventa||[]).some(e=>e.estado!=="resuelto")&&(
         <div style={{fontSize:12,color:C.warn,textAlign:"right",fontWeight:700}}><Ic n="🛠"/> post-venta abierta</div>
       )}
-    </div>
-  );
-}
-
-export function MiniFormLink({ ocId, onGuardar, orden }) {
-  const [show,setShow]=useState(false);
-  const [desc,setDesc]=useState(""); const [url,setUrl]=useState(""); const [saving,setSaving]=useState(false);
-  if(!show) return <button onClick={()=>setShow(true)} style={{fontSize:12,background:"none",border:`1px dashed ${C.border}`,borderRadius:6,padding:"4px 10px",color:C.teal,cursor:"pointer",width:"100%",marginTop:4}}>+ Agregar producto</button>;
-  return (
-    <div style={{background:C.tealLight,borderRadius:7,padding:"8px 10px",marginTop:4}}>
-      <input style={{...iStyle,marginBottom:6}} value={desc} onChange={e=>setDesc(e.target.value)} placeholder="Descripción del producto" />
-      <input style={{...iStyle,marginBottom:6}} value={url} onChange={e=>setUrl(e.target.value)} placeholder="https://... (opcional)" />
-      <div style={{display:"flex",gap:6}}>
-        <button onClick={async()=>{if(!desc.trim())return;setSaving(true);await onGuardar(ocId,{descripcion:desc.trim(),url:url.trim()||"sin-link",orden});setDesc("");setUrl("");setShow(false);setSaving(false);}} disabled={saving} style={btnP(C.teal)}>{saving?"…":"✓"}</button>
-        <button onClick={()=>{setShow(false);setDesc("");setUrl("");}} style={btnP(C.inkFaint)}>✕</button>
-      </div>
     </div>
   );
 }

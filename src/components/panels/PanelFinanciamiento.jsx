@@ -52,7 +52,7 @@ function FormAporte({ aporte, socios, onSave, onEliminar }) {
   );
 }
 
-export function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onAjustar, aportes, onGuardarAporte, onEliminarAporte, onAbonar }) {
+export function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onAjustar, aportes, onGuardarAporte, onEliminarAporte, onAbonar, pagoFinSueltos }) {
   const [nuevoAporte,setNuevoAporte]=useState(false);
   const [editAporte,setEditAporte]=useState(null);
   const [selFin,setSelFin]=useState(null);
@@ -70,10 +70,13 @@ export function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onA
     const pagos=(ocs||[]).flatMap(o=>(o.eventos_pago_financiamiento||[]).filter(e=>{
       return e.financiador_id===finId;
     }).map(e=>({tipo:"pago",fecha:e.fecha,oc:o.numero_oc||"—",monto:-(e.monto||0),categoria:"Pago",creadoEn:e.creadoEn,creadoPor:e.creado_por})));
+    // Pagos a financiadores que no están ligados a una OC (oc_id vacío).
+    const sueltos=(pagoFinSueltos||[]).filter(e=>e.financiador_id===finId).map(e=>({
+      tipo:"pago",fecha:e.fecha,oc:"—",monto:-(e.monto||0),categoria:"Pago",detalle:"Pago sin OC asignada",sinOC:true,creadoEn:e.creadoEn,creadoPor:e.creado_por}));
     const ajustesF=(ajustes||[]).filter(a=>a.financiador_id===finId).map(a=>({
       tipo:"ajuste",fecha:a.fecha,oc:"—",monto:a.monto_ajuste||0,categoria:"Otro",detalle:a.motivo,creadoEn:a.creadoEn,creadoPor:a.creado_por,
     }));
-    return [...compras,...pagos,...ajustesF].sort((a,b)=>b.fecha>a.fecha?1:-1);
+    return [...compras,...pagos,...sueltos,...ajustesF].sort((a,b)=>b.fecha>a.fecha?1:-1);
   };
 
   if(selFin) {
@@ -138,7 +141,7 @@ export function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onA
                     <tr key={i} style={{borderTop:`1px solid ${C.border}`,background:i%2?C.card:"transparent"}}>
                       <td style={{padding:"7px 10px",color:C.inkMuted,whiteSpace:"nowrap"}}>{fmt.date(m.fecha)}</td>
                       <td style={{padding:"7px 10px",color:C.ink,fontWeight:700}}>{m.categoria}</td>
-                      <td style={{padding:"7px 10px",color:C.inkMuted}}>{m.oc!=="—"?m.oc:(m.detalle||"—")}</td>
+                      <td style={{padding:"7px 10px",color:C.inkMuted}}>{m.oc!=="—"?m.oc:(m.detalle||"—")}{m.sinOC&&<span style={{marginLeft:6,background:C.warnLight,color:C.warn,borderRadius:10,padding:"1px 7px",fontSize:12,fontWeight:700,whiteSpace:"nowrap"}}>Sin OC</span>}</td>
                       <td style={{padding:"7px 10px",color:C.inkFaint,whiteSpace:"nowrap"}}>{nombreQuien}</td>
                       <td style={{padding:"7px 10px",textAlign:"right",fontFamily:MONO,fontWeight:800,whiteSpace:"nowrap",color:m.monto>=0?C.danger:C.ok}}>
                         {m.monto>=0?"+":""}{fmt.money(m.monto)}
