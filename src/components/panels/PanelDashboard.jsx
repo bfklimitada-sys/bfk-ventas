@@ -534,6 +534,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
                           <span style={{fontFamily:MONO,fontSize:12,fontWeight:700,color:C.ink,display:"block"}}>{o.numero_oc}</span>
                           <span style={{fontSize:10.5,color:C.inkFaint,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"block"}}>{o.cliente||o.nombre||""}</span>
                         </span>
+                        {esAdmin&&(
                         <button onClick={()=>{
                             if(window.confirm(`¿Eliminar la OC ${o.numero_oc}?\n\nFigura cancelada en Mercado Público. Esta acción no se puede deshacer.`))
                               onEliminarCancelada&&onEliminarCancelada(o.id);
@@ -542,6 +543,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
                             padding:"6px 11px",fontSize:11,fontWeight:700,cursor:"pointer"}}>
                           🗑 Eliminar
                         </button>
+                        )}
                       </div>
                     ))}
                   </AvisoMP>
