@@ -5,6 +5,7 @@ import { FormIngresarCompra } from "./components/forms/FormIngresarCompra";
 import { NuevaOCRapida } from "./components/forms/NuevaOCRapida";
 import { FormCompraRapida } from "./components/forms/FormCompraRapida";
 import { FormAbonoFinanciador, repartirFIFO } from "./components/forms/FormAbonoFinanciador";
+import { registrarPagoFinanciador } from "./lib/pagosFinanciador";
 import { ImportarCartola } from "./components/forms/ImportarCartola";
 import { FormSaldoBanco } from "./components/forms/FormSaldoBanco";
 import { FormConfirmarEntrega, FormEmitirFactura, FormPagoCliente } from "./components/forms/FormulariosRapidos";
@@ -809,30 +810,24 @@ export default function App() {
   const handleEgresosDesdeCartola=async(egresos,infoCartola)=>{
     const t=session.access_token;
     let nFin=0,nVen=0,nGas=0;
+    const repartidoEnLote=new Map();
 
     for(const e of egresos){
       if(e.tipo==="financiador"){
+        // Lo ya repartido dentro de esta misma cartola (el estado de pantalla aún no se recarga)
         const pendientes=ocs
           .filter(o=>o.financiador_id===e.destinoId&&o.estado_pago_financiamiento!=="pagado")
+          .map(o=>({...o,monto_pagado_fin:Number(o.monto_pagado_fin||0)+(repartidoEnLote.get(o.id)||0)}))
           .sort((a,b)=>{
             const fa=(a.eventos_compra||[])[0]?.fecha||a.creadoEn||"";
             const fb=(b.eventos_compra||[])[0]?.fecha||b.creadoEn||"";
             return String(fa).localeCompare(String(fb));
           });
-        const {reparto,sobrante}=repartirFIFO(e.monto,pendientes);
-        for(const r of reparto){
-          await ins("eventos_pago_financiamiento",t,{id:genId("evpf"),financiador_id:e.destinoId,
-            oc_id:r.oc.id,fecha:e.fecha,monto:r.asignado,creado_por:session.user.id});
-          await upd("ordenes_compra_v2",t,r.oc.id,{
-            monto_pagado_fin:Number(r.oc.monto_pagado_fin||0)+r.asignado,
-            estado_pago_financiamiento:r.completa?"pagado":"parcial"});
-        }
-        if(sobrante>0){
-          await ins("eventos_pago_financiamiento",t,{id:genId("evpf"),financiador_id:e.destinoId,
-            oc_id:null,fecha:e.fecha,monto:sobrante,creado_por:session.user.id});
-        }
-        const fin=financiadores.find(f=>f.id===e.destinoId);
-        if(fin) await upd("financiadores",t,fin.id,{saldo_deuda:Math.max(0,Number(fin.saldo_deuda||0)-e.monto)});
+        const {reparto}=repartirFIFO(e.monto,pendientes);
+        // Una sola operación transaccional: pagos, OC, saldo e historial juntos
+        await registrarPagoFinanciador(t,{financiadorId:e.destinoId,fecha:e.fecha,monto:e.monto,origen:"cartola",
+          asignaciones:reparto.map(r=>({ocId:r.oc.id,monto:r.asignado}))});
+        reparto.forEach(r=>repartidoEnLote.set(r.oc.id,(repartidoEnLote.get(r.oc.id)||0)+r.asignado));
         nFin++;
       }
 
@@ -865,34 +860,9 @@ export default function App() {
   // ─── ABONO A FINANCIADOR con reparto FIFO ────────────────────
   const handleAbonoFinanciador=async({financiadorId,fecha,referencia,montoTotal,sobrante,asignaciones})=>{
     const t=session.access_token;
-    const fin=financiadores.find(f=>f.id===financiadorId);
-
-    for(const a of asignaciones){
-      const oc=ocs.find(o=>o.id===a.ocId);
-      await ins("eventos_pago_financiamiento",t,{id:genId("evpf"),financiador_id:financiadorId,
-        oc_id:a.ocId,fecha,monto:a.monto,creado_por:session.user.id});
-
-      const pagadoAntes=Number(oc?.monto_pagado_fin||0);
-      const nuevoPagado=pagadoAntes+a.monto;
-      await upd("ordenes_compra_v2",t,a.ocId,{
-        monto_pagado_fin:nuevoPagado,
-        estado_pago_financiamiento:a.completa?"pagado":"parcial",
-      });
-
-      await registrarCambio(t,{ocId:a.ocId,ocNumero:a.numeroOc,usuarioId:perfil?.id,
-        usuarioNombre:perfil?.nombre,
-        accion:a.completa?`Financiamiento saldado (abono a ${fin?.nombre||""})`
-                         :`Abono parcial de financiamiento (${fmt.money(a.monto)})`,
-        campo:"monto_pagado_fin",valorAnterior:pagadoAntes,valorNuevo:nuevoPagado});
-    }
-
-    // Si el abono supera lo adeudado, el resto queda sin OC asociada
-    if(sobrante>0){
-      await ins("eventos_pago_financiamiento",t,{id:genId("evpf"),financiador_id:financiadorId,
-        oc_id:null,fecha,monto:sobrante,creado_por:session.user.id});
-    }
-
-    if(fin) await upd("financiadores",t,fin.id,{saldo_deuda:Math.max(0,Number(fin.saldo_deuda||0)-montoTotal)});
+    // Una sola operación transaccional (si algo falla, no se guarda nada). El resto sin OC lo calcula la base.
+    await registrarPagoFinanciador(t,{financiadorId,fecha,monto:montoTotal,origen:"abono",
+      asignaciones:asignaciones.map(a=>({ocId:a.ocId,monto:a.monto}))});
 
     const completas=asignaciones.filter(a=>a.completa).length;
     showToast(`Abono de ${fmt.money(montoTotal)} · ${completas} OC${completas!==1?"s":""} saldada${completas!==1?"s":""}`);
@@ -1015,12 +985,14 @@ export default function App() {
   };
   const handlePagoFin=async(data)=>{
     const t=session.access_token; const oc=data.ocId?ocs.find(o=>o.id===data.ocId):null;
-    await ins("eventos_pago_financiamiento",t,{id:genId("evpf"),financiador_id:data.financiadorId,oc_id:data.ocId,fecha:data.fecha,monto:data.monto,creado_por:session.user.id});
-    const fin=financiadores.find(f=>f.id===data.financiadorId);
-    if(fin) await upd("financiadores",t,fin.id,{saldo_deuda:Math.max(0,Number(fin.saldo_deuda)-data.monto)});
-    if(data.ocId) await upd("ordenes_compra_v2",t,data.ocId,{estado_pago_financiamiento:"pagado"});
-    await registrarCambio(t,{ocId:data.ocId||null,ocNumero:oc?.numero_oc||null,usuarioId:perfil?.id,
-      usuarioNombre:perfil?.nombre,accion:"Pago a financiador registrado",campo:"financiamiento",valorNuevo:`${fin?.nombre||""} · ${fmt.money(data.monto)}`});
+    // Lo que cubre la OC se le asigna; si el pago es mayor, el resto queda como pago sin OC.
+    let asignaciones=[];
+    if(oc){
+      const debe=Math.max(0,(Number(oc.costo_total)||0)-(Number(oc.monto_pagado_fin)||0));
+      const asig=Math.min(data.monto,debe);
+      if(asig>0) asignaciones=[{ocId:oc.id,monto:asig}];
+    }
+    await registrarPagoFinanciador(t,{financiadorId:data.financiadorId,fecha:data.fecha,monto:data.monto,origen:"pago_oc",asignaciones});
     showToast("Pago a financiador registrado"); setAccion(null); await cargarTodo();
   };
   const handleAjusteSaldo=async({financiadorId,fecha,montoAjuste,motivo})=>{
