@@ -1,9 +1,10 @@
 import { useState, useMemo } from "react";
-import { DiasBadge, Leyenda } from "../ui/Basicos";
+import { DiasBadge } from "../ui/Basicos";
 import { del } from "../../lib/supabase";
 import { calcularPagoVendedor, costoPostventa, estadoVencimiento, facturaVigente, gananciaReal, plazoPago } from "../../lib/calculos";
 import { C, MONO, SANS, btnP, fmt } from "../../lib/theme";
 import { Ic } from "../ui/Iconos";
+import { coincideBusqueda } from "../../lib/busqueda";
 import { Seccion, Tarjeta, Badge, Monto, Enlace } from "../ui/Sistema";
 
 // Tarjeta base para los avisos ligados a Mercado Público: encabezado con
@@ -54,7 +55,8 @@ function VerMasAvisoMP({n}){
   return <div style={{fontSize:12,color:C.inkFaint,marginTop:6,textAlign:"center"}}>y {n} más</div>;
 }
 
-export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, aportes: aportesLista, perfil, onExportarTodo, exportando, onNavigate, onAccion, onSincronizar, onCorregirFechas, sincronizando, porAceptar, onActualizarPorAceptar, verificandoPorAceptar, aceptadasSinCargar, onCargarOC, onCargarTodasAceptadas, cargandoAceptadas, onActualizarAceptadas, verificandoAceptadas, canceladasEnMP, onEliminarCancelada, onActualizarCanceladas, verificandoCanceladas, onValidarTodo, validandoTodo, usoMP, actMP, esCodigoMP, ultimaCartola, saldoBanco, bancoMensual, onEditarSaldo }) {
+export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, aportes: aportesLista, perfil, onExportarTodo, exportando, onNavigate, onAccion, onSincronizar, onCorregirFechas, sincronizando, porAceptar, onActualizarPorAceptar, verificandoPorAceptar, aceptadasSinCargar, onCargarOC, onCargarTodasAceptadas, cargandoAceptadas, onActualizarAceptadas, verificandoAceptadas, canceladasEnMP, onEliminarCancelada, onActualizarCanceladas, verificandoCanceladas, onValidarTodo, validandoTodo, usoMP, actMP, esCodigoMP, ultimaCartola, saldoBanco, bancoMensual, onEditarSaldo, onBuscarCompras }) {
+  const [busq,setBusq]=useState("");
   const esAdmin=perfil?.rol==="admin";
   const [verMP,setVerMP]=useState(false);
 
@@ -260,7 +262,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
       label:`${vencidas.length} factura${vencidas.length>1?"s":""} vencida${vencidas.length>1?"s":""}`,
       detalle:"Ya se pasó el plazo de pago",
       monto:vencidas.reduce((s,o)=>s+((o.monto_facturado||0)-(o.monto_cobrado||0)),0),
-      color:C.dangerText,tab:"compras",filtro:"cobro"});
+      color:C.dangerText,tab:"compras",filtro:"vencidas"});
 
     const porVencer=ocsPorCobrar.filter(o=>estadoVencimiento(o.diasDesde||0,plazoPago(o)).porVencer);
     if(porVencer.length) items.push({
@@ -298,6 +300,24 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
 
   return (
     <div style={{fontFamily:SANS}}>
+      <div style={{marginBottom:14}}>
+        <input type="search" value={busq} onChange={e=>setBusq(e.target.value)} placeholder="🔍 Buscar OC, cliente, factura o monto"
+          onKeyDown={e=>{if(e.key==="Enter"&&busq.trim()&&onBuscarCompras)onBuscarCompras(busq.trim());}}
+          style={{width:"100%",boxSizing:"border-box",minHeight:46,padding:"10px 14px",fontSize:16,fontFamily:SANS,border:`1px solid ${C.border}`,borderRadius:12,background:C.surface||"#fff",color:C.ink}} />
+        {busq.trim().length>=2&&(()=>{
+          const r=(ocs||[]).filter(o=>coincideBusqueda(o,busq));
+          return (<Tarjeta padding="4px" style={{marginTop:6}}>
+            {r.length===0&&<div style={{padding:"12px",fontSize:13,color:C.inkMuted}}>Sin resultados</div>}
+            {r.slice(0,5).map(o=>(
+              <button key={o.id} onClick={()=>onNavigate&&onNavigate("compras",null,o.id)}
+                style={{width:"100%",display:"block",minHeight:48,padding:"8px 10px",background:"none",border:"none",borderBottom:`1px solid ${C.border}`,textAlign:"left",cursor:"pointer",fontFamily:SANS}}>
+                <span style={{fontSize:14,fontWeight:700,color:C.ink,display:"block"}}>{o.numero_oc}</span>
+                <span style={{fontSize:12,color:C.inkMuted}}>{o.cliente||o.entidad||""}</span>
+              </button>))}
+            {r.length>0&&onBuscarCompras&&<button onClick={()=>onBuscarCompras(busq.trim())} style={{width:"100%",minHeight:44,background:"none",border:"none",color:C.accent||C.ink,fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:SANS}}>Ver {r.length>5?`los ${r.length} resultados`:"en Compras"} →</button>}
+          </Tarjeta>);
+        })()}
+      </div>
       <Seccion titulo="Prioridades de hoy" nota={prioridades.length>0?"Toca una para ver esas órdenes":undefined} margen={18}>
       {/* ── Prioridades de hoy: tareas accionables ── */}
       <Tarjeta padding="4px 4px 4px 4px">
@@ -321,14 +341,14 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
       </Tarjeta>
       </Seccion>
 
-      <Seccion titulo="Registrar" nota="Pasos 1 a 4 de una OC ya creada. Banco es aparte: concilia la cartola." margen={18}>
+      <Seccion titulo="Registrar" nota="Pasos 1 a 4 de una OC ya creada. Cartola es aparte: concilia los movimientos del banco." margen={18}>
       <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:6}}>
         {[
           {key:"compra",      icon:<Ic n="📦"/>, label:"Compra",  color:C.transit, paso:1},
           {key:"entrega",     icon:<Ic n="🚚"/>, label:"Entrega", color:C.info,    paso:2},
           {key:"factura",     icon:<Ic n="🧾"/>, label:"Factura", color:C.purple,  paso:3},
           {key:"pago_cliente",icon:<Ic n="💰"/>, label:"Pago",    color:C.okText,      paso:4},
-          {key:"cartola",     icon:<Ic n="🏦"/>, label:"Banco",   color:C.info,    paso:null},
+          {key:"cartola",     icon:<Ic n="🏦"/>, label:"Cartola", color:C.info,    paso:null},
         ].map(a=>(
           <button key={a.key} onClick={()=>onAccion&&onAccion(a.key)}
             style={{position:"relative",background:C.card,
@@ -354,28 +374,33 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
         <div style={{fontFamily:MONO,fontWeight:800,fontSize:34,color:kpis.saldoProyectado>=0?"#2DD4BF":"#F87171",letterSpacing:-1,lineHeight:1.1}}>{fmt.money(kpis.saldoProyectado)}</div>
         <div style={{fontSize:12,color:"#CBD5E1",marginTop:6,lineHeight:1.45}}>Cuánto quedaría si se cobra todo lo pendiente y se paga todo lo que se debe</div>
         <div style={{display:"flex",flexDirection:"column",gap:6,marginTop:12,paddingTop:12,borderTop:"1px solid rgba(255,255,255,0.14)"}}>
-          <button onClick={()=>onNavigate&&onNavigate("compras",null)}
-            style={{minHeight:44,background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.18)",
-              borderRadius:10,padding:"8px 12px",color:"#F1F5F9",fontSize:14,fontWeight:600,cursor:"pointer",textAlign:"left",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <span>{kpis.ocsAbiertas} órdenes en curso</span><Ic n="chevR"/>
-          </button>
           <button onClick={onEditarSaldo}
             style={{minHeight:44,background:"rgba(45,212,191,0.14)",border:"1px solid rgba(45,212,191,0.45)",
               borderRadius:10,padding:"8px 12px",color:"#5EEAD4",fontSize:14,fontWeight:700,cursor:"pointer",textAlign:"left",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <span>{kpis.saldoReal!==null?"Actualizar saldo del banco":"Registrar saldo del banco"}</span><Ic n="chevR"/>
+            <span>{kpis.saldoReal!==null?"Actualizar saldo de la cuenta":"Registrar saldo de la cuenta"}</span><Ic n="chevR"/>
           </button>
         </div>
       </div>
 
       </Seccion>
 
-      <Seccion titulo="Compromisos del mes" ocultarSiVacio={!(kpis.deudaVendedoresMes>0||kpis.f29>0)}>
+      <Seccion titulo="Compromisos" ocultarSiVacio={!(kpis.deudaFin>0||kpis.deudaVendedoresMes>0||kpis.f29>0)}>
       {/* Deuda a terceros — el detalle vive en Vendedores y Financiamiento */}
-      {(kpis.deudaVendedoresMes>0||kpis.f29>0)&&(
+      {(kpis.deudaFin>0||kpis.deudaVendedoresMes>0||kpis.f29>0)&&(
         <Tarjeta padding="4px 14px">
+          {kpis.deudaFin>0&&(
+            <button onClick={()=>onNavigate&&onNavigate("financiamiento",null)}
+              style={{width:"100%",background:"none",border:"none",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",minHeight:52,textAlign:"left"}}>
+              <span style={{fontSize:14,color:C.ink,fontWeight:600}}>Deuda con financiadores</span>
+              <span style={{display:"flex",alignItems:"center",gap:4}}>
+                <Monto tam="sm" tono="danger">{fmt.money(kpis.deudaFin)}</Monto>
+                <Ic n="chevR"/>
+              </span>
+            </button>
+          )}
           {kpis.deudaVendedoresMes>0&&(
             <button onClick={()=>onNavigate&&onNavigate("vendedores",null)}
-              style={{width:"100%",background:"none",border:"none",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",minHeight:52,textAlign:"left"}}>
+              style={{width:"100%",background:"none",border:"none",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",minHeight:52,textAlign:"left",borderTop:kpis.deudaFin>0?`1px solid ${C.border}`:"none"}}>
               <span style={{fontSize:14,color:C.ink,fontWeight:600}}>Comisiones a vendedores</span>
               <span style={{display:"flex",alignItems:"center",gap:4}}>
                 <Monto tam="sm" tono="warn">{fmt.money(kpis.deudaVendedoresMes)}</Monto>
@@ -384,7 +409,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
             </button>
           )}
           {kpis.f29>0&&(
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",minHeight:52,borderTop:kpis.deudaVendedoresMes>0?`1px solid ${C.border}`:"none"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",minHeight:52,borderTop:(kpis.deudaFin>0||kpis.deudaVendedoresMes>0)?`1px solid ${C.border}`:"none"}}>
               <span style={{fontSize:14,color:C.ink,fontWeight:600}}>Impuesto F29 proyectado</span>
               <Monto tam="sm" tono="warn">{fmt.money(kpis.f29)}</Monto>
             </div>
@@ -607,13 +632,6 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
 
       </Seccion>
 
-      <Leyenda titulo="¿Qué significan estos números?" items={[
-        {muestra:"Saldo", texto:"Saldo disponible: lo cobrado menos pagos a financiadores, gastos y compras con cuenta BFK."},
-        {muestra:"Proy.", texto:"Proyección total: saldo disponible + ingresos pendientes − deuda total. Es cuánto quedaría si todo se cobra y se paga."},
-        {muestra:"18%", color:C.okText, bg:C.okLight, texto:"Margen del mes: promedio esperado de las OCs compradas este mes. Verde sobre 20%, amarillo 10–20%, rojo bajo 10%."},
-        {muestra:"›", texto:"Las prioridades y los recuadros con flecha te llevan al listado ya filtrado."},
-        {muestra:"—", texto:"La línea gris del gráfico es el mes anterior a la misma altura del mes, para comparar parejo."},
-      ]} />
     </div>
   );
 }

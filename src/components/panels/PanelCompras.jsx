@@ -8,6 +8,7 @@ import { BloqueoBanner, ComentariosOC, HistorialCambiosOC } from "../ui/Multiusu
 import { del } from "../../lib/supabase";
 import { C, MONO, btnG, btnP, fmt, iMono, iStyle, selStyle } from "../../lib/theme";
 import { calcMargen, estadoVencimiento, facturaVigente, gananciaReal, plazoPago } from "../../lib/calculos";
+import { coincideBusqueda } from "../../lib/busqueda";
 import { Ic, I } from "../ui/Iconos";
 
 // Fecha de creación de la OC para mostrar en la lista: si el dato viene
@@ -212,7 +213,7 @@ export function FormEditarEvento({ item, onSave, onCancel }) {
 }
 
 // ─── Detalle completo de la OC, plegable ───────────────────
-function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, onSincronizarFecha }) {
+function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink }) {
   const [abierto,setAbierto]=useState(false);
   const [editando,setEditando]=useState(null);   // id del link en edición
   const [dNom,setDNom]=useState(""); const [dCant,setDCant]=useState("");
@@ -222,7 +223,6 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
   const [repartiendo,setRepartiendo]=useState(false);
   const [montoTotal,setMontoTotal]=useState("");
   const [guardandoReparto,setGuardandoReparto]=useState(false);
-  const [sincronizando,setSincronizando]=useState(false);
   const [copiado,setCopiado]=useState(false);
   const esAdmin=perfil?.rol==="admin";
   const copiarFolio=(folio)=>{
@@ -300,7 +300,7 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
         style={{width:"100%",background:C.card,border:`1px solid ${C.border}`,borderRadius:10,
           padding:"9px 12px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         <span style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4}}>
-          Detalle de la OC{vendidos.length>0&&<span style={{color:C.tealDark}}> · {vendidos.length} producto{vendidos.length>1?"s":""}</span>}
+          Productos y números{vendidos.length>0&&<span style={{color:C.tealDark}}> · {vendidos.length} producto{vendidos.length>1?"s":""}</span>}
         </span>
         <span style={{color:C.inkFaint,fontSize:12}}>{abierto?"▲":"▼"}</span>
       </button>
@@ -308,16 +308,6 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
       {abierto&&(
         <div style={{background:C.card,border:`1px solid ${C.border}`,borderTop:"none",
           borderRadius:"0 0 10px 10px",padding:"10px 12px",marginTop:-1}}>
-
-          {/* Traer la fecha real desde Mercado Público */}
-          {esAdmin&&(
-            <button onClick={async()=>{ setSincronizando(true); await onSincronizarFecha(oc); setSincronizando(false); }}
-              disabled={sincronizando}
-              style={{width:"100%",background:C.infoLight,border:`1px solid ${C.info}44`,color:C.info,
-                borderRadius:9,padding:"8px 12px",fontSize:12,fontWeight:700,cursor:"pointer",marginBottom:12}}>
-              {sincronizando?"Consultando…":"Actualizar fecha y datos desde Mercado Público"}
-            </button>
-          )}
 
           {/* Productos: cantidad y precio separados del nombre */}
           {links.length>0&&(
@@ -679,6 +669,30 @@ function proximaAccionCobranza(oc){
   return {nivel:"critico",texto:"Sin reclamo enviado todavía",boton:<I t={"📧 Enviar primer reclamo"}/>};
 }
 
+// Notas del equipo + historial de cambios en un solo desplegable.
+function NotasEHistorial({ oc, perfil, historialCambios, onAgregarComentario, onEliminarComentario }) {
+  const [abierto,setAbierto]=useState(false);
+  const nNotas=(oc.oc_comentarios||[]).length;
+  const nCambios=(historialCambios||[]).filter(h=>h.oc_id===oc.id).length;
+  return (
+    <div style={{marginBottom:12,background:C.card,borderRadius:10,border:`1px solid ${C.border}`,overflow:"hidden"}}>
+      <button type="button" onClick={()=>setAbierto(v=>!v)} aria-expanded={abierto}
+        style={{width:"100%",background:"none",border:"none",padding:"10px 12px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",textAlign:"left"}}>
+        <span style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4}}>
+          Notas e historial{(nNotas>0||nCambios>0)&&<span style={{color:C.tealDark}}> · {nNotas} nota{nNotas!==1?"s":""} · {nCambios} cambio{nCambios!==1?"s":""}</span>}
+        </span>
+        <span style={{color:C.inkFaint,fontSize:12}}>{abierto?"▲":"▼"}</span>
+      </button>
+      {abierto&&(
+        <div style={{padding:"0 12px 10px"}}>
+          <ComentariosOC plano oc={oc} perfil={perfil} onAgregar={onAgregarComentario} onEliminar={onEliminarComentario} />
+          <HistorialCambiosOC ocId={oc.id} historialCambios={historialCambios} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded, onToggle, contactos, onEnviarReclamo, onRegistrarRespuestaReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, bloqueos, perfil, historialCambios, onAgregarComentario, onEliminarComentario, onBloquear, onLiberar, onEliminarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa }) {
   const evF=facturaVigente(oc);
   const dias=fmt.diasDesde(evF?.fecha);
@@ -689,6 +703,7 @@ export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded
   const [accionRapida,setAccionRapida]=useState(null);
   const [correoFallida,setCorreoFallida]=useState(false);
   const [correoFecha,setCorreoFecha]=useState(false);
+  const [sincronizandoMP,setSincronizandoMP]=useState(false);
   const plazoOC = plazoPago(oc);
   const puedeReclamar = oc.estado_pago_cliente!=="pagado" && evF && dias!==null && dias>=plazoOC;
 
@@ -763,6 +778,23 @@ export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded
     return null;
   })();
 
+  // La etapa que toca (la acción principal de la OC) y lo que vive dentro de Cobro: reclamo, correo y respuestas.
+  const etapaActiva=proxima?({compra:"compra",entrega:"entrega",factura:"factura",pago_cliente:"cobro",pago_financ:"financ"})[proxima.key]:null;
+  const bloqueCobranza=(puedeReclamar||(oc.oc_reclamos||[]).length>0)?(
+    <div style={{marginTop:10}}>
+      {puedeReclamar&&(
+        hrsDesdeReclamo!==null&&hrsDesdeReclamo<24
+          ? <div style={{background:C.okLight,borderRadius:8,padding:"8px 12px",fontSize:12,color:C.okText,fontWeight:600,marginBottom:10}}>
+              <Ic n="✅"/> Reclamada hace {hrsDesdeReclamo}h · {ultimoReclamo.correo}
+            </div>
+          : <button onClick={()=>setReclamando(true)} style={{...btnP(C.danger),marginBottom:10}}>
+              <Ic n="📧"/> Reclamar pago de factura{(oc.oc_reclamos||[]).length>0?` (${(oc.oc_reclamos||[]).length} reclamo${(oc.oc_reclamos||[]).length>1?"s":""} previo${(oc.oc_reclamos||[]).length>1?"s":""})`:""}</button>
+      )}
+      {(oc.oc_reclamos||[]).length>0&&
+        <HistorialReclamos reclamos={oc.oc_reclamos} onRegistrarRespuesta={onRegistrarRespuestaReclamo} />}
+    </div>
+  ):null;
+
   const handleToggle=async()=>{
     if(!expanded && onBloquear) await onBloquear(oc.id);
     if(expanded && onLiberar) await onLiberar(oc.id);
@@ -824,28 +856,23 @@ export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded
         <div style={{borderTop:`1px solid ${C.border}`,padding:"12px 14px",background:C.paper}}>
           {bloqueoActivo&&<BloqueoBanner bloqueo={bloqueoActivo} />}
 
-          {/* Lo primero: la acción que corresponde */}
-          {proxima&&(
-            <button onClick={()=>setAccionRapida(proxima.key)}
-              style={{width:"100%",background:proxima.color,border:"none",color:"#fff",borderRadius:10,
-                padding:"12px",fontSize:13.5,fontWeight:700,cursor:"pointer",marginBottom:12}}>
-              {proxima.label} →
-            </button>
-          )}
-
-          {/* Datos, en una sola línea y sin repetir lo que ya está arriba */}
-          <div style={{fontSize:12,color:C.inkMuted,marginBottom:12,lineHeight:1.6}}>
-            {[oc.entidad,oc.contacto].filter(Boolean).join(" · ")}
-            {(oc.entidad||oc.contacto)&&<br/>}
-            {saldo>0&&oc.monto_facturado>0&&<>Por cobrar <b style={{color:C.dangerText}}>{fmt.money(saldo)}</b> · </>}
-            {(()=>{
-              const f=oc.fecha_emision_mp||(oc.eventos_compra||[])[0]?.fecha||oc.creadoEn;
-              const creador=perfiles?.find(p=>p.id===oc.creado_por)?.nombre;
-              return <>
-                {f&&<>Emitida {fmt.date(String(f).slice(0,10))}</>}
-                {creador&&<> · Creada por {creador}</>}
-              </>;
-            })()}
+          {/* 1 · Encabezado de la OC: datos, dirección y edición */}
+          <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:10,marginBottom:12}}>
+            <div style={{fontSize:12,color:C.inkMuted,lineHeight:1.6,minWidth:0,flex:1}}>
+              {[oc.entidad,oc.contacto].filter(Boolean).join(" · ")}
+              {(oc.entidad||oc.contacto)&&<br/>}
+              {saldo>0&&oc.monto_facturado>0&&<>Por cobrar <b style={{color:C.dangerText}}>{fmt.money(saldo)}</b> · </>}
+              {(()=>{
+                const f=oc.fecha_emision_mp||(oc.eventos_compra||[])[0]?.fecha||oc.creadoEn;
+                const creador=perfiles?.find(p=>p.id===oc.creado_por)?.nombre;
+                return <>
+                  {f&&<>Emitida {fmt.date(String(f).slice(0,10))}</>}
+                  {creador&&<> · Creada por {creador}</>}
+                </>;
+              })()}
+            </div>
+            <button onClick={()=>setEditandoDatos(true)}
+              style={{...btnG,flexShrink:0,fontSize:12,minHeight:36,padding:"6px 10px"}}><Ic n="✏️"/> Editar datos</button>
           </div>
 
           {oc.direccion_entrega&&(
@@ -856,9 +883,11 @@ export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded
             </div>
           )}
 
-          <DetalleOC oc={oc} perfil={perfil} onEditarLink={onEditarLink} onEliminarLink={onEliminarLink} onGuardarLink={onGuardarLink} onSincronizarFecha={onSincronizarFecha} />
-
+          {/* 2 · Ciclo de la OC: la etapa que toca es la acción principal */}
+          <div style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Ciclo de la OC</div>
           <EtapasOC oc={oc} perfil={perfil} perfiles={perfiles}
+            activa={etapaActiva}
+            extra={{cobro:bloqueCobranza}}
             onAsignarResponsable={onAsignarResponsable}
             onEditarEvento={setEditandoEvento}
             onEliminarFactura={onEliminarFactura}
@@ -871,36 +900,29 @@ export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded
             onEditarLink={onEditarLink}
           />
 
-          {puedeReclamar&&(
-            hrsDesdeReclamo!==null&&hrsDesdeReclamo<24
-              ? <div style={{background:C.okLight,borderRadius:8,padding:"8px 12px",fontSize:12,color:C.okText,fontWeight:600,marginBottom:10}}>
-                  <Ic n="✅"/> Reclamada hace {hrsDesdeReclamo}h · {ultimoReclamo.correo}
-                </div>
-              : <button onClick={()=>setReclamando(true)} style={{...btnP(C.danger),marginBottom:10}}>
-                  <Ic n="📧"/> Reclamar pago de factura{(oc.oc_reclamos||[]).length>0?` (${(oc.oc_reclamos||[]).length} reclamo${(oc.oc_reclamos||[]).length>1?"s":""} previo${(oc.oc_reclamos||[]).length>1?"s":""})`:""}</button>
-          )}
+          {/* 3 · Productos y números */}
+          <DetalleOC oc={oc} perfil={perfil} onEditarLink={onEditarLink} onEliminarLink={onEliminarLink} onGuardarLink={onGuardarLink} />
 
-          {(oc.oc_reclamos||[]).length>0&&
-            <HistorialReclamos reclamos={oc.oc_reclamos} onRegistrarRespuesta={onRegistrarRespuestaReclamo} />}
+          {/* 4 · Notas e historial */}
+          <NotasEHistorial oc={oc} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={onAgregarComentario} onEliminarComentario={onEliminarComentario} />
 
-          <ComentariosOC oc={oc} perfil={perfil} onAgregar={onAgregarComentario} onEliminar={onEliminarComentario} />
-          <HistorialCambiosOC ocId={oc.id} historialCambios={historialCambios} />
-
-          <details style={{marginTop:6}}>
-            <summary style={{fontSize:12,color:C.inkFaint,cursor:"pointer",padding:"6px 0",listStyle:"none"}}>⋯ Más acciones</summary>
-            <div style={{display:"flex",gap:6,marginTop:6,flexWrap:"wrap"}}>
-              <button onClick={()=>setEditandoDatos(true)} style={{...btnG,flex:1,fontSize:12}}>Editar datos</button>
-              <button onClick={()=>setCorreoFallida(true)} style={{...btnG,flex:1,fontSize:12}}>Entrega fallida</button>
-              <button onClick={()=>setCorreoFecha(true)} style={{...btnG,flex:1,fontSize:12}}>Fecha entrega</button>
-            </div>
-          </details>
+          {/* 5 · Zona administrativa (solo administradores) */}
           {perfil?.rol==="admin"&&(
-            <button onClick={async()=>{
-              if(window.confirm(`¿Eliminar la OC ${oc.numero_oc}?\n\nEsta acción no se puede deshacer.`))
-                await onEliminarOC(oc.id);
-            }} style={{width:"100%",background:"none",border:`1px solid ${C.danger}`,color:C.dangerText,borderRadius:9,padding:"8px 12px",fontSize:12,fontWeight:600,cursor:"pointer",marginTop:8}}>
-              <Ic n="🗑"/> Eliminar esta OC
-            </button>
+            <div style={{borderTop:`1px dashed ${C.border}`,paddingTop:10,marginTop:4}}>
+              <div style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Zona administrativa</div>
+              <button onClick={async()=>{ setSincronizandoMP(true); await onSincronizarFecha(oc); setSincronizandoMP(false); }}
+                disabled={sincronizandoMP}
+                style={{width:"100%",background:"none",border:`1px dashed ${C.info}`,color:C.info,
+                  borderRadius:9,padding:"8px 12px",fontSize:12,fontWeight:700,cursor:"pointer",marginBottom:8}}>
+                {sincronizandoMP?"Consultando…":"Actualizar fecha y datos desde Mercado Público"}
+              </button>
+              <button onClick={async()=>{
+                if(window.confirm(`¿Eliminar la OC ${oc.numero_oc}?\n\nEsta acción no se puede deshacer.`))
+                  await onEliminarOC(oc.id);
+              }} style={{width:"100%",background:"none",border:`1px dashed ${C.danger}`,color:C.dangerText,borderRadius:9,padding:"8px 12px",fontSize:12,fontWeight:600,cursor:"pointer"}}>
+                <Ic n="🗑"/> Eliminar esta OC
+              </button>
+            </div>
           )}
         </div>
       )}
@@ -967,11 +989,19 @@ export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded
   );
 }
 
-export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, onSincronizarFecha, contactos, onEnviarReclamo, onRegistrarRespuestaReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, bloqueos, perfil, historialCambios, onAgregarComentario, onEliminarComentario, onBloquear, onLiberar, onEliminarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa }) {
+// Factura vencida sin cobrar: misma regla para el banner de Compras y para la prioridad del Panel.
+const esVencidaSinCobrar=(o)=>{
+  if(o.estado_pago_cliente==="pagado") return false;
+  const evF=facturaVigente(o); if(!evF) return false;
+  return estadoVencimiento(fmt.diasDesde(evF.fecha)||0,plazoPago(o)).vencida;
+};
+
+export function PanelCompras({ ocs, perfiles, filtroInicial, busquedaInicial, ocFoco, onSincronizarFecha, contactos, onEnviarReclamo, onRegistrarRespuestaReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, bloqueos, perfil, historialCambios, onAgregarComentario, onEliminarComentario, onBloquear, onLiberar, onEliminarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa }) {
   const [filtros,setFiltros]=useState({}); const [busq,setBusq]=useState(""); const [expId,setExpId]=useState(null);
   const [reclamandoBanner,setReclamandoBanner]=useState(null); const [comunaSel,setComunaSel]=useState("");
   const [bannerAbierto,setBannerAbierto]=useState(false);
   const [vista,setVista]=useState("todas");
+  const [soloVencidas,setSoloVencidas]=useState(filtroInicial==="vencidas");
   const [masFiltros,setMasFiltros]=useState(false);
   const [desde,setDesde]=useState(""); const [hasta,setHasta]=useState("");
   const [orden,setOrden]=useState("fecha");   // fecha | ganancia
@@ -993,33 +1023,29 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, onSincroniz
     if(v==="financ")   return comprada&&!finPagado;
     return true;
   };
-  useEffect(()=>{ setFiltros(filtroInicial?{[filtroInicial]:"pend"}:{}); },[filtroInicial]);
+  useEffect(()=>{
+    // "vencidas" no es una etapa: muestra solo las facturas vencidas sin cobrar (igual que el Panel y el banner).
+    setSoloVencidas(filtroInicial==="vencidas");
+    setFiltros(filtroInicial&&filtroInicial!=="vencidas"?{[filtroInicial]:"pend"}:{});
+  },[filtroInicial]);
+  // Búsqueda traída desde el buscador rápido del Panel
+  useEffect(()=>{ if(busquedaInicial!=null&&busquedaInicial!==""){ setBusq(busquedaInicial); setVista("todas"); setFiltros({}); setSoloVencidas(false); } },[busquedaInicial]);
 
   // Si llegamos desde una alerta, abrimos esa OC y quitamos filtros
   // para que no quede escondida por la vista activa.
   useEffect(()=>{
     if(!ocFoco) return;
     const oc=ocs.find(o=>o.id===ocFoco);
-    setVista("todas"); setFiltros({}); setComunaSel("");
+    setVista("todas"); setFiltros({}); setComunaSel(""); setSoloVencidas(false);
     setBusq(oc?.numero_oc||"");
     setExpId(ocFoco);
   },[ocFoco,ocs]);
   const toggle=(key,val)=>setFiltros(prev=>({...prev,[key]:prev[key]===val?undefined:val}));
   const comunas=useMemo(()=>Array.from(new Set(ocs.map(o=>o.comuna).filter(Boolean))).sort(),[ocs]);
   const filtered=useMemo(()=>ocs.filter(oc=>{
-    if(busq.trim()){
-      const q=busq.toLowerCase();
-      const numFactura=facturaVigente(oc)?.numero_factura;
-      const coincide=
-        oc.numero_oc.toLowerCase().includes(q) ||
-        (oc.cliente||"").toLowerCase().includes(q) ||
-        (oc.comuna||"").toLowerCase().includes(q) ||
-        (oc.entidad||"").toLowerCase().includes(q) ||
-        (oc.rut_cliente||"").toLowerCase().includes(q) ||
-        String(numFactura||"").toLowerCase().includes(q) ||
-        String(oc.monto_facturado||"").includes(q);
-      if(!coincide) return false;
-    }
+    if(busq.trim()&&!coincideBusqueda(oc,busq)) return false;
+    // Mismo criterio que la prioridad del Panel: venta con factura emitida, vencida y sin cobrar.
+    if(soloVencidas&&!((oc.tipo_registro||"venta")==="venta"&&oc.estado_factura_propia==="emitida"&&esVencidaSinCobrar(oc))) return false;
     if(comunaSel&&oc.comuna!==comunaSel) return false;
     if(!cumpleVista(oc,vista)) return false;
     const f=fechaDe(oc);
@@ -1038,14 +1064,9 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, onSincroniz
     const fa=a.fecha_hora_emision_mp||a.fecha_emision_mp||((a.eventos_compra||[])[0]?.fecha)||a.creadoEn||"";
     const fb=b.fecha_hora_emision_mp||b.fecha_emision_mp||((b.eventos_compra||[])[0]?.fecha)||b.creadoEn||"";
     return String(fb).localeCompare(String(fa));
-  }),[ocs,filtros,busq,comunaSel,vista,desde,hasta,orden]);
+  }),[ocs,filtros,busq,comunaSel,vista,desde,hasta,orden,soloVencidas]);
 
-  const alertas=useMemo(()=>ocs.filter(o=>{
-    if(o.estado_pago_cliente==="pagado") return false;
-    const evF=facturaVigente(o); if(!evF) return false;
-    const plazo=plazoPago(o);
-    return estadoVencimiento(fmt.diasDesde(evF.fecha)||0,plazo).vencida;
-  }).sort((a,b)=>{
+  const alertas=useMemo(()=>ocs.filter(esVencidaSinCobrar).sort((a,b)=>{
     const dA=fmt.diasDesde(facturaVigente(a)?.fecha)||0;
     const dB=fmt.diasDesde(facturaVigente(b)?.fecha)||0;
     return dB-dA;
@@ -1127,12 +1148,19 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, onSincroniz
           value={busq} onChange={e=>setBusq(e.target.value)} />
       </div>
 
+      {soloVencidas&&(
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,background:C.dangerLight,border:`1px solid ${C.danger}55`,borderRadius:10,padding:"8px 12px",marginBottom:10}}>
+          <span style={{fontSize:12.5,fontWeight:700,color:C.dangerText}}>Mostrando solo facturas vencidas sin cobrar ({filtered.length})</span>
+          <button onClick={()=>setSoloVencidas(false)} style={{background:"none",border:"none",color:C.dangerText,fontSize:12.5,fontWeight:800,cursor:"pointer",textDecoration:"underline",padding:"4px 2px",minHeight:36}}>Ver todas</button>
+        </div>
+      )}
+
       {/* ── Vista rápida: qué falta hacer. Un toque, una respuesta ── */}
       <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:2,marginBottom:12,WebkitOverflowScrolling:"touch"}}>
         {VISTAS.map(v=>{
           const activa=vista===v.key;
           return (
-            <button key={v.key} onClick={()=>{setVista(v.key);setFiltros({});}}
+            <button key={v.key} onClick={()=>{setVista(v.key);setFiltros({});setSoloVencidas(false);}}
               style={{flexShrink:0,fontSize:12,fontWeight:700,padding:"7px 12px",borderRadius:20,cursor:"pointer",
                 border:`1.5px solid ${activa?v.color:C.border}`,
                 background:activa?v.bg:C.card, color:activa?v.color:C.inkMuted,whiteSpace:"nowrap"}}>

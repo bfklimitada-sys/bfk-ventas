@@ -35,9 +35,10 @@ export function HistorialCambiosOC({ ocId, historialCambios }) {
   );
 }
 
-export function ComentariosOC({ oc, perfil, onAgregar, onEliminar }) {
+export function ComentariosOC({ oc, perfil, onAgregar, onEliminar, plano }) {
   const [texto,setTexto]=useState(""); const [saving,setSaving]=useState(false);
-  const [abierto,setAbierto]=useState(false);
+  const [abiertoPropio,setAbierto]=useState(false);
+  const abierto=plano||abiertoPropio; // plano: sin cabecera propia, siempre visible dentro de "Notas e historial"
   const comentarios=(oc.oc_comentarios||[]).slice().sort((a,b)=>(b.creadoEn||"").localeCompare(a.creadoEn||""));
   const handleAgregar=async()=>{
     if(!texto.trim()) return;
@@ -46,15 +47,17 @@ export function ComentariosOC({ oc, perfil, onAgregar, onEliminar }) {
     setTexto(""); setSaving(false);
   };
   return (
-    <div style={{marginBottom:10,background:C.card,borderRadius:9,overflow:"hidden",border:`1px solid ${C.border}`}}>
-      <div onClick={()=>setAbierto(v=>!v)} style={{padding:"9px 12px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <span style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.5}}>
-          <Ic n="💬"/> Notas del equipo {comentarios.length>0&&<span style={{color:C.tealDark}}>({comentarios.length})</span>}
-        </span>
-        <span style={{color:C.inkFaint,fontSize:12}}>{abierto?"▲":"▼"}</span>
-      </div>
+    <div style={plano?{marginBottom:10}:{marginBottom:10,background:C.card,borderRadius:9,overflow:"hidden",border:`1px solid ${C.border}`}}>
+      {plano
+        ? <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}}><Ic n="💬"/> Notas del equipo {comentarios.length>0&&<span style={{color:C.tealDark}}>({comentarios.length})</span>}</div>
+        : <div onClick={()=>setAbierto(v=>!v)} style={{padding:"9px 12px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <span style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.5}}>
+              <Ic n="💬"/> Notas del equipo {comentarios.length>0&&<span style={{color:C.tealDark}}>({comentarios.length})</span>}
+            </span>
+            <span style={{color:C.inkFaint,fontSize:12}}>{abierto?"▲":"▼"}</span>
+          </div>}
       {abierto&&(
-        <div style={{padding:"0 12px 10px"}}>
+        <div style={plano?{}:{padding:"0 12px 10px"}}>
           {comentarios.map(c=>(
             <div key={c.id} style={{background:C.paper,borderRadius:8,padding:"8px 12px",marginBottom:6}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>

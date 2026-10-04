@@ -9,6 +9,7 @@ import { anioMesDe, calcularPagoVendedor, facturaVigente, mesesConFactura } from
 export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, onGuardarIva, onPagoVendedor }) {
   const [editIva,setEditIva]=useState(false);
   const [pagando,setPagando]=useState(false);
+  const [pagoInicial,setPagoInicial]=useState(null); // {vendedorId,mes,anio,monto} cuando se paga desde la tarjeta
   const [abierto,setAbierto]=useState(null); // id del vendedor desplegado
   const hoy=new Date(); const mesActual=hoy.getMonth()+1; const anioActual=hoy.getFullYear();
   const MESES=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
@@ -23,7 +24,7 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
 
   return (
     <div>
-      <button onClick={()=>setPagando(true)} style={{...btnP(C.tealDark),minHeight:50,fontSize:15,borderRadius:12,boxShadow:"0 4px 12px rgba(13,148,136,0.35)",marginBottom:20}}>+ Pago a vendedor</button>
+      <button onClick={()=>{setPagoInicial(null);setPagando(true);}} style={{...btnP(C.tealDark),minHeight:50,fontSize:15,borderRadius:12,boxShadow:"0 4px 12px rgba(13,148,136,0.35)",marginBottom:20}}>+ Pago a vendedor</button>
       <Seccion titulo="Comisiones por vendedor">
       {vendedores.map(v=>{
         const datos=datosVendedor(v);
@@ -53,6 +54,16 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
               </div>
               <Ic n={estaAbierto?"chevD":"chevR"}/>
             </button>
+
+            {deudaTotal>0&&(()=>{
+              const pend=datos.filter(d=>d.deuda>0); const d=pend[pend.length-1]; // el mes pendiente más antiguo
+              return (
+                <div style={{padding:"0 14px 12px"}}>
+                  <button onClick={()=>{setPagoInicial({vendedorId:v.id,mes:d.mes,anio:d.anio,monto:Math.round(d.deuda)});setPagando(true);}}
+                    style={{...btnP(C.tealDark),minHeight:44,fontSize:14}}>Pagar {d.label} · {fmt.money(d.deuda)}</button>
+                </div>
+              );
+            })()}
 
             {estaAbierto&&meses>0&&(
               <div style={{padding:"0 14px 14px"}}>
@@ -86,6 +97,10 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
                       <span style={{fontSize:12,color:C.inkMuted}}>Ya se le pagó: {fmt.money(d.pagado)}</span>
                       {d.deuda>0&&<span style={{fontSize:12,fontWeight:700,color:C.dangerText}}>Falta pagarle: {fmt.money(d.deuda)}</span>}
                     </div>
+                    {d.deuda>0&&(
+                      <button onClick={()=>{setPagoInicial({vendedorId:v.id,mes:d.mes,anio:d.anio,monto:Math.round(d.deuda)});setPagando(true);}}
+                        style={{...btnG,minHeight:40,fontSize:12.5,marginTop:6,padding:"6px 12px"}}>Pagar este mes · {fmt.money(d.deuda)}</button>
+                    )}
                     {!d.esVerificado&&d.pagado>d.pagoCalculado+1000&&(
                       <div style={{fontSize:12,color:C.warnText,marginTop:3,lineHeight:1.4}}>
                         <Ic n="⚠"/> Se pagó {fmt.money(d.pagado-d.pagoCalculado)} más de lo que calcula la fórmula automática — probablemente venta propia o extra no marcado en el sistema. Revisa la nota del pago para el detalle.
@@ -130,8 +145,8 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
       </Seccion>
 
       {pagando&&(
-        <Modal title="Pago a vendedor" onClose={()=>setPagando(false)}>
-          <FormPagoVendedorSimple vendedores={vendedores} ocs={ocs} onSave={async(d)=>{await onPagoVendedor(d);setPagando(false);}} />
+        <Modal title="Pago a vendedor" onClose={()=>{setPagando(false);setPagoInicial(null);}}>
+          <FormPagoVendedorSimple vendedores={vendedores} ocs={ocs} inicial={pagoInicial} onSave={async(d)=>{await onPagoVendedor(d);setPagando(false);setPagoInicial(null);}} />
         </Modal>
       )}
       {editIva&&(
@@ -174,10 +189,10 @@ export function FormIvaMensual({ ivaExistente, onSave }) {
   );
 }
 
-export function FormPagoVendedorSimple({ vendedores, ocs, onSave }) {
-  const [vendedorId,setVendedorId]=useState(vendedores[0]?.id||"");
-  const [monto,setMonto]=useState(""); const [fecha,setFecha]=useState(new Date().toISOString().slice(0,10));
-  const [mes,setMes]=useState(new Date().getMonth()+1); const [anio,setAnio]=useState(new Date().getFullYear());
+export function FormPagoVendedorSimple({ vendedores, ocs, onSave, inicial }) {
+  const [vendedorId,setVendedorId]=useState(inicial?.vendedorId||vendedores[0]?.id||"");
+  const [monto,setMonto]=useState(inicial?.monto?String(inicial.monto):""); const [fecha,setFecha]=useState(new Date().toISOString().slice(0,10));
+  const [mes,setMes]=useState(inicial?.mes||new Date().getMonth()+1); const [anio,setAnio]=useState(inicial?.anio||new Date().getFullYear());
   const [marcarPagadas,setMarcarPagadas]=useState(true);
   const [err,setErr]=useState(""); const [saving,setSaving]=useState(false);
   const vend=vendedores.find(v=>v.id===vendedorId);

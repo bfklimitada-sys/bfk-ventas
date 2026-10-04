@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Field } from "./Basicos";
 import { del } from "../../lib/supabase";
 import { C, MONO, SANS, btnP, fmt, iMono, iStyle, selStyle } from "../../lib/theme";
@@ -70,8 +70,10 @@ export function FormPostventa({ oc, evento, onSave }) {
   );
 }
 
-export function EtapasOC({ oc, perfil, perfiles, onEditarEvento, onEliminarFactura, onEliminarEvento, onAccion, onCorreoFallida, onCorreoFecha, onGuardarLink, onEliminarLink, onEditarLink, onAsignarResponsable }) {
-  const [detalle,setDetalle]=useState(null);
+export function EtapasOC({ oc, perfil, perfiles, activa, extra, onEditarEvento, onEliminarFactura, onEliminarEvento, onAccion, onCorreoFallida, onCorreoFecha, onGuardarLink, onEliminarLink, onEditarLink, onAsignarResponsable }) {
+  // La etapa que toca queda abierta: es la acción principal de la OC. Al registrar, avanza sola a la siguiente.
+  const [detalle,setDetalle]=useState(activa||null);
+  useEffect(()=>{ setDetalle(activa||null); },[activa]);
 
   const getEventos=(key)=>{
     if(key==="compra") return (oc.eventos_compra||[]);
@@ -108,6 +110,7 @@ export function EtapasOC({ oc, perfil, perfiles, onEditarEvento, onEliminarFactu
       accion: {label:<I t={"🛠 Registrar incidencia"}/>,color:C.warnText,key:"postventa"},
       correoBtns: null },
   ];
+  const esActiva=(e)=>!!activa&&e.key===activa;
   const principales=etapas.filter(e=>e.key!=="postventa");
   const completadas=principales.filter(e=>e.ok).length;
 
@@ -159,8 +162,8 @@ export function EtapasOC({ oc, perfil, perfiles, onEditarEvento, onEliminarFactu
             {/* Botón de acción inmediato cuando no hay registro */}
             {etapa.accion&&(
               <button onClick={()=>{onAccion&&onAccion(etapa.accion.key);}}
-                style={{width:"100%",background:etapa.accion.color,border:"none",color:"#fff",borderRadius:8,padding:"9px 12px",fontSize:12,fontWeight:700,cursor:"pointer"}}>
-                {etapa.accion.label}
+                style={{width:"100%",background:etapa.accion.color,border:"none",color:"#fff",borderRadius:esActiva(etapa)?10:8,padding:esActiva(etapa)?"12px":"9px 12px",fontSize:esActiva(etapa)?13.5:12,fontWeight:700,cursor:"pointer"}}>
+                {etapa.accion.label}{esActiva(etapa)?" →":""}
               </button>
             )}
             {etapa.correoBtns&&etapa.correoBtns.map((b,i)=>(
@@ -179,7 +182,7 @@ export function EtapasOC({ oc, perfil, perfiles, onEditarEvento, onEliminarFactu
               {ev.fecha_entrega_estimada&&<div style={{fontSize:12,color:C.inkMuted}}>Entrega est.: {fmt.date(ev.fecha_entrega_estimada)}</div>}
               {ev.proveedor&&<div style={{fontSize:12,color:C.inkMuted}}>Proveedor: {ev.proveedor}</div>}
               <div style={{fontSize:12,color:C.inkMuted}}>Financiador: <b>{oc.financiadores?.nombre||"—"}</b> · Vendedor: <b>{oc.vendedores?.nombre||"—"}</b></div>
-              <div style={{fontSize:12,color:C.inkFaint,marginTop:6}}>Los productos y links se gestionan en «Detalle de la OC».</div>
+              <div style={{fontSize:12,color:C.inkFaint,marginTop:6}}>Los productos y links se gestionan en «Productos y números».</div>
             </>}
             {etapa.key==="entrega"&&<>
               <div style={{fontSize:12.5,fontWeight:600}}><Ic n="✅"/> Entregado el {fmt.date(ev.fecha)||"—"}</div>
@@ -240,8 +243,8 @@ export function EtapasOC({ oc, perfil, perfiles, onEditarEvento, onEliminarFactu
         {/* Botones cuando SÍ hay eventos (acciones adicionales como re-emitir o correos) */}
         {eventos.length>0&&etapa.accion&&(
           <button onClick={()=>{onAccion&&onAccion(etapa.accion.key);}}
-            style={{width:"100%",background:etapa.accion.color,border:"none",color:"#fff",borderRadius:8,padding:"9px 12px",fontSize:12,fontWeight:700,cursor:"pointer",marginTop:4}}>
-            {etapa.accion.label}
+            style={{width:"100%",background:etapa.accion.color,border:"none",color:"#fff",borderRadius:esActiva(etapa)?10:8,padding:esActiva(etapa)?"12px":"9px 12px",fontSize:esActiva(etapa)?13.5:12,fontWeight:700,cursor:"pointer",marginTop:4}}>
+            {etapa.accion.label}{esActiva(etapa)?" →":""}
           </button>
         )}
         {eventos.length>0&&etapa.correoBtns&&etapa.correoBtns.map((b,i)=>(
@@ -250,6 +253,7 @@ export function EtapasOC({ oc, perfil, perfiles, onEditarEvento, onEliminarFactu
             {b.label}
           </button>
         ))}
+        {extra&&extra[etapa.key]}
         {/* Responsable de la etapa */}
         <div style={{marginTop:10,paddingTop:8,borderTop:`1px solid ${C.border}`}}>
           <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:5}}>Responsable</div>
@@ -277,7 +281,8 @@ export function EtapasOC({ oc, perfil, perfiles, onEditarEvento, onEliminarFactu
                 border:`2px solid ${detalle===e.key?C.teal:e.ok?C.ok:C.border}`,
                 cursor:"pointer",transition:"all 0.2s",padding:0,boxShadow:detalle===e.key?"0 2px 8px rgba(20,184,166,0.3)":"none",
               }}>{e.ok?<span style={{color:"#fff",fontWeight:800,fontSize:13}}>✓</span>:<span style={{fontSize:12,color:C.inkFaint}}>{i+1}</span>}</button>
-              <span style={{fontSize:12,color:detalle===e.key?C.teal:e.ok?C.ok:C.inkFaint,fontWeight:e.ok||detalle===e.key?700:400,textAlign:"center",lineHeight:1.1}}>{e.label}</span>
+              <span style={{fontSize:12,color:detalle===e.key?C.teal:e.ok?C.ok:C.inkFaint,fontWeight:e.ok||detalle===e.key||esActiva(e)?700:400,textAlign:"center",lineHeight:1.1}}>{e.label}</span>
+              {esActiva(e)&&<span style={{fontSize:12,color:C.tealDark,fontWeight:800,lineHeight:1}}>● toca</span>}
             </div>
             {i<etapas.length-1&&(
               <div style={{height:2,flex:0.5,background:etapas[i+1].ok&&e.ok?C.ok:C.border,marginBottom:14,transition:"all 0.2s"}} />

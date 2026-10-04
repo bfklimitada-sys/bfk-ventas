@@ -92,6 +92,7 @@ export function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onA
           <div style={{fontFamily:MONO,fontWeight:800,fontSize:30,color:C.danger,letterSpacing:-1}}>{fmt.money(fin?.saldo_deuda)}</div>
           <div style={{fontSize:12,color:C.inkOnDark,marginTop:4}}>Deuda actual</div>
         </div>
+        <button onClick={()=>onAbonar&&onAbonar(fin?.id)} style={{...btnP(C.teal),marginBottom:8}}><Ic n="💸"/> Abonar a {fin?.nombre}</button>
         <button onClick={()=>setAjustando(fin)} style={{...btnP(C.nightSoft),marginBottom:16}}>Ajustar saldo manualmente</button>
 
         {(()=>{
@@ -174,7 +175,7 @@ export function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onA
 
   return (
     <div>
-      <button onClick={onAbonar} style={{...btnP(C.teal),marginBottom:20}}><Ic n="💸"/> Abonar a un financiador</button>
+      <button onClick={()=>onAbonar&&onAbonar()} style={{...btnP(C.teal),marginBottom:20}}><Ic n="💸"/> Abonar a un financiador</button>
 
       {/* ── 1. Deuda a financiadores ── */}
       <Seccion titulo="Deuda a financiadores" nota="Toca un financiador para ver su cartola de movimientos.">

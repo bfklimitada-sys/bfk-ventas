@@ -18,8 +18,8 @@ export function repartirFIFO(monto, ocsPendientes) {
   return { reparto, sobrante: resto };
 }
 
-export function FormAbonoFinanciador({ ocs, financiadores, onSave }) {
-  const [finId, setFinId] = useState(financiadores[0]?.id || "");
+export function FormAbonoFinanciador({ ocs, financiadores, onSave, financiadorInicial }) {
+  const [finId, setFinId] = useState((financiadorInicial && financiadores.some(f => f.id === financiadorInicial) ? financiadorInicial : financiadores[0]?.id) || "");
   const [monto, setMonto] = useState("");
   const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10));
   const [referencia, setReferencia] = useState("");
