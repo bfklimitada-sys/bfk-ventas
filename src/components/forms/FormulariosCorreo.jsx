@@ -3,6 +3,7 @@ import { Field } from "../ui/Basicos";
 import { del } from "../../lib/supabase";
 import { C, btnP, fmt, iStyle } from "../../lib/theme";
 import { I } from "../ui/Iconos";
+import { abrirCorreo } from "../../lib/correos";
 
 export function FormEntregaFallida({ oc, onEnviar, entidadesCatalogo }) {
   const matchCatalogo=(entidadesCatalogo||[]).find(e=>e.rut===(oc.rut_cliente||"").trim());
@@ -17,8 +18,7 @@ export function FormEntregaFallida({ oc, onEnviar, entidadesCatalogo }) {
   const handleEnviar=async()=>{
     if(!correo.trim()){setErr("Indica el correo del destinatario");return;}
     setErr(""); setSending(true);
-    const url=`mailto:${encodeURIComponent(correo)}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
-    window.location.href=url;
+    abrirCorreo({correo,asunto,cuerpo});
     await onEnviar({correo,ocId:oc.id});
     setSending(false);
   };
@@ -57,8 +57,7 @@ export function FormFechaEntrega({ oc, onEnviar, entidadesCatalogo }) {
     if(!correo.trim()){setErr("Indica el correo del destinatario");return;}
     if(!fechaEntrega){setErr("Indica la fecha estimada de entrega");return;}
     setErr(""); setSending(true);
-    const url=`mailto:${encodeURIComponent(correo)}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
-    window.location.href=url;
+    abrirCorreo({correo,asunto,cuerpo});
     await onEnviar({correo,ocId:oc.id});
     setSending(false);
   };

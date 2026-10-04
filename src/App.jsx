@@ -1,3 +1,4 @@
+import { abrirCorreo } from "./lib/correos.js";
 import { useState, useEffect, useRef } from "react";
 import * as XLSX from "xlsx";
 import { LoginScreen } from "./components/auth/LoginScreen";
@@ -1380,7 +1381,6 @@ export default function App() {
   };
   const handleEnviarReclamo=async({correo,cc,asunto,cuerpo,ocId,rut})=>{
     const ccLimpio=(cc||"").split(",").map(s=>s.trim()).filter(Boolean).join(",");
-    const url=`mailto:${encodeURIComponent(correo)}?${ccLimpio?`cc=${encodeURIComponent(ccLimpio)}&`:""}subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
     const ahora=new Date().toISOString();
     const t=session.access_token;
     const oc=ocs.find(o=>o.id===ocId);
@@ -1395,7 +1395,7 @@ export default function App() {
         usuario_id:session.user.id,usuario_nombre:perfil?.nombre||"",
       });
     } catch {}
-    window.location.href=url;
+    abrirCorreo({correo,cc:ccLimpio,asunto,cuerpo});
     showToast(`Correo abierto para ${correo}`);
     setOcs([]);
     await cargarTodo();
