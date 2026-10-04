@@ -270,7 +270,7 @@ export function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onA
             <Modal title="Editar movimiento" onClose={()=>setEditAporte(null)}>
               <FormAporte aporte={editAporte} socios={socios}
                 onSave={async(d)=>{ await onGuardarAporte(d); setEditAporte(null); }}
-                onEliminar={async(id)=>{ await onEliminarAporte(id); setEditAporte(null); }} />
+                onEliminar={onEliminarAporte?async(id)=>{ await onEliminarAporte(id); setEditAporte(null); }:undefined} />
             </Modal>
           )}
         </>);
