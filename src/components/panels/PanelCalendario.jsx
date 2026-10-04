@@ -5,8 +5,26 @@ import { C, MONO, btnP, fmt, iMono } from "../../lib/theme";
 import { Ic } from "../ui/Iconos";
 import { facturaVigente, plazoPago } from "../../lib/calculos";
 
-export function PanelCalendario({ ocs, onMarcarFecha }) {
+// Resumen compacto de atrasos: una linea; al tocarla se despliega el detalle. No cambia ningun calculo.
+function ResumenAtraso({ titulo, monto, color, fondo, abierto, onToggle, onVerAlertas, children }) {
+  return (
+    <div style={{background:fondo,border:`1px solid ${color}33`,borderRadius:12,marginBottom:8,overflow:"hidden"}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,padding:"0 4px 0 12px",minHeight:44}}>
+        <button onClick={onToggle} aria-expanded={abierto} style={{flex:1,minWidth:0,display:"flex",alignItems:"center",gap:6,background:"none",border:"none",cursor:"pointer",padding:"8px 0",textAlign:"left",color,fontWeight:800,fontSize:12.5}}>
+          <Ic n="⚠"/><span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{titulo}{monto>0?` · ${fmt.money(monto)}`:""}</span>
+          <Ic n={abierto?"chevD":"chevR"}/>
+        </button>
+        {onVerAlertas&&<button onClick={onVerAlertas} style={{background:"none",border:"none",cursor:"pointer",color,fontWeight:800,fontSize:12.5,padding:"10px 8px",whiteSpace:"nowrap"}}>Ver alertas →</button>}
+      </div>
+      {abierto&&<div style={{padding:"0 12px 10px",borderTop:`1px solid ${color}22`}}>{children}</div>}
+    </div>
+  );
+}
+
+export function PanelCalendario({ ocs, onMarcarFecha, onVerAlertas }) {
   const hoy=new Date();
+  const [verEntregas,setVerEntregas]=useState(false);
+  const [verFacturas,setVerFacturas]=useState(false);
   const [anio,setAnio]=useState(hoy.getFullYear());
   const [mes,setMes]=useState(hoy.getMonth());
   const [diaSel,setDiaSel]=useState(null);
@@ -91,28 +109,29 @@ export function PanelCalendario({ ocs, onMarcarFecha }) {
   return (
     <div>
       {vencidas.length>0&&(
-        <div style={{background:C.dangerLight,border:`1px solid ${C.danger}`,borderRadius:12,padding:"10px 12px",marginBottom:12}}>
-          <div style={{fontWeight:800,color:C.danger,fontSize:12,marginBottom:6}}><Ic n="⚠"/> {vencidas.length} entrega{vencidas.length>1?"s":""} atrasada{vencidas.length>1?"s":""}</div>
+        <ResumenAtraso color={C.danger} fondo={C.dangerLight} abierto={verEntregas} onToggle={()=>setVerEntregas(v=>!v)}
+          titulo={`${vencidas.length} entrega${vencidas.length>1?"s":""} atrasada${vencidas.length>1?"s":""}`}>
           {vencidas.map(({oc,fEst})=>(
-            <div key={oc.id} style={{fontSize:12,display:"flex",justifyContent:"space-between",marginBottom:3}}>
+            <div key={oc.id} style={{fontSize:12,display:"flex",justifyContent:"space-between",padding:"4px 0"}}>
               <span style={{fontFamily:MONO,fontWeight:700}}>{oc.numero_oc}</span>
               <span style={{color:C.danger}}>estimada {fmt.date(fEst)}</span>
             </div>
           ))}
-        </div>
+        </ResumenAtraso>
       )}
 
       {facturasVencidas.length>0&&(
-        <div style={{background:C.warnLight,border:`1px solid ${C.warn}`,borderRadius:12,padding:"10px 12px",marginBottom:12}}>
-          <div style={{fontWeight:800,color:C.warn,fontSize:12,marginBottom:6}}><Ic n="⚠"/> {facturasVencidas.length} factura{facturasVencidas.length>1?"s":""} vencida{facturasVencidas.length>1?"s":""} sin cobrar</div>
-          {facturasVencidas.slice(0,8).map(({oc,evF,k})=>(
-            <div key={oc.id} style={{fontSize:12,display:"flex",justifyContent:"space-between",marginBottom:3}}>
+        <ResumenAtraso color={C.warn} fondo={C.warnLight} abierto={verFacturas} onToggle={()=>setVerFacturas(v=>!v)}
+          titulo={`${facturasVencidas.length} factura${facturasVencidas.length>1?"s":""} vencida${facturasVencidas.length>1?"s":""}`}
+          monto={facturasVencidas.reduce((s,x)=>s+(Number(x.evF?.monto)||0),0)} onVerAlertas={onVerAlertas}>
+          {facturasVencidas.slice(0,8).map(({oc,k})=>(
+            <div key={oc.id} style={{fontSize:12,display:"flex",justifyContent:"space-between",padding:"4px 0"}}>
               <span style={{fontFamily:MONO,fontWeight:700}}>{oc.numero_oc}</span>
               <span style={{color:C.warn}}>venció {fmt.date(k)}</span>
             </div>
           ))}
-          {facturasVencidas.length>8&&<div style={{fontSize:12,color:C.inkMuted}}>y {facturasVencidas.length-8} más en Alertas</div>}
-        </div>
+          {facturasVencidas.length>8&&<div style={{fontSize:12,color:C.inkMuted,paddingTop:4}}>y {facturasVencidas.length-8} más en Alertas</div>}
+        </ResumenAtraso>
       )}
 
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>

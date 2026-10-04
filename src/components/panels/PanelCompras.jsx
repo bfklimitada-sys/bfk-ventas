@@ -1123,7 +1123,7 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, onSincroniz
       )}
       {/* ── Buscador ── */}
       <div style={{marginBottom:10}}>
-        <input style={{...iStyle,fontSize:13,padding:"9px 11px"}} placeholder="Buscar OC, cliente, RUT, comuna, N° o monto factura…"
+        <input style={{...iStyle,fontSize:13,padding:"9px 11px"}} placeholder="Buscar OC, cliente, RUT, comuna, factura…"
           value={busq} onChange={e=>setBusq(e.target.value)} />
       </div>
 
