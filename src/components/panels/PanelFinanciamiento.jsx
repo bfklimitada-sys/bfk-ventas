@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Field, Modal, Trazabilidad } from "../ui/Basicos";
 import { C, MONO, btnP, fmt, iMono, iStyle } from "../../lib/theme";
 import { Ic, I } from "../ui/Iconos";
+import { Seccion, Tarjeta, Badge, Monto } from "../ui/Sistema";
 
 function FormAporte({ aporte, socios, onSave, onEliminar }) {
   const [socio,setSocio]=useState(aporte?.socio&&aporte.socio!=="Por asignar"?aporte.socio:"");
@@ -172,92 +173,101 @@ export function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onA
 
   return (
     <div>
-      <button onClick={onAbonar} style={{...btnP(C.purple),marginBottom:12}}><Ic n="💸"/> Abonar a un financiador</button>
-      <div style={{fontSize:12,color:C.inkFaint,marginBottom:12}}>Toca un financiador para ver su cartola de movimientos.</div>
+      <button onClick={onAbonar} style={{...btnP(C.teal),marginBottom:20}}><Ic n="💸"/> Abonar a un financiador</button>
+
+      {/* ── 1. Deuda a financiadores ── */}
+      <Seccion titulo="Deuda a financiadores" nota="Toca un financiador para ver su cartola de movimientos.">
       {(()=>{
         const conDeuda=financiadores.filter(f=>Number(f.saldo_deuda)!==0);
         const enCero=financiadores.filter(f=>Number(f.saldo_deuda)===0);
         return (<>
+      {conDeuda.length===0&&<Tarjeta><span style={{fontSize:14,color:C.ok,fontWeight:700}}>✓ Sin deuda con financiadores</span></Tarjeta>}
       {conDeuda.map(f=>(
-        <button key={f.id} onClick={()=>setSelFin(f.id)} style={{width:"100%",background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:16,marginBottom:10,textAlign:"left",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div>
-            <div style={{fontWeight:800,fontSize:15,color:C.ink}}>{f.nombre}</div>
-            <div style={{fontSize:12,color:C.inkFaint,marginTop:2}}>Toca para ver cartola →</div>
+        <Tarjeta key={f.id} onClick={()=>setSelFin(f.id)} padding="14px 16px">
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
+            <div style={{minWidth:0}}>
+              <div style={{fontWeight:800,fontSize:15,color:C.ink,lineHeight:1.25}}>{f.nombre}</div>
+              <div style={{marginTop:6}}><Badge tono="neutro">Ver cartola <Ic n="chevR"/></Badge></div>
+            </div>
+            <div style={{textAlign:"right",flexShrink:0}}>
+              <div style={{fontSize:12,color:C.inkMuted,marginBottom:2}}>Deuda actual</div>
+              <Monto tam="lg" tono={Number(f.saldo_deuda)>0?"danger":"ok"}>{fmt.money(f.saldo_deuda)}</Monto>
+            </div>
           </div>
-          <div style={{fontFamily:MONO,fontWeight:800,fontSize:20,color:Number(f.saldo_deuda)>0?C.danger:C.ok}}>{fmt.money(f.saldo_deuda)}</div>
-        </button>
+        </Tarjeta>
       ))}
       {enCero.length>0&&(
         <details style={{marginTop:4}}>
-          <summary style={{fontSize:12,color:C.inkFaint,cursor:"pointer",padding:"6px 0",listStyle:"none"}}>
+          <summary style={{fontSize:12,color:C.inkMuted,cursor:"pointer",padding:"10px 2px",listStyle:"none",minHeight:36}}>
             + {enCero.length} financiador{enCero.length>1?"es":""} sin deuda
           </summary>
           {enCero.map(f=>(
-            <button key={f.id} onClick={()=>setSelFin(f.id)} style={{width:"100%",background:C.paper,border:`1px solid ${C.border}`,borderRadius:12,padding:"11px 14px",marginTop:6,textAlign:"left",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <span style={{fontWeight:600,fontSize:13,color:C.inkMuted}}>{f.nombre}</span>
-              <span style={{fontFamily:MONO,fontWeight:700,fontSize:13,color:C.ok}}>{fmt.money(f.saldo_deuda)}</span>
-            </button>
+            <Tarjeta key={f.id} onClick={()=>setSelFin(f.id)} padding="11px 14px" style={{background:C.paper,marginBottom:6}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <span style={{fontWeight:600,fontSize:14,color:C.inkMuted}}>{f.nombre}</span>
+                <Monto tam="sm" tono="ok">{fmt.money(f.saldo_deuda)}</Monto>
+              </div>
+            </Tarjeta>
           ))}
         </details>
       )}
         </>);
       })()}
+      </Seccion>
 
-      {/* ── Aportes de socios ── */}
-      <div style={{marginTop:20}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-          <span style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4}}>Aportes de socios</span>
-          <button onClick={()=>setNuevoAporte(true)} style={{fontSize:12,background:C.okLight,color:C.ok,border:"none",borderRadius:7,padding:"5px 10px",fontWeight:700,cursor:"pointer"}}>+ Registrar</button>
-        </div>
-        <div style={{fontSize:12,color:C.inkFaint,marginBottom:10,lineHeight:1.45}}>
-          Capital que entra o sale de la empresa. Suma a la caja pero no cuenta como venta ni utilidad. Toca un movimiento para editarlo.
-        </div>
-
+      {/* ── 2. Aportes de socios ── */}
+      <Seccion titulo="Aportes de socios"
+        nota="Capital que entra o sale de la empresa. Suma a la caja pero no cuenta como venta ni utilidad."
+        accion={<button onClick={()=>setNuevoAporte(true)} style={{fontSize:13,background:C.okLight,color:"#047857",border:"none",borderRadius:10,minHeight:36,padding:"6px 12px",fontWeight:700,cursor:"pointer"}}>+ Registrar</button>}>
         {(()=>{
           const lista=aportes||[];
-          if(!lista.length) return <div style={{fontSize:12,color:C.inkFaint,padding:"10px 0"}}>Sin aportes registrados</div>;
+          if(!lista.length) return <div style={{fontSize:13,color:C.inkMuted,padding:"6px 2px"}}>Sin aportes registrados</div>;
           const porSocio={};
           for(const a of lista){
             const m=a.tipo==="retiro"?-(Number(a.monto)||0):(Number(a.monto)||0);
             porSocio[a.socio]=(porSocio[a.socio]||0)+m;
           }
           const total=Object.values(porSocio).reduce((s,v)=>s+v,0);
-          return (<>
-            <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 15px",marginBottom:10}}>
+          return (
+            <Tarjeta padding="6px 16px 12px">
               {Object.entries(porSocio).sort((a,b)=>b[1]-a[1]).map(([soc,m])=>(
-                <div key={soc} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:`1px solid ${C.border}`}}>
-                  <span style={{fontSize:12.5,color:soc==="Por asignar"?C.warn:C.ink,fontWeight:600}}>
+                <div key={soc} style={{display:"flex",justifyContent:"space-between",alignItems:"center",minHeight:44,borderBottom:`1px solid ${C.border}`}}>
+                  <span style={{fontSize:14,color:soc==="Por asignar"?"#B45309":C.ink,fontWeight:600}}>
                     {soc==="Por asignar"?<I t={"⚠ Por asignar"}/>:soc}
                   </span>
-                  <span style={{fontFamily:MONO,fontWeight:800,fontSize:12.5,color:m>=0?C.ok:C.danger}}>{fmt.money(m)}</span>
+                  <Monto tam="sm" tono={m>=0?"ok":"danger"}>{fmt.money(m)}</Monto>
                 </div>
               ))}
-              <div style={{display:"flex",justifyContent:"space-between",paddingTop:8,marginTop:4}}>
-                <span style={{fontSize:12.5,fontWeight:800,color:C.ink}}>Total en caja</span>
-                <span style={{fontFamily:MONO,fontWeight:800,fontSize:14,color:C.ok}}>{fmt.money(total)}</span>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingTop:12}}>
+                <span style={{fontSize:14,fontWeight:800,color:C.ink}}>Total en caja</span>
+                <Monto tam="md" tono="ok">{fmt.money(total)}</Monto>
               </div>
-            </div>
-            {lista.map(a=>(
-              <button key={a.id} onClick={()=>setEditAporte(a)}
-                style={{width:"100%",textAlign:"left",background:a.socio==="Por asignar"?C.warnLight:C.paper,
-                  border:a.socio==="Por asignar"?`1px solid ${C.warn}`:"none",
-                  borderRadius:9,padding:"8px 12px",marginBottom:5,cursor:"pointer",
-                  display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
-                <span style={{minWidth:0}}>
-                  <span style={{display:"block",fontSize:12,fontWeight:600,color:C.ink}}>{a.socio}{a.medio?` · ${a.medio}`:""}</span>
-                  <span style={{display:"block",fontSize:12,color:C.inkFaint}}>{fmt.date(String(a.fecha).slice(0,10))}{a.notas?` · ${a.notas.slice(0,50)}`:""}</span>
-                </span>
-                <span style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
-                  <span style={{fontFamily:MONO,fontWeight:800,fontSize:12.5,color:a.tipo==="retiro"?C.danger:C.ok}}>
-                    {a.tipo==="retiro"?"−":"+"}{fmt.money(a.monto)}
-                  </span>
-                  <span style={{fontSize:12,color:C.inkFaint}}>›</span>
-                </span>
-              </button>
-            ))}
-          </>);
+            </Tarjeta>
+          );
         })()}
-      </div>
+      </Seccion>
+
+      {/* ── 3. Movimientos de socios ── */}
+      {(aportes||[]).length>0&&(
+      <Seccion titulo="Movimientos" nota="Toca un movimiento para editarlo.">
+        {(aportes||[]).map(a=>(
+          <button key={a.id} onClick={()=>setEditAporte(a)}
+            style={{width:"100%",textAlign:"left",background:a.socio==="Por asignar"?C.warnLight:C.card,
+              border:`1px solid ${a.socio==="Por asignar"?C.warn:C.border}`,
+              borderRadius:12,padding:"10px 14px",marginBottom:6,cursor:"pointer",minHeight:52,
+              display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+            <span style={{minWidth:0}}>
+              <span style={{display:"block",fontSize:14,fontWeight:600,color:C.ink}}>{a.socio}{a.medio?` · ${a.medio}`:""}</span>
+              <span style={{display:"block",fontSize:12,color:C.inkMuted}}>{fmt.date(String(a.fecha).slice(0,10))}{a.notas?` · ${a.notas.slice(0,50)}`:""}</span>
+            </span>
+            <span style={{display:"flex",alignItems:"center",gap:4,flexShrink:0}}>
+              <Monto tam="sm" tono={a.tipo==="retiro"?"danger":"ok"}>{a.tipo==="retiro"?"−":"+"}{fmt.money(a.monto)}</Monto>
+              <Ic n="chevR"/>
+            </span>
+          </button>
+        ))}
+      </Seccion>
+      )}
 
       {(()=>{
         const socios=Array.from(new Set([

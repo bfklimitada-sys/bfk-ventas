@@ -4,19 +4,7 @@ import { del } from "../../lib/supabase";
 import { calcularPagoVendedor, costoPostventa, estadoVencimiento, facturaVigente, gananciaReal, plazoPago } from "../../lib/calculos";
 import { C, MONO, SANS, btnP, fmt } from "../../lib/theme";
 import { Ic } from "../ui/Iconos";
-
-// Agrupa el contenido bajo un título discreto
-function Seccion({titulo,children,sub,ocultarSiVacio}){
-  if(ocultarSiVacio) return null;
-  return (
-  <div style={{marginBottom:18}}>
-    <div style={{fontSize:12,fontWeight:800,color:C.inkFaint,textTransform:"uppercase",
-      letterSpacing:0.6,marginBottom:8,paddingLeft:2}}>{titulo}</div>
-    {sub&&<div style={{fontSize:12,color:C.inkFaint,marginBottom:8,paddingLeft:2}}>{sub}</div>}
-    {children}
-  </div>
-  );
-}
+import { Seccion, Tarjeta, Badge, Monto, Enlace } from "../ui/Sistema";
 
 // Tarjeta base para los avisos ligados a Mercado Público: encabezado con
 // icono + botón de refresco, y cuerpo blanco para el contenido/lista.
@@ -310,31 +298,31 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
 
   return (
     <div style={{fontFamily:SANS}}>
-      <Seccion titulo="Acciones de hoy">
-      {/* ── Prioridades de hoy ── */}
-      <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px",marginBottom:12}}>
-        <div style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:2}}>Prioridades de hoy</div>
-        <div style={{fontSize:12,color:C.inkFaint,marginBottom:10}}>Toca cualquiera para ver esas órdenes</div>
-        {prioridades.length===0&&<div style={{fontSize:12.5,color:C.inkFaint}}>✓ Sin pendientes urgentes</div>}
+      <Seccion titulo="Prioridades de hoy" nota={prioridades.length>0?"Toca una para ver esas órdenes":undefined} margen={18}>
+      {/* ── Prioridades de hoy: tareas accionables ── */}
+      <Tarjeta padding="4px 4px 4px 4px">
+        {prioridades.length===0&&<div style={{fontSize:14,color:C.ok,fontWeight:700,padding:"14px 12px"}}>✓ Sin pendientes urgentes</div>}
         {prioridades.map((p,i)=>(
           <button key={i} onClick={()=>onNavigate&&onNavigate(p.tab,p.filtro)}
-            style={{width:"100%",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,
-              padding:"9px 0",background:"none",border:"none",cursor:"pointer",textAlign:"left",
+            style={{width:"100%",display:"flex",alignItems:"center",gap:10,minHeight:60,
+              padding:"8px 10px",background:"none",border:"none",cursor:"pointer",textAlign:"left",
               borderBottom:i<prioridades.length-1?`1px solid ${C.border}`:"none"}}>
-            <span style={{minWidth:0}}>
-              <span style={{fontSize:12.5,color:C.ink,fontWeight:600,display:"block"}}>{p.label}</span>
-              {p.detalle&&<span style={{fontSize:12,color:C.inkFaint,display:"block",marginTop:1}}>{p.detalle}</span>}
+            <span style={{width:4,alignSelf:"stretch",borderRadius:4,background:p.color,flexShrink:0,margin:"4px 0"}} />
+            <span style={{minWidth:0,flex:1}}>
+              <span style={{fontSize:14,color:C.ink,fontWeight:700,display:"block",lineHeight:1.3}}>{p.label}</span>
+              {p.detalle&&<span style={{fontSize:12,color:C.inkMuted,display:"block",marginTop:2,lineHeight:1.35}}>{p.detalle}</span>}
             </span>
-            <span style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
-              <span style={{fontSize:12.5,fontWeight:800,color:p.color,fontFamily:MONO}}>{fmt.money(p.monto)}</span>
-              <span style={{fontSize:13,color:C.inkFaint}}>›</span>
+            <span style={{display:"flex",alignItems:"center",gap:4,flexShrink:0}}>
+              <Monto tam="sm" style={{color:p.color}}>{fmt.money(p.monto)}</Monto>
+              <Ic n="chevR"/>
             </span>
           </button>
         ))}
-      </div>
+      </Tarjeta>
+      </Seccion>
 
-
-      <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:6,marginBottom:6}}>
+      <Seccion titulo="Registrar" nota="Pasos 1 a 4 de una OC ya creada. Banco es aparte: concilia la cartola." margen={18}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:6}}>
         {[
           {key:"compra",      icon:<Ic n="📦"/>, label:"Compra",  color:C.transit, paso:1},
           {key:"entrega",     icon:<Ic n="🚚"/>, label:"Entrega", color:C.info,    paso:2},
@@ -357,28 +345,24 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
           </button>
         ))}
       </div>
-      <div style={{fontSize:12,color:C.inkFaint,textAlign:"center",marginBottom:14}}>
-        Pasos ① a ④ de una OC ya creada — "Banco" es aparte, para conciliar la cartola
-      </div>
       </Seccion>
 
       <Seccion titulo="Caja">
       {/* ── Saldo Proyectado: solo lo esencial ── */}
-      <div style={{background:`linear-gradient(135deg,${C.night},${C.nightSoft})`,borderRadius:16,padding:"18px 20px",marginBottom:12}}>
-        <div style={{fontSize:12,color:C.inkFaint,fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:0.5}}>Saldo Proyectado</div>
-        <div style={{fontFamily:MONO,fontWeight:800,fontSize:28,color:kpis.saldoProyectado>=0?C.teal:C.danger,letterSpacing:-1}}>{fmt.money(kpis.saldoProyectado)}</div>
-        <div style={{fontSize:12,color:C.inkFaint,marginTop:4}}>Cuánto quedaría si se cobra todo lo pendiente y se paga todo lo que se debe</div>
-
-        <button onClick={()=>onNavigate&&onNavigate("compras",null)}
-          style={{marginTop:14,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.12)",
-            borderRadius:9,padding:"7px 12px",color:"#B8C4D9",fontSize:12,fontWeight:600,cursor:"pointer",width:"100%"}}>
-          {kpis.ocsAbiertas} órdenes en curso ›
-        </button>
-
-        <div style={{fontSize:12,color:C.inkFaint,marginTop:10,paddingTop:9,borderTop:"1px solid rgba(255,255,255,0.08)",lineHeight:1.6}}>
+      <div style={{background:`linear-gradient(135deg,${C.night},${C.nightSoft})`,borderRadius:16,padding:"16px 18px",marginBottom:8}}>
+        <div style={{fontSize:12,color:"#94A3B8",fontWeight:700,marginBottom:4,textTransform:"uppercase",letterSpacing:0.5}}>Saldo proyectado</div>
+        <div style={{fontFamily:MONO,fontWeight:800,fontSize:30,color:kpis.saldoProyectado>=0?C.teal:C.danger,letterSpacing:-1,lineHeight:1.1}}>{fmt.money(kpis.saldoProyectado)}</div>
+        <div style={{fontSize:12,color:"#94A3B8",marginTop:6,lineHeight:1.45}}>Cuánto quedaría si se cobra todo lo pendiente y se paga todo lo que se debe</div>
+        <div style={{display:"flex",gap:8,marginTop:12,paddingTop:10,borderTop:"1px solid rgba(255,255,255,0.1)"}}>
+          <button onClick={()=>onNavigate&&onNavigate("compras",null)}
+            style={{flex:1,minHeight:44,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.12)",
+              borderRadius:10,padding:"8px 10px",color:"#CBD5E1",fontSize:13,fontWeight:600,cursor:"pointer"}}>
+            {kpis.ocsAbiertas} órdenes en curso ›
+          </button>
           <button onClick={onEditarSaldo}
-            style={{background:"none",border:"none",color:C.teal,fontSize:12,fontWeight:700,cursor:"pointer",padding:"3px 0"}}>
-            {kpis.saldoReal!==null?"Actualizar el saldo del banco":"Registrar el saldo del banco para conciliar"}
+            style={{flex:1,minHeight:44,background:"rgba(20,184,166,0.12)",border:"1px solid rgba(20,184,166,0.35)",
+              borderRadius:10,padding:"8px 10px",color:C.teal,fontSize:13,fontWeight:700,cursor:"pointer"}}>
+            {kpis.saldoReal!==null?"Actualizar saldo":"Registrar saldo"} <Ic n="🏦"/>
           </button>
         </div>
       </div>
@@ -388,24 +372,24 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
       <Seccion titulo="Compromisos del mes" ocultarSiVacio={!(kpis.deudaVendedoresMes>0||kpis.f29>0)}>
       {/* Deuda a terceros — el detalle vive en Vendedores y Financiamiento */}
       {(kpis.deudaVendedoresMes>0||kpis.f29>0)&&(
-        <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"12px 15px",marginBottom:12}}>
-                    {kpis.deudaVendedoresMes>0&&(
+        <Tarjeta padding="4px 14px">
+          {kpis.deudaVendedoresMes>0&&(
             <button onClick={()=>onNavigate&&onNavigate("vendedores",null)}
-              style={{width:"100%",background:"none",border:"none",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",textAlign:"left"}}>
-              <span style={{fontSize:12.5,color:C.ink,fontWeight:600}}>Comisiones a vendedores</span>
-              <span style={{display:"flex",alignItems:"center",gap:6}}>
-                <span style={{fontFamily:MONO,fontWeight:800,fontSize:12.5,color:C.warn}}>{fmt.money(kpis.deudaVendedoresMes)}</span>
-                <span style={{fontSize:13,color:C.inkFaint}}>›</span>
+              style={{width:"100%",background:"none",border:"none",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",minHeight:52,textAlign:"left"}}>
+              <span style={{fontSize:14,color:C.ink,fontWeight:600}}>Comisiones a vendedores</span>
+              <span style={{display:"flex",alignItems:"center",gap:4}}>
+                <Monto tam="sm" tono="warn">{fmt.money(kpis.deudaVendedoresMes)}</Monto>
+                <Ic n="chevR"/>
               </span>
             </button>
           )}
           {kpis.f29>0&&(
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderTop:kpis.deudaVendedoresMes>0?`1px solid ${C.border}`:"none"}}>
-              <span style={{fontSize:12.5,color:C.ink,fontWeight:600}}>Impuesto F29 proyectado</span>
-              <span style={{fontFamily:MONO,fontWeight:800,fontSize:12.5,color:C.warn}}>{fmt.money(kpis.f29)}</span>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",minHeight:52,borderTop:kpis.deudaVendedoresMes>0?`1px solid ${C.border}`:"none"}}>
+              <span style={{fontSize:14,color:C.ink,fontWeight:600}}>Impuesto F29 proyectado</span>
+              <Monto tam="sm" tono="warn">{fmt.money(kpis.f29)}</Monto>
             </div>
           )}
-        </div>
+        </Tarjeta>
       )}
 
       </Seccion>
@@ -430,20 +414,23 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
         const sinDatos=sinDatosMP;
         if(!sinDatos&&!sincronizando) return null;
         return (
-          <div style={{background:C.infoLight,border:`1px solid ${C.info}`,borderRadius:12,padding:"12px 14px",marginBottom:12}}>
-            <div style={{fontSize:12.5,fontWeight:700,color:C.info,marginBottom:3}}>
-              {sincronizando?`Revisando ${sincronizando.hechas} de ${sincronizando.total}…`:`${sinDatos} OC${sinDatos>1?"s":""} sin datos de cliente`}
+          <Tarjeta>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,marginBottom:6}}>
+              <span style={{fontSize:14,fontWeight:700,color:C.ink}}>
+                {sincronizando?`Revisando ${sincronizando.hechas} de ${sincronizando.total}…`:`${sinDatos} OC${sinDatos>1?"s":""} sin datos de cliente`}
+              </span>
+              {!sincronizando&&<Badge tono="info">Mercado Público</Badge>}
             </div>
-            <div style={{fontSize:12,color:C.inkMuted,marginBottom:sincronizando?0:9,lineHeight:1.45}}>
+            <div style={{fontSize:12,color:C.inkMuted,marginBottom:sincronizando?0:10,lineHeight:1.45}}>
               Mercado Público tiene el cliente, RUT, comuna, contacto, fecha de emisión y productos de estas órdenes. Solo se consultan las que tienen código de Mercado Público; las ventas directas quedan fuera.
             </div>
             {!sincronizando&&(
               <button onClick={onSincronizar}
-                style={{width:"100%",background:C.info,border:"none",color:"#fff",borderRadius:9,padding:"9px 12px",fontSize:12.5,fontWeight:700,cursor:"pointer"}}>
+                style={{width:"100%",minHeight:44,background:C.teal,border:"none",color:"#fff",borderRadius:10,padding:"10px 12px",fontSize:14,fontWeight:700,cursor:"pointer"}}>
                 Completar desde Mercado Público
               </button>
             )}
-          </div>
+          </Tarjeta>
         );
       })()}
 
@@ -586,7 +573,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
 
       </Seccion>
 
-      <Seccion titulo="Este mes">
+      <Seccion titulo="Utilidad del mes">
       {/* Utilidad: promedio histórico, mes pasado cerrado, y este mes en curso — un solo gráfico, sin vueltas */}
       {(()=>{
         const barras=[
@@ -596,8 +583,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
         ];
         const max=Math.max(1,...barras.map(b=>Math.abs(b.v)));
         return (
-          <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"16px 16px 14px"}}>
-            <div style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:16}}>Utilidad</div>
+          <Tarjeta padding="16px 16px 14px">
             <div style={{display:"flex",alignItems:"flex-end",gap:10,height:110}}>
               {barras.map(b=>(
                 <div key={b.label} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-end",height:"100%"}}>
@@ -615,7 +601,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
                 </div>
               ))}
             </div>
-          </div>
+          </Tarjeta>
         );
       })()}
 

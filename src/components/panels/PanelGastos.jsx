@@ -1,6 +1,11 @@
 import { useState, useMemo } from "react";
 import { Field, Modal } from "../ui/Basicos";
-import { C, MONO, btnP, fmt, iMono, iStyle, selStyle } from "../../lib/theme";
+import { C, btnP, fmt, iMono, iStyle, selStyle } from "../../lib/theme";
+import { Ic } from "../ui/Iconos";
+import { Seccion, Tarjeta, Badge, Monto } from "../ui/Sistema";
+
+// Los pagos a vendedores hoy se administran en Vendedores; la categoria historica solo se consulta.
+const esHistoricaVendedor=(c)=>/vendedor/i.test(c?.nombre||"");
 
 export function PanelGastos({ gastos, categorias, onNuevoGasto }) {
   const [showForm,setShowForm]=useState(false);
@@ -20,49 +25,62 @@ export function PanelGastos({ gastos, categorias, onNuevoGasto }) {
     return map;
   },[gastos]);
 
+  const tarjetaCategoria=(c,historica)=>{
+    const u=ultimoPorCat[c.id];
+    const historial=historialPorCat[c.id]||[];
+    const estaAbierta=abierta===c.id;
+    return (
+      <Tarjeta key={c.id} padding="0" style={{overflow:"hidden",marginBottom:8,background:historica?C.paper:C.card}}>
+        <button onClick={()=>historial.length&&setAbierta(estaAbierta?null:c.id)}
+          style={{width:"100%",background:"none",border:"none",padding:"12px 16px",minHeight:60,cursor:historial.length?"pointer":"default",
+            display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,textAlign:"left"}}>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontWeight:700,fontSize:15,color:historica?C.inkMuted:C.ink,lineHeight:1.25}}>{c.nombre}</div>
+            {u
+              ?<div style={{fontSize:12,color:C.inkMuted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",marginTop:2}}>{u.subcategoria||u.detalle||"—"} · {fmt.monthYear(u.mes,u.anio)}</div>
+              :<div style={{fontSize:12,color:C.inkMuted,marginTop:2}}>Sin pagos registrados</div>}
+          </div>
+          {u&&<Monto tam="md" tono={historica?"suave":"neutro"}>{fmt.money(u.monto)}</Monto>}
+          {historial.length>1&&<Ic n={estaAbierta?"chevD":"chevR"}/>}
+        </button>
+        {estaAbierta&&historial.length>0&&(
+          <div style={{padding:"0 16px 12px"}}>
+            <div style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.5,marginBottom:4,paddingTop:10,borderTop:`1px solid ${C.border}`}}>Historial completo ({historial.length})</div>
+            {historial.map(g=>(
+              <div key={g.id} style={{padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:8}}>
+                  <span style={{fontSize:13,fontWeight:700,color:C.ink}}>{fmt.monthYear(g.mes,g.anio)}</span>
+                  <Monto tam="sm" tono={historica?"suave":"neutro"}>{fmt.money(g.monto)}</Monto>
+                </div>
+                {(g.detalle||g.subcategoria)&&<div style={{fontSize:12,color:C.inkMuted,marginTop:1}}>{g.subcategoria||g.detalle}</div>}
+              </div>
+            ))}
+          </div>
+        )}
+      </Tarjeta>
+    );
+  };
+
+  const actuales=categorias.filter(c=>!esHistoricaVendedor(c));
+  const historicas=categorias.filter(esHistoricaVendedor);
+
   return (
     <div>
-      <div style={{display:"flex",gap:8,marginBottom:16}}>
-        <button onClick={()=>{setTipoForm("gasto");setShowForm(true);}} style={btnP(C.warn)}>+ Registrar gasto</button>
-      </div>
-      <div style={{fontSize:12.5,fontWeight:800,color:C.inkMuted,marginBottom:8,textTransform:"uppercase",letterSpacing:0.4}}>Gastos por categoría</div>
-      {categorias.map(c=>{
-        const u=ultimoPorCat[c.id];
-        const historial=historialPorCat[c.id]||[];
-        const estaAbierta=abierta===c.id;
-        return (
-          <div key={c.id} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,marginBottom:8,overflow:"hidden"}}>
-            <button onClick={()=>historial.length&&setAbierta(estaAbierta?null:c.id)}
-              style={{width:"100%",background:"none",border:"none",padding:"12px 15px",cursor:historial.length?"pointer":"default",
-                display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,textAlign:"left"}}>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{fontWeight:700,fontSize:13.5,color:C.ink}}>{c.nombre}</div>
-                {u?<div style={{fontSize:12,color:C.inkMuted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{u.subcategoria||u.detalle||"—"} · {fmt.monthYear(u.mes,u.anio)}</div>:<div style={{fontSize:12,color:C.inkFaint}}>Sin pagos</div>}
-              </div>
-              {u&&<div style={{fontFamily:MONO,fontWeight:800,fontSize:15,color:C.warn,flexShrink:0,whiteSpace:"nowrap"}}>{fmt.money(u.monto)}</div>}
-              {historial.length>1&&<span style={{fontSize:12,color:C.inkFaint,flexShrink:0}}>{estaAbierta?"▲":"▼"}</span>}
-            </button>
-            {estaAbierta&&historial.length>0&&(
-              <div style={{padding:"0 15px 12px"}}>
-                <div style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",marginBottom:6,paddingTop:8,borderTop:`1px solid ${C.border}`}}>Historial completo ({historial.length})</div>
-                {historial.map(g=>(
-                  <div key={g.id} style={{padding:"7px 0",borderBottom:`1px solid ${C.border}`}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:8}}>
-                      <span style={{fontSize:12,fontWeight:700,color:C.ink}}>{fmt.monthYear(g.mes,g.anio)}</span>
-                      <span style={{fontFamily:MONO,fontWeight:800,fontSize:13,color:C.warn,flexShrink:0}}>{fmt.money(g.monto)}</span>
-                    </div>
-                    {(g.detalle||g.subcategoria)&&<div style={{fontSize:12,color:C.inkMuted}}>{g.subcategoria||g.detalle}</div>}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        );
-      })}
+      <button onClick={()=>{setTipoForm("gasto");setShowForm(true);}} style={{...btnP(C.teal),marginBottom:20}}>+ Registrar gasto</button>
+
+      <Seccion titulo="Gastos por categoría" nota="Se muestra el último pago de cada categoría. Toca una para ver su historial.">
+        {actuales.map(c=>tarjetaCategoria(c,false))}
+      </Seccion>
+
+      {historicas.length>0&&(
+        <Seccion titulo="Histórico" nota="Solo consulta. Los pagos a vendedores ahora se registran en Vendedores.">
+          {historicas.map(c=>tarjetaCategoria(c,true))}
+        </Seccion>
+      )}
 
       {showForm&&tipoForm==="gasto"&&(
         <Modal title="Registrar gasto" onClose={()=>setShowForm(false)}>
-          <FormNuevoGasto categorias={categorias} onSave={async(d)=>{await onNuevoGasto(d);setShowForm(false);}} />
+          <FormNuevoGasto categorias={actuales} onSave={async(d)=>{await onNuevoGasto(d);setShowForm(false);}} />
         </Modal>
       )}
     </div>

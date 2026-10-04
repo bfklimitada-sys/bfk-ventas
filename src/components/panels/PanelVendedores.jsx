@@ -3,6 +3,7 @@ import { Field, Modal } from "../ui/Basicos";
 import { del } from "../../lib/supabase";
 import { C, MONO, btnG, btnP, fmt, iMono, iStyle, selStyle } from "../../lib/theme";
 import { Ic } from "../ui/Iconos";
+import { Seccion, Tarjeta, Badge, Monto } from "../ui/Sistema";
 import { anioMesDe, calcularPagoVendedor, facturaVigente, mesesConFactura } from "../../lib/calculos";
 
 export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, onGuardarIva, onPagoVendedor }) {
@@ -22,56 +23,35 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
 
   return (
     <div>
-      <button onClick={()=>setPagando(true)} style={{...btnP(C.teal),marginBottom:12}}>+ Pago a vendedor</button>
-      <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:16,marginBottom:16}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-          <div style={{fontWeight:800,fontSize:14,color:C.ink}}>IVA del mes ({fmt.monthYear(mesActual,anioActual)})</div>
-          <button onClick={()=>{setEditandoIvaExistente(ivaMensual.find(i=>i.mes===mesActual&&i.anio===anioActual)||null);setEditIva(true);}} style={btnG}>{ivaMensual.find(i=>i.mes===mesActual&&i.anio===anioActual)?"Editar":"Registrar"}</button>
-        </div>
-        {ivaMensual.find(i=>i.mes===mesActual&&i.anio===anioActual)?
-          <div style={{fontFamily:MONO,fontWeight:800,fontSize:18,color:C.info}}>{fmt.money(Math.max(0,(ivaMensual.find(i=>i.mes===mesActual&&i.anio===anioActual).iva_ventas||0)-(ivaMensual.find(i=>i.mes===mesActual&&i.anio===anioActual).iva_compras||0)))}</div>:
-          <div style={{fontSize:12.5,color:C.inkFaint}}>Sin registrar.</div>
-        }
-        <div style={{display:"flex",gap:14,marginTop:10,paddingTop:10,borderTop:`1px solid ${C.border}`}}>
-          <button onClick={()=>{setEditandoIvaExistente(null);setEditIva(true);}} style={{background:"none",border:"none",color:C.info,fontSize:12,fontWeight:700,cursor:"pointer",textDecoration:"underline",padding:0}}>+ Registrar IVA de otro mes</button>
-          {ivaMensual.length>0&&<button onClick={()=>setVerHistorialIva(v=>!v)} style={{background:"none",border:"none",color:C.inkFaint,fontSize:12,fontWeight:700,cursor:"pointer",textDecoration:"underline",padding:0}}>{verHistorialIva?"Ocultar historial":`Ver historial (${ivaMensual.length})`}</button>}
-        </div>
-        {verHistorialIva&&(
-          <div style={{marginTop:10}}>
-            {ivaOrdenado.map(i=>(
-              <button key={i.id} onClick={()=>{setEditandoIvaExistente(i);setEditIva(true);}}
-                style={{width:"100%",background:"none",border:"none",padding:"7px 0",borderBottom:`1px solid ${C.border}`,
-                  display:"flex",justifyContent:"space-between",cursor:"pointer",textAlign:"left"}}>
-                <span style={{fontSize:12,color:C.ink,fontWeight:700}}>{fmt.monthYear(i.mes,i.anio)}</span>
-                <span style={{fontFamily:MONO,fontSize:12,color:C.info,fontWeight:700}}>{fmt.money(Math.max(0,(i.iva_ventas||0)-(i.iva_compras||0)))}</span>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
+      <button onClick={()=>setPagando(true)} style={{...btnP(C.teal),marginBottom:20}}>+ Pago a vendedor</button>
+      <Seccion titulo="Comisiones por vendedor">
       {vendedores.map(v=>{
         const datos=datosVendedor(v);
         const ultimoPagado=datos.find(d=>d.estado==="pagado");
         const deudaTotal=datos.reduce((s,d)=>s+d.deuda,0);
         const meses=datos.filter(d=>(d.pagoCalculado||0)>0||d.pagado>0).length;
+        const mesesPend=datos.filter(d=>d.deuda>0).length;
         const estaAbierto=abierto===v.id;
         return (
-          <div key={v.id} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,marginBottom:10,overflow:"hidden"}}>
-            <button onClick={()=>setAbierto(estaAbierto?null:v.id)}
-              style={{width:"100%",background:"none",border:"none",padding:14,textAlign:"left",cursor:"pointer",
+          <Tarjeta key={v.id} padding="0" style={{overflow:"hidden",marginBottom:8}}>
+            <button onClick={()=>setAbierto(estaAbierto?null:v.id)} aria-expanded={estaAbierto}
+              style={{width:"100%",background:"none",border:"none",padding:"14px 16px",textAlign:"left",cursor:"pointer",minHeight:64,
                 display:"flex",alignItems:"center",gap:10}}>
               <div style={{flex:1,minWidth:0}}>
-                <div style={{fontWeight:800,fontSize:14.5,color:C.ink}}>{v.nombre}</div>
-                {deudaTotal>0
-                  ? <div style={{fontSize:12,color:C.warn,fontWeight:700,marginTop:2}}>Falta pagarle {fmt.money(deudaTotal)}</div>
-                  : meses>0
-                    ? <div style={{fontSize:12,color:C.ok,fontWeight:700,marginTop:2}}>✓ Comisiones al día{ultimoPagado?` · último pago ${ultimoPagado.label}`:""}</div>
-                    : <div style={{fontSize:12,color:C.inkFaint,marginTop:2}}>Sin ventas registradas</div>
-                }
+                <div style={{fontWeight:800,fontSize:15,color:C.ink,lineHeight:1.25}}>{v.nombre}</div>
+                <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:6}}>
+                  {deudaTotal>0
+                    ? <Badge tono="warn">{mesesPend} mes{mesesPend!==1?"es":""} pendiente{mesesPend!==1?"s":""}</Badge>
+                    : meses>0
+                      ? <Badge tono="ok">✓ Al día{ultimoPagado?` · último pago ${ultimoPagado.label}`:""}</Badge>
+                      : <Badge tono="neutro">Sin ventas registradas</Badge>}
+                  {meses>0&&<Badge tono="neutro">{meses} mes{meses>1?"es":""} con ventas</Badge>}
+                </div>
               </div>
-              {meses>0&&<span style={{fontSize:12,color:C.inkFaint,flexShrink:0}}>{meses} mes{meses>1?"es":""}</span>}
-              <span style={{fontSize:12,color:C.inkFaint,flexShrink:0}}>{estaAbierto?"▲":"▼"}</span>
+              <div style={{textAlign:"right",flexShrink:0}}>
+                {deudaTotal>0&&<><div style={{fontSize:12,color:C.inkMuted,marginBottom:2}}>Falta pagarle</div><Monto tam="md" tono="warn">{fmt.money(deudaTotal)}</Monto></>}
+              </div>
+              <Ic n={estaAbierto?"chevD":"chevR"}/>
             </button>
 
             {estaAbierto&&meses>0&&(
@@ -82,9 +62,7 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
                   <div key={d.label} style={{padding:"9px 0",borderBottom:`1px solid ${C.border}`}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:3}}>
                       <span style={{fontSize:12.5,fontWeight:700,color:C.ink}}>{d.label}</span>
-                      <span style={{fontSize:12.5,fontWeight:800,color:d.estado==="pagado"?C.ok:C.warn}}>
-                        {d.estado==="pagado"?"✓ Comisión pagada":"Comisión pendiente"}
-                      </span>
+                      <Badge tono={d.estado==="pagado"?"ok":"warn"}>{d.estado==="pagado"?"✓ Comisión pagada":"Comisión pendiente"}</Badge>
                     </div>
                     <div style={{fontSize:12,color:C.inkFaint,marginBottom:5,lineHeight:1.7}}>
                       {d.esVerificado ? (
@@ -117,9 +95,39 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
                 ))}
               </div>
             )}
-          </div>
+          </Tarjeta>
         );
       })}
+      </Seccion>
+
+      <Seccion titulo="IVA mensual" nota="Impuesto de la empresa. Se registra aparte y se usa para calcular las comisiones; no es un pago a vendedores.">
+      <Tarjeta padding="14px 16px">
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+          <div style={{fontWeight:800,fontSize:14,color:C.ink}}>IVA del mes ({fmt.monthYear(mesActual,anioActual)})</div>
+          <button onClick={()=>{setEditandoIvaExistente(ivaMensual.find(i=>i.mes===mesActual&&i.anio===anioActual)||null);setEditIva(true);}} style={btnG}>{ivaMensual.find(i=>i.mes===mesActual&&i.anio===anioActual)?"Editar":"Registrar"}</button>
+        </div>
+        {ivaMensual.find(i=>i.mes===mesActual&&i.anio===anioActual)?
+          <div style={{fontFamily:MONO,fontWeight:800,fontSize:22,color:C.info}}>{fmt.money(Math.max(0,(ivaMensual.find(i=>i.mes===mesActual&&i.anio===anioActual).iva_ventas||0)-(ivaMensual.find(i=>i.mes===mesActual&&i.anio===anioActual).iva_compras||0)))}</div>:
+          <div style={{fontSize:12.5,color:C.inkFaint}}>Sin registrar.</div>
+        }
+        <div style={{display:"flex",gap:14,marginTop:10,paddingTop:10,borderTop:`1px solid ${C.border}`}}>
+          <button onClick={()=>{setEditandoIvaExistente(null);setEditIva(true);}} style={{background:"none",border:"none",color:C.info,fontSize:12,fontWeight:700,cursor:"pointer",textDecoration:"underline",padding:0}}>+ Registrar IVA de otro mes</button>
+          {ivaMensual.length>0&&<button onClick={()=>setVerHistorialIva(v=>!v)} style={{background:"none",border:"none",color:C.inkFaint,fontSize:12,fontWeight:700,cursor:"pointer",textDecoration:"underline",padding:0}}>{verHistorialIva?"Ocultar historial":`Ver historial (${ivaMensual.length})`}</button>}
+        </div>
+        {verHistorialIva&&(
+          <div style={{marginTop:10}}>
+            {ivaOrdenado.map(i=>(
+              <button key={i.id} onClick={()=>{setEditandoIvaExistente(i);setEditIva(true);}}
+                style={{width:"100%",background:"none",border:"none",padding:"7px 0",borderBottom:`1px solid ${C.border}`,
+                  display:"flex",justifyContent:"space-between",cursor:"pointer",textAlign:"left"}}>
+                <span style={{fontSize:12,color:C.ink,fontWeight:700}}>{fmt.monthYear(i.mes,i.anio)}</span>
+                <span style={{fontFamily:MONO,fontSize:12,color:C.info,fontWeight:700}}>{fmt.money(Math.max(0,(i.iva_ventas||0)-(i.iva_compras||0)))}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </Tarjeta>
+      </Seccion>
 
       {pagando&&(
         <Modal title="Pago a vendedor" onClose={()=>setPagando(false)}>

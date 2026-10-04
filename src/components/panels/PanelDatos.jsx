@@ -1,3 +1,4 @@
+import { Tarjeta } from "../ui/Sistema";
 import { useState } from "react";
 import * as XLSX from "xlsx";
 import { TABLAS_EXPORT, del, ins, sel, upd } from "../../lib/supabase";
@@ -129,16 +130,16 @@ export function PanelDatos({ session, showToast }) {
   const totalActualizadas = resumenCambios?.reduce((s,r)=>s+r.actualizadas,0) || 0;
 
   return (
-    <div style={{marginTop:20}}>
-      <div style={{fontSize:12,fontWeight:800,color:C.inkMuted,marginBottom:8,textTransform:"uppercase",letterSpacing:0.4}}>Exportar / Importar datos</div>
-      <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:16,marginBottom:12}}>
-        <div style={{fontSize:12.5,color:C.inkMuted,marginBottom:12}}>Descarga toda la base de datos en un Excel con una hoja por tabla. Edítalo y vuelve a subirlo para actualizar los valores.</div>
-        <button onClick={handleExportar} disabled={exporting} style={{...btnP(exporting?C.inkFaint:C.teal),marginBottom:10}}>{exporting?"Generando…":"⬇ Exportar Excel completo"}</button>
-        <label style={{...btnG,display:"block",textAlign:"center",cursor:"pointer"}}>
+    <div>
+      <Tarjeta>
+        <div style={{fontSize:14,fontWeight:700,color:C.ink,marginBottom:4}}>Excel completo de la base</div>
+        <div style={{fontSize:12,color:C.inkMuted,marginBottom:12,lineHeight:1.45}}>Descarga toda la base en un Excel con una hoja por tabla. Si lo editas y lo subes, se actualizan los valores (acción administrativa).</div>
+        <button onClick={handleExportar} disabled={exporting} style={{...btnG,width:"100%",marginBottom:10,opacity:exporting?0.6:1}}>{exporting?"Generando…":"⬇ Exportar Excel completo"}</button>
+        <label style={{display:"block",textAlign:"center",cursor:comparando?"default":"pointer",minHeight:44,padding:"12px 14px",boxSizing:"border-box",borderRadius:10,border:`1.5px dashed ${C.danger}88`,color:C.danger,fontWeight:600,fontSize:14,opacity:comparando?0.6:1}}>
           {comparando?"Comparando…":"⬆ Subir Excel editado"}
           <input type="file" accept=".xlsx" onChange={handleArchivoSeleccionado} style={{display:"none"}} disabled={comparando} />
         </label>
-      </div>
+      </Tarjeta>
 
       {resumenCambios && resumenCambios.length>0 && (
         <div style={{background:C.warnLight,border:`1px solid ${C.warn}`,borderRadius:14,padding:16,marginBottom:12}}>

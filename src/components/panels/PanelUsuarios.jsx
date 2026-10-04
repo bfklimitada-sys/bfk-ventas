@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { PanelDatos } from "./PanelDatos";
 import { C, btnG, btnP, fmt } from "../../lib/theme";
 import { Ic } from "../ui/Iconos";
+import { Seccion, Tarjeta, Badge, BotonAdmin } from "../ui/Sistema";
 
 export function PanelUsuarios({ perfiles, ocs, onChangeRol, session, showToast, entidadesCatalogo, onImportarEntidades, usoMP, sincronizando, validandoTodo, exportando, onCorregirFechas, onValidarTodo, onExportarTodo }) {
   const [showImport,setShowImport]=useState(false);
@@ -51,80 +52,89 @@ export function PanelUsuarios({ perfiles, ocs, onChangeRol, session, showToast, 
 
   return (
     <div>
+      {/* ── 1. Usuarios y permisos ── */}
+      <Seccion titulo="Usuarios y permisos">
       {perfiles.map(p=>{
         const ultima=ultimaActividad[p.id];
         const diasInactivo = ultima ? Math.floor((new Date()-new Date(ultima))/(1000*60*60*24)) : null;
         const activo = diasInactivo!==null && diasInactivo<=14;
         return (
-          <div key={p.id} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 15px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <div>
-              <div style={{display:"flex",alignItems:"center",gap:6}}>
-                <span style={{width:7,height:7,borderRadius:"50%",background:activo?C.ok:C.inkFaint,display:"inline-block"}} />
-                <span style={{fontWeight:700,fontSize:13.5,color:C.ink}}>{p.nombre}</span>
+          <Tarjeta key={p.id}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
+              <div style={{minWidth:0}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                  <span style={{width:8,height:8,borderRadius:"50%",background:activo?C.ok:C.inkFaint,display:"inline-block",flexShrink:0}} />
+                  <span style={{fontWeight:700,fontSize:15,color:C.ink}}>{p.nombre}</span>
+                  <Badge tono={p.rol==="admin"?"info":"neutro"}>{p.rol==="admin"?"Administrador":"Usuario"}</Badge>
+                </div>
+                <div style={{fontSize:12,color:C.inkMuted,marginTop:4}}>{ultima?`Última actividad: ${fmt.datetime(ultima)}`:"Sin actividad registrada"}</div>
               </div>
-              <div style={{fontSize:12,color:C.inkMuted,marginTop:2}}>{p.rol==="admin"?"Administrador":"Usuario"}</div>
-              <div style={{fontSize:12,color:C.inkFaint,marginTop:2}}>{ultima?`Última actividad: ${fmt.datetime(ultima)}`:"Sin actividad registrada"}</div>
+              <BotonAdmin peligro={p.rol==="admin"} onClick={()=>onChangeRol(p.id,p.rol==="admin"?"usuario":"admin")} style={{flexShrink:0,padding:"8px 12px",fontSize:13}}>{p.rol==="admin"?"Quitar admin":"Hacer admin"}</BotonAdmin>
             </div>
-            <button onClick={()=>onChangeRol(p.id,p.rol==="admin"?"usuario":"admin")} style={btnG}>{p.rol==="admin"?"Quitar admin":"Hacer admin"}</button>
-          </div>
+          </Tarjeta>
         );
       })}
-      {/* ── Administración: herramientas que salieron del Panel ── */}
-      <div style={{marginTop:20,background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px"}}>
-        <div style={{fontWeight:800,fontSize:13,color:C.ink,marginBottom:10}}>Mantenimiento de Mercado Público</div>
-        {usoMP&&(
-          <div style={{fontSize:12,color:C.inkMuted,marginBottom:10}}>Consultas de hoy: <b style={{color:C.ink}}>{(usoMP.solicitudes||0).toLocaleString("es-CL")}</b> de 10.000</div>
-        )}
-        <div style={{display:"flex",flexDirection:"column",gap:8}}>
-          {onValidarTodo&&(
-            <button onClick={()=>onValidarTodo()} disabled={!!validandoTodo} style={btnG}>
-              {validandoTodo?`Validando ${validandoTodo.hechas} de ${validandoTodo.total}…`:"Validar todas mis OC contra Mercado Público"}
-            </button>
-          )}
-          {onCorregirFechas&&(
-            <button onClick={()=>onCorregirFechas()} disabled={!!sincronizando} style={btnG}>
-              {sincronizando?`Revisando ${sincronizando.hechas} de ${sincronizando.total}…`:"Corregir fechas de todas contra Mercado Público"}
-            </button>
-          )}
-        </div>
-      </div>
+      </Seccion>
 
-      <div style={{marginTop:12,background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px"}}>
-        <div style={{fontWeight:800,fontSize:13,color:C.ink,marginBottom:6}}>Datos y respaldo</div>
-        <div style={{fontSize:12,color:C.inkMuted,marginBottom:10,lineHeight:1.5}}>
-          Se hace un respaldo cifrado de la base de datos todos los días, automáticamente, con una prueba de restauración. El estado se revisa en el repositorio de respaldos (GitHub → Actions).
-        </div>
-        {onExportarTodo&&(
-          <button onClick={()=>onExportarTodo()} disabled={!!exportando} style={btnG}>
-            {exportando?"Armando el Excel…":"Exportar todo a Excel"}
-          </button>
-        )}
-      </div>
-
-      <PanelDatos session={session} showToast={showToast} />
-
-      <div style={{marginTop:20}}>
-        <div style={{fontWeight:800,fontSize:13,color:C.ink,marginBottom:4}}><Ic n="🏢"/> Catálogo de entidades</div>
-        <div style={{fontSize:12,color:C.inkMuted,marginBottom:10}}>
-          {(entidadesCatalogo||[]).length} entidades guardadas · Se autocompletan al escribir el RUT en cualquier OC
-        </div>
-        {!showImport?(
-          <button onClick={()=>setShowImport(true)} style={btnP(C.teal)}>⬆ Importar desde CSV/Excel</button>
-        ):(
-          <div style={{background:C.tealLight,borderRadius:10,padding:"12px 14px"}}>
-            <div style={{fontSize:12.5,fontWeight:700,color:C.tealDark,marginBottom:8}}>Importar entidades desde CSV</div>
-            <div style={{fontSize:12,color:C.inkMuted,marginBottom:10}}>
-              El archivo debe tener columnas: <b>rut</b>, <b>nombre</b> (o entidad), y opcionalmente <b>comuna</b>, <b>contacto</b>, <b>correo</b>. Primera fila = encabezados.
-            </div>
-            <input type="file" accept=".csv,.txt" onChange={e=>setImportFile(e.target.files[0])} style={{marginBottom:10,fontSize:12}} />
-            {importMsg&&<div style={{fontSize:12,color:importMsg.startsWith("✓")?C.ok:C.danger,marginBottom:8,fontWeight:600}}>{importMsg}</div>}
-            <div style={{display:"flex",gap:8}}>
-              <button onClick={handleImport} style={btnP(C.teal)}>✓ Importar</button>
-              <button onClick={()=>{setShowImport(false);setImportMsg("");setImportFile(null);}} style={btnP(C.inkFaint)}>Cancelar</button>
-            </div>
+      {/* ── 2. Datos y respaldo ── */}
+      <Seccion titulo="Datos y respaldo" nota="Acciones administrativas: tienen más alcance que el trabajo diario.">
+        <Tarjeta>
+          <div style={{fontSize:12,color:C.inkMuted,marginBottom:12,lineHeight:1.5}}>
+            Se hace un respaldo cifrado de la base de datos todos los días, automáticamente, con una prueba de restauración. El estado se revisa en el repositorio de respaldos (GitHub → Actions).
           </div>
-        )}
-      </div>
+          {onExportarTodo&&(
+            <button onClick={()=>onExportarTodo()} disabled={!!exportando} style={{...btnG,width:"100%",opacity:exportando?0.6:1}}>
+              {exportando?"Armando el Excel…":"Exportar todo a Excel"}
+            </button>
+          )}
+        </Tarjeta>
+
+        <PanelDatos session={session} showToast={showToast} />
+
+        <Tarjeta>
+          <div style={{fontSize:14,fontWeight:700,color:C.ink,marginBottom:2}}><Ic n="🏢"/> Catálogo de entidades</div>
+          <div style={{fontSize:12,color:C.inkMuted,marginBottom:10}}>
+            {(entidadesCatalogo||[]).length} entidades guardadas · Se autocompletan al escribir el RUT en cualquier OC
+          </div>
+          {!showImport?(
+            <BotonAdmin onClick={()=>setShowImport(true)} style={{width:"100%"}}>⬆ Importar desde CSV/Excel</BotonAdmin>
+          ):(
+            <div style={{background:C.tealLight,borderRadius:10,padding:"12px 14px"}}>
+              <div style={{fontSize:12.5,fontWeight:700,color:C.tealDark,marginBottom:8}}>Importar entidades desde CSV</div>
+              <div style={{fontSize:12,color:C.inkMuted,marginBottom:10}}>
+                El archivo debe tener columnas: <b>rut</b>, <b>nombre</b> (o entidad), y opcionalmente <b>comuna</b>, <b>contacto</b>, <b>correo</b>. Primera fila = encabezados.
+              </div>
+              <input type="file" accept=".csv,.txt" onChange={e=>setImportFile(e.target.files[0])} style={{marginBottom:10,fontSize:12}} />
+              {importMsg&&<div style={{fontSize:12,color:importMsg.startsWith("✓")?C.ok:C.danger,marginBottom:8,fontWeight:600}}>{importMsg}</div>}
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={handleImport} style={btnP(C.teal)}>✓ Importar</button>
+                <button onClick={()=>{setShowImport(false);setImportMsg("");setImportFile(null);}} style={btnP(C.inkFaint)}>Cancelar</button>
+              </div>
+            </div>
+          )}
+        </Tarjeta>
+      </Seccion>
+
+      {/* ── 3. Mercado Público ── */}
+      <Seccion titulo="Mercado Público" nota="Mantenimiento masivo. Consulta muchas órdenes a la vez; úsalo solo cuando haga falta.">
+        <Tarjeta>
+          {usoMP&&(
+            <div style={{fontSize:12,color:C.inkMuted,marginBottom:10}}>Consultas de hoy: <b style={{color:C.ink}}>{(usoMP.solicitudes||0).toLocaleString("es-CL")}</b> de 10.000</div>
+          )}
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            {onValidarTodo&&(
+              <BotonAdmin onClick={()=>onValidarTodo()} disabled={!!validandoTodo}>
+                {validandoTodo?`Validando ${validandoTodo.hechas} de ${validandoTodo.total}…`:"Validar todas mis OC contra Mercado Público"}
+              </BotonAdmin>
+            )}
+            {onCorregirFechas&&(
+              <BotonAdmin onClick={()=>onCorregirFechas()} disabled={!!sincronizando}>
+                {sincronizando?`Revisando ${sincronizando.hechas} de ${sincronizando.total}…`:"Corregir fechas de todas contra Mercado Público"}
+              </BotonAdmin>
+            )}
+          </div>
+        </Tarjeta>
+      </Seccion>
     </div>
   );
 }
