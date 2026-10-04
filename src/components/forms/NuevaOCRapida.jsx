@@ -144,7 +144,7 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
             placeholder="ej: 3013-587-AG26" />
         </Field>
 
-        {err && <div style={{ background: C.dangerLight, color: C.danger, borderRadius: 8, padding: "8px 12px", fontSize: 12.5, marginBottom: 10, fontWeight: 600 }}>{err}</div>}
+        {err && <div style={{ background: C.dangerLight, color:C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 12.5, marginBottom: 10, fontWeight: 600 }}>{err}</div>}
 
         <button onClick={buscar} disabled={cargando} style={btnP(cargando ? C.inkFaint : C.teal)}>
           {cargando ? "Consultando Mercado Público…" : "Buscar OC →"}
@@ -162,7 +162,7 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
     <div style={{ fontFamily: SANS }}>
       {pendiente ? (
         <div style={{ background: C.warnLight, border: `1px solid ${C.warn}`, borderRadius: 10, padding: "12px 14px", marginBottom: 14 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 700, color: C.warn, marginBottom: 4 }}><Ic n="⏳"/> Aún no aceptada en Mercado Público</div>
+          <div style={{ fontSize: 12.5, fontWeight: 700, color:C.warnText, marginBottom: 4 }}><Ic n="⏳"/> Aún no aceptada en Mercado Público</div>
           <div style={{ fontSize: 12, color: C.inkMuted, lineHeight: 1.5 }}>
             Guárdala igual con el link. La app completará el cliente, los productos y los montos
             automáticamente cuando la OC sea aceptada.
@@ -170,7 +170,7 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
         </div>
       ) : (
         <div style={{ background: C.okLight, borderRadius: 10, padding: "10px 14px", marginBottom: 14 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 700, color: C.ok }}>✓ Datos traídos de Mercado Público</div>
+          <div style={{ fontSize: 12.5, fontWeight: 700, color:C.okText }}>✓ Datos traídos de Mercado Público</div>
         </div>
       )}
 
@@ -212,7 +212,7 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
       {/* Links de compra — lo único obligatorio para Mati */}
       <div style={{ marginBottom: 14 }}>
         <div style={{ fontSize: 12, fontWeight: 800, color: C.inkMuted, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>
-          Link de compra <span style={{ color: C.danger }}>*</span>
+          Link de compra <span style={{ color:C.dangerText }}>*</span>
         </div>
         {links.map((l, i) => (
           <div key={i} style={{ display: "flex", gap: 6, marginBottom: 6 }}>
@@ -221,12 +221,12 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
               placeholder="https://…" />
             {links.length > 1 && (
               <button onClick={() => setLinks(ls => ls.filter((_, ix) => ix !== i))}
-                style={{ background: C.dangerLight, border: "none", borderRadius: 8, padding: "0 12px", color: C.danger, fontSize: 14, cursor: "pointer" }}>✕</button>
+                style={{ background: C.dangerLight, border: "none", borderRadius: 8, padding: "0 12px", color:C.dangerText, fontSize: 14, cursor: "pointer" }}>✕</button>
             )}
           </div>
         ))}
         <button onClick={() => setLinks(ls => [...ls, ""])}
-          style={{ fontSize: 12, background: "none", border: `1px dashed ${C.border}`, borderRadius: 8, padding: "6px 12px", color: C.teal, cursor: "pointer", width: "100%" }}>
+          style={{ fontSize: 12, background: "none", border: `1px dashed ${C.border}`, borderRadius: 8, padding: "6px 12px", color:C.tealDark, cursor: "pointer", width: "100%" }}>
           + Otro link
         </button>
       </div>
@@ -256,7 +256,7 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
           value={(vendedores||[]).find(v=>v.id===vendedorId)?.nombre || "Sin vendedor asignado"} />
       </Field>
 
-      {err && <div style={{ background: C.dangerLight, color: C.danger, borderRadius: 8, padding: "8px 12px", fontSize: 12.5, marginBottom: 10, fontWeight: 600 }}>{err}</div>}
+      {err && <div style={{ background: C.dangerLight, color:C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 12.5, marginBottom: 10, fontWeight: 600 }}>{err}</div>}
 
       <div style={{ display: "flex", gap: 8 }}>
         <button onClick={() => { setPaso(1); setErr(""); }} style={{ ...btnP(C.inkFaint), flex: 1 }}>← Atrás</button>

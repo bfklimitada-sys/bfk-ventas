@@ -77,7 +77,7 @@ export function FormAbonoFinanciador({ ocs, financiadores, onSave }) {
         <div style={{ background: C.paper, borderRadius: 9, padding: "10px 12px", marginBottom: 14 }}>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.inkMuted }}>
             <span>{pendientes.length} OC{pendientes.length !== 1 ? "s" : ""} por devolver</span>
-            <span style={{ fontFamily: MONO, fontWeight: 800, color: C.danger }}>{fmt.money(totalAdeudado)}</span>
+            <span style={{ fontFamily: MONO, fontWeight: 800, color:C.dangerText }}>{fmt.money(totalAdeudado)}</span>
           </div>
         </div>
       )}
@@ -129,7 +129,7 @@ export function FormAbonoFinanciador({ ocs, financiadores, onSave }) {
         </div>
       )}
 
-      {err && <div style={{ background: C.dangerLight, color: C.danger, borderRadius: 8, padding: "8px 12px", fontSize: 12.5, marginBottom: 10, fontWeight: 600 }}>{err}</div>}
+      {err && <div style={{ background: C.dangerLight, color:C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 12.5, marginBottom: 10, fontWeight: 600 }}>{err}</div>}
 
       <button onClick={guardar} disabled={saving} style={btnP(saving ? C.inkFaint : C.purple)}>
         {saving ? "Registrando…" : `✓ Abonar ${fmt.money(Number(monto) || 0)}`}

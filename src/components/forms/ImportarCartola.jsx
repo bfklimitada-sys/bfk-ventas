@@ -333,7 +333,7 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, re
           <input type="file" accept=".xlsx,.xls" multiple disabled={leyendo}
             onChange={e => procesar(Array.from(e.target.files || []))} style={{ display: "none" }} />
         </label>
-        {err && <div style={{ background: C.dangerLight, color: C.danger, borderRadius: 8, padding: "8px 12px", fontSize: 12.5, marginTop: 12, fontWeight: 600 }}>{err}</div>}
+        {err && <div style={{ background: C.dangerLight, color:C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 12.5, marginTop: 12, fontWeight: 600 }}>{err}</div>}
         <div style={{ fontSize: 12, color: C.inkFaint, marginTop: 14, lineHeight: 1.5 }}>
           Los abonos se cruzan por monto, y el RUT o el nombre del pagador
           desempatan cuando hay varias facturas del mismo valor.
@@ -388,13 +388,13 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, re
                   <span style={{ fontSize: 12, color: C.inkMuted, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {fmt.date(it.mov.fecha)} · {it.mov.descripcion}
                   </span>
-                  <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: 12.5, color: C.ok, flexShrink: 0 }}>
+                  <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: 12.5, color:C.okText, flexShrink: 0 }}>
                     {fmt.money(it.mov.abono)}
                   </span>
                 </div>
 
                 {!it.claro && (
-                  <div style={{ fontSize: 12, color: C.warn, fontWeight: 700, margin: "5px 0 3px" }}>
+                  <div style={{ fontSize: 12, color:C.warnText, fontWeight: 700, margin: "5px 0 3px" }}>
                     <Ic n="⚠"/> {it.candidatos.length} facturas de ese monto — elige cuál corresponde
                   </div>
                 )}
@@ -413,7 +413,7 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, re
             );
           })}
 
-          {err && <div style={{ background: C.dangerLight, color: C.danger, borderRadius: 8, padding: "8px 12px", fontSize: 12.5, margin: "10px 0", fontWeight: 600 }}>{err}</div>}
+          {err && <div style={{ background: C.dangerLight, color:C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 12.5, margin: "10px 0", fontWeight: 600 }}>{err}</div>}
 
           <button onClick={registrar} disabled={guardando || !nSel} style={{ ...btnP(guardando || !nSel ? C.inkFaint : C.ok), marginTop: 8 }}>
             {guardando ? "Registrando…" : `✓ Registrar ${nSel} cobro${nSel !== 1 ? "s" : ""} · ${fmt.money(totalSel)}`}
@@ -430,7 +430,7 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, re
         ) : (
           <>
             {egresos.filter(e => e.antiguo).length > 0 && (
-              <div style={{ background: C.warnLight, border: `1px solid ${C.warn}`, borderRadius: 9, padding: "10px 12px", marginBottom: 10, fontSize: 12, color: C.warn, fontWeight: 600, lineHeight: 1.45 }}>
+              <div style={{ background: C.warnLight, border: `1px solid ${C.warn}`, borderRadius: 9, padding: "10px 12px", marginBottom: 10, fontSize: 12, color:C.warnText, fontWeight: 600, lineHeight: 1.45 }}>
                 {egresos.filter(e => e.antiguo).length} movimiento(s) anteriores al {fmt.date(CORTE_EGRESOS)} vienen desmarcados.
                 Los saldos de los financistas ya los incluyen — cargarlos los descuadraría.
               </div>
@@ -469,12 +469,12 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, re
                           : `Ya registrado el ${fmt.date(String(e.duplicado.fecha).slice(0, 10))} — no se volverá a cargar`}
                       </span>
                     ) : !e.seguro && (
-                      <span style={{ display: "block", fontSize: 12, color: C.warn, fontWeight: 700, marginTop: 2 }}>
+                      <span style={{ display: "block", fontSize: 12, color:C.warnText, fontWeight: 700, marginTop: 2 }}>
                         <Ic n="⚠"/> No se pudo identificar — revisa el destino
                       </span>
                     )}
                   </span>
-                  <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: 12.5, color: C.danger, flexShrink: 0 }}>
+                  <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: 12.5, color:C.dangerText, flexShrink: 0 }}>
                     −{fmt.money(e.mov.cargo)}
                   </span>
                 </label>
@@ -518,7 +518,7 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, re
         )
       )}
 
-      {err && <div style={{ background: C.dangerLight, color: C.danger, borderRadius: 8, padding: "8px 12px", fontSize: 12.5, marginTop: 10, fontWeight: 600 }}>{err}</div>}
+      {err && <div style={{ background: C.dangerLight, color:C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 12.5, marginTop: 10, fontWeight: 600 }}>{err}</div>}
 
       <button onClick={async () => {
           setGuardando(true);

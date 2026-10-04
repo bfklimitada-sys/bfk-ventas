@@ -1,7 +1,7 @@
 
 export const C = {
   night:"#0B1120", nightSoft:"#141B2E", paper:"#F7F8FA", card:"#FFFFFF",
-  border:"#E2E5EB", borderDark:"#232C42", ink:"#0F172A", inkMuted:"#64748B", inkFaint:"#94A3B8",
+  border:"#E2E5EB", borderDark:"#232C42", ink:"#0F172A", inkMuted:"#475569", inkFaint:"#64748B", inkOnDark:"#94A3B8", okText:"#047857", warnText:"#B45309", dangerText:"#DC2626",
   teal:"#14B8A6", tealLight:"#E6FBF8", tealDark:"#0D9488",
   ok:"#10B981", okLight:"#E7F8F0", warn:"#F59E0B", warnLight:"#FEF3E2",
   danger:"#EF4444", dangerLight:"#FEEAEA", transit:"#6366F1", transitLight:"#EEEDFC",

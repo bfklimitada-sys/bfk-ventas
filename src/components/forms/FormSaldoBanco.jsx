@@ -56,7 +56,7 @@ export function FormSaldoBanco({ actual, onSave }) {
           placeholder="ej: revisado con la cartola del día" />
       </Field>
 
-      {err && <div style={{ background: C.dangerLight, color: C.danger, borderRadius: 8, padding: "8px 12px", fontSize: 12.5, marginBottom: 10, fontWeight: 600 }}>{err}</div>}
+      {err && <div style={{ background: C.dangerLight, color:C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 12.5, marginBottom: 10, fontWeight: 600 }}>{err}</div>}
 
       <button onClick={guardar} disabled={saving} style={btnP(saving ? C.inkFaint : C.teal)}>
         {saving ? "Guardando…" : "✓ Fijar este saldo"}

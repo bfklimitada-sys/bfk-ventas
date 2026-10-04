@@ -117,7 +117,7 @@ export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, ent
         <div>
           <Field label="Código OC (Mercado Público)" required>
             {ocExistente
-              ? <div style={{...iMono,background:C.paper,color:C.inkMuted,display:"flex",alignItems:"center"}}>{numOC} <span style={{fontSize:12,marginLeft:8,color:C.teal}}>✓ definida</span></div>
+              ? <div style={{...iMono,background:C.paper,color:C.inkMuted,display:"flex",alignItems:"center"}}>{numOC} <span style={{fontSize:12,marginLeft:8,color:C.tealDark}}>✓ definida</span></div>
               : <input style={iMono} value={numOC} onChange={e=>setNumOC(e.target.value)} placeholder="ej: 2436-690-AG26" />}
           </Field>
           <Field label="Vendedor" required>
@@ -129,7 +129,7 @@ export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, ent
           <Field label="RUT del cliente" hint="Escribe el RUT para autocompletar">
             <input style={iStyle} value={rutCliente} onChange={e=>handleRutChange(e.target.value)} placeholder="ej: 69.150.600-2" />
           </Field>
-          {autocompletado&&<div style={{background:C.okLight,borderRadius:8,padding:"7px 10px",fontSize:12,color:C.ok,fontWeight:600,marginBottom:10}}>✓ Datos autocompletados desde el catálogo</div>}
+          {autocompletado&&<div style={{background:C.okLight,borderRadius:8,padding:"7px 10px",fontSize:12,color:C.okText,fontWeight:600,marginBottom:10}}>✓ Datos autocompletados desde el catálogo</div>}
           <Field label="Institución / Cliente" required>
             <input style={iStyle} value={cliente} onChange={e=>setCliente(e.target.value)} placeholder="ej: Municipalidad de Concepción" />
           </Field>
@@ -153,8 +153,8 @@ export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, ent
           {productos.map((p,i)=>(
             <div key={i} style={{background:C.paper,borderRadius:10,padding:"12px 12px 8px",marginBottom:10,border:`1px solid ${C.border}`}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-                <div style={{fontSize:12,fontWeight:700,color:C.teal}}>Producto {i+1}</div>
-                {productos.length>1&&<button onClick={()=>delProducto(i)} style={{background:"none",border:"none",color:C.danger,fontSize:13,cursor:"pointer",padding:"0 4px"}}>✕ Eliminar</button>}
+                <div style={{fontSize:12,fontWeight:700,color:C.tealDark}}>Producto {i+1}</div>
+                {productos.length>1&&<button onClick={()=>delProducto(i)} style={{background:"none",border:"none",color:C.dangerText,fontSize:13,cursor:"pointer",padding:"0 4px"}}>✕ Eliminar</button>}
               </div>
               <Field label="Descripción" required>
                 <input style={iStyle} value={p.desc} onChange={e=>updProducto(i,"desc",e.target.value)} placeholder="ej: Silla ergonómica negra 3C" />
@@ -245,7 +245,7 @@ export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, ent
               <div key={i} style={{borderLeft:`2px solid ${C.teal}`,paddingLeft:10,marginBottom:8}}>
                 <div style={{fontSize:12.5,fontWeight:600}}>{p.desc} × {p.cantidad}</div>
                 <div style={{fontSize:12,color:C.inkMuted}}>Compra: ${(Number(p.precioCompra)*Number(p.cantidad)).toLocaleString("es-CL")} · Venta: ${(Number(p.precioVenta)*Number(p.cantidad)).toLocaleString("es-CL")}</div>
-                {p.link&&<div style={{fontSize:12,color:C.teal,wordBreak:"break-all"}}>{p.link.slice(0,60)}{p.link.length>60?"…":""}</div>}
+                {p.link&&<div style={{fontSize:12,color:C.tealDark,wordBreak:"break-all"}}>{p.link.slice(0,60)}{p.link.length>60?"…":""}</div>}
               </div>
             ))}
           </div>
@@ -265,7 +265,7 @@ export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, ent
       )}
 
       {/* Error */}
-      {err&&<div style={{background:C.dangerLight,color:C.danger,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}
+      {err&&<div style={{background:C.dangerLight,color:C.dangerText,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}
 
       {/* Navegación entre pasos */}
       <div style={{display:"flex",gap:8,marginTop:8}}>

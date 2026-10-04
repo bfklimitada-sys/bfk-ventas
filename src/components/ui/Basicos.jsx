@@ -21,7 +21,7 @@ export function Field({ label, required, hint, children }) {
   return (
     <div style={{marginBottom:14}}>
       <label style={{display:"block",fontSize:12,fontWeight:700,color:C.inkMuted,marginBottom:5,textTransform:"uppercase",letterSpacing:0.3}}>
-        {label}{required&&<span style={{color:C.danger}}> *</span>}
+        {label}{required&&<span style={{color:C.dangerText}}> *</span>}
       </label>
       {children}
       {hint&&<div style={{fontSize:12,color:C.inkFaint,marginTop:4}}>{hint}</div>}

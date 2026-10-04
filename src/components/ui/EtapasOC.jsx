@@ -64,7 +64,7 @@ export function FormPostventa({ oc, evento, onSave }) {
         </Field>
         <Field label="Fecha de resolución"><input style={iStyle} type="date" value={fechaRes} onChange={e=>setFechaRes(e.target.value)} /></Field>
       </>}
-      {err&&<div style={{background:C.dangerLight,color:C.danger,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}
+      {err&&<div style={{background:C.dangerLight,color:C.dangerText,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}
       <button onClick={guardar} disabled={saving} style={btnP(saving?C.inkFaint:C.warn)}>{saving?"Guardando…":evento?"✓ Actualizar incidencia":"✓ Registrar incidencia"}</button>
     </div>
   );
@@ -85,12 +85,12 @@ export function EtapasOC({ oc, perfil, perfiles, onEditarEvento, onEliminarFactu
 
   const etapas = [
     { key:"compra",  label:"Compra",  ok:(oc.eventos_compra||[]).length>0,        icon:<Ic n="📦"/>, tabla:"eventos_compra",
-      accion: (oc.eventos_compra||[]).length===0?{label:<I t={"📦 Registrar compra"}/>,color:C.teal,key:"compra"}:null,
+      accion: (oc.eventos_compra||[]).length===0?{label:<I t={"📦 Registrar compra"}/>,color:C.tealDark,key:"compra"}:null,
       correoBtns: null },
     { key:"entrega", label:"Entrega", ok:oc.estado_entrega==="confirmada"||oc.estado_entrega==="entregado",          icon:<Ic n="🚚"/>, tabla:"eventos_entrega",
       accion: oc.estado_entrega!=="confirmada"&&oc.estado_entrega!=="entregado"?{label:"✓ Confirmar entrega",color:C.transit,key:"entrega"}:null,
       correoBtns: [
-        {label:<I t={"⚠️ Entrega fallida"}/>,action:onCorreoFallida,color:C.warn},
+        {label:<I t={"⚠️ Entrega fallida"}/>,action:onCorreoFallida,color:C.warnText},
         {label:<I t={"📅 Fecha de entrega"}/>,action:onCorreoFecha,color:C.ink},
       ]},
     { key:"factura", label:"Factura", ok:oc.estado_factura_propia==="emitida",     icon:<Ic n="🧾"/>, tabla:"eventos_factura",
@@ -99,13 +99,13 @@ export function EtapasOC({ oc, perfil, perfiles, onEditarEvento, onEliminarFactu
         :{label:<I t={"🧾 Re-emitir (NC)"}/>,color:C.inkMuted,key:"factura"},
       correoBtns: null },
     { key:"cobro",   label:"Cobro",   ok:oc.estado_pago_cliente==="pagado",        icon:<Ic n="💰"/>, tabla:"eventos_pago_cliente",
-      accion: oc.estado_factura_propia==="emitida"&&oc.estado_pago_cliente!=="pagado"?{label:<I t={"💰 Registrar cobro"}/>,color:C.ok,key:"pago_cliente"}:null,
+      accion: oc.estado_factura_propia==="emitida"&&oc.estado_pago_cliente!=="pagado"?{label:<I t={"💰 Registrar cobro"}/>,color:C.okText,key:"pago_cliente"}:null,
       correoBtns: null },
     { key:"financ",  label:"Financ.", ok:oc.estado_pago_financiamiento==="pagado", icon:<Ic n="🏦"/>, tabla:"eventos_pago_financiamiento",
       accion: oc.estado_pago_financiamiento!=="pagado"?{label:<I t={"🏦 Registrar pago"}/>,color:C.purple,key:"pago_financ"}:null,
       correoBtns: null },
     { key:"postventa", label:"Post-venta", ok:(oc.eventos_postventa||[]).some(e=>e.estado==="resuelto"), icon:<Ic n="🛠"/>, tabla:"eventos_postventa",
-      accion: {label:<I t={"🛠 Registrar incidencia"}/>,color:C.warn,key:"postventa"},
+      accion: {label:<I t={"🛠 Registrar incidencia"}/>,color:C.warnText,key:"postventa"},
       correoBtns: null },
   ];
   const principales=etapas.filter(e=>e.key!=="postventa");
@@ -122,27 +122,27 @@ export function EtapasOC({ oc, perfil, perfiles, onEditarEvento, onEliminarFactu
               <div style={{background:C.card,borderRadius:8,padding:"10px 12px",marginBottom:8}}>
                 <div style={{fontSize:12.5,fontWeight:600}}><Ic n="🧾"/> Factura registrada</div>
                 <div style={{fontSize:12,color:C.inkMuted}}>Monto: <b>{fmt.money(oc.monto_facturado)}</b></div>
-                <div style={{fontSize:12,color:C.warn,marginTop:4}}>Sin detalle de número y fecha — usa Re-emitir para agregar</div>
+                <div style={{fontSize:12,color:C.warnText,marginTop:4}}>Sin detalle de número y fecha — usa Re-emitir para agregar</div>
               </div>
             )}
             {etapa.key==="cobro"&&oc.estado_pago_cliente==="pagado"&&(
               <div style={{background:C.card,borderRadius:8,padding:"10px 12px",marginBottom:8}}>
                 <div style={{fontSize:12.5,fontWeight:600}}><Ic n="💰"/> Cobro registrado</div>
                 <div style={{fontSize:12,color:C.inkMuted}}>Monto: <b>{fmt.money(oc.monto_cobrado||oc.monto_facturado||oc.monto_total)}</b></div>
-                <div style={{fontSize:12,color:C.warn,marginTop:4}}>Registro histórico — sin fecha detallada</div>
+                <div style={{fontSize:12,color:C.warnText,marginTop:4}}>Registro histórico — sin fecha detallada</div>
               </div>
             )}
             {etapa.key==="entrega"&&(oc.estado_entrega==="confirmada"||oc.estado_entrega==="entregado")&&(
               <div style={{background:C.card,borderRadius:8,padding:"10px 12px",marginBottom:8}}>
                 <div style={{fontSize:12.5,fontWeight:600}}><Ic n="🚚"/> Entrega confirmada</div>
-                <div style={{fontSize:12,color:C.warn,marginTop:4}}>Registro histórico — sin fecha detallada</div>
+                <div style={{fontSize:12,color:C.warnText,marginTop:4}}>Registro histórico — sin fecha detallada</div>
               </div>
             )}
             {etapa.key==="financ"&&oc.estado_pago_financiamiento==="pagado"&&(
               <div style={{background:C.card,borderRadius:8,padding:"10px 12px",marginBottom:8}}>
                 <div style={{fontSize:12.5,fontWeight:600}}><Ic n="🏦"/> Financiamiento pagado</div>
                 <div style={{fontSize:12,color:C.inkMuted}}>Monto: <b>{fmt.money(oc.costo_total)}</b> · A: <b>{oc.financiadores?.nombre||"—"}</b></div>
-                <div style={{fontSize:12,color:C.warn,marginTop:4}}>Registro histórico — sin fecha detallada</div>
+                <div style={{fontSize:12,color:C.warnText,marginTop:4}}>Registro histórico — sin fecha detallada</div>
               </div>
             )}
             {/* Mensaje solo cuando realmente no hay nada */}
@@ -153,7 +153,7 @@ export function EtapasOC({ oc, perfil, perfiles, onEditarEvento, onEliminarFactu
               (etapa.key==="financ"&&oc.estado_pago_financiamiento==="pagado")
             )&&(
               etapa.key==="cobro"&&oc.estado_factura_propia!=="emitida"
-                ? <div style={{fontSize:12,color:C.warn,padding:"4px 0 8px",fontWeight:600}}><Ic n="⚠"/> Primero emite la factura para poder registrar el cobro</div>
+                ? <div style={{fontSize:12,color:C.warnText,padding:"4px 0 8px",fontWeight:600}}><Ic n="⚠"/> Primero emite la factura para poder registrar el cobro</div>
                 : <div style={{fontSize:12,color:C.inkFaint,padding:"4px 0 8px"}}>Sin registros aún</div>
             )}
             {/* Botón de acción inmediato cuando no hay registro */}
@@ -190,8 +190,8 @@ export function EtapasOC({ oc, perfil, perfiles, onEditarEvento, onEliminarFactu
             {etapa.key==="factura"&&<>
               <div style={{fontSize:12.5,fontWeight:600}}><Ic n="🧾"/> Factura N°{ev.numero_factura||"—"} · {fmt.money(ev.monto||oc.monto_facturado)}</div>
               <div style={{fontSize:12,color:C.inkMuted}}>Emitida el {fmt.date(ev.fecha)||"—"}</div>
-              {ev.nota_credito&&<div style={{fontSize:12,color:C.warn}}>NC N°{ev.nota_credito} · anula factura N°{ev.factura_anulada_numero}</div>}
-              {ev.motivo_diferencia&&<div style={{fontSize:12,color:C.warn,marginTop:3}}><Ic n="⚠"/> Difiere de la OC: {ev.motivo_diferencia}</div>}
+              {ev.nota_credito&&<div style={{fontSize:12,color:C.warnText}}>NC N°{ev.nota_credito} · anula factura N°{ev.factura_anulada_numero}</div>}
+              {ev.motivo_diferencia&&<div style={{fontSize:12,color:C.warnText,marginTop:3}}><Ic n="⚠"/> Difiere de la OC: {ev.motivo_diferencia}</div>}
             </>}
             {etapa.key==="cobro"&&<>
               <div style={{fontSize:12.5,fontWeight:600}}><Ic n="💰"/> {fmt.money(ev.monto||oc.monto_cobrado)} cobrado</div>
@@ -212,27 +212,27 @@ export function EtapasOC({ oc, perfil, perfiles, onEditarEvento, onEliminarFactu
               </div>
               <div style={{fontSize:12,color:C.inkMuted}}>{fmt.date(ev.fecha)||"—"}</div>
               {ev.descripcion&&<div style={{fontSize:12,color:C.ink,marginTop:3}}>{ev.descripcion}</div>}
-              {ev.solucion&&<div style={{fontSize:12,color:C.ok,marginTop:3}}>Solución: {ev.solucion}{ev.fecha_resolucion?` · ${fmt.date(ev.fecha_resolucion)}`:""}</div>}
+              {ev.solucion&&<div style={{fontSize:12,color:C.okText,marginTop:3}}>Solución: {ev.solucion}{ev.fecha_resolucion?` · ${fmt.date(ev.fecha_resolucion)}`:""}</div>}
               {Number(ev.costo_extra)>0&&(
-                <div style={{fontSize:12,color:C.danger,marginTop:3,fontWeight:600}}>
+                <div style={{fontSize:12,color:C.dangerText,marginTop:3,fontWeight:600}}>
                   Costo extra: {fmt.money(ev.costo_extra)}{ev.detalle_costo?` · ${ev.detalle_costo}`:""}
                 </div>
               )}
             </>}
             <div style={{display:"flex",gap:6,marginTop:8}}>
               <button onClick={()=>onEditarEvento&&onEditarEvento({tipo:etapa.label,e:ev,tabla:etapa.tabla})}
-                style={{fontSize:12,background:C.tealLight,color:C.teal,border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontWeight:600}}><Ic n="✏️"/> Editar</button>
+                style={{fontSize:12,background:C.tealLight,color:C.tealDark,border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontWeight:600}}><Ic n="✏️"/> Editar</button>
               {perfil?.rol==="admin"&&etapa.key==="factura"&&(
                 <button onClick={async()=>{
                   if(!window.confirm(`¿Eliminar factura N°${ev.numero_factura}?\nEsto revertirá el estado a pendiente.`)) return;
                   await onEliminarFactura(oc.id, ev.id); setDetalle(null);
-                }} style={{fontSize:12,background:C.dangerLight,color:C.danger,border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontWeight:600}}><Ic n="🗑"/> Eliminar</button>
+                }} style={{fontSize:12,background:C.dangerLight,color:C.dangerText,border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontWeight:600}}><Ic n="🗑"/> Eliminar</button>
               )}
               {perfil?.rol==="admin"&&etapa.key!=="factura"&&(
                 <button onClick={async()=>{
                   if(!window.confirm(`¿Eliminar este registro de ${etapa.label}?`)) return;
                   if(onEliminarEvento) await onEliminarEvento(etapa.tabla, ev.id, oc.id, etapa.key); setDetalle(null);
-                }} style={{fontSize:12,background:C.dangerLight,color:C.danger,border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontWeight:600}}><Ic n="🗑"/> Eliminar</button>
+                }} style={{fontSize:12,background:C.dangerLight,color:C.dangerText,border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontWeight:600}}><Ic n="🗑"/> Eliminar</button>
               )}
             </div>
           </div>
@@ -297,7 +297,7 @@ export function EtapasOC({ oc, perfil, perfiles, onEditarEvento, onEliminarFactu
         </div>
       )}
       {(oc.eventos_postventa||[]).some(e=>e.estado!=="resuelto")&&(
-        <div style={{fontSize:12,color:C.warn,textAlign:"right",fontWeight:700}}><Ic n="🛠"/> post-venta abierta</div>
+        <div style={{fontSize:12,color:C.warnText,textAlign:"right",fontWeight:700}}><Ic n="🛠"/> post-venta abierta</div>
       )}
     </div>
   );

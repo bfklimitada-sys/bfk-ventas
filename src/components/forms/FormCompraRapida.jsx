@@ -79,7 +79,7 @@ export function FormCompraRapida({ ocs, financiadores, perfil, onSave, ocPresele
         </div>
       )}
       {oc && c > venta && venta > 0 && (
-        <div style={{ background: C.dangerLight, color: C.danger, borderRadius: 8, padding: "8px 12px", fontSize: 12, marginBottom: 12, fontWeight: 600 }}>
+        <div style={{ background: C.dangerLight, color:C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 12, marginBottom: 12, fontWeight: 600 }}>
           <Ic n="⚠"/> El costo es mayor que la venta — revisa el monto
         </div>
       )}
@@ -106,7 +106,7 @@ export function FormCompraRapida({ ocs, financiadores, perfil, onSave, ocPresele
           placeholder="ej: MercadoLibre, Sodimac…" />
       </Field>
 
-      {err && <div style={{ background: C.dangerLight, color: C.danger, borderRadius: 8, padding: "8px 12px", fontSize: 12.5, marginBottom: 10, fontWeight: 600 }}>{err}</div>}
+      {err && <div style={{ background: C.dangerLight, color:C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 12.5, marginBottom: 10, fontWeight: 600 }}>{err}</div>}
 
       <button onClick={guardar} disabled={saving} style={btnP(saving ? C.inkFaint : C.teal)}>
         {saving ? "Guardando…" : "✓ Registrar compra"}

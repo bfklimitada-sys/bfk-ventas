@@ -252,7 +252,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
         label:`${valeVistas.length} vale vista${valeVistas.length>1?"s":""}/cheque${valeVistas.length>1?"s":""} por cobrar`,
         detalle:detalleInst,
         monto:valeVistas.reduce((s,{ev})=>s+(ev.monto||0),0),
-        color:C.danger,tab:"compras",filtro:null});
+        color:C.dangerText,tab:"compras",filtro:null});
     }
 
     const vencidas=ocsPorCobrar.filter(o=>estadoVencimiento(o.diasDesde||0,plazoPago(o)).vencida);
@@ -260,14 +260,14 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
       label:`${vencidas.length} factura${vencidas.length>1?"s":""} vencida${vencidas.length>1?"s":""}`,
       detalle:"Ya se pasó el plazo de pago",
       monto:vencidas.reduce((s,o)=>s+((o.monto_facturado||0)-(o.monto_cobrado||0)),0),
-      color:C.danger,tab:"compras",filtro:"cobro"});
+      color:C.dangerText,tab:"compras",filtro:"cobro"});
 
     const porVencer=ocsPorCobrar.filter(o=>estadoVencimiento(o.diasDesde||0,plazoPago(o)).porVencer);
     if(porVencer.length) items.push({
       label:`${porVencer.length} factura${porVencer.length>1?"s":""} por vencer`,
       detalle:"Vencen dentro de 5 días",
       monto:porVencer.reduce((s,o)=>s+((o.monto_facturado||0)-(o.monto_cobrado||0)),0),
-      color:C.warn,tab:"compras",filtro:"cobro"});
+      color:C.warnText,tab:"compras",filtro:"cobro"});
 
     const sinFacturar=ocs.filter(o=>(o.tipo_registro||"venta")==="venta"&&(o.estado_entrega==="confirmada"||o.estado_entrega==="entregado")&&o.estado_factura_propia!=="emitida");
     if(sinFacturar.length) items.push({
@@ -301,7 +301,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
       <Seccion titulo="Prioridades de hoy" nota={prioridades.length>0?"Toca una para ver esas órdenes":undefined} margen={18}>
       {/* ── Prioridades de hoy: tareas accionables ── */}
       <Tarjeta padding="4px 4px 4px 4px">
-        {prioridades.length===0&&<div style={{fontSize:14,color:C.ok,fontWeight:700,padding:"14px 12px"}}>✓ Sin pendientes urgentes</div>}
+        {prioridades.length===0&&<div style={{fontSize:14,color:C.okText,fontWeight:700,padding:"14px 12px"}}>✓ Sin pendientes urgentes</div>}
         {prioridades.map((p,i)=>(
           <button key={i} onClick={()=>onNavigate&&onNavigate(p.tab,p.filtro)}
             style={{width:"100%",display:"flex",alignItems:"center",gap:10,minHeight:60,
@@ -327,7 +327,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
           {key:"compra",      icon:<Ic n="📦"/>, label:"Compra",  color:C.transit, paso:1},
           {key:"entrega",     icon:<Ic n="🚚"/>, label:"Entrega", color:C.info,    paso:2},
           {key:"factura",     icon:<Ic n="🧾"/>, label:"Factura", color:C.purple,  paso:3},
-          {key:"pago_cliente",icon:<Ic n="💰"/>, label:"Pago",    color:C.ok,      paso:4},
+          {key:"pago_cliente",icon:<Ic n="💰"/>, label:"Pago",    color:C.okText,      paso:4},
           {key:"cartola",     icon:<Ic n="🏦"/>, label:"Banco",   color:C.info,    paso:null},
         ].map(a=>(
           <button key={a.key} onClick={()=>onAccion&&onAccion(a.key)}
@@ -349,20 +349,20 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
 
       <Seccion titulo="Caja">
       {/* ── Saldo Proyectado: solo lo esencial ── */}
-      <div style={{background:`linear-gradient(135deg,${C.night},${C.nightSoft})`,borderRadius:16,padding:"16px 18px",marginBottom:8}}>
-        <div style={{fontSize:12,color:"#94A3B8",fontWeight:700,marginBottom:4,textTransform:"uppercase",letterSpacing:0.5}}>Saldo proyectado</div>
-        <div style={{fontFamily:MONO,fontWeight:800,fontSize:30,color:kpis.saldoProyectado>=0?C.teal:C.danger,letterSpacing:-1,lineHeight:1.1}}>{fmt.money(kpis.saldoProyectado)}</div>
-        <div style={{fontSize:12,color:"#94A3B8",marginTop:6,lineHeight:1.45}}>Cuánto quedaría si se cobra todo lo pendiente y se paga todo lo que se debe</div>
-        <div style={{display:"flex",gap:8,marginTop:12,paddingTop:10,borderTop:"1px solid rgba(255,255,255,0.1)"}}>
+      <div style={{background:`linear-gradient(135deg,${C.night},${C.nightSoft})`,borderRadius:16,padding:"16px 18px",marginBottom:8,border:"1px solid rgba(45,212,191,0.25)"}}>
+        <div style={{fontSize:13,color:"#E2E8F0",fontWeight:800,marginBottom:4,textTransform:"uppercase",letterSpacing:0.6}}>Saldo proyectado</div>
+        <div style={{fontFamily:MONO,fontWeight:800,fontSize:34,color:kpis.saldoProyectado>=0?"#2DD4BF":"#F87171",letterSpacing:-1,lineHeight:1.1}}>{fmt.money(kpis.saldoProyectado)}</div>
+        <div style={{fontSize:12,color:"#CBD5E1",marginTop:6,lineHeight:1.45}}>Cuánto quedaría si se cobra todo lo pendiente y se paga todo lo que se debe</div>
+        <div style={{display:"flex",flexDirection:"column",gap:6,marginTop:12,paddingTop:12,borderTop:"1px solid rgba(255,255,255,0.14)"}}>
           <button onClick={()=>onNavigate&&onNavigate("compras",null)}
-            style={{flex:1,minHeight:44,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.12)",
-              borderRadius:10,padding:"8px 10px",color:"#CBD5E1",fontSize:13,fontWeight:600,cursor:"pointer"}}>
-            {kpis.ocsAbiertas} órdenes en curso ›
+            style={{minHeight:44,background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.18)",
+              borderRadius:10,padding:"8px 12px",color:"#F1F5F9",fontSize:14,fontWeight:600,cursor:"pointer",textAlign:"left",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <span>{kpis.ocsAbiertas} órdenes en curso</span><Ic n="chevR"/>
           </button>
           <button onClick={onEditarSaldo}
-            style={{flex:1,minHeight:44,background:"rgba(20,184,166,0.12)",border:"1px solid rgba(20,184,166,0.35)",
-              borderRadius:10,padding:"8px 10px",color:C.teal,fontSize:13,fontWeight:700,cursor:"pointer"}}>
-            {kpis.saldoReal!==null?"Actualizar saldo":"Registrar saldo"} <Ic n="🏦"/>
+            style={{minHeight:44,background:"rgba(45,212,191,0.14)",border:"1px solid rgba(45,212,191,0.45)",
+              borderRadius:10,padding:"8px 12px",color:"#5EEAD4",fontSize:14,fontWeight:700,cursor:"pointer",textAlign:"left",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <span>{kpis.saldoReal!==null?"Actualizar saldo del banco":"Registrar saldo del banco"}</span><Ic n="chevR"/>
           </button>
         </div>
       </div>
@@ -482,9 +482,9 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
                 </span>
                 {!verificandoAlgo&&ultimaGeneral&&<span style={{display:"block",fontSize:12,color:C.inkFaint,marginTop:1}}>Última consulta exitosa: {hace(ultimaGeneral)}</span>}
               </span>
-              {nPorAceptar>0&&<span style={{fontSize:12,fontWeight:800,color:C.warn,background:C.warnLight,borderRadius:20,padding:"2px 8px"}}><Ic n="⏳"/> {nPorAceptar}</span>}
-              {nAceptadas>0&&<span style={{fontSize:12,fontWeight:800,color:C.ok,background:C.okLight,borderRadius:20,padding:"2px 8px"}}>✓ {nAceptadas}</span>}
-              {nCanceladas>0&&<span style={{fontSize:12,fontWeight:800,color:C.danger,background:C.dangerLight,borderRadius:20,padding:"2px 8px"}}>✕ {nCanceladas}</span>}
+              {nPorAceptar>0&&<span style={{fontSize:12,fontWeight:800,color:C.warnText,background:C.warnLight,borderRadius:20,padding:"2px 8px"}}><Ic n="⏳"/> {nPorAceptar}</span>}
+              {nAceptadas>0&&<span style={{fontSize:12,fontWeight:800,color:C.okText,background:C.okLight,borderRadius:20,padding:"2px 8px"}}>✓ {nAceptadas}</span>}
+              {nCanceladas>0&&<span style={{fontSize:12,fontWeight:800,color:C.dangerText,background:C.dangerLight,borderRadius:20,padding:"2px 8px"}}>✕ {nCanceladas}</span>}
               <span style={{fontSize:12,color:C.inkFaint,flexShrink:0}}>{verMP?"▲":"▼"}</span>
             </button>
 
@@ -520,7 +520,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
                     descripcion="Ya las aceptaron en Mercado Público, pero todavía no existen como registro en la app. Revísalas una a una, o cárgalas todas de una vez (sin link de compra — lo agregas después en cada una)."
                     onActualizar={onActualizarAceptadas} verificando={verificandoAceptadas}>
                     {cargandoAceptadas?(
-                      <div style={{background:C.paper,borderRadius:10,padding:"10px 12px",fontSize:12,fontWeight:700,color:C.ok,textAlign:"center",marginBottom:2}}>
+                      <div style={{background:C.paper,borderRadius:10,padding:"10px 12px",fontSize:12,fontWeight:700,color:C.okText,textAlign:"center",marginBottom:2}}>
                         Cargando {cargandoAceptadas.hechas} de {cargandoAceptadas.total}…
                       </div>
                     ):(
@@ -556,7 +556,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
                             if(window.confirm(`¿Eliminar la OC ${o.numero_oc}?\n\nFigura cancelada en Mercado Público. Esta acción no se puede deshacer.`))
                               onEliminarCancelada&&onEliminarCancelada(o.id);
                           }}
-                          style={{flexShrink:0,background:C.card,border:`1px solid ${C.danger}55`,color:C.danger,borderRadius:8,
+                          style={{flexShrink:0,background:C.card,border:`1px solid ${C.danger}55`,color:C.dangerText,borderRadius:8,
                             padding:"6px 11px",fontSize:12,fontWeight:700,cursor:"pointer"}}>
                           <Ic n="🗑"/> Eliminar
                         </button>
@@ -610,7 +610,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
       <Leyenda titulo="¿Qué significan estos números?" items={[
         {muestra:"Saldo", texto:"Saldo disponible: lo cobrado menos pagos a financiadores, gastos y compras con cuenta BFK."},
         {muestra:"Proy.", texto:"Proyección total: saldo disponible + ingresos pendientes − deuda total. Es cuánto quedaría si todo se cobra y se paga."},
-        {muestra:"18%", color:C.ok, bg:C.okLight, texto:"Margen del mes: promedio esperado de las OCs compradas este mes. Verde sobre 20%, amarillo 10–20%, rojo bajo 10%."},
+        {muestra:"18%", color:C.okText, bg:C.okLight, texto:"Margen del mes: promedio esperado de las OCs compradas este mes. Verde sobre 20%, amarillo 10–20%, rojo bajo 10%."},
         {muestra:"›", texto:"Las prioridades y los recuadros con flecha te llevan al listado ya filtrado."},
         {muestra:"—", texto:"La línea gris del gráfico es el mes anterior a la misma altura del mes, para comparar parejo."},
       ]} />

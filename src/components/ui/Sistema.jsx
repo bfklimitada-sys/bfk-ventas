@@ -42,7 +42,7 @@ export function Badge({ tono = "neutro", children, style }) {
 }
 
 // Monto con el mismo tratamiento en toda la app
-const COL = { ok: C.ok, warn: "#B45309", danger: C.danger, neutro: C.ink, suave: C.inkMuted };
+const COL = { ok: C.okText, warn: C.warnText, danger: C.dangerText, neutro: C.ink, suave: C.inkMuted };
 export function Monto({ children, tono = "neutro", tam = "md", style }) {
   const size = { sm: 14, md: 17, lg: 22, xl: 28 }[tam] || 17;
   return <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: size, color: COL[tono] || C.ink, letterSpacing: -0.3, whiteSpace: "nowrap", ...style }}>{children}</span>;

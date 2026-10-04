@@ -23,7 +23,7 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
 
   return (
     <div>
-      <button onClick={()=>setPagando(true)} style={{...btnP(C.teal),marginBottom:20}}>+ Pago a vendedor</button>
+      <button onClick={()=>setPagando(true)} style={{...btnP(C.tealDark),minHeight:50,fontSize:15,borderRadius:12,boxShadow:"0 4px 12px rgba(13,148,136,0.35)",marginBottom:20}}>+ Pago a vendedor</button>
       <Seccion titulo="Comisiones por vendedor">
       {vendedores.map(v=>{
         const datos=datosVendedor(v);
@@ -66,15 +66,15 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
                     </div>
                     <div style={{fontSize:12,color:C.inkFaint,marginBottom:5,lineHeight:1.7}}>
                       {d.esVerificado ? (
-                        <>Comisión del mes: <b style={{color:C.ink}}>{fmt.money(d.pagoCalculado)}</b> <span style={{color:C.ok}}>✓ verificado contra planilla histórica / cartola real</span></>
+                        <>Comisión del mes: <b style={{color:C.ink}}>{fmt.money(d.pagoCalculado)}</b> <span style={{color:C.okText}}>✓ verificado contra planilla histórica / cartola real</span></>
                       ) : (
                         <>
                           <div>Utilidad del mes: <b style={{color:C.ink}}>+{fmt.money(d.sumaUtilidad)}</b> <span style={{color:C.inkFaint}}>(de {fmt.money(d.sumaFacts)} facturados)</span></div>
                           {d.sinIva
                             ? <div style={{color:C.inkFaint}}>Sin descuento de IVA (regla especial de ese mes)</div>
                             : d.ivaRegistrado
-                              ? <div>IVA del mes a descontar: <b style={{color:C.danger}}>−{fmt.money(d.impIva)}</b></div>
-                              : <div style={{color:C.warn}}><Ic n="⚠"/> IVA de este mes sin registrar todavía — se está calculando sin descontarlo, va a bajar cuando lo cargues</div>
+                              ? <div>IVA del mes a descontar: <b style={{color:C.dangerText}}>−{fmt.money(d.impIva)}</b></div>
+                              : <div style={{color:C.warnText}}><Ic n="⚠"/> IVA de este mes sin registrar todavía — se está calculando sin descontarlo, va a bajar cuando lo cargues</div>
                           }
                           <div>Mitad de (utilidad − IVA): <b style={{color:C.ink}}>{fmt.money(Math.round((d.sumaUtilidad-(d.sinIva?0:d.impIva))/2))}</b></div>
                           {d.pagoVentasPropias>0&&<div>+ Ventas propias (100% de esa utilidad, sin repartir): <b style={{color:C.ink}}>+{fmt.money(d.pagoVentasPropias)}</b></div>}
@@ -84,10 +84,10 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
                     </div>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
                       <span style={{fontSize:12,color:C.inkMuted}}>Ya se le pagó: {fmt.money(d.pagado)}</span>
-                      {d.deuda>0&&<span style={{fontSize:12,fontWeight:700,color:C.danger}}>Falta pagarle: {fmt.money(d.deuda)}</span>}
+                      {d.deuda>0&&<span style={{fontSize:12,fontWeight:700,color:C.dangerText}}>Falta pagarle: {fmt.money(d.deuda)}</span>}
                     </div>
                     {!d.esVerificado&&d.pagado>d.pagoCalculado+1000&&(
-                      <div style={{fontSize:12,color:C.warn,marginTop:3,lineHeight:1.4}}>
+                      <div style={{fontSize:12,color:C.warnText,marginTop:3,lineHeight:1.4}}>
                         <Ic n="⚠"/> Se pagó {fmt.money(d.pagado-d.pagoCalculado)} más de lo que calcula la fórmula automática — probablemente venta propia o extra no marcado en el sistema. Revisa la nota del pago para el detalle.
                       </div>
                     )}
@@ -168,7 +168,7 @@ export function FormIvaMensual({ ivaExistente, onSave }) {
         <Field label="IVA compras ($)"><input style={iMono} type="number" value={iC} onChange={e=>setIC(e.target.value)} /></Field>
       </div>
       <div style={{background:C.tealLight,borderRadius:9,padding:"10px 12px",fontSize:13,color:C.tealDark,fontWeight:700,marginBottom:14}}>IVA a pagar: {fmt.money(ivaPagado)}</div>
-      {err&&<div style={{background:C.dangerLight,color:C.danger,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}
+      {err&&<div style={{background:C.dangerLight,color:C.dangerText,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}
       <button onClick={handleSave} disabled={saving} style={btnP(saving?C.inkFaint:C.info)}>{saving?"Guardando…":"✓ Guardar IVA"}</button>
     </div>
   );
@@ -210,7 +210,7 @@ export function FormPagoVendedorSimple({ vendedores, ocs, onSave }) {
           <span style={{fontSize:12,color:C.inkMuted}}>Marcar las {ocsDelMes.length} OC{ocsDelMes.length!==1?"s":""} facturadas este mes como "vendedor pagado" — evita que se vuelvan a contar si se re-emite la factura en otro mes</span>
         </label>
       )}
-      {err&&<div style={{background:C.dangerLight,color:C.danger,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}
+      {err&&<div style={{background:C.dangerLight,color:C.dangerText,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}
       <button onClick={handleSave} disabled={saving} style={btnP(saving?C.inkFaint:C.teal)}>{saving?"Guardando…":"✓ Registrar pago"}</button>
     </div>
   );

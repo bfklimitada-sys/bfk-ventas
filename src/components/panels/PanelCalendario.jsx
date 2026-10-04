@@ -3,28 +3,23 @@ import { Field, Leyenda } from "../ui/Basicos";
 import { sel } from "../../lib/supabase";
 import { C, MONO, btnP, fmt, iMono } from "../../lib/theme";
 import { Ic } from "../ui/Iconos";
-import { facturaVigente, plazoPago } from "../../lib/calculos";
+import { estadoVencimiento, facturaVigente, plazoPago } from "../../lib/calculos";
 
-// Resumen compacto de atrasos: una linea; al tocarla se despliega el detalle. No cambia ningun calculo.
-function ResumenAtraso({ titulo, monto, color, fondo, abierto, onToggle, onVerAlertas, children }) {
+// Resumen compacto de atrasos: una sola tarjeta con acceso a Alertas. No lista OC individuales.
+function ResumenAtraso({ titulo, monto, color, fondo, onVerAlertas }) {
   return (
-    <div style={{background:fondo,border:`1px solid ${color}33`,borderRadius:12,marginBottom:8,overflow:"hidden"}}>
-      <div style={{display:"flex",alignItems:"center",gap:8,padding:"0 4px 0 12px",minHeight:44}}>
-        <button onClick={onToggle} aria-expanded={abierto} style={{flex:1,minWidth:0,display:"flex",alignItems:"center",gap:6,background:"none",border:"none",cursor:"pointer",padding:"8px 0",textAlign:"left",color,fontWeight:800,fontSize:12.5}}>
-          <Ic n="⚠"/><span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{titulo}{monto>0?` · ${fmt.money(monto)}`:""}</span>
-          <Ic n={abierto?"chevD":"chevR"}/>
-        </button>
-        {onVerAlertas&&<button onClick={onVerAlertas} style={{background:"none",border:"none",cursor:"pointer",color,fontWeight:800,fontSize:12.5,padding:"10px 8px",whiteSpace:"nowrap"}}>Ver alertas →</button>}
-      </div>
-      {abierto&&<div style={{padding:"0 12px 10px",borderTop:`1px solid ${color}22`}}>{children}</div>}
+    <div style={{background:fondo,border:`1px solid ${color}44`,borderRadius:12,marginBottom:8,display:"flex",alignItems:"center",gap:8,padding:"6px 6px 6px 12px",minHeight:52}}>
+      <span style={{flex:1,minWidth:0,display:"flex",alignItems:"flex-start",gap:6,color,fontWeight:800,fontSize:13,lineHeight:1.3}}>
+        <span style={{paddingTop:1}}><Ic n="⚠"/></span>
+        <span>{titulo}{monto>0&&<span style={{display:"block",fontFamily:MONO,fontSize:15,marginTop:1}}>{fmt.money(monto)}</span>}</span>
+      </span>
+      {onVerAlertas&&<button onClick={onVerAlertas} style={{background:"none",border:"none",cursor:"pointer",color,fontWeight:800,fontSize:13,minHeight:44,padding:"0 8px",whiteSpace:"nowrap"}}>Ver alertas →</button>}
     </div>
   );
 }
 
 export function PanelCalendario({ ocs, onMarcarFecha, onVerAlertas }) {
   const hoy=new Date();
-  const [verEntregas,setVerEntregas]=useState(false);
-  const [verFacturas,setVerFacturas]=useState(false);
   const [anio,setAnio]=useState(hoy.getFullYear());
   const [mes,setMes]=useState(hoy.getMonth());
   const [diaSel,setDiaSel]=useState(null);
@@ -80,6 +75,18 @@ export function PanelCalendario({ ocs, onMarcarFecha, onVerAlertas }) {
     return {estimadasPorDia:est,realesPorDia:rea,vencidas:ven};
   },[ocs]);
 
+  // Mismo criterio que el Panel y Alertas: estadoVencimiento + saldo (facturado - cobrado) por OC.
+  const resumenFacturas=useMemo(()=>{
+    let n=0,monto=0;
+    for(const oc of ocs){
+      if((oc.tipo_registro||"venta")!=="venta"||oc.estado_factura_propia!=="emitida"||oc.estado_pago_cliente==="pagado") continue;
+      const evF=facturaVigente(oc); if(!evF?.fecha) continue;
+      const dias=fmt.diasDesde(evF.fecha);
+      if(estadoVencimiento(dias||0,plazoPago(oc)).vencida){ n++; monto+=(oc.monto_facturado||0)-(oc.monto_cobrado||0); }
+    }
+    return {n,monto};
+  },[ocs]);
+
   const primerDia=new Date(anio,mes,1);
   const diasEnMes=new Date(anio,mes+1,0).getDate();
   let offset=primerDia.getDay()-1; if(offset<0)offset=6;
@@ -109,29 +116,14 @@ export function PanelCalendario({ ocs, onMarcarFecha, onVerAlertas }) {
   return (
     <div>
       {vencidas.length>0&&(
-        <ResumenAtraso color={C.danger} fondo={C.dangerLight} abierto={verEntregas} onToggle={()=>setVerEntregas(v=>!v)}
-          titulo={`${vencidas.length} entrega${vencidas.length>1?"s":""} atrasada${vencidas.length>1?"s":""}`}>
-          {vencidas.map(({oc,fEst})=>(
-            <div key={oc.id} style={{fontSize:12,display:"flex",justifyContent:"space-between",padding:"4px 0"}}>
-              <span style={{fontFamily:MONO,fontWeight:700}}>{oc.numero_oc}</span>
-              <span style={{color:C.danger}}>estimada {fmt.date(fEst)}</span>
-            </div>
-          ))}
-        </ResumenAtraso>
+        <ResumenAtraso color={C.dangerText} fondo={C.dangerLight} onVerAlertas={onVerAlertas}
+          titulo={`${vencidas.length} entrega${vencidas.length>1?"s":""} atrasada${vencidas.length>1?"s":""}`} />
       )}
 
-      {facturasVencidas.length>0&&(
-        <ResumenAtraso color={C.warn} fondo={C.warnLight} abierto={verFacturas} onToggle={()=>setVerFacturas(v=>!v)}
-          titulo={`${facturasVencidas.length} factura${facturasVencidas.length>1?"s":""} vencida${facturasVencidas.length>1?"s":""}`}
-          monto={facturasVencidas.reduce((s,x)=>s+(Number(x.evF?.monto)||0),0)} onVerAlertas={onVerAlertas}>
-          {facturasVencidas.slice(0,8).map(({oc,k})=>(
-            <div key={oc.id} style={{fontSize:12,display:"flex",justifyContent:"space-between",padding:"4px 0"}}>
-              <span style={{fontFamily:MONO,fontWeight:700}}>{oc.numero_oc}</span>
-              <span style={{color:C.warn}}>venció {fmt.date(k)}</span>
-            </div>
-          ))}
-          {facturasVencidas.length>8&&<div style={{fontSize:12,color:C.inkMuted,paddingTop:4}}>y {facturasVencidas.length-8} más en Alertas</div>}
-        </ResumenAtraso>
+      {resumenFacturas.n>0&&(
+        <ResumenAtraso color={C.warnText} fondo={C.warnLight} onVerAlertas={onVerAlertas}
+          titulo={`${resumenFacturas.n} factura${resumenFacturas.n>1?"s":""} vencida${resumenFacturas.n>1?"s":""} sin cobrar`}
+          monto={resumenFacturas.monto} />
       )}
 
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
@@ -194,7 +186,7 @@ export function PanelCalendario({ ocs, onMarcarFecha, onVerAlertas }) {
               <Field label="Código de la OC">
                 <input style={iMono} value={codOC} onChange={e=>setCodOC(e.target.value)} placeholder="ej: 2436-690-AG26" />
               </Field>
-              {err&&<div style={{fontSize:12,color:C.danger,fontWeight:600,marginBottom:8}}>{err}</div>}
+              {err&&<div style={{fontSize:12,color:C.dangerText,fontWeight:600,marginBottom:8}}>{err}</div>}
               <button onClick={handleMarcar} disabled={saving} style={btnP(saving?C.inkFaint:C.teal)}>
                 {saving?"Guardando…":`✓ Marcar entrega estimada para el ${diaSel}/${mes+1}`}
               </button>
@@ -217,18 +209,18 @@ export function PanelCalendario({ ocs, onMarcarFecha, onVerAlertas }) {
           )}
           {(realesPorDia[kSel]||[]).length>0&&(
             <div>
-              <div style={{fontSize:12,fontWeight:700,color:C.ok,textTransform:"uppercase",marginBottom:4}}>● Entregas realizadas</div>
+              <div style={{fontSize:12,fontWeight:700,color:C.okText,textTransform:"uppercase",marginBottom:4}}>● Entregas realizadas</div>
               {(realesPorDia[kSel]||[]).map(oc=>(
                 <div key={oc.id} style={{fontSize:12,display:"flex",justifyContent:"space-between",marginBottom:3}}>
                   <span style={{fontFamily:MONO,fontWeight:700}}>{oc.numero_oc}</span>
-                  <span style={{color:C.ok,fontSize:12}}>✓</span>
+                  <span style={{color:C.okText,fontSize:12}}>✓</span>
                 </div>
               ))}
             </div>
           )}
           {(vencenPorDia[kSel]||[]).length>0&&(
             <div style={{marginTop:8}}>
-              <div style={{fontSize:12,fontWeight:700,color:C.warn,textTransform:"uppercase",marginBottom:4}}>● Vencen facturas</div>
+              <div style={{fontSize:12,fontWeight:700,color:C.warnText,textTransform:"uppercase",marginBottom:4}}>● Vencen facturas</div>
               {(vencenPorDia[kSel]||[]).map(({oc,evF})=>(
                 <div key={oc.id} style={{fontSize:12,display:"flex",justifyContent:"space-between",marginBottom:3}}>
                   <span style={{fontFamily:MONO,fontWeight:700}}>{oc.numero_oc}</span>
@@ -255,8 +247,8 @@ export function PanelCalendario({ ocs, onMarcarFecha, onVerAlertas }) {
       )}
       <Leyenda titulo="¿Qué significan los puntos?" items={[
         {muestra:"●", color:C.info, bg:C.infoLight, texto:"Azul: entrega estimada, la fecha que se puso al registrar la compra."},
-        {muestra:"●", color:C.ok, bg:C.okLight, texto:"Verde: entrega realizada, la fecha real en que se confirmó."},
-        {muestra:"●", color:C.warn, bg:C.warnLight, texto:"Amarillo: vence una factura (fecha de factura + plazo de pago de la OC)."},
+        {muestra:"●", color:C.okText, bg:C.okLight, texto:"Verde: entrega realizada, la fecha real en que se confirmó."},
+        {muestra:"●", color:C.warnText, bg:C.warnLight, texto:"Amarillo: vence una factura (fecha de factura + plazo de pago de la OC)."},
         {muestra:"●", color:C.purple, bg:C.purpleLight, texto:"Morado: fecha en que el cliente prometió pagar."},
         {muestra:"▢", texto:"Recuadro negro: hoy. Recuadro verde: el día que tienes seleccionado."},
       ]} />

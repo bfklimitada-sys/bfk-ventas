@@ -1430,7 +1430,7 @@ export default function App() {
   ].filter(m=>m.fecha&&m.monto);
 
   return (
-    <div style={{minHeight:"100vh",background:C.paper,fontFamily:SANS,paddingBottom:76}}>
+    <div style={{minHeight:"100vh",background:C.paper,fontFamily:SANS,paddingBottom:"calc(104px + env(safe-area-inset-bottom))"}}>
       {/* HEADER */}
       <div style={{background:`linear-gradient(135deg,${C.night} 0%,#16213E 100%)`,padding:"calc(16px + env(safe-area-inset-top)) 16px 14px",color:"#fff",boxShadow:"0 2px 12px rgba(11,17,32,0.25)",position:"sticky",top:0,zIndex:30}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -1504,14 +1504,14 @@ export default function App() {
                       {t.icon}
                       {t.key==="notif"&&<NotifBadge notificaciones={notificaciones} urgentes={alertasUrgentes} />}
                     </span>
-                    <span style={{fontSize:12,fontWeight:activo?800:600,color:activo?C.tealDark:C.inkFaint}}>{t.label}</span>
+                    <span style={{fontSize:12,fontWeight:activo?800:600,color:activo?C.tealDark:C.inkMuted}}>{t.label}</span>
                   </button>
                 );
               })}
               {secundarias.length>0&&(
                 <button onClick={()=>setMenuMas(v=>!v)} style={{flex:1,background:"none",border:"none",padding:"6px 1px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
                   <span style={{fontSize:17,display:"flex",alignItems:"center",justifyContent:"center",width:44,height:28,borderRadius:14,background:enMas||menuMas?C.tealLight:"transparent",transition:"all 0.18s"}}><Ic n="☰"/></span>
-                  <span style={{fontSize:12,fontWeight:enMas||menuMas?800:600,color:enMas||menuMas?C.tealDark:C.inkFaint}}>Más</span>
+                  <span style={{fontSize:12,fontWeight:enMas||menuMas?800:600,color:enMas||menuMas?C.tealDark:C.inkMuted}}>Más</span>
                 </button>
               )}
             </div>

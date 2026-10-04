@@ -45,14 +45,14 @@ export function LoginScreen({ onLogin }) {
           </div>
         )}
         {mode==="recover"&&<div style={{fontWeight:800,fontSize:15,color:C.ink,marginBottom:16,textAlign:"center"}}>Recuperar contraseña</div>}
-        {err&&<div style={{background:C.dangerLight,color:C.danger,borderRadius:9,padding:"9px 12px",fontSize:12.5,marginBottom:14,textAlign:"center",fontWeight:600}}>{err}</div>}
-        {info&&<div style={{background:C.okLight,color:C.ok,borderRadius:9,padding:"9px 12px",fontSize:12.5,marginBottom:14,textAlign:"center",fontWeight:600}}>{info}</div>}
+        {err&&<div style={{background:C.dangerLight,color:C.dangerText,borderRadius:9,padding:"9px 12px",fontSize:12.5,marginBottom:14,textAlign:"center",fontWeight:600}}>{err}</div>}
+        {info&&<div style={{background:C.okLight,color:C.okText,borderRadius:9,padding:"9px 12px",fontSize:12.5,marginBottom:14,textAlign:"center",fontWeight:600}}>{info}</div>}
         {mode==="signup"&&<Field label="Nombre"><input style={iStyle} value={nombre} onChange={e=>setNombre(e.target.value)} placeholder="Tu nombre" onKeyDown={e=>e.key==="Enter"&&submit()} /></Field>}
         <Field label="Correo"><input style={iStyle} type="email" value={email} onChange={e=>{setEmail(e.target.value);setErr("");}} placeholder="correo@ejemplo.com" onKeyDown={e=>e.key==="Enter"&&submit()} /></Field>
         {mode!=="recover"&&<Field label="Contraseña"><input style={iStyle} type="password" value={pass} onChange={e=>{setPass(e.target.value);setErr("");}} placeholder="••••••••" onKeyDown={e=>e.key==="Enter"&&submit()} /></Field>}
         <button onClick={submit} disabled={loading} style={btnP(loading?C.inkFaint:C.night)}>{loading?"Procesando…":mode==="login"?"Ingresar":mode==="signup"?"Crear cuenta":"Enviar correo de recuperación"}</button>
-        {mode==="login"&&<div style={{textAlign:"center",marginTop:14}}><button onClick={()=>{setMode("recover");setErr("");setInfo("");}} style={{background:"none",border:"none",color:C.teal,fontSize:12,fontWeight:700,cursor:"pointer"}}>¿Olvidaste tu contraseña?</button></div>}
-        {mode==="recover"&&<div style={{textAlign:"center",marginTop:14}}><button onClick={()=>{setMode("login");setErr("");setInfo("");}} style={{background:"none",border:"none",color:C.teal,fontSize:12,fontWeight:700,cursor:"pointer"}}>← Volver a iniciar sesión</button></div>}
+        {mode==="login"&&<div style={{textAlign:"center",marginTop:14}}><button onClick={()=>{setMode("recover");setErr("");setInfo("");}} style={{background:"none",border:"none",color:C.tealDark,fontSize:12,fontWeight:700,cursor:"pointer"}}>¿Olvidaste tu contraseña?</button></div>}
+        {mode==="recover"&&<div style={{textAlign:"center",marginTop:14}}><button onClick={()=>{setMode("login");setErr("");setInfo("");}} style={{background:"none",border:"none",color:C.tealDark,fontSize:12,fontWeight:700,cursor:"pointer"}}>← Volver a iniciar sesión</button></div>}
         <div style={{textAlign:"center",fontSize:12,color:C.inkFaint,marginTop:16}}>{mode==="login"?'¿Sin cuenta? Usa "Crear cuenta"':mode==="signup"?"El primer usuario será administrador.":""}</div>
       </div>
     </div>
