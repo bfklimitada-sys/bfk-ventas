@@ -7,10 +7,48 @@
 //
 // El ticket se lee de la variable de entorno MP_TICKET.
 // Configúrala en Vercel → Settings → Environment Variables.
-// Si no existe, usa el ticket público de pruebas de ChileCompra.
+// Si no existe, la función responde un error claro (ya no usa ticket de pruebas).
+// Exige una sesión válida de BFK (cabecera Authorization: Bearer <token>).
 // ═══════════════════════════════════════════════════════════════
 
-const TICKET_PRUEBAS = "F8537A18-6766-4DEF-9E59-426B4FEE2844";
+const SUPABASE_URL = "https://gypywxaugwuxbgmcqntp.supabase.co";
+// Clave pública (anon) del proyecto: es pública por diseño, igual que en el frontend.
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd5cHl3eGF1Z3d1eGJnbWNxbnRwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2MjA4MjksImV4cCI6MjA5NzE5NjgyOX0.ujdKtdhFklJEPHy1vWlm8RLgPAQlo7sNNBGd_MbmibQ";
+
+// Límite por usuario (en memoria; se reinicia con cada instancia de la función).
+const VENTANA_MS = 60_000;
+const MAX_CODIGO = 120;   // consultas de una OC por minuto
+const MAX_LISTAR = 10;    // listados por minuto
+const usos = new Map();
+function limitado(uid, tipo, max) {
+  const ahora = Date.now();
+  const k = `${uid}:${tipo}`;
+  const arr = (usos.get(k) || []).filter((t) => ahora - t < VENTANA_MS);
+  if (arr.length >= max) { usos.set(k, arr); return true; }
+  arr.push(ahora); usos.set(k, arr);
+  if (usos.size > 2000) for (const [kk, v] of usos) if (!v.some((t) => ahora - t < VENTANA_MS)) usos.delete(kk);
+  return false;
+}
+
+// Valida el token con Supabase y comprueba que el usuario tenga perfil BFK.
+async function validarSesion(req) {
+  const auth = String(req.headers?.authorization || "");
+  const m = auth.match(/^Bearer\s+(.+)$/i);
+  if (!m) return { error: "Sesión requerida. Inicie sesión en BFK Ventas.", status: 401 };
+  const token = m[1].trim();
+  try {
+    const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` } });
+    if (!r.ok) return { error: "Sesión inválida o vencida. Vuelva a iniciar sesión.", status: 401 };
+    const u = await r.json();
+    if (!u?.id) return { error: "Sesión inválida.", status: 401 };
+    const p = await fetch(`${SUPABASE_URL}/rest/v1/perfiles?id=eq.${encodeURIComponent(u.id)}&select=id`, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` } });
+    const filas = p.ok ? await p.json() : [];
+    if (!Array.isArray(filas) || filas.length === 0) return { error: "Usuario sin perfil autorizado en BFK.", status: 403 };
+    return { uid: u.id };
+  } catch {
+    return { error: "No se pudo validar la sesión. Intente de nuevo.", status: 503 };
+  }
+}
 
 // Anexo 3.3 de la documentación oficial
 const TIPO_DESPACHO = {
@@ -165,7 +203,18 @@ async function listarOCs(req, res, ticket) {
 
 export default async function handler(req, res) {
 
-  const ticket = process.env.MP_TICKET || TICKET_PRUEBAS;
+  const ses = await validarSesion(req);
+  if (ses.error) return res.status(ses.status).json({ ok: false, error: ses.error });
+
+  const ticket = (process.env.MP_TICKET || "").trim();
+  if (!ticket) {
+    return res.status(500).json({ ok: false, error: "Falta configurar MP_TICKET en el servidor (Vercel → Environment Variables)." });
+  }
+
+  const tipo = req.query?.listar ? "listar" : "codigo";
+  if (limitado(ses.uid, tipo, tipo === "listar" ? MAX_LISTAR : MAX_CODIGO)) {
+    return res.status(429).json({ ok: false, error: "Demasiadas consultas. Espere un minuto e intente de nuevo." });
+  }
 
   // Modo listado
   if (req.query?.listar) {
@@ -211,7 +260,7 @@ export default async function handler(req, res) {
       return res.status(502).json({
         ok: false,
         error: `Mercado Público respondió ${ultimoStatus}`,
-        usandoTicketPruebas: !process.env.MP_TICKET,
+        usandoTicketPruebas: false,
       });
     }
 
@@ -293,7 +342,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       ok: true,
       oc: normalizada,
-      usandoTicketPruebas: !process.env.MP_TICKET,
+      usandoTicketPruebas: false,
     });
 
   } catch (e) {
