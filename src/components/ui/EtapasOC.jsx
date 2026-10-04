@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Field } from "./Basicos";
 import { del } from "../../lib/supabase";
 import { C, MONO, SANS, btnP, fmt, iMono, iStyle, selStyle } from "../../lib/theme";
+import { Ic, I } from "./Iconos";
 
 export const TIPOS_PV={falla:"Falla del producto",faltante:"Faltante",cambio:"Cambio / reposición",devolucion:"Devolución",otro:"Otro"};
 
@@ -83,28 +84,28 @@ export function EtapasOC({ oc, perfil, perfiles, onEditarEvento, onEliminarFactu
   };
 
   const etapas = [
-    { key:"compra",  label:"Compra",  ok:(oc.eventos_compra||[]).length>0,        icon:"📦", tabla:"eventos_compra",
-      accion: (oc.eventos_compra||[]).length===0?{label:"📦 Registrar compra",color:C.teal,key:"compra"}:null,
+    { key:"compra",  label:"Compra",  ok:(oc.eventos_compra||[]).length>0,        icon:<Ic n="📦"/>, tabla:"eventos_compra",
+      accion: (oc.eventos_compra||[]).length===0?{label:<I t={"📦 Registrar compra"}/>,color:C.teal,key:"compra"}:null,
       correoBtns: null },
-    { key:"entrega", label:"Entrega", ok:oc.estado_entrega==="confirmada"||oc.estado_entrega==="entregado",          icon:"🚚", tabla:"eventos_entrega",
+    { key:"entrega", label:"Entrega", ok:oc.estado_entrega==="confirmada"||oc.estado_entrega==="entregado",          icon:<Ic n="🚚"/>, tabla:"eventos_entrega",
       accion: oc.estado_entrega!=="confirmada"&&oc.estado_entrega!=="entregado"?{label:"✓ Confirmar entrega",color:C.transit,key:"entrega"}:null,
       correoBtns: [
-        {label:"⚠️ Entrega fallida",action:onCorreoFallida,color:C.warn},
-        {label:"📅 Fecha de entrega",action:onCorreoFecha,color:C.ink},
+        {label:<I t={"⚠️ Entrega fallida"}/>,action:onCorreoFallida,color:C.warn},
+        {label:<I t={"📅 Fecha de entrega"}/>,action:onCorreoFecha,color:C.ink},
       ]},
-    { key:"factura", label:"Factura", ok:oc.estado_factura_propia==="emitida",     icon:"🧾", tabla:"eventos_factura",
+    { key:"factura", label:"Factura", ok:oc.estado_factura_propia==="emitida",     icon:<Ic n="🧾"/>, tabla:"eventos_factura",
       accion: oc.estado_factura_propia!=="emitida"
-        ?{label:"🧾 Emitir factura",color:C.info,key:"factura"}
-        :{label:"🧾 Re-emitir (NC)",color:C.inkMuted,key:"factura"},
+        ?{label:<I t={"🧾 Emitir factura"}/>,color:C.info,key:"factura"}
+        :{label:<I t={"🧾 Re-emitir (NC)"}/>,color:C.inkMuted,key:"factura"},
       correoBtns: null },
-    { key:"cobro",   label:"Cobro",   ok:oc.estado_pago_cliente==="pagado",        icon:"💰", tabla:"eventos_pago_cliente",
-      accion: oc.estado_factura_propia==="emitida"&&oc.estado_pago_cliente!=="pagado"?{label:"💰 Registrar cobro",color:C.ok,key:"pago_cliente"}:null,
+    { key:"cobro",   label:"Cobro",   ok:oc.estado_pago_cliente==="pagado",        icon:<Ic n="💰"/>, tabla:"eventos_pago_cliente",
+      accion: oc.estado_factura_propia==="emitida"&&oc.estado_pago_cliente!=="pagado"?{label:<I t={"💰 Registrar cobro"}/>,color:C.ok,key:"pago_cliente"}:null,
       correoBtns: null },
-    { key:"financ",  label:"Financ.", ok:oc.estado_pago_financiamiento==="pagado", icon:"🏦", tabla:"eventos_pago_financiamiento",
-      accion: oc.estado_pago_financiamiento!=="pagado"?{label:"🏦 Registrar pago",color:C.purple,key:"pago_financ"}:null,
+    { key:"financ",  label:"Financ.", ok:oc.estado_pago_financiamiento==="pagado", icon:<Ic n="🏦"/>, tabla:"eventos_pago_financiamiento",
+      accion: oc.estado_pago_financiamiento!=="pagado"?{label:<I t={"🏦 Registrar pago"}/>,color:C.purple,key:"pago_financ"}:null,
       correoBtns: null },
-    { key:"postventa", label:"Post-venta", ok:(oc.eventos_postventa||[]).some(e=>e.estado==="resuelto"), icon:"🛠", tabla:"eventos_postventa",
-      accion: {label:"🛠 Registrar incidencia",color:C.warn,key:"postventa"},
+    { key:"postventa", label:"Post-venta", ok:(oc.eventos_postventa||[]).some(e=>e.estado==="resuelto"), icon:<Ic n="🛠"/>, tabla:"eventos_postventa",
+      accion: {label:<I t={"🛠 Registrar incidencia"}/>,color:C.warn,key:"postventa"},
       correoBtns: null },
   ];
   const principales=etapas.filter(e=>e.key!=="postventa");
@@ -119,27 +120,27 @@ export function EtapasOC({ oc, perfil, perfiles, onEditarEvento, onEliminarFactu
             {/* Estado marcado en OC pero sin evento detallado (OCs históricas) */}
             {etapa.key==="factura"&&oc.estado_factura_propia==="emitida"&&(
               <div style={{background:C.card,borderRadius:8,padding:"10px 12px",marginBottom:8}}>
-                <div style={{fontSize:12.5,fontWeight:600}}>🧾 Factura registrada</div>
+                <div style={{fontSize:12.5,fontWeight:600}}><Ic n="🧾"/> Factura registrada</div>
                 <div style={{fontSize:12,color:C.inkMuted}}>Monto: <b>{fmt.money(oc.monto_facturado)}</b></div>
                 <div style={{fontSize:12,color:C.warn,marginTop:4}}>Sin detalle de número y fecha — usa Re-emitir para agregar</div>
               </div>
             )}
             {etapa.key==="cobro"&&oc.estado_pago_cliente==="pagado"&&(
               <div style={{background:C.card,borderRadius:8,padding:"10px 12px",marginBottom:8}}>
-                <div style={{fontSize:12.5,fontWeight:600}}>💰 Cobro registrado</div>
+                <div style={{fontSize:12.5,fontWeight:600}}><Ic n="💰"/> Cobro registrado</div>
                 <div style={{fontSize:12,color:C.inkMuted}}>Monto: <b>{fmt.money(oc.monto_cobrado||oc.monto_facturado||oc.monto_total)}</b></div>
                 <div style={{fontSize:12,color:C.warn,marginTop:4}}>Registro histórico — sin fecha detallada</div>
               </div>
             )}
             {etapa.key==="entrega"&&(oc.estado_entrega==="confirmada"||oc.estado_entrega==="entregado")&&(
               <div style={{background:C.card,borderRadius:8,padding:"10px 12px",marginBottom:8}}>
-                <div style={{fontSize:12.5,fontWeight:600}}>🚚 Entrega confirmada</div>
+                <div style={{fontSize:12.5,fontWeight:600}}><Ic n="🚚"/> Entrega confirmada</div>
                 <div style={{fontSize:12,color:C.warn,marginTop:4}}>Registro histórico — sin fecha detallada</div>
               </div>
             )}
             {etapa.key==="financ"&&oc.estado_pago_financiamiento==="pagado"&&(
               <div style={{background:C.card,borderRadius:8,padding:"10px 12px",marginBottom:8}}>
-                <div style={{fontSize:12.5,fontWeight:600}}>🏦 Financiamiento pagado</div>
+                <div style={{fontSize:12.5,fontWeight:600}}><Ic n="🏦"/> Financiamiento pagado</div>
                 <div style={{fontSize:12,color:C.inkMuted}}>Monto: <b>{fmt.money(oc.costo_total)}</b> · A: <b>{oc.financiadores?.nombre||"—"}</b></div>
                 <div style={{fontSize:12,color:C.warn,marginTop:4}}>Registro histórico — sin fecha detallada</div>
               </div>
@@ -152,7 +153,7 @@ export function EtapasOC({ oc, perfil, perfiles, onEditarEvento, onEliminarFactu
               (etapa.key==="financ"&&oc.estado_pago_financiamiento==="pagado")
             )&&(
               etapa.key==="cobro"&&oc.estado_factura_propia!=="emitida"
-                ? <div style={{fontSize:12,color:C.warn,padding:"4px 0 8px",fontWeight:600}}>⚠ Primero emite la factura para poder registrar el cobro</div>
+                ? <div style={{fontSize:12,color:C.warn,padding:"4px 0 8px",fontWeight:600}}><Ic n="⚠"/> Primero emite la factura para poder registrar el cobro</div>
                 : <div style={{fontSize:12,color:C.inkFaint,padding:"4px 0 8px"}}>Sin registros aún</div>
             )}
             {/* Botón de acción inmediato cuando no hay registro */}
@@ -173,14 +174,14 @@ export function EtapasOC({ oc, perfil, perfiles, onEditarEvento, onEliminarFactu
         {eventos.map((ev,i)=>(
           <div key={ev.id||i} style={{background:C.card,borderRadius:8,padding:"10px 12px",marginBottom:6}}>
             {etapa.key==="compra"&&<>
-              <div style={{fontSize:12.5,fontWeight:600}}>📅 {fmt.date(ev.fecha)||"—"}</div>
+              <div style={{fontSize:12.5,fontWeight:600}}><Ic n="📅"/> {fmt.date(ev.fecha)||"—"}</div>
               <div style={{fontSize:12,color:C.inkMuted}}>Venta: <b>{fmt.money(ev.monto_venta||oc.monto_total)}</b> · Costo: <b>{fmt.money(ev.costo_compra||oc.costo_total)}</b></div>
               {ev.fecha_entrega_estimada&&<div style={{fontSize:12,color:C.inkMuted}}>Entrega est.: {fmt.date(ev.fecha_entrega_estimada)}</div>}
               {ev.proveedor&&<div style={{fontSize:12,color:C.inkMuted}}>Proveedor: {ev.proveedor}</div>}
               <div style={{fontSize:12,color:C.inkMuted}}>Financiador: <b>{oc.financiadores?.nombre||"—"}</b> · Vendedor: <b>{oc.vendedores?.nombre||"—"}</b></div>
               {/* Links de productos dentro de Compra */}
               <div style={{marginTop:8,borderTop:`1px solid ${C.border}`,paddingTop:8}}>
-                <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:6}}>🔗 Productos</div>
+                <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:6}}><Ic n="🔗"/> Productos</div>
                 {(oc.oc_productos_link||[]).sort((a,b)=>a.orden-b.orden).map((l,li)=>(
                   <div key={l.id} style={{display:"flex",alignItems:"center",gap:6,marginBottom:4,background:C.card,borderRadius:7,padding:"6px 8px"}}>
                     <span style={{fontSize:12,color:C.inkMuted,fontWeight:700,minWidth:14}}>{li+1}</span>
@@ -189,7 +190,7 @@ export function EtapasOC({ oc, perfil, perfiles, onEditarEvento, onEliminarFactu
                       {l.url&&l.url!=="sin-link"&&<a href={l.url} target="_blank" rel="noopener noreferrer" style={{fontSize:12,color:C.teal,textDecoration:"none"}}>{l.url.length>40?l.url.slice(0,40)+"…":l.url}</a>}
                     </div>
                     {l.url&&l.url!=="sin-link"&&<button onClick={()=>window.open(l.url,'_blank')} style={{background:C.tealLight,border:"none",borderRadius:5,padding:"3px 6px",fontSize:12,color:C.teal,cursor:"pointer",flexShrink:0}}>↗</button>}
-                    <button onClick={()=>{const nd=prompt("Nueva descripción:",l.descripcion);if(nd)onEditarLink&&onEditarLink(l.id,{descripcion:nd,url:l.url});}} style={{background:"none",border:"none",fontSize:12,cursor:"pointer",flexShrink:0}}>✏️</button>
+                    <button onClick={()=>{const nd=prompt("Nueva descripción:",l.descripcion);if(nd)onEditarLink&&onEditarLink(l.id,{descripcion:nd,url:l.url});}} style={{background:"none",border:"none",fontSize:12,cursor:"pointer",flexShrink:0}}><Ic n="✏️"/></button>
                     <button onClick={async()=>{if(window.confirm("¿Eliminar este link?"))await onEliminarLink&&onEliminarLink(l.id);}} style={{background:"none",border:"none",fontSize:12,color:C.danger,cursor:"pointer",flexShrink:0}}>✕</button>
                   </div>
                 ))}
@@ -197,30 +198,30 @@ export function EtapasOC({ oc, perfil, perfiles, onEditarEvento, onEliminarFactu
               </div>
             </>}
             {etapa.key==="entrega"&&<>
-              <div style={{fontSize:12.5,fontWeight:600}}>✅ Entregado el {fmt.date(ev.fecha)||"—"}</div>
+              <div style={{fontSize:12.5,fontWeight:600}}><Ic n="✅"/> Entregado el {fmt.date(ev.fecha)||"—"}</div>
               {ev.persona_recibe&&<div style={{fontSize:12,color:C.inkMuted}}>Recibe: {ev.persona_recibe}</div>}
               {ev.notas&&<div style={{fontSize:12,color:C.inkMuted}}>{ev.notas}</div>}
               {!ev.persona_recibe&&!ev.notas&&<div style={{fontSize:12,color:C.inkFaint}}>Sin detalle adicional</div>}
             </>}
             {etapa.key==="factura"&&<>
-              <div style={{fontSize:12.5,fontWeight:600}}>🧾 Factura N°{ev.numero_factura||"—"} · {fmt.money(ev.monto||oc.monto_facturado)}</div>
+              <div style={{fontSize:12.5,fontWeight:600}}><Ic n="🧾"/> Factura N°{ev.numero_factura||"—"} · {fmt.money(ev.monto||oc.monto_facturado)}</div>
               <div style={{fontSize:12,color:C.inkMuted}}>Emitida el {fmt.date(ev.fecha)||"—"}</div>
               {ev.nota_credito&&<div style={{fontSize:12,color:C.warn}}>NC N°{ev.nota_credito} · anula factura N°{ev.factura_anulada_numero}</div>}
-              {ev.motivo_diferencia&&<div style={{fontSize:12,color:C.warn,marginTop:3}}>⚠ Difiere de la OC: {ev.motivo_diferencia}</div>}
+              {ev.motivo_diferencia&&<div style={{fontSize:12,color:C.warn,marginTop:3}}><Ic n="⚠"/> Difiere de la OC: {ev.motivo_diferencia}</div>}
             </>}
             {etapa.key==="cobro"&&<>
-              <div style={{fontSize:12.5,fontWeight:600}}>💰 {fmt.money(ev.monto||oc.monto_cobrado)} cobrado</div>
+              <div style={{fontSize:12.5,fontWeight:600}}><Ic n="💰"/> {fmt.money(ev.monto||oc.monto_cobrado)} cobrado</div>
               <div style={{fontSize:12,color:C.inkMuted}}>{fmt.date(ev.fecha)||"—"}</div>
               {ev.referencia&&<div style={{fontSize:12,color:C.inkMuted}}>Ref: {ev.referencia}</div>}
             </>}
             {etapa.key==="financ"&&<>
-              <div style={{fontSize:12.5,fontWeight:600}}>🏦 {fmt.money(ev.monto||oc.costo_total)} pagado</div>
+              <div style={{fontSize:12.5,fontWeight:600}}><Ic n="🏦"/> {fmt.money(ev.monto||oc.costo_total)} pagado</div>
               <div style={{fontSize:12,color:C.inkMuted}}>{fmt.date(ev.fecha)||"—"}</div>
               {ev.financiador_id&&<div style={{fontSize:12,color:C.inkMuted}}>A: {oc.financiadores?.nombre||"—"}</div>}
             </>}
             {etapa.key==="postventa"&&<>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:6}}>
-                <div style={{fontSize:12.5,fontWeight:600}}>🛠 {TIPOS_PV[ev.tipo]||ev.tipo||"Incidencia"}</div>
+                <div style={{fontSize:12.5,fontWeight:600}}><Ic n="🛠"/> {TIPOS_PV[ev.tipo]||ev.tipo||"Incidencia"}</div>
                 <span style={{fontSize:12,fontWeight:700,borderRadius:5,padding:"2px 6px",background:ev.estado==="resuelto"?C.okLight:ev.estado==="en_gestion"?C.warnLight:C.dangerLight,color:ev.estado==="resuelto"?C.ok:ev.estado==="en_gestion"?C.warn:C.danger}}>
                   {ev.estado==="resuelto"?"✓ Resuelto":ev.estado==="en_gestion"?"En gestión":"Abierto"}
                 </span>
@@ -236,18 +237,18 @@ export function EtapasOC({ oc, perfil, perfiles, onEditarEvento, onEliminarFactu
             </>}
             <div style={{display:"flex",gap:6,marginTop:8}}>
               <button onClick={()=>onEditarEvento&&onEditarEvento({tipo:etapa.label,e:ev,tabla:etapa.tabla})}
-                style={{fontSize:12,background:C.tealLight,color:C.teal,border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontWeight:600}}>✏️ Editar</button>
+                style={{fontSize:12,background:C.tealLight,color:C.teal,border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontWeight:600}}><Ic n="✏️"/> Editar</button>
               {perfil?.rol==="admin"&&etapa.key==="factura"&&(
                 <button onClick={async()=>{
                   if(!window.confirm(`¿Eliminar factura N°${ev.numero_factura}?\nEsto revertirá el estado a pendiente.`)) return;
                   await onEliminarFactura(oc.id, ev.id); setDetalle(null);
-                }} style={{fontSize:12,background:C.dangerLight,color:C.danger,border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontWeight:600}}>🗑 Eliminar</button>
+                }} style={{fontSize:12,background:C.dangerLight,color:C.danger,border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontWeight:600}}><Ic n="🗑"/> Eliminar</button>
               )}
               {perfil?.rol==="admin"&&etapa.key!=="factura"&&(
                 <button onClick={async()=>{
                   if(!window.confirm(`¿Eliminar este registro de ${etapa.label}?`)) return;
                   if(onEliminarEvento) await onEliminarEvento(etapa.tabla, ev.id, oc.id, etapa.key); setDetalle(null);
-                }} style={{fontSize:12,background:C.dangerLight,color:C.danger,border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontWeight:600}}>🗑 Eliminar</button>
+                }} style={{fontSize:12,background:C.dangerLight,color:C.danger,border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontWeight:600}}><Ic n="🗑"/> Eliminar</button>
               )}
             </div>
           </div>
@@ -312,7 +313,7 @@ export function EtapasOC({ oc, perfil, perfiles, onEditarEvento, onEliminarFactu
         </div>
       )}
       {(oc.eventos_postventa||[]).some(e=>e.estado!=="resuelto")&&(
-        <div style={{fontSize:12,color:C.warn,textAlign:"right",fontWeight:700}}>🛠 post-venta abierta</div>
+        <div style={{fontSize:12,color:C.warn,textAlign:"right",fontWeight:700}}><Ic n="🛠"/> post-venta abierta</div>
       )}
     </div>
   );

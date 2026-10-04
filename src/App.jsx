@@ -19,16 +19,17 @@ import { Modal, NotifBadge, Toast } from "./components/ui/Basicos";
 import { PanelNotificaciones, calcularAlertas } from "./components/ui/Multiusuario";
 import { SESSION_KEY, SUPABASE_URL, bloquearOC, crearNotificacion, del, genId, getBloqueosVigentes, getPerfil, hdrs, ins, liberarOC, registrarCambio, sel, selOCs, selPerfiles, storageGet, storageSet, supaRefresh, supaSignOut, upd, updRol } from "./lib/supabase";
 import { C, MONO, SANS, fmt } from "./lib/theme";
+import { Ic } from "./components/ui/Iconos";
 
 export const TABS=[
-  {key:"panel",label:"Panel",icon:"📊"},
-  {key:"compras",label:"Compras",icon:"📦"},
-  {key:"agenda",label:"Agenda",icon:"📅"},
-  {key:"financiamiento",label:"Financ.",icon:"🏦"},
-  {key:"gastos",label:"Gastos",icon:"🧾"},
-  {key:"vendedores",label:"Vendedores",icon:"🧑‍💼"},
-  {key:"notif",label:"Alertas",icon:"🔔"},
-  {key:"usuarios",label:"Usuarios",icon:"👥",adminOnly:true},
+  {key:"panel",label:"Panel",icon:<Ic n="📊"/>},
+  {key:"compras",label:"Compras",icon:<Ic n="📦"/>},
+  {key:"agenda",label:"Agenda",icon:<Ic n="📅"/>},
+  {key:"financiamiento",label:"Financ.",icon:<Ic n="🏦"/>},
+  {key:"gastos",label:"Gastos",icon:<Ic n="🧾"/>},
+  {key:"vendedores",label:"Vendedores",icon:<Ic n="🧑‍💼"/>},
+  {key:"notif",label:"Alertas",icon:<Ic n="🔔"/>},
+  {key:"usuarios",label:"Usuarios",icon:<Ic n="👥"/>,adminOnly:true},
 ];
 
 export default function App() {
@@ -1467,7 +1468,7 @@ export default function App() {
               {tab==="panel"?(
                 <>
                   <div style={{fontWeight:800,fontSize:15,letterSpacing:-0.3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
-                    {(()=>{ const h=new Date().getHours(); return h<12?"Buenos días":h<19?"Buenas tardes":"Buenas noches"; })()}, {perfil?.nombre?.split(" ")[0]||""} 👋
+                    {(()=>{ const h=new Date().getHours(); return h<12?"Buenos días":h<19?"Buenas tardes":"Buenas noches"; })()}, {perfil?.nombre?.split(" ")[0]||""}
                   </div>
                   <div style={{fontSize:12,color:"#8B9AB5"}}>
                     {new Date().toLocaleDateString("es-CL",{weekday:"long",day:"numeric",month:"long"})}
@@ -1537,7 +1538,7 @@ export default function App() {
               })}
               {secundarias.length>0&&(
                 <button onClick={()=>setMenuMas(v=>!v)} style={{flex:1,background:"none",border:"none",padding:"6px 1px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
-                  <span style={{fontSize:17,display:"flex",alignItems:"center",justifyContent:"center",width:44,height:28,borderRadius:14,background:enMas||menuMas?C.tealLight:"transparent",transition:"all 0.18s"}}>☰</span>
+                  <span style={{fontSize:17,display:"flex",alignItems:"center",justifyContent:"center",width:44,height:28,borderRadius:14,background:enMas||menuMas?C.tealLight:"transparent",transition:"all 0.18s"}}><Ic n="☰"/></span>
                   <span style={{fontSize:12,fontWeight:enMas||menuMas?800:600,color:enMas||menuMas?C.tealDark:C.inkFaint}}>Más</span>
                 </button>
               )}

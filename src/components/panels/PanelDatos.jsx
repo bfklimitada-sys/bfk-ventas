@@ -2,6 +2,7 @@ import { useState } from "react";
 import * as XLSX from "xlsx";
 import { TABLAS_EXPORT, del, ins, sel, upd } from "../../lib/supabase";
 import { C, btnG, btnP } from "../../lib/theme";
+import { Ic } from "../ui/Iconos";
 
 export function PanelDatos({ session, showToast }) {
   const [exporting,setExporting]=useState(false);
@@ -151,7 +152,7 @@ export function PanelDatos({ session, showToast }) {
           <div style={{borderTop:`1px solid ${C.warn}`,marginTop:8,paddingTop:8,fontSize:12.5,fontWeight:700,color:C.ink}}>
             Total: {totalNuevas} filas nuevas, {totalActualizadas} actualizadas
           </div>
-          <div style={{fontSize:12,color:C.inkMuted,marginTop:8}}>📥 Al confirmar, se descargará automáticamente un respaldo del estado actual antes de aplicar los cambios.</div>
+          <div style={{fontSize:12,color:C.inkMuted,marginTop:8}}><Ic n="📥"/> Al confirmar, se descargará automáticamente un respaldo del estado actual antes de aplicar los cambios.</div>
           <button onClick={handleAplicarCambios} disabled={aplicando} style={{...btnP(aplicando?C.inkFaint:C.danger),marginTop:12}}>{aplicando?"Respaldando y aplicando…":"✓ Confirmar y aplicar cambios"}</button>
           <button onClick={()=>{setResumenCambios(null);setArchivoData(null);}} style={{...btnG,marginTop:8,width:"100%"}}>Cancelar</button>
         </div>

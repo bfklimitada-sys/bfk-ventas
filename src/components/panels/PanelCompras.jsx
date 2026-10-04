@@ -7,6 +7,7 @@ import { EtapasOC, FormPostventa } from "../ui/EtapasOC";
 import { BloqueoBanner, ComentariosOC, HistorialCambiosOC } from "../ui/Multiusuario";
 import { del } from "../../lib/supabase";
 import { C, MONO, btnG, btnP, calcMargen, gananciaReal, fmt, iMono, iStyle, selStyle } from "../../lib/theme";
+import { Ic, I } from "../ui/Iconos";
 
 // Fecha de creación de la OC para mostrar en la lista: si el dato viene
 // de Mercado Público (fecha_hora_emision_mp) trae hora exacta; si viene
@@ -99,7 +100,7 @@ export function FormEditarDatosOC({ oc, onSave, entidadesCatalogo, perfil, ocs, 
           <input style={iMono} value={numeroOc} onChange={e=>{setNumeroOc(e.target.value);setErr("");}} />
           {codigoRepetido&&(
             <div style={{fontSize:12,color:C.danger,fontWeight:700,marginTop:5}}>
-              ⚠ Ya hay otra OC con ese código
+              <Ic n="⚠"/> Ya hay otra OC con ese código
             </div>
           )}
           {codigoCambio&&!codigoRepetido&&(
@@ -157,7 +158,7 @@ export function FormEditarEvento({ item, onSave, onCancel }) {
   return (
     <div>
       <div style={{background:C.warnLight,borderRadius:9,padding:"10px 12px",fontSize:12,color:C.warn,fontWeight:600,marginBottom:14}}>
-        ⚠ Editar este evento ajustará automáticamente el saldo del financiador y los totales de la OC según la diferencia.
+        <Ic n="⚠"/> Editar este evento ajustará automáticamente el saldo del financiador y los totales de la OC según la diferencia.
       </div>
       <Field label="Fecha" required><input style={iStyle} type="date" value={fecha} onChange={ev=>setFecha(ev.target.value)} /></Field>
       {tabla==="eventos_compra"&&(<>
@@ -381,7 +382,7 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
                         const neto=Math.round((Number(oc.monto_total)||0)/1.19);
                         return Math.abs(tv-neto)>1&&Math.abs(tv-(Number(oc.monto_total)||0))>1?(
                           <span style={{display:"block",fontSize:12,color:C.warn,fontWeight:700}}>
-                            ⚠ la OC dice {fmt.money(oc.monto_total)}
+                            <Ic n="⚠"/> la OC dice {fmt.money(oc.monto_total)}
                           </span>
                         ):(
                           <span style={{display:"block",fontSize:12,color:C.inkFaint}}>
@@ -438,7 +439,7 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
                           <a href={l.url} target="_blank" rel="noopener noreferrer"
                             style={{flex:1,minWidth:0,fontSize:12,color:C.teal,textDecoration:"none",fontWeight:600,
                               overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                            🔗 {dominio||l.url} ↗
+                            <Ic n="🔗"/> {dominio||l.url} ↗
                           </a>
                         ):(
                           <span style={{flex:1,fontSize:12,color:C.inkFaint}}>Sin link</span>
@@ -458,7 +459,7 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
                   <button onClick={()=>setRepartiendo(true)}
                     style={{fontSize:12,background:C.purpleLight,border:`1px solid ${C.purple}55`,borderRadius:8,
                       padding:"7px 12px",color:C.purple,cursor:"pointer",width:"100%",fontWeight:700,marginBottom:6}}>
-                    💰 Solo sé cuánto invertí en total — repartir
+                    <Ic n="💰"/> Solo sé cuánto invertí en total — repartir
                   </button>
                 )}
                 {repartiendo&&(
@@ -612,7 +613,7 @@ function HistorialReclamos({ reclamos, onRegistrarRespuesta }){
       </div>
       {ordenados.map(r=>(
         <div key={r.id} style={{background:C.paper,borderRadius:10,padding:"10px 12px",marginBottom:6,border:`1px solid ${C.border}`}}>
-          <span style={{fontSize:12,fontWeight:700,color:C.ink}}>📧 {fmt.datetime(r.fecha)}</span>
+          <span style={{fontSize:12,fontWeight:700,color:C.ink}}><Ic n="📧"/> {fmt.datetime(r.fecha)}</span>
           <div style={{fontSize:12,color:C.inkMuted,marginTop:2}}>Enviado a {r.correo}</div>
 
           {r.respondido_en ? (
@@ -642,7 +643,7 @@ function HistorialReclamos({ reclamos, onRegistrarRespuesta }){
           ) : (
             <button onClick={()=>{setEditando(r.id);setFecha("");setNotas("");}}
               style={{marginTop:6,background:"none",border:"none",color:C.info,fontSize:12,fontWeight:700,cursor:"pointer",padding:0}}>
-              📩 Registrar respuesta
+              <Ic n="📩"/> Registrar respuesta
             </button>
           )}
         </div>
@@ -662,20 +663,20 @@ function proximaAccionCobranza(oc){
     if(ultimo.fecha_prometida){
       const diasPasada=fmt.diasDesde(ultimo.fecha_prometida);
       if(diasPasada!==null&&diasPasada>0)
-        return {nivel:"critico",texto:`Se pasó la fecha prometida (${fmt.date(ultimo.fecha_prometida)})`,boton:"📧 Contactar de nuevo"};
+        return {nivel:"critico",texto:`Se pasó la fecha prometida (${fmt.date(ultimo.fecha_prometida)})`,boton:<I t={"📧 Contactar de nuevo"}/>};
       return {nivel:"ok",texto:`Prometió pagar el ${fmt.date(ultimo.fecha_prometida)}`,boton:null};
     }
-    return {nivel:"ok",texto:"Respondió, sin fecha concreta",boton:"📧 Pedir fecha estimada"};
+    return {nivel:"ok",texto:"Respondió, sin fecha concreta",boton:<I t={"📧 Pedir fecha estimada"}/>};
   }
 
   if(ultimo){
     const diasSinResp=Math.floor((new Date()-new Date(ultimo.fecha))/(1000*60*60*24));
     if(diasSinResp<1) return {nivel:"espera",texto:"Reclamada hoy, esperando respuesta",boton:null};
     if(diasSinResp<7) return {nivel:"espera",texto:`Reclamada hace ${diasSinResp}d, esperando respuesta`,boton:null};
-    return {nivel:"critico",texto:`Sin respuesta hace ${diasSinResp}d`,boton:"📧 Reenviar reclamo"};
+    return {nivel:"critico",texto:`Sin respuesta hace ${diasSinResp}d`,boton:<I t={"📧 Reenviar reclamo"}/>};
   }
 
-  return {nivel:"critico",texto:"Sin reclamo enviado todavía",boton:"📧 Enviar primer reclamo"};
+  return {nivel:"critico",texto:"Sin reclamo enviado todavía",boton:<I t={"📧 Enviar primer reclamo"}/>};
 }
 
 export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded, onToggle, contactos, onEnviarReclamo, onRegistrarRespuestaReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, bloqueos, perfil, historialCambios, onAgregarComentario, onEliminarComentario, onBloquear, onLiberar, onEliminarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa }) {
@@ -732,23 +733,23 @@ export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded
 
     // El ciclo saltó una etapa: el registro quedó incompleto
     if(facturada&&!entregada)
-      return {color:C.warn, bg:C.warnLight, icono:"⚠", texto:"Facturada sin registrar la entrega"};
+      return {color:C.warn, bg:C.warnLight, icono:<Ic n="⚠"/>, texto:"Facturada sin registrar la entrega"};
     if(cobrada&&!facturada)
-      return {color:C.warn, bg:C.warnLight, icono:"⚠", texto:"Cobrada sin registrar la factura"};
+      return {color:C.warn, bg:C.warnLight, icono:<Ic n="⚠"/>, texto:"Cobrada sin registrar la factura"};
 
     if(cobrada&&valeVistaPendiente)
-      return {color:C.warn, bg:C.warnLight, icono:"📄", texto:"Cobrada · vale vista/cheque sin cobrar en el banco"};
+      return {color:C.warn, bg:C.warnLight, icono:<Ic n="📄"/>, texto:"Cobrada · vale vista/cheque sin cobrar en el banco"};
     if(cobrada&&finPagado)  return {color:C.ok,      bg:C.okLight,      icono:"✓", texto:"Cerrada"};
-    if(cobrada&&!finPagado) return {color:C.purple,  bg:C.purpleLight,  icono:"🏦", texto:"Cobrada · falta pagar financiamiento"};
+    if(cobrada&&!finPagado) return {color:C.purple,  bg:C.purpleLight,  icono:<Ic n="🏦"/>, texto:"Cobrada · falta pagar financiamiento"};
     if(facturada&&dias!==null){
-      if(dias>=plazo+9)     return {color:C.danger,  bg:C.dangerLight,  icono:"⚠", texto:`Reclamar pago · ${dias} de ${plazo} días`};
-      if(dias>=plazo)       return {color:C.danger,  bg:C.dangerLight,  icono:"🔴", texto:`Vencida · ${dias} de ${plazo} días`};
-      if(dias>=plazo-5)     return {color:C.warn,    bg:C.warnLight,    icono:"🟡", texto:`Por vencer · quedan ${plazo-dias} días`};
-      return {color:C.warn, bg:C.warnLight, icono:"🧾", texto:`Facturada · ${dias} de ${plazo} días`};
+      if(dias>=plazo+9)     return {color:C.danger,  bg:C.dangerLight,  icono:<Ic n="⚠"/>, texto:`Reclamar pago · ${dias} de ${plazo} días`};
+      if(dias>=plazo)       return {color:C.danger,  bg:C.dangerLight,  icono:<Ic n="🔴"/>, texto:`Vencida · ${dias} de ${plazo} días`};
+      if(dias>=plazo-5)     return {color:C.warn,    bg:C.warnLight,    icono:<Ic n="🟡"/>, texto:`Por vencer · quedan ${plazo-dias} días`};
+      return {color:C.warn, bg:C.warnLight, icono:<Ic n="🧾"/>, texto:`Facturada · ${dias} de ${plazo} días`};
     }
-    if(facturada)           return {color:C.warn,    bg:C.warnLight,    icono:"🧾", texto:"Facturada · esperando pago"};
-    if(entregada)           return {color:C.info,    bg:C.infoLight,    icono:"📦", texto:"Entregada · falta facturar"};
-    if(comprada)            return {color:C.transit, bg:C.transitLight, icono:"🚚", texto:"Comprada · falta entregar"};
+    if(facturada)           return {color:C.warn,    bg:C.warnLight,    icono:<Ic n="🧾"/>, texto:"Facturada · esperando pago"};
+    if(entregada)           return {color:C.info,    bg:C.infoLight,    icono:<Ic n="📦"/>, texto:"Entregada · falta facturar"};
+    if(comprada)            return {color:C.transit, bg:C.transitLight, icono:<Ic n="🚚"/>, texto:"Comprada · falta entregar"};
     return {color:C.inkFaint, bg:C.paper, icono:"○", texto:"Sin compra registrada"};
   })();
 
@@ -800,7 +801,7 @@ export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded
               const nombre=esPorCompletar?(oc.entidad||null):oc.cliente;
               return nombre
                 ? [nombre,oc.comuna].filter(Boolean).join(" · ")
-                : <span style={{color:C.warn,fontWeight:700}}>⚠ Falta la entidad</span>;
+                : <span style={{color:C.warn,fontWeight:700}}><Ic n="⚠"/> Falta la entidad</span>;
             })()}
           </span>
         </div>
@@ -812,7 +813,7 @@ export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded
             {estadoOC.icono} {estadoOC.texto}
           </span>
           <span style={{fontSize:12,color:C.inkFaint,flexShrink:0}}>
-            {estancada&&<span style={{color:C.warn,fontWeight:700}}>⏸ {diasEstancada}d · </span>}
+            {estancada&&<span style={{color:C.warn,fontWeight:700}}><Ic n="⏸"/> {diasEstancada}d · </span>}
             {oc.vendedores?.nombre&&<>{oc.vendedores.nombre.split(" ")[0]} · </>}
             {completadas}/5
           </span>
@@ -873,10 +874,10 @@ export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded
           {puedeReclamar&&(
             hrsDesdeReclamo!==null&&hrsDesdeReclamo<24
               ? <div style={{background:C.okLight,borderRadius:8,padding:"8px 12px",fontSize:12,color:C.ok,fontWeight:600,marginBottom:10}}>
-                  ✅ Reclamada hace {hrsDesdeReclamo}h · {ultimoReclamo.correo}
+                  <Ic n="✅"/> Reclamada hace {hrsDesdeReclamo}h · {ultimoReclamo.correo}
                 </div>
               : <button onClick={()=>setReclamando(true)} style={{...btnP(C.danger),marginBottom:10}}>
-                  📧 Reclamar pago de factura{(oc.oc_reclamos||[]).length>0?` (${(oc.oc_reclamos||[]).length} reclamo${(oc.oc_reclamos||[]).length>1?"s":""} previo${(oc.oc_reclamos||[]).length>1?"s":""})`:""}</button>
+                  <Ic n="📧"/> Reclamar pago de factura{(oc.oc_reclamos||[]).length>0?` (${(oc.oc_reclamos||[]).length} reclamo${(oc.oc_reclamos||[]).length>1?"s":""} previo${(oc.oc_reclamos||[]).length>1?"s":""})`:""}</button>
           )}
 
           {(oc.oc_reclamos||[]).length>0&&
@@ -898,7 +899,7 @@ export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded
               if(window.confirm(`¿Eliminar la OC ${oc.numero_oc}?\n\nEsta acción no se puede deshacer.`))
                 await onEliminarOC(oc.id);
             }} style={{width:"100%",background:"none",border:`1px solid ${C.danger}`,color:C.danger,borderRadius:9,padding:"8px 12px",fontSize:12,fontWeight:600,cursor:"pointer",marginTop:8}}>
-              🗑 Eliminar esta OC
+              <Ic n="🗑"/> Eliminar esta OC
             </button>
           )}
         </div>
@@ -1067,7 +1068,7 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, onSincroniz
       {alertas.length>0&&(
         <div style={{background:C.dangerLight,border:`1px solid ${C.danger}`,borderRadius:12,marginBottom:14,overflow:"hidden"}}>
           <div onClick={()=>setBannerAbierto(v=>!v)} style={{padding:"10px 12px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <span style={{fontWeight:800,color:C.danger,fontSize:12}}>⚠ {alertas.length} factura{alertas.length>1?"s":""} vencida{alertas.length>1?"s":""} sin pagar</span>
+            <span style={{fontWeight:800,color:C.danger,fontSize:12}}><Ic n="⚠"/> {alertas.length} factura{alertas.length>1?"s":""} vencida{alertas.length>1?"s":""} sin pagar</span>
             <span style={{color:C.danger,fontSize:13,fontWeight:700}}>{bannerAbierto?"▲":"▼"}</span>
           </div>
           {bannerAbierto&&(
@@ -1104,7 +1105,7 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, onSincroniz
                   ? <button onClick={()=>setReclamandoBanner(o)}
                       style={{flexShrink:0,background:accion.nivel==="critico"?C.danger:C.warn,border:"none",color:"#fff",
                         borderRadius:7,padding:"6px 10px",fontSize:12,fontWeight:700,cursor:"pointer"}}>{accion.boton}</button>
-                  : <div style={{fontSize:16,flexShrink:0}}>{accion.nivel==="ok"?"💚":"⏳"}</div>
+                  : <div style={{fontSize:16,flexShrink:0}}>{accion.nivel==="ok"?<Ic n="💚"/>:<Ic n="⏳"/>}</div>
                 }
               </div>
             );
@@ -1257,16 +1258,16 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, ocFoco, onSincroniz
       {filtered.length===0&&<div style={{textAlign:"center",padding:30,color:C.inkFaint,fontSize:13}}>No hay órdenes con estos filtros.</div>}
       <Leyenda items={[
         {muestra:"✓ Cerrada",   color:C.ok,      bg:C.okLight,      texto:"Cobrada al cliente y pagada al financiador. Ciclo terminado."},
-        {muestra:"🏦 Cobrada",  color:C.purple,  bg:C.purpleLight,  texto:"El cliente ya pagó, falta devolverle la plata al financiador."},
-        {muestra:"⚠ Reclamar",  color:C.danger,  bg:C.dangerLight,  texto:"Pasaron 9 días o más del plazo. Se habilita el correo de cobranza."},
-        {muestra:"🔴 Vencida",  color:C.danger,  bg:C.dangerLight,  texto:"Se cumplió el plazo de pago de esa OC y no ha entrado."},
-        {muestra:"🟡 Por vencer",color:C.warn,   bg:C.warnLight,    texto:"Quedan 5 días o menos para que se cumpla el plazo."},
-        {muestra:"🧾 Facturada",color:C.warn,    bg:C.warnLight,    texto:"Factura emitida, dentro de plazo, esperando el pago."},
-        {muestra:"📦 Entregada",color:C.info,    bg:C.infoLight,    texto:"Ya se entregó, falta emitir la factura."},
-        {muestra:"🚚 Comprada", color:C.transit, bg:C.transitLight, texto:"Comprada al proveedor, falta entregar al cliente."},
+        {muestra:<I t={"🏦 Cobrada"}/>,  color:C.purple,  bg:C.purpleLight,  texto:"El cliente ya pagó, falta devolverle la plata al financiador."},
+        {muestra:<I t={"⚠ Reclamar"}/>,  color:C.danger,  bg:C.dangerLight,  texto:"Pasaron 9 días o más del plazo. Se habilita el correo de cobranza."},
+        {muestra:<I t={"🔴 Vencida"}/>,  color:C.danger,  bg:C.dangerLight,  texto:"Se cumplió el plazo de pago de esa OC y no ha entrado."},
+        {muestra:<I t={"🟡 Por vencer"}/>,color:C.warn,   bg:C.warnLight,    texto:"Quedan 5 días o menos para que se cumpla el plazo."},
+        {muestra:<I t={"🧾 Facturada"}/>,color:C.warn,    bg:C.warnLight,    texto:"Factura emitida, dentro de plazo, esperando el pago."},
+        {muestra:<I t={"📦 Entregada"}/>,color:C.info,    bg:C.infoLight,    texto:"Ya se entregó, falta emitir la factura."},
+        {muestra:<I t={"🚚 Comprada"}/>, color:C.transit, bg:C.transitLight, texto:"Comprada al proveedor, falta entregar al cliente."},
         {muestra:"23%",         color:C.ok,      bg:C.okLight,      texto:"Margen de la OC. Verde sobre 20%, amarillo 10–20%, rojo bajo 10%."},
-        {muestra:"⚠",           color:C.warn,    bg:C.warnLight,    texto:"El ciclo saltó una etapa: hay factura sin entrega, o cobro sin factura. El registro quedó incompleto."},
-        {muestra:"⏸ 43d",       color:C.warn,    bg:C.warnLight,    texto:"Días sin avanzar de etapa. La OC quedó detenida."},
+        {muestra:<Ic n="⚠"/>,           color:C.warn,    bg:C.warnLight,    texto:"El ciclo saltó una etapa: hay factura sin entrega, o cobro sin factura. El registro quedó incompleto."},
+        {muestra:<I t={"⏸ 43d"}/>,       color:C.warn,    bg:C.warnLight,    texto:"Días sin avanzar de etapa. La OC quedó detenida."},
         {muestra:"Matías · 3/5", texto:"Vendedor a cargo y etapas completadas de las cinco del ciclo."},
       ]} />
     </div>

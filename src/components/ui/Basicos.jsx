@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { C, MONO, R, fmt, iMono } from "../../lib/theme";
+import { I } from "./Iconos";
 
 export function Modal({ title, onClose, children }) {
   return (
@@ -47,7 +48,7 @@ export function DiasBadge({ dias, diasPago }) {
 
   const color = reclamar ? C.danger : vencida ? C.danger : porVencer ? C.warn : C.ok;
   const bg    = reclamar ? C.dangerLight : vencida ? C.dangerLight : porVencer ? C.warnLight : C.okLight;
-  const label = reclamar ? "⚠ Reclamar" : vencida ? "Vencida" : porVencer ? "Por vencer" : "Al día";
+  const label = reclamar ? <I t={"⚠ Reclamar"}/> : vencida ? "Vencida" : porVencer ? "Por vencer" : "Al día";
 
   return (
     <span title={`Plazo de pago: ${plazo} días`}

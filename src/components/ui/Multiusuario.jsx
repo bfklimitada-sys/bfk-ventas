@@ -2,12 +2,13 @@ import { useState } from "react";
 import { del } from "../../lib/supabase";
 import { C, MONO, SANS, fmt } from "../../lib/theme";
 import { Leyenda } from "./Basicos";
+import { Ic, I } from "./Iconos";
 
 export function BloqueoBanner({ bloqueo }) {
   const segs=Math.max(0,Math.round((new Date(bloqueo.expira_en)-new Date())/1000));
   return (
     <div style={{background:C.warnLight,border:`1px solid ${C.warn}`,borderRadius:9,padding:"10px 14px",marginBottom:12,display:"flex",alignItems:"center",gap:10}}>
-      <span style={{fontSize:18}}>🔒</span>
+      <span style={{fontSize:18}}><Ic n="🔒"/></span>
       <div>
         <div style={{fontSize:12.5,fontWeight:700,color:C.warn}}>{bloqueo.usuario_nombre} está editando esta OC</div>
         <div style={{fontSize:12,color:C.inkMuted}}>Disponible en ~{segs} segundos</div>
@@ -21,7 +22,7 @@ export function HistorialCambiosOC({ ocId, historialCambios }) {
   if(!items.length) return null;
   return (
     <div style={{marginBottom:14}}>
-      <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>📋 Historial de cambios</div>
+      <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",letterSpacing:1,marginBottom:8}}><Ic n="📋"/> Historial de cambios</div>
       {items.map(h=>(
         <div key={h.id} style={{borderLeft:`2px solid ${C.border}`,paddingLeft:10,marginBottom:8}}>
           <div style={{fontSize:12,fontWeight:600,color:C.ink}}>{h.accion}</div>
@@ -47,7 +48,7 @@ export function ComentariosOC({ oc, perfil, onAgregar, onEliminar }) {
     <div style={{marginBottom:10,background:C.card,borderRadius:9,overflow:"hidden",border:`1px solid ${C.border}`}}>
       <div onClick={()=>setAbierto(v=>!v)} style={{padding:"9px 12px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         <span style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.5}}>
-          💬 Notas del equipo {comentarios.length>0&&<span style={{color:C.teal}}>({comentarios.length})</span>}
+          <Ic n="💬"/> Notas del equipo {comentarios.length>0&&<span style={{color:C.teal}}>({comentarios.length})</span>}
         </span>
         <span style={{color:C.inkFaint,fontSize:12}}>{abierto?"▲":"▼"}</span>
       </div>
@@ -106,17 +107,17 @@ export function calcularAlertas(ocs) {
     // 1. Facturas vencidas o por vencer
     if (evF && oc.estado_pago_cliente !== "pagado" && dias !== null) {
       if (dias >= plazo + 9) {
-        alertas.push({ ocId:oc.id, nivel:"alto", icono:"🔴", oc:oc.numero_oc, cliente:oc.cliente,
+        alertas.push({ ocId:oc.id, nivel:"alto", icono:<Ic n="🔴"/>, oc:oc.numero_oc, cliente:oc.cliente,
           titulo:`Factura ${evF.numero_factura} lleva ${dias} días`,
           detalle:`El plazo era ${plazo} días — corresponde reclamar el pago`,
           monto:saldo, tab:"compras", filtro:"cobro", orden:1 });
       } else if (dias >= plazo) {
-        alertas.push({ ocId:oc.id, nivel:"alto", icono:"🟠", oc:oc.numero_oc, cliente:oc.cliente,
+        alertas.push({ ocId:oc.id, nivel:"alto", icono:<Ic n="🟠"/>, oc:oc.numero_oc, cliente:oc.cliente,
           titulo:`Factura ${evF.numero_factura} vencida`,
           detalle:`${dias} días de ${plazo} de plazo`,
           monto:saldo, tab:"compras", filtro:"cobro", orden:2 });
       } else if (dias >= plazo - 5) {
-        alertas.push({ ocId:oc.id, nivel:"medio", icono:"🟡", oc:oc.numero_oc, cliente:oc.cliente,
+        alertas.push({ ocId:oc.id, nivel:"medio", icono:<Ic n="🟡"/>, oc:oc.numero_oc, cliente:oc.cliente,
           titulo:`Factura ${evF.numero_factura} vence pronto`,
           detalle:`Quedan ${plazo - dias} día${plazo - dias === 1 ? "" : "s"}`,
           monto:saldo, tab:"compras", filtro:"cobro", orden:3 });
@@ -129,7 +130,7 @@ export function calcularAlertas(ocs) {
     (oc.eventos_pago_cliente || []).forEach(ev => {
       if (ev.medio_pago && ev.medio_pago !== "transferencia" && !ev.cobrado_en_banco) {
         const tipo = ev.medio_pago === "vale_vista" ? "Vale vista" : "Cheque";
-        alertas.push({ ocId:oc.id, nivel:"alto", icono:"📄", oc:oc.numero_oc, cliente:oc.cliente,
+        alertas.push({ ocId:oc.id, nivel:"alto", icono:<Ic n="📄"/>, oc:oc.numero_oc, cliente:oc.cliente,
           titulo:`${tipo} sin cobrar en el banco`,
           detalle:ev.institucion?`Hay que ir a cobrarlo en ${ev.institucion}`:"Falta ir a cobrarlo",
           monto:ev.monto, tab:"compras", filtro:null, orden:0 });
@@ -142,7 +143,7 @@ export function calcularAlertas(ocs) {
     if (fEst && !entregada) {
       const atraso = fmt.diasDesde(String(fEst).slice(0,10));
       if (atraso !== null && atraso > 0) {
-        alertas.push({ ocId:oc.id, nivel:"alto", icono:"🚚", oc:oc.numero_oc, cliente:oc.cliente,
+        alertas.push({ ocId:oc.id, nivel:"alto", icono:<Ic n="🚚"/>, oc:oc.numero_oc, cliente:oc.cliente,
           titulo:`Entrega atrasada ${atraso} día${atraso === 1 ? "" : "s"}`,
           detalle:`Estaba estimada para el ${fmt.date(String(fEst).slice(0,10))}`,
           monto:oc.monto_total, tab:"compras", filtro:"entrega", orden:2 });
@@ -154,7 +155,7 @@ export function calcularAlertas(ocs) {
       const fEnt = (oc.eventos_entrega || [])[0]?.fecha;
       const d = fEnt ? fmt.diasDesde(String(fEnt).slice(0,10)) : null;
       if (d !== null && d >= 3) {
-        alertas.push({ ocId:oc.id, nivel:"medio", icono:"🧾", oc:oc.numero_oc, cliente:oc.cliente,
+        alertas.push({ ocId:oc.id, nivel:"medio", icono:<Ic n="🧾"/>, oc:oc.numero_oc, cliente:oc.cliente,
           titulo:`Entregada hace ${d} días, sin factura`,
           detalle:"Mientras no se facture, no se puede cobrar",
           monto:oc.monto_total, tab:"compras", filtro:"factura", orden:3 });
@@ -164,13 +165,13 @@ export function calcularAlertas(ocs) {
     // 3b. Ciclo fuera de orden: el registro quedó incompleto
     const facturada = oc.estado_factura_propia === "emitida";
     if (facturada && !entregada) {
-      alertas.push({ ocId:oc.id, nivel:"medio", icono:"⚠", oc:oc.numero_oc, cliente:oc.cliente,
+      alertas.push({ ocId:oc.id, nivel:"medio", icono:<Ic n="⚠"/>, oc:oc.numero_oc, cliente:oc.cliente,
         titulo:"Facturada sin registrar la entrega",
         detalle:"Falta el registro de entrega — la agenda y el historial quedan incompletos",
         monto:oc.monto_total, tab:"compras", filtro:"entrega", orden:3 });
     }
     if (oc.estado_pago_cliente === "pagado" && !facturada) {
-      alertas.push({ ocId:oc.id, nivel:"medio", icono:"⚠", oc:oc.numero_oc, cliente:oc.cliente,
+      alertas.push({ ocId:oc.id, nivel:"medio", icono:<Ic n="⚠"/>, oc:oc.numero_oc, cliente:oc.cliente,
         titulo:"Cobrada sin registrar la factura",
         detalle:"Entró la plata pero no hay factura cargada",
         monto:oc.monto_cobrado||oc.monto_total, tab:"compras", filtro:"factura", orden:3 });
@@ -196,7 +197,7 @@ export function calcularAlertas(ocs) {
       const quieta = Math.floor((new Date() - new Date(fechas[fechas.length-1])) / 86400000);
       if (quieta >= 14) {
         const faltan = Object.entries(etapasNombres).filter(([,ok]) => !ok).map(([k]) => k);
-        alertas.push({ ocId:oc.id, nivel:"bajo", icono:"⏸", oc:oc.numero_oc, cliente:oc.cliente,
+        alertas.push({ ocId:oc.id, nivel:"bajo", icono:<Ic n="⏸"/>, oc:oc.numero_oc, cliente:oc.cliente,
           titulo:`Sin avance hace ${quieta} días`,
           detalle:`Va en ${etapas} de 5 etapas · falta: ${faltan.join(", ")}`,
           monto:oc.monto_total, tab:"compras", filtro:null, orden:4, etapas });
@@ -205,7 +206,7 @@ export function calcularAlertas(ocs) {
 
     // 5. Guardadas antes de ser aceptadas en Mercado Público
     if (oc.sync_pendiente) {
-      alertas.push({ ocId:oc.id, nivel:"bajo", icono:"⏳", oc:oc.numero_oc, cliente:"Por completar",
+      alertas.push({ ocId:oc.id, nivel:"bajo", icono:<Ic n="⏳"/>, oc:oc.numero_oc, cliente:"Por completar",
         titulo:"Esperando aceptación en Mercado Público",
         detalle:"Se completará sola cuando la acepten",
         monto:0, tab:"compras", filtro:null, orden:5 });
@@ -213,7 +214,7 @@ export function calcularAlertas(ocs) {
 
     // 6. Post-venta abierta
     if ((oc.eventos_postventa||[]).some(e => e.estado !== "resuelto")) {
-      alertas.push({ ocId:oc.id, nivel:"medio", icono:"🛠", oc:oc.numero_oc, cliente:oc.cliente,
+      alertas.push({ ocId:oc.id, nivel:"medio", icono:<Ic n="🛠"/>, oc:oc.numero_oc, cliente:oc.cliente,
         titulo:"Post-venta sin resolver",
         detalle:"Hay un reclamo del cliente abierto",
         monto:0, tab:"compras", filtro:null, orden:3 });
@@ -263,8 +264,8 @@ export function PanelNotificaciones({ notificaciones, ocs, onMarcarLeidas, onNav
 
       <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
         <Chip id="todas" label="Todas" n={alertas.length} color={C.teal} />
-        <Chip id="alto"  label="🔴 Urgente"   n={conteo.alto}  color={C.danger} />
-        <Chip id="medio" label="🟡 Atención"  n={conteo.medio} color={C.warn} />
+        <Chip id="alto"  label={<I t={"🔴 Urgente"}/>}   n={conteo.alto}  color={C.danger} />
+        <Chip id="medio" label={<I t={"🟡 Atención"}/>}  n={conteo.medio} color={C.warn} />
         <Chip id="bajo"  label="Informativas" n={conteo.bajo}  color={C.inkMuted} />
       </div>
 
@@ -315,9 +316,9 @@ export function PanelNotificaciones({ notificaciones, ocs, onMarcarLeidas, onNav
       )}
 
       <Leyenda titulo="¿Cómo se ordenan las alertas?" items={[
-        {muestra:"🔴", texto:"Urgente: facturas pasadas de plazo o entregas atrasadas. Son las que cuestan plata."},
-        {muestra:"🟡", texto:"Atención: vencen dentro de 5 días, o llevan días entregadas sin facturar."},
-        {muestra:"⏸", texto:"Informativas: OCs sin avance hace más de dos semanas, o esperando Mercado Público."},
+        {muestra:<Ic n="🔴"/>, texto:"Urgente: facturas pasadas de plazo o entregas atrasadas. Son las que cuestan plata."},
+        {muestra:<Ic n="🟡"/>, texto:"Atención: vencen dentro de 5 días, o llevan días entregadas sin facturar."},
+        {muestra:<Ic n="⏸"/>, texto:"Informativas: OCs sin avance hace más de dos semanas, o esperando Mercado Público."},
         {muestra:"›", texto:"Al tocar una alerta te lleva al listado filtrado por esa etapa."},
       ]} />
     </div>

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Field, Modal, Trazabilidad } from "../ui/Basicos";
 import { C, MONO, btnP, fmt, iMono, iStyle } from "../../lib/theme";
+import { Ic, I } from "../ui/Iconos";
 
 function FormAporte({ aporte, socios, onSave, onEliminar }) {
   const [socio,setSocio]=useState(aporte?.socio&&aporte.socio!=="Por asignar"?aporte.socio:"");
@@ -44,7 +45,7 @@ function FormAporte({ aporte, socios, onSave, onEliminar }) {
       {aporte&&onEliminar&&(
         <button onClick={async()=>{ if(window.confirm("¿Eliminar este movimiento?")) await onEliminar(aporte.id); }}
           style={{width:"100%",background:"none",border:`1px solid ${C.danger}`,color:C.danger,borderRadius:9,padding:"8px 12px",fontSize:12,fontWeight:600,cursor:"pointer",marginTop:8}}>
-          🗑 Eliminar movimiento
+          <Ic n="🗑"/> Eliminar movimiento
         </button>
       )}
     </div>
@@ -168,7 +169,7 @@ export function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onA
 
   return (
     <div>
-      <button onClick={onAbonar} style={{...btnP(C.purple),marginBottom:12}}>💸 Abonar a un financiador</button>
+      <button onClick={onAbonar} style={{...btnP(C.purple),marginBottom:12}}><Ic n="💸"/> Abonar a un financiador</button>
       <div style={{fontSize:12,color:C.inkFaint,marginBottom:12}}>Toca un financiador para ver su cartola de movimientos.</div>
       {(()=>{
         const conDeuda=financiadores.filter(f=>Number(f.saldo_deuda)!==0);
@@ -223,7 +224,7 @@ export function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onA
               {Object.entries(porSocio).sort((a,b)=>b[1]-a[1]).map(([soc,m])=>(
                 <div key={soc} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:`1px solid ${C.border}`}}>
                   <span style={{fontSize:12.5,color:soc==="Por asignar"?C.warn:C.ink,fontWeight:600}}>
-                    {soc==="Por asignar"?"⚠ Por asignar":soc}
+                    {soc==="Por asignar"?<I t={"⚠ Por asignar"}/>:soc}
                   </span>
                   <span style={{fontFamily:MONO,fontWeight:800,fontSize:12.5,color:m>=0?C.ok:C.danger}}>{fmt.money(m)}</span>
                 </div>

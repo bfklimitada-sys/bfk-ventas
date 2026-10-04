@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { Field, Modal } from "../ui/Basicos";
 import { del } from "../../lib/supabase";
 import { C, MONO, btnG, btnP, fmt, iMono, selStyle } from "../../lib/theme";
+import { Ic } from "../ui/Iconos";
 
 export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, onGuardarIva, onPagoVendedor }) {
   const [editIva,setEditIva]=useState(false);
@@ -143,7 +144,7 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
                             ? <div style={{color:C.inkFaint}}>Sin descuento de IVA (regla especial de ese mes)</div>
                             : d.ivaRegistrado
                               ? <div>IVA del mes a descontar: <b style={{color:C.danger}}>−{fmt.money(d.impIva)}</b></div>
-                              : <div style={{color:C.warn}}>⚠ IVA de este mes sin registrar todavía — se está calculando sin descontarlo, va a bajar cuando lo cargues</div>
+                              : <div style={{color:C.warn}}><Ic n="⚠"/> IVA de este mes sin registrar todavía — se está calculando sin descontarlo, va a bajar cuando lo cargues</div>
                           }
                           <div>Mitad de (utilidad − IVA): <b style={{color:C.ink}}>{fmt.money(Math.round((d.sumaUtilidad-(d.sinIva?0:d.impIva))/2))}</b></div>
                           {d.pagoVentasPropias>0&&<div>+ Ventas propias (100% de esa utilidad, sin repartir): <b style={{color:C.ink}}>+{fmt.money(d.pagoVentasPropias)}</b></div>}
@@ -157,7 +158,7 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
                     </div>
                     {!d.esVerificado&&d.pagado>d.pagoCalculado+1000&&(
                       <div style={{fontSize:12,color:C.warn,marginTop:3,lineHeight:1.4}}>
-                        ⚠ Se pagó {fmt.money(d.pagado-d.pagoCalculado)} más de lo que calcula la fórmula automática — probablemente venta propia o extra no marcado en el sistema. Revisa la nota del pago para el detalle.
+                        <Ic n="⚠"/> Se pagó {fmt.money(d.pagado-d.pagoCalculado)} más de lo que calcula la fórmula automática — probablemente venta propia o extra no marcado en el sistema. Revisa la nota del pago para el detalle.
                       </div>
                     )}
                   </div>

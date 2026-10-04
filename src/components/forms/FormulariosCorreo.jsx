@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Field } from "../ui/Basicos";
 import { del } from "../../lib/supabase";
 import { C, btnP, fmt, iStyle } from "../../lib/theme";
+import { I } from "../ui/Iconos";
 
 export function FormEntregaFallida({ oc, onEnviar, entidadesCatalogo }) {
   const matchCatalogo=(entidadesCatalogo||[]).find(e=>e.rut===(oc.rut_cliente||"").trim());
@@ -35,7 +36,7 @@ export function FormEntregaFallida({ oc, onEnviar, entidadesCatalogo }) {
         <div style={{fontSize:12,color:C.ink,whiteSpace:"pre-wrap"}}>{cuerpo}</div>
       </div>
       {err&&<div style={{background:C.dangerLight,color:C.danger,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}
-      <button onClick={handleEnviar} disabled={sending} style={btnP(sending?C.inkFaint:C.warn)}>{sending?"Abriendo correo…":"📧 Enviar aviso de entrega fallida"}</button>
+      <button onClick={handleEnviar} disabled={sending} style={btnP(sending?C.inkFaint:C.warn)}>{sending?"Abriendo correo…":<I t={"📧 Enviar aviso de entrega fallida"}/>}</button>
     </div>
   );
 }
@@ -74,7 +75,7 @@ export function FormFechaEntrega({ oc, onEnviar, entidadesCatalogo }) {
         <div style={{fontSize:12,color:C.ink,whiteSpace:"pre-wrap"}}>{cuerpo}</div>
       </div>
       {err&&<div style={{background:C.dangerLight,color:C.danger,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}
-      <button onClick={handleEnviar} disabled={sending} style={btnP(sending?C.inkFaint:C.transit)}>{sending?"Abriendo correo…":"📅 Enviar fecha estimada de entrega"}</button>
+      <button onClick={handleEnviar} disabled={sending} style={btnP(sending?C.inkFaint:C.transit)}>{sending?"Abriendo correo…":<I t={"📅 Enviar fecha estimada de entrega"}/>}</button>
     </div>
   );
 }

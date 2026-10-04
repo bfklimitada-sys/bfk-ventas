@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Field } from "../ui/Basicos";
 import { C, MONO, SANS, btnP, btnG, fmt, iStyle, iMono, selStyle } from "../../lib/theme";
+import { Ic } from "../ui/Iconos";
 
 // ── Heurística para sacar la dirección de entrega del texto del producto ──
 // Cuando TipoDespacho = 12 ("ver instrucciones"), Mercado Público mete la
@@ -161,7 +162,7 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
     <div style={{ fontFamily: SANS }}>
       {pendiente ? (
         <div style={{ background: C.warnLight, border: `1px solid ${C.warn}`, borderRadius: 10, padding: "12px 14px", marginBottom: 14 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 700, color: C.warn, marginBottom: 4 }}>⏳ Aún no aceptada en Mercado Público</div>
+          <div style={{ fontSize: 12.5, fontWeight: 700, color: C.warn, marginBottom: 4 }}><Ic n="⏳"/> Aún no aceptada en Mercado Público</div>
           <div style={{ fontSize: 12, color: C.inkMuted, lineHeight: 1.5 }}>
             Guárdala igual con el link. La app completará el cliente, los productos y los montos
             automáticamente cuando la OC sea aceptada.

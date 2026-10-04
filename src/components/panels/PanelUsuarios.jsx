@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { PanelDatos } from "./PanelDatos";
 import { C, btnG, btnP, fmt } from "../../lib/theme";
+import { Ic } from "../ui/Iconos";
 
 export function PanelUsuarios({ perfiles, ocs, onChangeRol, session, showToast, entidadesCatalogo, onImportarEntidades }) {
   const [showImport,setShowImport]=useState(false);
@@ -71,7 +72,7 @@ export function PanelUsuarios({ perfiles, ocs, onChangeRol, session, showToast, 
       <PanelDatos session={session} showToast={showToast} />
 
       <div style={{marginTop:20}}>
-        <div style={{fontWeight:800,fontSize:13,color:C.ink,marginBottom:4}}>🏢 Catálogo de entidades</div>
+        <div style={{fontWeight:800,fontSize:13,color:C.ink,marginBottom:4}}><Ic n="🏢"/> Catálogo de entidades</div>
         <div style={{fontSize:12,color:C.inkMuted,marginBottom:10}}>
           {(entidadesCatalogo||[]).length} entidades guardadas · Se autocompletan al escribir el RUT en cualquier OC
         </div>

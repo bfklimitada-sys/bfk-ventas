@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { BuscadorOC, Field } from "../ui/Basicos";
 import { C, MONO, btnP, fmt, iMono, iStyle, selStyle } from "../../lib/theme";
+import { Ic } from "../ui/Iconos";
 
 export function FormConfirmarEntrega({ ocs, onSave, ocPreseleccionada }) {
   const [ocId,setOcId]=useState(ocPreseleccionada||null); const [fecha,setFecha]=useState(new Date().toISOString().slice(0,10));
@@ -59,7 +60,7 @@ export function FormEmitirFactura({ ocs, onSave, ocPreseleccionada }) {
       )}
       {selected&&!entregada&&(
         <div style={{background:C.warnLight,border:`1px solid ${C.warn}`,borderRadius:9,padding:"10px 12px",marginBottom:14}}>
-          <div style={{fontSize:12,fontWeight:700,color:C.warn,marginBottom:6}}>⚠ Sin entrega registrada</div>
+          <div style={{fontSize:12,fontWeight:700,color:C.warn,marginBottom:6}}><Ic n="⚠"/> Sin entrega registrada</div>
           <div style={{fontSize:12,color:C.inkMuted,lineHeight:1.45,marginBottom:8}}>
             Lo normal es registrar la entrega antes de facturar. Si ya se entregó y solo faltó anotarlo,
             puedes continuar — pero conviene registrarla para que quede la fecha y el respaldo.
@@ -79,7 +80,7 @@ export function FormEmitirFactura({ ocs, onSave, ocPreseleccionada }) {
             <span style={{fontSize:12,color:C.inkMuted}}>Difiere de la OC ({fmt.money(montoOC)})</span>
             <span style={{fontSize:13,fontWeight:800,fontFamily:MONO,color:difGrande?C.warn:C.inkMuted}}>{dif>0?"+":""}{fmt.money(dif)}</span>
           </div>
-          {difGrande&&<div style={{fontSize:12,color:C.warn,fontWeight:600}}>⚠ Diferencia relevante — deja registrado por qué</div>}
+          {difGrande&&<div style={{fontSize:12,color:C.warn,fontWeight:600}}><Ic n="⚠"/> Diferencia relevante — deja registrado por qué</div>}
         </div>
       )}
       {hayDif&&(
@@ -116,7 +117,7 @@ export function FormPagoCliente({ ocs, onSave, ocPreseleccionada }) {
       {!ocPreseleccionada&&<Field label="Orden de Compra" required><BuscadorOC ocs={ocs} ocId={ocId} setOcId={setOcId} /></Field>}
       {sinFactura&&(
         <div style={{background:C.dangerLight,border:`1px solid ${C.danger}`,borderRadius:9,padding:"10px 12px",marginBottom:14,fontSize:12,color:C.danger,fontWeight:600}}>
-          ⚠ Sin factura emitida — no se puede registrar el cobro. Emite la factura primero.
+          <Ic n="⚠"/> Sin factura emitida — no se puede registrar el cobro. Emite la factura primero.
         </div>
       )}
       {selected&&!sinFactura&&<div style={{background:C.paper,borderRadius:8,padding:"8px 12px",fontSize:12,color:C.inkMuted,marginBottom:12}}>Facturado: <b style={{color:C.ink}}>{fmt.money(selected.monto_facturado)}</b> · Cobrado: <b style={{color:C.ok}}>{fmt.money(selected.monto_cobrado)}</b> · Saldo: <b style={{color:C.danger}}>{fmt.money(saldo)}</b></div>}

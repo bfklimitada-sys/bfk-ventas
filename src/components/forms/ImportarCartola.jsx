@@ -1,6 +1,7 @@
 import { useState } from "react";
 import * as XLSX from "xlsx";
 import { C, MONO, SANS, btnP, btnG, fmt } from "../../lib/theme";
+import { Ic, I } from "../ui/Iconos";
 
 const aNumero = (v) => {
   if (v === null || v === undefined) return 0;
@@ -327,7 +328,7 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, re
           </div>
         </div>
         <label style={{ ...btnG, display: "block", textAlign: "center", cursor: "pointer", padding: "16px" }}>
-          {leyendo ? "Leyendo…" : "📄 Elegir cartola(s)"}
+          {leyendo ? "Leyendo…" : <I t={"📄 Elegir cartola(s)"}/>}
           <input type="file" accept=".xlsx,.xls" multiple disabled={leyendo}
             onChange={e => procesar(Array.from(e.target.files || []))} style={{ display: "none" }} />
         </label>
@@ -393,7 +394,7 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, re
 
                 {!it.claro && (
                   <div style={{ fontSize: 12, color: C.warn, fontWeight: 700, margin: "5px 0 3px" }}>
-                    ⚠ {it.candidatos.length} facturas de ese monto — elige cuál corresponde
+                    <Ic n="⚠"/> {it.candidatos.length} facturas de ese monto — elige cuál corresponde
                   </div>
                 )}
 
@@ -468,7 +469,7 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, re
                       </span>
                     ) : !e.seguro && (
                       <span style={{ display: "block", fontSize: 12, color: C.warn, fontWeight: 700, marginTop: 2 }}>
-                        ⚠ No se pudo identificar — revisa el destino
+                        <Ic n="⚠"/> No se pudo identificar — revisa el destino
                       </span>
                     )}
                   </span>

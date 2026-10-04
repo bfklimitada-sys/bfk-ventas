@@ -4,6 +4,7 @@ import { gananciaReal, costoPostventa } from "../../lib/theme";
 import { del } from "../../lib/supabase";
 import { facturaVigente } from "./PanelCompras";
 import { C, MONO, SANS, btnP, fmt } from "../../lib/theme";
+import { Ic } from "../ui/Iconos";
 
 // Agrupa el contenido bajo un título discreto
 function Seccion({titulo,children,sub,ocultarSiVacio}){
@@ -344,11 +345,11 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
       <Seccion titulo="Registrar">
       <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:6,marginBottom:6}}>
         {[
-          {key:"compra",      icon:"📦", label:"Compra",  color:C.transit, paso:1},
-          {key:"entrega",     icon:"🚚", label:"Entrega", color:C.info,    paso:2},
-          {key:"factura",     icon:"🧾", label:"Factura", color:C.purple,  paso:3},
-          {key:"pago_cliente",icon:"💰", label:"Pago",    color:C.ok,      paso:4},
-          {key:"cartola",     icon:"🏦", label:"Banco",   color:C.info,    paso:null},
+          {key:"compra",      icon:<Ic n="📦"/>, label:"Compra",  color:C.transit, paso:1},
+          {key:"entrega",     icon:<Ic n="🚚"/>, label:"Entrega", color:C.info,    paso:2},
+          {key:"factura",     icon:<Ic n="🧾"/>, label:"Factura", color:C.purple,  paso:3},
+          {key:"pago_cliente",icon:<Ic n="💰"/>, label:"Pago",    color:C.ok,      paso:4},
+          {key:"cartola",     icon:<Ic n="🏦"/>, label:"Banco",   color:C.info,    paso:null},
         ].map(a=>(
           <button key={a.key} onClick={()=>onAccion&&onAccion(a.key)}
             style={{position:"relative",background:C.card,
@@ -456,7 +457,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
                 </span>
                 {!verificandoAlgo&&ultimaGeneral&&<span style={{display:"block",fontSize:12,color:C.inkFaint,marginTop:1}}>Última consulta exitosa: {hace(ultimaGeneral)}</span>}
               </span>
-              {nPorAceptar>0&&<span style={{fontSize:12,fontWeight:800,color:C.warn,background:C.warnLight,borderRadius:20,padding:"2px 8px"}}>⏳ {nPorAceptar}</span>}
+              {nPorAceptar>0&&<span style={{fontSize:12,fontWeight:800,color:C.warn,background:C.warnLight,borderRadius:20,padding:"2px 8px"}}><Ic n="⏳"/> {nPorAceptar}</span>}
               {nAceptadas>0&&<span style={{fontSize:12,fontWeight:800,color:C.ok,background:C.okLight,borderRadius:20,padding:"2px 8px"}}>✓ {nAceptadas}</span>}
               {nCanceladas>0&&<span style={{fontSize:12,fontWeight:800,color:C.danger,background:C.dangerLight,borderRadius:20,padding:"2px 8px"}}>✕ {nCanceladas}</span>}
               <span style={{fontSize:12,color:C.inkFaint,flexShrink:0}}>{verMP?"▲":"▼"}</span>
@@ -486,7 +487,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
                 )}
 
                 {nPorAceptar>0&&(
-                  <AvisoMP icon="⏳" color={C.warn} bg={C.warnLight}
+                  <AvisoMP icon={<Ic n="⏳"/>} color={C.warn} bg={C.warnLight}
                     titulo={`${nPorAceptar} OC${nPorAceptar>1?"s":""} esperando aceptación`}
                     descripcion="Están enviadas en Mercado Público pero nadie las ha aceptado todavía. Hasta que se acepten no se pueden cargar acá."
                     onActualizar={onActualizarPorAceptar} verificando={verificandoPorAceptar}>
@@ -541,7 +542,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
                           }}
                           style={{flexShrink:0,background:C.card,border:`1px solid ${C.danger}55`,color:C.danger,borderRadius:8,
                             padding:"6px 11px",fontSize:12,fontWeight:700,cursor:"pointer"}}>
-                          🗑 Eliminar
+                          <Ic n="🗑"/> Eliminar
                         </button>
                         )}
                       </div>

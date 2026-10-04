@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { Field, Leyenda } from "../ui/Basicos";
 import { sel } from "../../lib/supabase";
 import { C, MONO, btnP, fmt, iMono } from "../../lib/theme";
+import { Ic } from "../ui/Iconos";
 
 export function PanelCalendario({ ocs, onMarcarFecha }) {
   const hoy=new Date();
@@ -67,7 +68,7 @@ export function PanelCalendario({ ocs, onMarcarFecha }) {
     <div>
       {vencidas.length>0&&(
         <div style={{background:C.dangerLight,border:`1px solid ${C.danger}`,borderRadius:12,padding:"10px 12px",marginBottom:12}}>
-          <div style={{fontWeight:800,color:C.danger,fontSize:12,marginBottom:6}}>⚠ {vencidas.length} entrega{vencidas.length>1?"s":""} atrasada{vencidas.length>1?"s":""}</div>
+          <div style={{fontWeight:800,color:C.danger,fontSize:12,marginBottom:6}}><Ic n="⚠"/> {vencidas.length} entrega{vencidas.length>1?"s":""} atrasada{vencidas.length>1?"s":""}</div>
           {vencidas.map(({oc,fEst})=>(
             <div key={oc.id} style={{fontSize:12,display:"flex",justifyContent:"space-between",marginBottom:3}}>
               <span style={{fontFamily:MONO,fontWeight:700}}>{oc.numero_oc}</span>
@@ -78,9 +79,9 @@ export function PanelCalendario({ ocs, onMarcarFecha }) {
       )}
 
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-        <button onClick={()=>cambiarMes(-1)} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 12px",fontSize:14,cursor:"pointer"}}>◀</button>
+        <button onClick={()=>cambiarMes(-1)} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 12px",fontSize:14,cursor:"pointer"}}><Ic n="chevL"/></button>
         <div style={{fontWeight:800,fontSize:14}}>{MESES[mes]} {anio}</div>
-        <button onClick={()=>cambiarMes(1)} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 12px",fontSize:14,cursor:"pointer"}}>▶</button>
+        <button onClick={()=>cambiarMes(1)} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 12px",fontSize:14,cursor:"pointer"}}><Ic n="chevR"/></button>
       </div>
 
       <div style={{display:"flex",gap:12,marginBottom:8,fontSize:12,color:C.inkMuted}}>

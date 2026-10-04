@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { Field, BuscadorOC } from "../ui/Basicos";
 import { C, MONO, SANS, btnP, fmt, iStyle, iMono, selStyle } from "../../lib/theme";
+import { Ic } from "../ui/Iconos";
 
 export function FormCompraRapida({ ocs, financiadores, perfil, onSave, ocPreseleccionada }) {
   // Solo OCs que todavía no tienen compra registrada
@@ -79,7 +80,7 @@ export function FormCompraRapida({ ocs, financiadores, perfil, onSave, ocPresele
       )}
       {oc && c > venta && venta > 0 && (
         <div style={{ background: C.dangerLight, color: C.danger, borderRadius: 8, padding: "8px 12px", fontSize: 12, marginBottom: 12, fontWeight: 600 }}>
-          ⚠ El costo es mayor que la venta — revisa el monto
+          <Ic n="⚠"/> El costo es mayor que la venta — revisa el monto
         </div>
       )}
 
