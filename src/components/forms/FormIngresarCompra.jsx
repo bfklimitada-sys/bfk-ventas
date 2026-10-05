@@ -3,7 +3,7 @@ import { Field } from "../ui/Basicos";
 import { del } from "../../lib/supabase";
 import { C, btnP, iMono, iStyle, selStyle } from "../../lib/theme";
 
-export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, entidadesCatalogo, ocExistente }) {
+export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, entidadesCatalogo, ocExistente, perfil }) {
   const [paso,setPaso]=useState(1);
   // Paso 1 — Datos OC (si ocExistente, el código viene definido)
   const [numOC,setNumOC]=useState(ocExistente?.numero_oc||"");
@@ -18,7 +18,7 @@ export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, ent
   // Paso 2 — Productos
   const [productos,setProductos]=useState([{desc:"",cantidad:1,precioCompra:"",precioVenta:"",link:""}]);
   // Paso 3 — Compra
-  const [financiadorId,setFinanciadorId]=useState(financiadores[0]?.id||"");
+  const [financiadorId,setFinanciadorId]=useState(perfil?.financiador_default||financiadores.find(f=>f.id==="fin_byron")?.id||financiadores[0]?.id||"");
   const [fechaCompra,setFechaCompra]=useState(new Date().toISOString().slice(0,10));
   const [fechaEst,setFechaEst]=useState("");
   const [obs,setObs]=useState("");
@@ -28,8 +28,11 @@ export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, ent
   // Totales calculados desde productos
   const costoTotal=productos.reduce((s,p)=>s+(Number(p.precioCompra)||0)*(Number(p.cantidad)||1),0);
   const ventaTotal=productos.reduce((s,p)=>s+(Number(p.precioVenta)||0)*(Number(p.cantidad)||1),0);
-  const utilidad=ventaTotal-costoTotal;
-  const margen=ventaTotal>0?((utilidad/ventaTotal)*100).toFixed(1):0;
+  // Si la OC ya existe, su monto adjudicado NO se modifica: la utilidad se muestra contra ese monto.
+  const ventaOC=ocExistente?(Number(ocExistente.monto_total)||0):ventaTotal;
+  const utilidad=ventaOC-costoTotal;
+  const margen=ventaOC>0?((utilidad/ventaOC)*100).toFixed(1):0;
+  const difVenta=ocExistente&&ventaTotal>0&&Math.abs(ventaTotal-ventaOC)>1;
 
   const handleRutChange=(val)=>{
     setRutCliente(val);
@@ -120,6 +123,14 @@ export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, ent
               ? <div style={{...iMono,background:C.paper,color:C.inkMuted,display:"flex",alignItems:"center"}}>{numOC} <span style={{fontSize:12,marginLeft:8,color:C.tealDark}}>✓ definida</span></div>
               : <input style={iMono} value={numOC} onChange={e=>setNumOC(e.target.value)} placeholder="ej: 2436-690-AG26" />}
           </Field>
+          {ocExistente?(
+            <div style={{background:C.paper,borderRadius:10,padding:"12px 14px",marginTop:4,fontSize:12.5,lineHeight:1.8}}>
+              <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:4}}>Datos de la OC (no se modifican)</div>
+              <b>Cliente:</b> {ocExistente.cliente||"—"}{ocExistente.entidad?` · ${ocExistente.entidad}`:""}<br/>
+              <b>Vendedor:</b> {vendedores.find(v=>v.id===ocExistente.vendedor_id)?.nombre||"Sin vendedor asignado"}<br/>
+              <b>Monto de la OC:</b> ${(Number(ocExistente.monto_total)||0).toLocaleString("es-CL")}
+            </div>
+          ):(<>
           <Field label="Vendedor" required>
             <select style={selStyle} value={vendedorId} onChange={e=>setVendedorId(e.target.value)}>
               {vendedores.map(v=><option key={v.id} value={v.id}>{v.nombre}</option>)}
@@ -143,6 +154,7 @@ export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, ent
           <Field label="Correo">
             <input style={iStyle} type="email" value={correo} onChange={e=>setCorreo(e.target.value)} placeholder="contacto@entidad.cl" />
           </Field>
+          </>)}
         </div>
       )}
 
@@ -186,9 +198,10 @@ export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, ent
             <div style={{background:C.tealLight,borderRadius:9,padding:"10px 14px",fontSize:12.5}}>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4}}>
                 <div><div style={{color:C.inkMuted,fontSize:12}}>Costo total</div><div style={{fontWeight:700,color:C.ink}}>${costoTotal.toLocaleString("es-CL")}</div></div>
-                <div><div style={{color:C.inkMuted,fontSize:12}}>Venta total</div><div style={{fontWeight:700,color:C.ink}}>${ventaTotal.toLocaleString("es-CL")}</div></div>
+                <div><div style={{color:C.inkMuted,fontSize:12}}>{ocExistente?"Venta de la OC":"Venta total"}</div><div style={{fontWeight:700,color:C.ink}}>${ventaOC.toLocaleString("es-CL")}</div></div>
                 <div><div style={{color:C.inkMuted,fontSize:12}}>Utilidad ({margen}%)</div><div style={{fontWeight:700,color:utilidad>=0?C.ok:C.danger}}>${utilidad.toLocaleString("es-CL")}</div></div>
               </div>
+              {difVenta&&<div style={{background:C.warnLight,color:C.warnText,borderRadius:8,padding:"8px 12px",fontSize:12,marginTop:8,fontWeight:600}}>Los productos suman ${ventaTotal.toLocaleString("es-CL")} de venta; el monto de la OC (${ventaOC.toLocaleString("es-CL")}) no se modifica.</div>}
             </div>
           )}
         </div>
@@ -218,9 +231,10 @@ export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, ent
             <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,marginBottom:8,textTransform:"uppercase"}}>Resumen financiero</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4,fontSize:12.5}}>
               <div><div style={{color:C.inkMuted,fontSize:12}}>Costo</div><div style={{fontWeight:700}}>${costoTotal.toLocaleString("es-CL")}</div></div>
-              <div><div style={{color:C.inkMuted,fontSize:12}}>Venta</div><div style={{fontWeight:700}}>${ventaTotal.toLocaleString("es-CL")}</div></div>
+              <div><div style={{color:C.inkMuted,fontSize:12}}>Venta</div><div style={{fontWeight:700}}>${ventaOC.toLocaleString("es-CL")}</div></div>
               <div><div style={{color:C.inkMuted,fontSize:12}}>Utilidad ({margen}%)</div><div style={{fontWeight:700,color:utilidad>=0?C.ok:C.danger}}>${utilidad.toLocaleString("es-CL")}</div></div>
             </div>
+            {difVenta&&<div style={{background:C.warnLight,color:C.warnText,borderRadius:8,padding:"8px 12px",fontSize:12,marginTop:8,fontWeight:600}}>Los productos suman ${ventaTotal.toLocaleString("es-CL")} de venta; el monto de la OC (${ventaOC.toLocaleString("es-CL")}) no se modifica.</div>}
           </div>
         </div>
       )}
@@ -253,10 +267,11 @@ export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, ent
             <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:8}}>Resumen financiero</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4,fontSize:13}}>
               <div><div style={{color:C.inkMuted,fontSize:12}}>Costo</div><div style={{fontWeight:800}}>${costoTotal.toLocaleString("es-CL")}</div></div>
-              <div><div style={{color:C.inkMuted,fontSize:12}}>Venta</div><div style={{fontWeight:800}}>${ventaTotal.toLocaleString("es-CL")}</div></div>
+              <div><div style={{color:C.inkMuted,fontSize:12}}>Venta</div><div style={{fontWeight:800}}>${ventaOC.toLocaleString("es-CL")}</div></div>
               <div><div style={{color:C.inkMuted,fontSize:12}}>Utilidad</div><div style={{fontWeight:800,color:utilidad>=0?C.ok:C.danger}}>${utilidad.toLocaleString("es-CL")} ({margen}%)</div></div>
             </div>
             <div style={{marginTop:8,fontSize:12,color:C.inkMuted}}>
+              {difVenta&&<div style={{background:C.warnLight,color:C.warnText,borderRadius:8,padding:"8px 12px",fontSize:12,marginBottom:8,fontWeight:600}}>Los productos suman ${ventaTotal.toLocaleString("es-CL")} de venta; el monto de la OC (${ventaOC.toLocaleString("es-CL")}) no se modifica.</div>}<br/>
               <b>Financiador:</b> {financiadores.find(f=>f.id===financiadorId)?.nombre} · <b>Fecha:</b> {fechaCompra}
               {fechaEst&&<> · <b>Entrega est.:</b> {fechaEst}</>}
             </div>
@@ -277,7 +292,7 @@ export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, ent
           }} style={{...btnP(C.teal),flex:2}}>Siguiente →</button>
         )}
         {paso===4&&(
-          <button onClick={handleGuardar} disabled={saving} style={{...btnP(saving?C.inkFaint:C.ok),flex:2}}>{saving?"Guardando…":"✓ Crear OC"}</button>
+          <button onClick={handleGuardar} disabled={saving} style={{...btnP(saving?C.inkFaint:C.ok),flex:2}}>{saving?"Guardando…":(ocExistente?"✓ Registrar compra":"✓ Crear OC")}</button>
         )}
       </div>
     </div>

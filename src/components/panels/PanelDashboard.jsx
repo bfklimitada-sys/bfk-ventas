@@ -141,8 +141,20 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
     // Misma regla que el panel Vendedores (lib/calculos.js).
     const deudaVendedoresMes=vendedores?.reduce((sv,v)=>
       sv+(calcularPagoVendedor({vendedorId:v.id,ocs,anio:anioActual,mes:mesActual,ivaMensual,pagosVendedor})?.deuda||0),0)||0;
-    const ivaMes=ivaMensual.find(i=>i.mes===mesActual&&i.anio===anioActual);
-    const f29=ivaMes?Math.max(0,(ivaMes.iva_ventas||0)-(ivaMes.iva_compras||0)):0;
+    // F29 por período (mes anterior y mes actual), solo con datos existentes:
+    //  · Determinado = iva_mensual: max(0, iva_ventas − iva_compras) del período
+    //  · Pagado      = suma de gastos "Impuesto SII" (cat_impuesto) con ese mes/año
+    //  · Pendiente   = max(0, Determinado − Pagado)
+    const periodoF29=(a,m)=>{
+      const iv=ivaMensual.find(i=>i.mes===m&&i.anio===a);
+      const det=iv?Math.max(0,(iv.iva_ventas||0)-(iv.iva_compras||0)):0;
+      const pag=gastos.filter(g=>g.categoria_id==="cat_impuesto"&&Number(g.mes)===m&&Number(g.anio)===a).reduce((s2,g)=>s2+(g.monto||0),0);
+      return {anio:a,mes:m,det,pag,pend:Math.max(0,det-pag)};
+    };
+    const mesPrev=mesActual===1?12:mesActual-1; const anioPrev=mesActual===1?anioActual-1:anioActual;
+    const f29Periodos=[periodoF29(anioPrev,mesPrev),periodoF29(anioActual,mesActual)].filter(x=>x.det>0||x.pag>0);
+    const f29=f29Periodos.reduce((s2,x)=>s2+x.pend,0); // lo que aún falta pagar
+    const f29Visible=f29Periodos.length>0;
     const deudaContadorMes=0;
     const deudaTotal=deudaFin+deudaVendedoresMes+f29+deudaContadorMes;
 
@@ -172,7 +184,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
     }).length;
 
     const utilidad=ingresos-costos;
-    return {saldoReal,saldoEsperado,brecha,corteBanco:corte,movDesdeCorte,gananciaMes,ventaMes,aportes:totalAportes,cobrado,porCobrar,deudaFin,utilidad,saldoProyectado,saldoCtaCte,ingresosPendientes,deudaTotal,gastoContador,gastosVendedores,gastoImpuesto,f29,margenPromPct,deudaVendedoresMes,ocsAbiertas,creditoPagadoTotal,gastosTotal,costoBFK};
+    return {saldoReal,saldoEsperado,brecha,corteBanco:corte,movDesdeCorte,gananciaMes,ventaMes,aportes:totalAportes,cobrado,porCobrar,deudaFin,utilidad,saldoProyectado,saldoCtaCte,ingresosPendientes,deudaTotal,gastoContador,gastosVendedores,gastoImpuesto,f29,f29Periodos,f29Visible,margenPromPct,deudaVendedoresMes,ocsAbiertas,creditoPagadoTotal,gastosTotal,costoBFK};
   },[ocs,financiadores,gastos,pagosVendedor,ivaMensual,vendedores,pagoFinSueltos,aportesLista,saldoBanco]);
 
   // ── Proyección del mes: promedio histórico completo, para tener ──
@@ -384,9 +396,9 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
 
       </Seccion>
 
-      <Seccion titulo="Compromisos" ocultarSiVacio={!(kpis.deudaFin>0||kpis.deudaVendedoresMes>0||kpis.f29>0)}>
+      <Seccion titulo="Compromisos" ocultarSiVacio={!(kpis.deudaFin>0||kpis.deudaVendedoresMes>0||kpis.f29Visible)}>
       {/* Deuda a terceros — el detalle vive en Vendedores y Financiamiento */}
-      {(kpis.deudaFin>0||kpis.deudaVendedoresMes>0||kpis.f29>0)&&(
+      {(kpis.deudaFin>0||kpis.deudaVendedoresMes>0||kpis.f29Visible)&&(
         <Tarjeta padding="4px 14px">
           {kpis.deudaFin>0&&(
             <button onClick={()=>onNavigate&&onNavigate("financiamiento",null)}
@@ -408,12 +420,15 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
               </span>
             </button>
           )}
-          {kpis.f29>0&&(
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",minHeight:52,borderTop:(kpis.deudaFin>0||kpis.deudaVendedoresMes>0)?`1px solid ${C.border}`:"none"}}>
-              <span style={{fontSize:14,color:C.ink,fontWeight:600}}>Impuesto F29 proyectado</span>
-              <Monto tam="sm" tono="warn">{fmt.money(kpis.f29)}</Monto>
+          {kpis.f29Periodos.map((x,i)=>(
+            <div key={x.anio+"-"+x.mes} style={{padding:"10px 0",borderTop:(kpis.deudaFin>0||kpis.deudaVendedoresMes>0||i>0)?`1px solid ${C.border}`:"none"}}>
+              <div style={{fontSize:14,color:C.ink,fontWeight:600,marginBottom:4}}>Impuesto F29 · {fmt.monthYear(x.mes,x.anio)}</div>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:13,color:C.inkMuted,minHeight:24,alignItems:"center"}}><span>IVA determinado</span><Monto tam="sm">{fmt.money(x.det)}</Monto></div>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:13,color:C.inkMuted,minHeight:24,alignItems:"center"}}><span>Pagado (gastos Impuesto SII)</span><Monto tam="sm">{fmt.money(x.pag)}</Monto></div>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:13,color:C.ink,fontWeight:700,minHeight:24,alignItems:"center"}}><span>Pendiente de pago</span><Monto tam="sm" tono={x.pend>0?"warn":undefined}>{fmt.money(x.pend)}</Monto></div>
+              {x.det===0&&x.pag>0&&<div style={{fontSize:12,color:C.warnText,marginTop:2}}>Hay un pago registrado, pero el IVA de este período aún no está cargado en Vendedores.</div>}
             </div>
-          )}
+          ))}
         </Tarjeta>
       )}
 

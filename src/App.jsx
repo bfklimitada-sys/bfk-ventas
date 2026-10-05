@@ -304,7 +304,10 @@ export default function App() {
         }catch{}
       }
     } else {
-      await upd("ordenes_compra_v2",t,ocId,{estado_compra:"comprado",monto_total:data.montoVenta,costo_total:data.costoCompra,financiador_id:data.financiadorId,cliente:data.cliente,rut_cliente:data.rutCliente||"",correo_cliente:data.correo||"",entidad:data.entidad||"",comuna:data.comuna||"",contacto:data.contacto||"",vendedor_id:data.vendedorId});
+      // OC existente: el monto adjudicado (monto_total) y los datos del cliente NO se
+      // modifican. Se agregan los productos (desglose) y el registro de la compra se
+      // delega en handleCompraRapida, para que haya una sola lógica: evento de compra,
+      // costo, financiador, saldo del financiador e historial "Compra registrada".
       if(data.productos?.length){
         const existentes=(ocs.find(o=>o.id===ocId)?.oc_productos_link||[]).length;
         for(let i=0;i<data.productos.length;i++){
@@ -313,20 +316,17 @@ export default function App() {
           await ins("oc_productos_link",t,{id:genId("lnk"),oc_id:ocId,descripcion:desc,url:p.url||"sin-link",orden:existentes+i,creado_por:session.user.id});
         }
       }
-      if(data.rutCliente?.trim()){
-        try{
-          const existente=entidadesCatalogo.find(e=>e.rut===data.rutCliente.trim());
-          const datosEnt={rut:data.rutCliente.trim(),nombre_entidad:data.entidad||data.cliente||"",comuna:data.comuna||"",contacto:data.contacto||"",correo:data.correo||""};
-          if(existente) await upd("entidades_catalogo",t,existente.id,datosEnt);
-          else await ins("entidades_catalogo",t,{id:genId("ent"),...datosEnt,creado_por:session.user.id});
-        }catch{}
-      }
+      await handleCompraRapida({ocId,costoCompra:data.costoCompra,fecha:data.fecha,fechaEst:data.fechaEst,financiadorId:data.financiadorId,proveedor:data.proveedor});
+      return;
     }
     await ins("eventos_compra",t,{id:genId("evc"),oc_id:ocId,fecha:data.fecha,monto_venta:data.montoVenta,costo_compra:data.costoCompra,fecha_entrega_estimada:data.fechaEst,financiador_id:data.financiadorId,proveedor:data.proveedor,creado_por:session.user.id});
     const fin=financiadores.find(f=>f.id===data.financiadorId);
     const esVentaPropia=ocs.find(o=>o.id===ocId)?.es_venta_propia;
     if(fin&&!esVentaPropia) await upd("financiadores",t,fin.id,{saldo_deuda:Number(fin.saldo_deuda)+data.costoCompra});
-    showToast(data.esNueva?"OC creada correctamente":"Compra registrada"); setAccion(null); await cargarTodo();
+    await registrarCambio(t,{ocId,ocNumero:data.numNueva,usuarioId:perfil?.id,
+      usuarioNombre:perfil?.nombre,accion:"Compra registrada",campo:"costo_total",
+      valorNuevo:data.costoCompra});
+    showToast("OC creada correctamente"); setAccion(null); await cargarTodo();
   };
   // ─── NUEVA OC RÁPIDA (datos desde Mercado Público) ───────────
   const handleNuevaOCRapida=async({pendienteSync, oc, links, direccion_entrega, correo_cliente, vendedorId: vendedorIdElegido, ventaPropia})=>{
@@ -906,7 +906,7 @@ export default function App() {
 
     await registrarCambio(t,{ocId,ocNumero:oc?.numero_oc,usuarioId:perfil?.id,
       usuarioNombre:perfil?.nombre,accion:"Compra registrada",campo:"costo_total",
-      valorNuevo:costoCompra});
+      valorAnterior:oc?.costo_total,valorNuevo:costoCompra});
 
     showToast("Compra registrada"); setAccion(null); await cargarTodo();
   };
@@ -1010,18 +1010,10 @@ export default function App() {
   const handleNuevoGasto=async(data)=>{
     const t=session.access_token;
     await ins("gastos_indirectos",t,{id:genId("gas"),categoria_id:data.categoriaId,subcategoria:data.subcategoria,monto:data.monto,mes:data.mes,anio:data.anio,fecha:data.fecha,detalle:data.detalle,creado_por:session.user.id});
-    // Si el gasto es de la categoría "Impuesto SII", se asume que es el IVA
-    // mensual — se refleja también en la tabla que usa el cálculo de
-    // comisión de vendedores, para que dé lo mismo por dónde se cargue y
-    // nunca quede desincronizado (como pasó varias veces antes).
-    if(data.categoriaId==="cat_impuesto"){
-      const existe=ivaMensual.find(i=>i.mes===data.mes&&i.anio===data.anio);
-      if(existe){
-        await upd("iva_mensual",t,existe.id,{iva_ventas:(Number(existe.iva_ventas)||0)+Number(data.monto),iva_pagado:(Number(existe.iva_pagado)||0)+Number(data.monto)});
-      }else{
-        await ins("iva_mensual",t,{id:genId("iva"),anio:data.anio,mes:data.mes,ventas_netas:0,iva_ventas:data.monto,compras_netas:0,iva_compras:0,iva_pagado:data.monto});
-      }
-    }
+    // El gasto "Impuesto SII" es solo la salida real de caja del período (mes/año).
+    // NO escribe en iva_mensual: el IVA determinado (iva_ventas/iva_compras) se
+    // registra únicamente desde el flujo de IVA de Vendedores. Así el gasto no puede
+    // sumar ni duplicar el IVA que usa la comisión, sin importar el orden de registro.
     showToast("Gasto registrado"); await cargarTodo();
   };
   const handlePagoVendedorSimple=async(data)=>{
@@ -1597,7 +1589,7 @@ export default function App() {
       {accion==="cartola"&&<Modal title="Cartola del banco: conciliar" onClose={()=>setAccion(null)}><ImportarCartola ocs={ocs} financiadores={financiadores} vendedores={vendedores} categorias={categoriasGasto} registrados={movimientosRegistrados} onRegistrar={handleCobrosDesdeCartola} onRegistrarEgresos={handleEgresosDesdeCartola} /></Modal>}
       {accion==="abono_fin"&&<Modal title="Abonar a financiador" onClose={()=>setAccion(null)}><FormAbonoFinanciador ocs={ocs} financiadores={financiadores} financiadorInicial={abonoFinId} onSave={handleAbonoFinanciador} /></Modal>}
       {accion==="pago_cliente"&&<Modal title="Ingresar pago" onClose={()=>setAccion(null)}><FormPagoCliente ocs={ocs} onSave={handlePagoCliente} /></Modal>}
-      {accion==="compra_manual"&&<Modal title="Nueva OC — manual" onClose={()=>setAccion(null)}><FormIngresarCompra ocs={ocs} financiadores={financiadores} vendedores={vendedores} entidadesCatalogo={entidadesCatalogo} onSave={handleIngresarCompra} /></Modal>}
+      {accion==="compra_manual"&&<Modal title="Nueva OC — manual" onClose={()=>setAccion(null)}><FormIngresarCompra perfil={perfil} ocs={ocs} financiadores={financiadores} vendedores={vendedores} entidadesCatalogo={entidadesCatalogo} onSave={handleIngresarCompra} /></Modal>}
 
       <Toast toast={toast} />
     </div>

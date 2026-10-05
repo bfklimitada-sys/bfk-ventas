@@ -952,7 +952,7 @@ export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded
       )}
       {accionRapida==="compra"&&(
         <Modal title="Registrar compra" onClose={()=>setAccionRapida(null)}>
-          <FormIngresarCompra ocs={[]} financiadores={financiadores} vendedores={vendedores} entidadesCatalogo={entidadesCatalogo} ocExistente={oc} onSave={async(data)=>{ await onIngresarCompra(data); setAccionRapida(null); }} />
+          <FormIngresarCompra ocs={[]} financiadores={financiadores} vendedores={vendedores} entidadesCatalogo={entidadesCatalogo} perfil={perfil} ocExistente={oc} onSave={async(data)=>{ await onIngresarCompra(data); setAccionRapida(null); }} />
         </Modal>
       )}
       {accionRapida==="entrega"&&(
