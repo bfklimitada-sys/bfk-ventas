@@ -146,3 +146,52 @@ oc_keys = {clave(o["rut"]) for o in OCS if o["rut"]}
 print(f"RUT distintos (normalizados) en OCs={len(oc_keys)}; con entidad={len(oc_keys & ent_keys)}; sin entidad={len(oc_keys - ent_keys)}")
 print(f"OCs cuyo RUT coincide con una entidad SOLO normalizado (no exacto)={sum(1 for o in OCS if o['rut'] and clave(o['rut']) in ent_keys and o['rut'].strip() not in {e['rut'] for e in E})}")
 print(f"entidades sin ninguna OC (normalizado)={sum(1 for e in E if clave(e['rut']) not in oc_keys)}")
+
+print("\n===== 7. EVIDENCIA DE OCs PARA CAMPOS EN CONFLICTO =====")
+from collections import Counter
+cnt = Counter(); por_grupo = []
+for d in detalle:
+    i, k = d[0], d[1]; rows = grupos[k]; ocs = sorted(oc_key.get(k, []), key=lambda o: o["creado"] or "")
+    estado_g = "auto"
+    for c, oc_c in (("nombre", None), ("comuna", "comuna"), ("contacto", "contacto"), ("correo", "correo")):
+        cat = d[3][c]
+        if not (cat.startswith("distinto") or cat.startswith("contiene")): continue
+        cands = {nt(r[c]) for r in rows if str(r[c] or "").strip()}
+        def vals(o): return {nt(o["cliente"]), nt(o["entidad"])} if c == "nombre" else {nt(o[oc_c])}
+        matches = [(o, cands & vals(o)) for o in ocs]
+        conval = [m for m in matches if m[1]]
+        unicos = {next(iter(m[1])) for m in conval if len(m[1]) == 1}
+        ambos = sum(1 for m in conval if len(m[1]) > 1)
+        if conval and len(unicos) == 1 and not ambos and len(conval) == len([o for o in ocs if any(vals(o) - {""})]):
+            r = "unanime_todas_las_ocs"
+        elif conval and len(unicos) == 1:
+            r = "unanime_entre_ocs_que_coinciden(otras_ocs_con_otro_texto)"
+        elif conval and matches[-1][1] and len(matches[-1][1]) == 1:
+            r = "solo_la_mas_reciente(ocs_divididas)"
+        else:
+            r = "sin_evidencia"
+        cnt[(c, r)] += 1
+        if r != "unanime_todas_las_ocs": estado_g = "manual"
+        por_grupo.append(f"G{i:02d} {c}: {r} (ocs={len(ocs)}, ocs_que_coinciden={len(conval)}, coinciden_ambos={ambos})")
+for l in por_grupo: print(" ", l)
+for (c, r), n in sorted(cnt.items()): print(f"  {c} -> {r}: {n}")
+# texto exacto de la OC más reciente vs candidatos (para nombre): ¿cliente o entidad?
+cl = en = 0
+for d in detalle:
+    if not d[3]["nombre"].startswith(("distinto", "contiene")): continue
+    rows = grupos[d[1]]; ocs = sorted(oc_key.get(d[1], []), key=lambda o: o["creado"] or "")
+    if not ocs: continue
+    u = ocs[-1]; cands = {nt(r["nombre"]) for r in rows}
+    cl += nt(u["cliente"]) in cands; en += nt(u["entidad"]) in cands
+print(f"  nombre coincide con OC.cliente={cl} con OC.entidad={en}")
+# fila invalida 61606800-6: nombres
+for e in E:
+    if limpio(e["rut"])[:-1] == "61606800": print("  ent 61606800:", e["rut"], "| nombre_norm_igual_al_resto:", len({nt(x['nombre']) for x in E if limpio(x['rut'])[:-1]=='61606800'})==1, "| campos_llenos:", sum(1 for c in CAMPOS if str(e[c] or '').strip()), "| creado_por:", bool(e["por"]))
+print("  contactos_cobranza con 61606800:", sum(1 for c in CC if c["rut"] and limpio(c["rut"])[:-1] == "61606800"))
+print("  OCs con 61606800:", [(o["rut"], (o["creado"] or "")[:10], nt(o["cliente"])==nt(o["entidad"])) for o in OCS if o["rut"] and limpio(o["rut"])[:-1]=="61606800"])
+sin_grupo = [e for e in sin if len(G[clave(e["rut"])]) == 1]
+print("  sin creado_por fuera de grupos:", [(e["rut"], valido(e["rut"])) for e in sin_grupo])
+print("  hyphen-only fuera de grupos:", [e["rut"] for e in E if re.fullmatch(r"[0-9]{7,8}-[0-9Kk]", e["rut"]) and len(G[clave(e["rut"])]) == 1])
+print("  k minúscula: en grupos=", sum(1 for e in E if e["rut"].endswith("k") and len(G[clave(e["rut"])]) > 1), " fuera=", sum(1 for e in E if e["rut"].endswith("k") and len(G[clave(e["rut"])]) == 1))
+# contactos_cobranza: formatos y coincidencia con entidades
+print("  contactos_cobranza: con puntos=", sum(1 for c in CC if c["rut"] and "." in c["rut"]), " sin=", sum(1 for c in CC if c["rut"] and "." not in c["rut"]), " sin entidad (normalizado)=", sum(1 for c in CC if c["rut"] and clave(c["rut"]) not in ent_keys))
