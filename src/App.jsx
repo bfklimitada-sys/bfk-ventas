@@ -1154,9 +1154,8 @@ export default function App() {
     const otrosAbiertos=lista.filter(e=>e.id!==d.id&&e.estado!=="resuelto").length;
     await upd("ordenes_compra_v2",t,d.ocId,{estado_postventa:(!cerradoAhora||otrosAbiertos>0)?"con_incidencia":"resuelta"});
     const tipoTxt={falla:"Falla del producto",faltante:"Faltante",cambio:"Cambio / reposición",devolucion:"Devolución",otro:"Otro"}[d.tipo]||d.tipo;
-    const orden=(previo?lista:[...lista,{id:"_nuevo",fecha:d.fecha}]).slice().sort((a,b)=>String(a.fecha||"").localeCompare(String(b.fecha||"")));
-    const n=Math.max(1,orden.findIndex(e=>e.id===(d.id||"_nuevo"))+1);
-    const ident=`Incidente ${n} · ${tipoTxt} · ${fmt.date(d.fecha)}`;
+    // Referencia estable (no depende de la numeración visual): tipo + fecha del reclamo, dentro de la OC del registro.
+    const ident=`${tipoTxt} · reclamo del ${fmt.date(d.fecha)}`;
     await registrarCambio(t,{ocId:d.ocId,ocNumero:oc?.numero_oc,usuarioId:perfil?.id,usuarioNombre:perfil?.nombre,accion,campo:"incidente",
       valorNuevo:accion==="Incidente editado"?`${ident} (cambió: ${cambios.join(", ")})`:accion==="Incidente cerrado"&&d.solucion?`${ident} · cierre: ${String(d.solucion).slice(0,80)}`:ident});
     showToast(accion==="Incidente cerrado"?"Incidente cerrado":accion==="Incidente reabierto"?"Incidente reabierto":accion==="Incidente editado"?"Incidente actualizado":(Number(d.costo_extra)>0?`Incidente registrado · ${fmt.money(d.costo_extra)} de costo extra`:"Incidente registrado")); await cargarTodo();
