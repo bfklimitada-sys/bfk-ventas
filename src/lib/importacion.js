@@ -37,11 +37,13 @@ export function leerArchivoImportable(buf, tablas) {
     const ws = wb.Sheets[hoja];
     if (!ws) continue;
     const crudas = XLSX.utils.sheet_to_json(ws);
-    const filas = crudas.map((fila) => {
+    // defval:null → una celda en blanco es NULL (el exportador deja en blanco los NULL y escribe "" como texto vacío),
+    // así una fila borrada que se vuelve a insertar recupera NULL en vez del valor por defecto de la columna.
+    const filas = XLSX.utils.sheet_to_json(ws, { defval: null }).map((fila) => {
       const limpia = {};
       for (const k of Object.keys(fila)) { if (!k.startsWith("_")) limpia[k] = fila[k]; }
       return limpia;
-    }).filter((f) => Object.keys(f).length);
+    }).filter((f) => Object.values(f).some((v) => v !== null));
     const sinId = filas.filter((f) => f.id === undefined || f.id === null || valorTexto(f.id).trim() === "").length;
     if (sinId) problemas.push(`${hoja}: ${sinId} fila(s) sin id.`);
     const vistos = new Set(); const dup = new Set();

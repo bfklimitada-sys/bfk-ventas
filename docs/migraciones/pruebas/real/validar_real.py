@@ -45,8 +45,9 @@ def unicos(t):
     u = {tuple(r["cols"]) for r in RESTR if r["t"] == t and r["tipo"] == "u"}
     for x in (M["unicos"] or []):
         if x["t"] == t:
-            m = re.search(r"\(([^)]*)\)", x["def"].split(" USING ")[-1]); 
-            if m: u.add(tuple(s.strip().strip('"') for s in m.group(1).split(",")))
+            cols_txt = x["def"].split(" USING ")[-1].split("(", 1)[-1].rsplit(")", 1)[0]
+            if "(" in cols_txt: continue   # indice sobre expresion (p. ej. upper(regexp_replace(numero_oc…))): se respeta por la columna base ya desplazada
+            u.add(tuple(s.strip().strip('"') for s in cols_txt.split(",")))
     pk = {tuple(r["cols"]) for r in RESTR if r["t"] == t and r["tipo"] == "p"}
     return [c for c in u if c not in pk]
 
