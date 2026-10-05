@@ -179,9 +179,9 @@ psql("drop trigger tmp_falla_ent on public.entidades_catalogo; drop function pub
 # conflicto concurrente: otra sesión con INSERT sin confirmar; la importación espera el bloqueo y falla con lock_timeout => 0 cambios
 Lc = libres(1, 73000000)[0]
 hold = subprocess.Popen([ENV.get("PSQL", "psql"), "-X", "-q", "-v", "ON_ERROR_STOP=1"], stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, text=True, env=ENV)
-hold.stdin.write(f"begin; insert into public.entidades_catalogo(id,rut,nombre_entidad) values ('ent_hold_x','{dotted(Lc)}','HOLD'); select pg_sleep(8); rollback;\n"); hold.stdin.flush(); time.sleep(2)
+hold.stdin.write(f"begin; insert into public.entidades_catalogo(id,rut,nombre_entidad) values ('ent_hold_x','{dotted(Lc)}','HOLD'); select pg_sleep(8); rollback;\n"); hold.stdin.close(); time.sleep(2)
 r, e, _ = rpc([op(2, dotted(Lc), "Conc")], extra="set local lock_timeout='1500ms';\n"); chk("conflicto_concurrente_falla_y_no_escribe", r is None and "IMPORTACION_CANCELADA" in (e or ""), e)
-hold.wait(); chk("conflicto_concurrente_0_cambios", hash_tabla() == Ha)
+hold.wait(timeout=60); chk("conflicto_concurrente_0_cambios", hash_tabla() == Ha)
 
 print("\n===== LÍMITE 499 / 500 / 501 =====", flush=True)
 for n in (499, 500, 501):
