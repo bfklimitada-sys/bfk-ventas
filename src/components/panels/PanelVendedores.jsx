@@ -4,7 +4,8 @@ import { del } from "../../lib/supabase";
 import { C, MONO, btnG, btnP, fmt, iMono, iStyle, selStyle } from "../../lib/theme";
 import { Ic } from "../ui/Iconos";
 import { Seccion, Tarjeta, Badge, Monto } from "../ui/Sistema";
-import { anioMesDe, calcularPagoVendedor, facturaVigente, mesesConFactura } from "../../lib/calculos";
+import { ocsPagablesDelMes } from "../../lib/pagosVendedor";
+import { calcularPagoVendedor, mesesConFactura } from "../../lib/calculos";
 
 export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, onGuardarIva, onPagoVendedor }) {
   const [editIva,setEditIva]=useState(false);
@@ -198,11 +199,7 @@ export function FormPagoVendedorSimple({ vendedores, ocs, onSave, inicial }) {
   const vend=vendedores.find(v=>v.id===vendedorId);
   const MESES=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
   const labelMes=`Ventas de ${MESES[mes-1]}/${anio}`;
-  const ocsDelMes=ocs?.filter(o=>{
-    if(o.vendedor_id!==vendedorId||o.estado_factura_propia!=="emitida"||o.vendedor_pagado) return false;
-    const evF=facturaVigente(o); if(!evF) return false;
-    const f=anioMesDe(evF.fecha); return f.mes===Number(mes)&&f.anio===Number(anio);
-  })||[];
+  const ocsDelMes=ocsPagablesDelMes(ocs,vendedorId,mes,anio);
   const handleSave=async()=>{
     if(!monto||Number(monto)<=0){setErr("Indica el monto");return;}
     setErr(""); setSaving(true);

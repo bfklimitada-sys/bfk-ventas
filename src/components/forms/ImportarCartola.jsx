@@ -1,4 +1,5 @@
-import { facturaVigente } from "../../lib/calculos";
+import { anioMesDe, facturaVigente } from "../../lib/calculos";
+import { ocsPagablesDelMes } from "../../lib/pagosVendedor";
 import { useState } from "react";
 import * as XLSX from "xlsx";
 import { C, MONO, SANS, btnP, btnG, fmt } from "../../lib/theme";
@@ -210,7 +211,8 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, re
         const c = clasificarCargo(m, financiadores, vendedores);
         const dup = yaRegistrado(m, registrados);
         const antiguo = m.fecha < CORTE_EGRESOS;
-        return { mov: m, ...c, duplicado: dup || null, antiguo,
+        const am = anioMesDe(m.fecha);
+        return { mov: m, ...c, mesCom: am.mes, anioCom: am.anio, marcarOc: true, duplicado: dup || null, antiguo,
                  incluir: (dup || antiguo) ? false : c.seguro };
       }));
     } catch (e) {
@@ -274,11 +276,17 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, re
     if (sel.some(e => e.tipo !== "gasto" && !e.destinoId)) {
       setErr("Falta elegir el destino en alguno de los egresos"); return;
     }
+    if (sel.some(e => e.tipo === "vendedor" && (!(Number(e.mesCom) >= 1 && Number(e.mesCom) <= 12) || !(Number(e.anioCom) >= 2020)))) {
+      setErr("Indica el mes y el año de la comisión en los pagos a vendedor"); return;
+    }
     setErr(""); setGuardando(true);
     try {
       await onRegistrarEgresos(sel.map(e => ({
         tipo: e.tipo, destinoId: e.destinoId, categoriaId: e.categoriaId || "cat_otros",
         monto: e.mov.cargo, fecha: e.mov.fecha, descripcion: e.mov.descripcion,
+        mesCom: Number(e.mesCom), anioCom: Number(e.anioCom),
+        ocIds: e.tipo === "vendedor" && e.marcarOc !== false
+          ? ocsPagablesDelMes(ocs, e.destinoId, e.mesCom, e.anioCom).map(o => o.id) : [],
       })), resumenCartola());
     } catch (er) { setErr(er.message); setGuardando(false); }
   };
@@ -506,6 +514,29 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, re
                     )}
                   </div>
                 )}
+
+                {e.incluir && e.tipo === "vendedor" && e.destinoId && (() => {
+                  const nOc = ocsPagablesDelMes(ocs, e.destinoId, e.mesCom, e.anioCom).length;
+                  const set = (patch) => setEgresos(l => l.map((x, ix) => ix === i ? { ...x, ...patch } : x));
+                  const MESES_C = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+                  return (
+                    <div style={{ marginTop: 8 }}>
+                      <div style={{ fontSize: 11, color: C.inkMuted, marginBottom: 4 }}>Comisión que se paga (mes de las ventas):</div>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <select value={e.mesCom} onChange={ev => set({ mesCom: Number(ev.target.value) })}
+                          style={{ flex: 1, padding: "6px 8px", borderRadius: 8, fontSize: 12, border: `1px solid ${C.border}`, background: C.card, color: C.ink, fontFamily: SANS }}>
+                          {MESES_C.map((n, k) => <option key={k} value={k + 1}>{n}</option>)}
+                        </select>
+                        <input type="number" value={e.anioCom} onChange={ev => set({ anioCom: Number(ev.target.value) })}
+                          style={{ width: 80, padding: "6px 8px", borderRadius: 8, fontSize: 12, border: `1px solid ${C.border}`, background: C.card, color: C.ink, fontFamily: MONO }} />
+                      </div>
+                      <label style={{ display: "flex", gap: 6, alignItems: "flex-start", marginTop: 6, fontSize: 11.5, color: C.inkMuted, cursor: "pointer" }}>
+                        <input type="checkbox" checked={e.marcarOc !== false} onChange={ev => set({ marcarOc: ev.target.checked })} style={{ marginTop: 2 }} />
+                        <span>Marcar {nOc} OC facturada{nOc !== 1 ? "s" : ""} de ese mes como "vendedor pagado"</span>
+                      </label>
+                    </div>
+                  );
+                })()}
               </div>
             ))}
 

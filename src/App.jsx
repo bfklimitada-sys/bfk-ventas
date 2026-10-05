@@ -7,6 +7,7 @@ import { NuevaOCRapida } from "./components/forms/NuevaOCRapida";
 import { FormCompraRapida } from "./components/forms/FormCompraRapida";
 import { FormAbonoFinanciador, repartirFIFO } from "./components/forms/FormAbonoFinanciador";
 import { registrarPagoFinanciador } from "./lib/pagosFinanciador";
+import { registrarPagoVendedor } from "./lib/pagosVendedor";
 import { ImportarCartola } from "./components/forms/ImportarCartola";
 import { FormSaldoBanco } from "./components/forms/FormSaldoBanco";
 import { FormConfirmarEntrega, FormEmitirFactura, FormPagoCliente } from "./components/forms/FormulariosRapidos";
@@ -837,10 +838,10 @@ export default function App() {
       }
 
       if(e.tipo==="vendedor"){
-        const d=new Date(e.fecha);
-        await ins("pagos_vendedor",t,{id:genId("pv"),vendedor_id:e.destinoId,
-          anio:d.getFullYear(),mes:d.getMonth()+1,monto_calculado:e.monto,monto_pagado:e.monto,
-          fecha:e.fecha,estado:"pagado",notas:`Desde cartola: ${e.descripcion}`,creado_por:session.user.id});
+        // Misma función que el pago desde Vendedores; el mes de comisión viene elegido (por defecto, el de la fecha sin desfase horario)
+        await registrarPagoVendedor({ins,upd,token:t,userId:session.user.id,id:genId("pv"),vendedorId:e.destinoId,
+          monto:e.monto,fecha:e.fecha,mes:e.mesCom,anio:e.anioCom,
+          notas:`Desde cartola: ${e.descripcion}`,ocIds:e.ocIds});
         nVen++;
       }
 
@@ -1017,13 +1018,9 @@ export default function App() {
     showToast("Gasto registrado"); await cargarTodo();
   };
   const handlePagoVendedorSimple=async(data)=>{
-    await ins("pagos_vendedor",session.access_token,{id:genId("pv"),vendedor_id:data.vendedorId,anio:data.anio,mes:data.mes,monto_calculado:data.monto,monto_pagado:data.monto,fecha:data.fecha,estado:"pagado",notas:data.label,creado_por:session.user.id});
-    if (data.ocIdsAMarcar && data.ocIdsAMarcar.length) {
-      for (const ocId of data.ocIdsAMarcar) {
-        await upd("ordenes_compra_v2", session.access_token, ocId, { vendedor_pagado: true });
-      }
-    }
-    showToast(`Pago a vendedor registrado${data.ocIdsAMarcar?.length?` · ${data.ocIdsAMarcar.length} OCs marcadas como pagadas`:""}`); await cargarTodo();
+    const n=await registrarPagoVendedor({ins,upd,token:session.access_token,userId:session.user.id,id:genId("pv"),
+      vendedorId:data.vendedorId,monto:data.monto,fecha:data.fecha,mes:data.mes,anio:data.anio,notas:data.label,ocIds:data.ocIdsAMarcar});
+    showToast(`Pago a vendedor registrado${n?` · ${n} OCs marcadas como pagadas`:""}`); await cargarTodo();
   };
   const handleGuardarIva=async(data)=>{
     const t=session.access_token; const existe=ivaMensual.find(i=>i.mes===data.mes&&i.anio===data.anio);
