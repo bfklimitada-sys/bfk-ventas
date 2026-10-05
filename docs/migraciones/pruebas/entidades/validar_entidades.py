@@ -182,6 +182,12 @@ hold = subprocess.Popen([ENV.get("PSQL", "psql"), "-X", "-q", "-v", "ON_ERROR_ST
 hold.stdin.write(f"begin; insert into public.entidades_catalogo(id,rut,nombre_entidad) values ('ent_hold_x','{dotted(Lc)}','HOLD'); select pg_sleep(8); rollback;\n"); hold.stdin.close(); time.sleep(2)
 r, e, _ = rpc([op(2, dotted(Lc), "Conc")], extra="set local lock_timeout='1500ms';\n"); chk("conflicto_concurrente_falla_y_no_escribe", r is None and "IMPORTACION_CANCELADA" in (e or ""), e)
 hold.wait(timeout=60); chk("conflicto_concurrente_0_cambios", hash_tabla() == Ha)
+# sin lock_timeout: la importación ESPERA a que la otra escritura termine y luego se aplica (serialización, sin duplicar)
+hold = subprocess.Popen([ENV.get("PSQL", "psql"), "-X", "-q", "-v", "ON_ERROR_STOP=1"], stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, text=True, env=ENV)
+hold.stdin.write(f"begin; insert into public.entidades_catalogo(id,rut,nombre_entidad) values ('ent_hold_y','{dotted(Lc)}','HOLD'); select pg_sleep(4); commit;\n"); hold.stdin.close(); time.sleep(1.5)
+t0 = time.time(); r, e, _ = rpc([op(2, rut_valido(Lc), "Conc despues")]); dt = time.time() - t0; hold.wait(timeout=60)
+chk("concurrente_espera_y_ve_la_fila_confirmada_(actualiza,_no_duplica)", r and r["creadas"] == 0 and r["actualizadas"] == 1 and dt >= 1.5 and q(f"select count(*) from public.entidades_catalogo where rut='{dotted(Lc)}'") == "1", f"{e} dt={dt:.1f}")
+print(f"  espera por la otra transacción: {dt:.1f}s", flush=True)
 
 print("\n===== LÍMITE 499 / 500 / 501 =====", flush=True)
 for n in (499, 500, 501):

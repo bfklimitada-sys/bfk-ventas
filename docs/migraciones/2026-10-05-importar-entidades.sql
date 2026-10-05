@@ -19,7 +19,7 @@
 --
 -- p_simular (por defecto true): valida y cuenta sin escribir. El cliente confirma con p_simular = false.
 -- Límite: 500 operaciones por llamada (error IE004).
--- Errores (errcode): IE001 validación, IE002 ambiguo, IE003 permisos/sesión, IE004 límite. detail = JSON {fila,rut,campo,causa}.
+-- Errores (errcode): IE001 validación, IE002 ambiguo, IE003 permisos/sesión, IE004 límite, IE005 tabla ocupada por otra escritura. detail = JSON {fila,rut,campo,causa}.
 -- Respuesta: {ok, simulado, total, creadas, actualizadas, sin_cambios}
 
 create or replace function public.importar_entidades_catalogo(
@@ -72,7 +72,14 @@ begin
   -- Una importación a la vez; en modo real además se impide que otro flujo cree/modifique entidades mientras dura
   -- (transacción corta, <= 500 filas), para que comparar-y-escribir sea consistente.
   perform pg_advisory_xact_lock(hashtext('importar_entidades_catalogo'));
-  if not p_simular then lock table public.entidades_catalogo in share row exclusive mode; end if;
+  if not p_simular then
+    begin
+      lock table public.entidades_catalogo in share row exclusive mode;
+    exception when lock_not_available or query_canceled then
+      raise exception 'IMPORTACION_CANCELADA: otra operación está modificando entidades en este momento; reintente en unos segundos'
+        using errcode = 'IE005', detail = jsonb_build_object('causa','tabla_ocupada')::text, hint = 'No se aplicó ningún cambio';
+    end;
+  end if;
 
   begin
     for v_i in 0 .. v_n - 1 loop
