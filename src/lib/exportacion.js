@@ -33,13 +33,20 @@ export async function construirLibroRespaldo({ sel, token, hojas = HOJAS_RESPALD
   for (const h of hojas) {
     try {
       const filas = await leerTablaCompleta(sel, token, h.tabla);
-      const omitidas = new Set();
+      const omitidas = new Set(); const json = new Set();
       datos[h.hoja] = filas.map((f) => {
         const limpia = {};
-        for (const k of Object.keys(f)) { if (COLUMNA_SECRETA.test(k)) omitidas.add(k); else limpia[k] = f[k]; }
+        for (const k of Object.keys(f)) {
+          if (COLUMNA_SECRETA.test(k)) omitidas.add(k);
+          else if (f[k] !== null && typeof f[k] === "object") { limpia[k] = JSON.stringify(f[k]); json.add(k); }   // json/jsonb/arrays: SheetJS descarta los objetos; se guardan como JSON válido (reversible)
+          else limpia[k] = f[k];
+        }
         return limpia;
       });
-      resumen.push({ Hoja: h.hoja, Tabla: h.tabla, Filas: filas.length, Estado: "OK", Nota: omitidas.size ? `columnas omitidas por seguridad: ${[...omitidas].join(", ")}` : "" });
+      const notas = [];
+      if (omitidas.size) notas.push(`columnas omitidas por seguridad: ${[...omitidas].join(", ")}`);
+      if (json.size) notas.push(`columnas JSON guardadas como texto JSON: ${[...json].join(", ")}`);
+      resumen.push({ Hoja: h.hoja, Tabla: h.tabla, Filas: filas.length, Estado: "OK", Nota: notas.join(" · ") });
     } catch (e) {
       resumen.push({ Hoja: h.hoja, Tabla: h.tabla, Filas: 0, Estado: "ERROR", Nota: e.message });
     }

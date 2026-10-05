@@ -11,6 +11,16 @@ export class ErrorImportacion extends Error {
 
 const valorTexto = (v) => String(v ?? "");
 
+// json/jsonb/arrays: el Excel los guarda como texto JSON (ver exportacion.js). Para compararlos o escribirlos se
+// reconstruyen SOLO donde la base devuelve un objeto/array para esa columna; en las demás el texto sigue siendo texto.
+const esJSON = (v) => v !== null && typeof v === "object";
+const canonico = (v) => Array.isArray(v) ? v.map(canonico) : esJSON(v) ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, canonico(v[k])])) : v;
+const analizar = (txt) => { try { return { ok: true, v: JSON.parse(txt) }; } catch { return { ok: false }; } };
+const igualValor = (archivo, bd) => {
+  if (esJSON(bd)) { if (typeof archivo !== "string") return false; const a = analizar(archivo); return a.ok && JSON.stringify(canonico(a.v)) === JSON.stringify(canonico(bd)); }
+  return valorTexto(archivo) !== valorTexto(bd) ? false : true;
+};
+
 // 1) Interpreta el archivo. No toca la base. Devuelve { datos, problemas }.
 export function leerArchivoImportable(buf, tablas) {
   let wb;
@@ -62,11 +72,15 @@ export async function planificarImportacion({ sel, token, tablas, datos }) {
       const ajenas = new Set(); for (const f of filasArchivo) for (const k of Object.keys(f)) if (!columnasBD.has(k)) ajenas.add(k);
       if (ajenas.size) problemas.push(`${hoja}: columnas que no existen en la tabla (${[...ajenas].join(", ")}).`);
     }
+    // columnas que la base entrega como objeto/array (cualquier fila de esa tabla): se reconstruyen desde el texto JSON del archivo
+    const columnasJSON = new Set(); for (const r of actuales) for (const k of Object.keys(r)) if (esJSON(r[k])) columnasJSON.add(k);
     const nuevas = []; const actualizadas = []; const ops = [];   // ops conserva el orden del archivo (igual que el importador original)
-    for (const fila of filasArchivo) {
+    for (const original of filasArchivo) {
+      const fila = { ...original };
+      for (const k of columnasJSON) if (typeof fila[k] === "string") { const a = analizar(fila[k]); if (a.ok) fila[k] = a.v; else problemas.push(`${hoja}: id ${fila.id}, columna ${k} no contiene JSON válido.`); }
       const existente = mapaActual[String(fila.id)];
       if (!existente) { nuevas.push(fila); ops.push({ op: "insert", fila }); }
-      else if (Object.keys(fila).some((k) => valorTexto(fila[k]) !== valorTexto(existente[k]))) { actualizadas.push(fila); ops.push({ op: "update", fila }); }
+      else if (Object.keys(fila).some((k) => !igualValor(esJSON(fila[k]) ? JSON.stringify(fila[k]) : fila[k], existente[k]))) { actualizadas.push(fila); ops.push({ op: "update", fila }); }
     }
     plan.push({ tabla, hoja, nuevas, actualizadas, ops });
   }
