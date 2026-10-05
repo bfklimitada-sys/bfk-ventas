@@ -225,7 +225,7 @@ def payload_perf(tipo, n):
     return p({OC: {"insertar": clonar(OC, n, "INS", offset=100000)}})
 PERF = []
 for tipo in ("update_pequeno", "update_amplio", "insert"):
-    for n in (100, 500, 1000, 1500, 2500):
+    for n in (100, 500, 1000):
         pay = payload_perf(tipo, n); f0 = fp()
         rs = llamar(pay, simular=True, sub=ADMIN, pre="set statement_timeout='8s';\n"); rr = llamar(pay, sub=ADMIN, pre="set statement_timeout='8s';\n", rollback=True)
         rl = llamar(pay, sub=ADMIN, rollback=True)
@@ -233,13 +233,18 @@ for tipo in ("update_pequeno", "update_amplio", "insert"):
         PERF.append(fila); print("PERF", json.dumps(fila, ensure_ascii=False), flush=True)
         assert fp() == f0, "la medición dejó cambios (rollback falló)"
 RES["rendimiento"] = PERF
+for tipo in ("update_pequeno", "insert"):   # el límite de 1.000 lo aplica la RPC: 1.001 se rechaza sin escribir (ni siquiera simulando)
+    pay = payload_perf(tipo, 1001); f0 = fp(); h0 = hist()
+    for sim_ in (True, False):
+        r_ = llamar(pay, simular=sim_, sub=ADMIN)
+        chk(f"limite_1001_{tipo}_{'simulacion' if sim_ else 'real'}_rechazado_0_cambios", (not r_["ok"]) and "supera el máximo permitido de 1.000" in r_["err"] and fp() == f0 and hist() == h0, limpio(r_["err"], 120))
 ok_n = {}
 for f_ in PERF:
     t_ = f_["real_sin_limite"]
     ok_n.setdefault(f_["tipo"], []).append((f_["n"], t_))
 RES["limite_sugerido_regla"] = "mayor N cuyo tiempo real x3 < 8 s en todos los tipos"
 lim = 0
-for n in (100, 500, 1000, 1500, 2500):
+for n in (100, 500, 1000):
     ts = [f_["real_sin_limite"] for f_ in PERF if f_["n"] == n]
     if all(isinstance(x, float) and x * 3 < 8 for x in ts): lim = n
 RES["limite_sugerido_N"] = lim

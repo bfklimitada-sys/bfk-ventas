@@ -95,6 +95,7 @@ export async function planificarImportacion({ sel, token, tablas, datos }) {
     plan.push({ tabla, hoja, nuevas, actualizadas, ops });
   }
   if (problemas.length) throw new ErrorImportacion(`Archivo no válido para esta base: ${problemas.join(" ")} No se aplicó ningún cambio.`, { problemas });
+  comprobarLimite(plan);   // antes de cualquier llamada de escritura (y antes de simular)
   return plan;
 }
 
@@ -114,6 +115,13 @@ export function construirPayloadRPC(plan) {
   return { version: 1, tablas };
 }
 
+// Máximo de operaciones (INSERT + UPDATE de las 14 tablas) por importación. PostgreSQL lo vuelve a comprobar (RPC): es la autoridad.
+export const LIMITE_OPERACIONES = 1000;
+const miles = (n) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+export const totalOperaciones = (plan) => plan.reduce((s, p) => s + p.ops.length, 0);
+export const mensajeLimite = (n) => `La importación contiene ${miles(n)} cambios y supera el máximo permitido de ${miles(LIMITE_OPERACIONES)}. No se aplicó ningún cambio.`;
+const comprobarLimite = (plan) => { const n = totalOperaciones(plan); if (n > LIMITE_OPERACIONES) throw new ErrorImportacion(mensajeLimite(n), { causa: "limite_excedido", total: n }); };
+
 const CAUSAS = {
   conflicto_concurrente: "otro usuario modificó el dato después de la comparación",
   fila_inexistente: "la fila ya no existe",
@@ -129,6 +137,7 @@ const AVISO = "IMPORTACIÓN CANCELADA — no se aplicó ningún cambio";
 export function errorDeRPC(status, cuerpo) {
   if (status === 404 || cuerpo?.code === "PGRST202") return new ErrorImportacion(`${AVISO}. La función de importación atómica no está instalada en la base de datos.`, { causa: "rpc_no_instalada" });
   let d = {}; try { d = JSON.parse(cuerpo?.details || "{}"); } catch { /* sin detalle */ }
+  if (d.causa === "limite_excedido") return new ErrorImportacion(mensajeLimite(d.total), { causa: "limite_excedido", total: d.total, codigo: cuerpo?.code });
   const donde = [d.tabla && `tabla ${d.tabla}`, d.id && `id ${d.id}`, d.campo && `campo ${d.campo}`].filter(Boolean).join(" · ");
   const causa = CAUSAS[d.causa] || (cuerpo?.message || "error desconocido").replace(/^IMPORTACION_CANCELADA:\s*/, "");
   return new ErrorImportacion(`${AVISO}${donde ? ` (${donde})` : ""}: ${causa}.`, { causa: d.causa, tabla: d.tabla, id: d.id, campo: d.campo, codigo: cuerpo?.code, detalleServidor: cuerpo?.message });
@@ -137,6 +146,7 @@ export function errorDeRPC(status, cuerpo) {
 // ÚNICA función que escribe: UNA llamada a la base. Si falla cualquier fila, la base revierte todo.
 // `rpc(payload, simular)` la inyecta quien llama (ver supabase.jsx: rpcImportarRespaldo).
 export async function aplicarPlan({ rpc, plan, simular = false }) {
+  comprobarLimite(plan);
   const payload = construirPayloadRPC(plan);
   let r;
   try { r = await rpc(payload, simular); }

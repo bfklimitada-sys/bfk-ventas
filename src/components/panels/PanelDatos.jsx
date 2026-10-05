@@ -44,7 +44,7 @@ export function PanelDatos({ session, showToast }) {
       if (resumen.length) await simularPlan({ rpc, plan });
       setPlanImport(plan); setResumenCambios(resumen);
       if (resumen.length===0) showToast("Sin cambios detectados respecto a la base de datos actual");
-    } catch (err) { const m=err.message.startsWith("IMPORTACIÓN CANCELADA")?err.message:"IMPORTACIÓN CANCELADA — no se aplicó ningún cambio: "+err.message; setErrorImport({msg:m,parcial:false}); showToast(m, "error"); }
+    } catch (err) { const m=(err.message.startsWith("IMPORTACIÓN CANCELADA")||err.causa==="limite_excedido")?err.message:"IMPORTACIÓN CANCELADA — no se aplicó ningún cambio: "+err.message; setErrorImport({msg:m,parcial:false}); showToast(m, "error"); }
     finally { setComparando(false); e.target.value=""; }
   };
 
@@ -58,7 +58,7 @@ export function PanelDatos({ session, showToast }) {
       const r = await aplicarPlan({ rpc, plan: planImport });
       showToast(`Importación aplicada: ${r.total_insertadas} nuevas, ${r.total_actualizadas} actualizadas`);
       setResumenCambios(null); setPlanImport(null);
-    } catch (err) { const m=err.message.startsWith("IMPORTACIÓN CANCELADA")?err.message:"IMPORTACIÓN CANCELADA — no se aplicó ningún cambio: "+err.message; setErrorImport({msg:m}); showToast(m, "error"); setResumenCambios(null); setPlanImport(null); }
+    } catch (err) { const m=(err.message.startsWith("IMPORTACIÓN CANCELADA")||err.causa==="limite_excedido")?err.message:"IMPORTACIÓN CANCELADA — no se aplicó ningún cambio: "+err.message; setErrorImport({msg:m}); showToast(m, "error"); setResumenCambios(null); setPlanImport(null); }
     finally { setAplicando(false); }
   };
 

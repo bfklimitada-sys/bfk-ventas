@@ -21,7 +21,7 @@ def payload(tipo, n):
         return at.p({"ordenes_compra_v2": {"insertar": ops}})
 filas = []
 for tipo in (sys.argv[1:] or ["update_1_columna", "update_ancho", "insert_fila_completa_38_cols"]):
-    for n in [100, 500, 1000, 2500]:
+    for n in [100, 500, 1000]:   # >1000 lo rechaza la RPC (límite)
         fila = {"tipo": tipo, "n": n}
         for etiqueta, pre in [("sin_limite", ""), ("limite_8s", "set statement_timeout='8s';\n")]:
             at.reset()

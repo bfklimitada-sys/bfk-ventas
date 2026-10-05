@@ -28,6 +28,7 @@
 -- y no toma bloqueos de fila. Las restricciones UNIQUE/CHECK y las FK hacia tablas fuera de las 14 solo
 -- pueden comprobarse al escribir: en modo real, si fallan, se revierte todo.
 --
+-- Límite: máximo 1.000 operaciones (INSERT + UPDATE, suma de las 14 tablas) por llamada, también en simulación; si se supera: IM001 causa limite_excedido, 0 cambios.
 -- Errores: excepción con errcode IM001 (validación), IM002 (conflicto concurrente), IM003 (permisos),
 -- IM004 (otra importación en curso), IM005 (dependencia circular). detail = JSON {tabla,id,campo,causa}.
 -- Respuesta: {ok, simulado, orden, tablas:{<t>:{insertadas,actualizadas}}, total_insertadas, total_actualizadas, columnas_generadas_ignoradas}
@@ -60,6 +61,7 @@ declare
   v_actual jsonb; v_tipado jsonb; v_esperado_norm jsonb;
   v_vistos jsonb := '{}'::jsonb; v_ins_ids jsonb := '{}'::jsonb; v_ignoradas jsonb := '{}'::jsonb;
   v_resumen jsonb := '{}'::jsonb; v_ins int; v_upd int; v_tot_ins int := 0; v_tot_upd int := 0;
+  c_max_ops constant int := 1000; v_total_ops int := 0;
   v_cols_sql text; v_set_sql text; v_filas int; v_padre_existe boolean; v_tipo_json text;
 begin
   ---------------------------------------------------------------- sesión y rol
@@ -104,6 +106,16 @@ begin
         end if;
       end loop;
     end loop;
+
+    ---------------------------------------------------------------- límite de tamaño (PostgreSQL es la autoridad; también en simulación)
+    for v_t in select jsonb_object_keys(v_tablas) loop
+      v_total_ops := v_total_ops + jsonb_array_length(coalesce(v_tablas->v_t->'insertar', '[]'::jsonb))
+                                 + jsonb_array_length(coalesce(v_tablas->v_t->'actualizar', '[]'::jsonb));
+    end loop;
+    if v_total_ops > c_max_ops then
+      raise exception 'IMPORTACION_CANCELADA: La importación contiene % cambios y supera el máximo permitido de 1.000. No se aplicó ningún cambio.', v_total_ops
+        using errcode = 'IM001', detail = jsonb_build_object('causa','limite_excedido','total',v_total_ops,'maximo',c_max_ops)::text, hint = 'No se aplicó ningún cambio';
+    end if;
 
     ---------------------------------------------------------------- catálogo real de cada tabla del payload
     for v_t in select jsonb_object_keys(v_tablas) loop
