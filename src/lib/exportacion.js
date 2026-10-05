@@ -8,16 +8,22 @@ const PAGINA = 1000;
 const COLUMNA_SECRETA = /(token|password|passwd|secret|api_?key|service_role|clave)/i;
 
 export async function leerTablaCompleta(sel, token, tabla) {
-  const leer = async (orden) => {
+  const leer = async (orden, inicial = null) => {
     const filas = [];
-    for (let desde = 0; ; desde += PAGINA) {
-      const lote = await sel(tabla, token, `${orden}&limit=${PAGINA}&offset=${desde}`);
+    let desde = 0;
+    if (inicial) { filas.push(...inicial); if (inicial.length < PAGINA) return filas; desde = PAGINA; }
+    for (;; desde += PAGINA) {
+      const lote = await sel(tabla, token, `${orden}&limit=${PAGINA}&offset=${desde}`);   // una página que falle lanza el error: nunca se devuelve una lectura parcial
       filas.push(...lote);
       if (lote.length < PAGINA) return filas;
     }
   };
-  try { return await leer("&order=id"); }
-  catch { return await leer(""); }          // tablas sin columna id: sin orden explícito
+  // El orden alternativo solo se admite si falla la PRIMERA página (tabla sin columna id).
+  // Una página posterior que falle aborta la lectura: reintentar sin orden podría duplicar u omitir filas.
+  let primera;
+  try { primera = await sel(tabla, token, `&order=id&limit=${PAGINA}&offset=0`); }
+  catch { return await leer(""); }
+  return await leer("&order=id", primera);
 }
 
 export async function construirLibroRespaldo({ sel, token, hojas = HOJAS_RESPALDO }) {

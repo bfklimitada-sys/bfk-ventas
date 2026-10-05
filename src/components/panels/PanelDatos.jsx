@@ -1,7 +1,8 @@
 import { Tarjeta } from "../ui/Sistema";
 import { useState } from "react";
 import * as XLSX from "xlsx";
-import { TABLAS_EXPORT, del, ins, sel, upd } from "../../lib/supabase";
+import { TABLAS_EXPORT, ins, sel, upd } from "../../lib/supabase";
+import { leerArchivoImportable, planificarImportacion, resumirPlan, aplicarPlan } from "../../lib/importacion";
 import { exportarExcelRespaldo } from "../../lib/exportacion";
 import { C, btnG, btnP } from "../../lib/theme";
 import { Ic } from "../ui/Iconos";
@@ -12,6 +13,7 @@ export function PanelDatos({ session, showToast }) {
   const [resumenCambios,setResumenCambios]=useState(null);
   const [archivoData,setArchivoData]=useState(null);
   const [aplicando,setAplicando]=useState(false);
+  const [errorImport,setErrorImport]=useState(null);   // mensaje persistente (el toast dura 3 s y un aborto debe quedar a la vista)
 
   // Misma función que "Exportar todo a Excel": una sola fuente para armar el archivo.
   const generarExcelCompleto = async (prefijo="bfk-datos") => {
@@ -26,73 +28,34 @@ export function PanelDatos({ session, showToast }) {
     finally { setExporting(false); }
   };
 
+  // Importación en tres fases; solo la última escribe. Todo lo anterior es lectura y aborta sin tocar la base.
   const handleArchivoSeleccionado = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    setComparando(true); setResumenCambios(null);
+    setComparando(true); setResumenCambios(null); setArchivoData(null); setErrorImport(null);
     try {
-      const buf = await file.arrayBuffer();
-      const wb = XLSX.read(buf, { type:"array" });
-      const datosPorTabla = {};
-      for (const { hoja, tabla } of TABLAS_EXPORT) {
-        const ws = wb.Sheets[hoja];
-        const filas = ws ? XLSX.utils.sheet_to_json(ws) : [];
-        datosPorTabla[tabla] = filas.map(fila => {
-          const limpia = {};
-          for (const k of Object.keys(fila)) { if (!k.startsWith("_")) limpia[k] = fila[k]; }
-          return limpia;
-        });
-      }
-      setArchivoData(datosPorTabla);
-
-      const resumen = [];
-      for (const { hoja, tabla } of TABLAS_EXPORT) {
-        const actuales = await sel(tabla, session.access_token, "&order=id");
-        const mapaActual = Object.fromEntries(actuales.map(r => [String(r.id), r]));
-        const nuevasFilas = []; const actualizadasFilas = [];
-        for (const fila of (datosPorTabla[tabla]||[])) {
-          if (!fila.id) continue;
-          const id = String(fila.id);
-          if (!mapaActual[id]) { nuevasFilas.push(fila); }
-          else {
-            const existente = mapaActual[id];
-            const cambio = Object.keys(fila).some(k => String(fila[k]??"") !== String(existente[k]??""));
-            if (cambio) actualizadasFilas.push(fila);
-          }
-        }
-        if (nuevasFilas.length || actualizadasFilas.length) {
-          resumen.push({ tabla, hoja, nuevas:nuevasFilas.length, actualizadas:actualizadasFilas.length });
-        }
-      }
-      setResumenCambios(resumen);
+      const { datos, problemas } = leerArchivoImportable(await file.arrayBuffer(), TABLAS_EXPORT);
+      if (!datos) throw new Error(problemas.join(" "));
+      const plan = await planificarImportacion({ sel, token: session.access_token, tablas: TABLAS_EXPORT, datos });
+      const resumen = resumirPlan(plan);
+      setArchivoData(datos); setResumenCambios(resumen);
       if (resumen.length===0) showToast("Sin cambios detectados respecto a la base de datos actual");
-    } catch (e) { showToast("Error al leer el Excel: "+e.message, "error"); }
-    finally { setComparando(false); }
+    } catch (err) { const m="Importación abortada, no se modificó nada: "+err.message; setErrorImport({msg:m,parcial:false}); showToast(m, "error"); }
+    finally { setComparando(false); e.target.value=""; }
   };
 
   const handleAplicarCambios = async () => {
     if (!archivoData) return;
-    setAplicando(true);
+    setAplicando(true); setErrorImport(null);
     try {
+      // 1) respaldo previo completo (si queda incompleto, se aborta); 2) lectura y validación completas; 3) escrituras.
       const erroresRespaldo = await generarExcelCompleto("bfk-RESPALDO-antes-de-importar");
       if (erroresRespaldo.length) throw new Error(`El respaldo previo quedó incompleto (${erroresRespaldo.map(e=>e.Hoja).join(", ")}). No se aplicó ningún cambio.`);
-      for (const { tabla } of TABLAS_EXPORT) {
-        const actuales = await sel(tabla, session.access_token, "&order=id");
-        const mapaActual = Object.fromEntries(actuales.map(r => [String(r.id), r]));
-        for (const fila of (archivoData[tabla]||[])) {
-          if (!fila.id) continue;
-          const id = String(fila.id);
-          if (!mapaActual[id]) { await ins(tabla, session.access_token, fila); }
-          else {
-            const existente = mapaActual[id];
-            const cambio = Object.keys(fila).some(k => String(fila[k]??"") !== String(existente[k]??""));
-            if (cambio) await upd(tabla, session.access_token, id, fila);
-          }
-        }
-      }
+      const plan = await planificarImportacion({ sel, token: session.access_token, tablas: TABLAS_EXPORT, datos: archivoData });
+      await aplicarPlan({ ins, upd, token: session.access_token, plan });
       showToast("Cambios aplicados correctamente");
       setResumenCambios(null); setArchivoData(null);
-    } catch (e) { showToast("Error al aplicar cambios: "+e.message, "error"); }
+    } catch (err) { const m=(err.parcial?"IMPORTACIÓN PARCIAL — ":"Importación abortada, no se modificó nada: ")+err.message; setErrorImport({msg:m,parcial:!!err.parcial}); showToast(m, "error"); setResumenCambios(null); setArchivoData(null); }
     finally { setAplicando(false); }
   };
 
@@ -110,6 +73,14 @@ export function PanelDatos({ session, showToast }) {
           <input type="file" accept=".xlsx" onChange={handleArchivoSeleccionado} style={{display:"none"}} disabled={comparando} />
         </label>
       </Tarjeta>
+
+      {errorImport && (
+        <div role="alert" style={{background:C.dangerLight||"#fdecec",border:`1.5px solid ${C.danger}`,borderRadius:14,padding:14,marginBottom:12}}>
+          <div style={{fontWeight:800,color:C.dangerText,fontSize:13.5,marginBottom:6}}>{errorImport.parcial?"Importación parcial: revise los datos":"Importación abortada"}</div>
+          <div style={{fontSize:12.5,color:C.ink,lineHeight:1.45}}>{errorImport.msg}</div>
+          <button onClick={()=>setErrorImport(null)} style={{...btnG,marginTop:10,width:"100%"}}>Entendido</button>
+        </div>
+      )}
 
       {resumenCambios && resumenCambios.length>0 && (
         <div style={{background:C.warnLight,border:`1px solid ${C.warn}`,borderRadius:14,padding:16,marginBottom:12}}>
