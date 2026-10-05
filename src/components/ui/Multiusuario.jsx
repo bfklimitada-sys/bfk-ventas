@@ -236,11 +236,22 @@ export function calcularAlertas(ocs) {
   return finales.sort((a,b) => a.orden - b.orden || (a.etapas??99) - (b.etapas??99) || (b.monto||0) - (a.monto||0));
 }
 
-export function PanelNotificaciones({ notificaciones, ocs, onMarcarLeidas, onNavigate }) {
-  const [filtro, setFiltro] = useState("todas");
+// El filtro vive en App (prop `filtroAlertas`) para sobrevivir a la navegación y a las recargas de datos.
+// nivel: todas | alto | medio | bajo · etapa (opcional): refina con el campo `filtro` que ya trae cada alerta
+// ("entrega" = entregas atrasadas, "cobro" = facturas vencidas), sin categorías nuevas.
+const ETAPA_ALERTA = { entrega: "entregas atrasadas", cobro: "facturas vencidas sin cobrar" };
+export function PanelNotificaciones({ notificaciones, ocs, onMarcarLeidas, onNavigate, filtroAlertas, onFiltroAlertas }) {
+  const [filtroLocal, setFiltroLocal] = useState({ nivel: "todas", etapa: null });
+  const fa = filtroAlertas || filtroLocal;
+  const setFa = onFiltroAlertas || setFiltroLocal;
+  const filtro = fa.nivel || "todas";
+  const etapa = fa.etapa || null;
+  const setFiltro = (nivel) => setFa({ nivel, etapa: null });
   const alertas = calcularAlertas(ocs);
   const noLeidas = (notificaciones || []).filter(n => !n.leida);
-  const visibles = filtro === "todas" ? alertas : alertas.filter(a => a.nivel === filtro);
+  const visibles = alertas
+    .filter(a => filtro === "todas" || a.nivel === filtro)
+    .filter(a => !etapa || a.filtro === etapa);
   const conteo = {
     alto:  alertas.filter(a => a.nivel === "alto").length,
     medio: alertas.filter(a => a.nivel === "medio").length,
@@ -272,6 +283,14 @@ export function PanelNotificaciones({ notificaciones, ocs, onMarcarLeidas, onNav
         <Chip id="medio" label={<I t={"🟡 Atención"}/>}  n={conteo.medio} color={C.warn} />
         <Chip id="bajo"  label="Informativas" n={conteo.bajo}  color={C.inkMuted} />
       </div>
+
+      {etapa && (
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10,fontSize:12,color:C.inkMuted}}>
+          <span>Mostrando solo: <b>{ETAPA_ALERTA[etapa] || etapa}</b></span>
+          <button onClick={() => setFa({ nivel: filtro, etapa: null })}
+            style={{border:`1px solid ${C.border}`,background:C.card,borderRadius:8,padding:"3px 9px",fontSize:12,cursor:"pointer",color:C.ink}}>Quitar ✕</button>
+        </div>
+      )}
 
       {visibles.length === 0 && (
         <div style={{textAlign:"center",padding:"30px 0",color:C.inkFaint,fontSize:13}}>

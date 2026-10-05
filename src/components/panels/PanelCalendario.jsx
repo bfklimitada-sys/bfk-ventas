@@ -116,12 +116,12 @@ export function PanelCalendario({ ocs, onMarcarFecha, onVerAlertas }) {
   return (
     <div>
       {vencidas.length>0&&(
-        <ResumenAtraso color={C.dangerText} fondo={C.dangerLight} onVerAlertas={onVerAlertas}
+        <ResumenAtraso color={C.dangerText} fondo={C.dangerLight} onVerAlertas={onVerAlertas&&(()=>onVerAlertas({nivel:"alto",etapa:"entrega"}))}
           titulo={`${vencidas.length} entrega${vencidas.length>1?"s":""} atrasada${vencidas.length>1?"s":""}`} />
       )}
 
       {resumenFacturas.n>0&&(
-        <ResumenAtraso color={C.warnText} fondo={C.warnLight} onVerAlertas={onVerAlertas}
+        <ResumenAtraso color={C.warnText} fondo={C.warnLight} onVerAlertas={onVerAlertas&&(()=>onVerAlertas({nivel:"alto",etapa:"cobro"}))}
           titulo={`${resumenFacturas.n} factura${resumenFacturas.n>1?"s":""} vencida${resumenFacturas.n>1?"s":""} sin cobrar`}
           monto={resumenFacturas.monto} />
       )}

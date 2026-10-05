@@ -996,7 +996,7 @@ const esVencidaSinCobrar=(o)=>{
   return estadoVencimiento(fmt.diasDesde(evF.fecha)||0,plazoPago(o)).vencida;
 };
 
-export function PanelCompras({ ocs, perfiles, filtroInicial, busquedaInicial, ocFoco, onSincronizarFecha, contactos, onEnviarReclamo, onRegistrarRespuestaReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, bloqueos, perfil, historialCambios, onAgregarComentario, onEliminarComentario, onBloquear, onLiberar, onEliminarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa }) {
+export function PanelCompras({ ocs, perfiles, filtroInicial, busquedaInicial, ocFoco, onFocoUsado, onSincronizarFecha, contactos, onEnviarReclamo, onRegistrarRespuestaReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, bloqueos, perfil, historialCambios, onAgregarComentario, onEliminarComentario, onBloquear, onLiberar, onEliminarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa }) {
   const [filtros,setFiltros]=useState({}); const [busq,setBusq]=useState(""); const [expId,setExpId]=useState(null);
   const [reclamandoBanner,setReclamandoBanner]=useState(null); const [comunaSel,setComunaSel]=useState("");
   const [bannerAbierto,setBannerAbierto]=useState(false);
@@ -1039,7 +1039,9 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, busquedaInicial, oc
     setVista("todas"); setFiltros({}); setComunaSel(""); setSoloVencidas(false);
     setBusq(oc?.numero_oc||"");
     setExpId(ocFoco);
-  },[ocFoco,ocs]);
+    // Navegación de una sola vez: se consume el foco para que una recarga de `ocs` no reabra la OC ni borre filtros.
+    if(onFocoUsado) onFocoUsado();
+  },[ocFoco,ocs]); // eslint-disable-line react-hooks/exhaustive-deps
   const toggle=(key,val)=>setFiltros(prev=>({...prev,[key]:prev[key]===val?undefined:val}));
   const comunas=useMemo(()=>Array.from(new Set(ocs.map(o=>o.comuna).filter(Boolean))).sort(),[ocs]);
   const filtered=useMemo(()=>ocs.filter(oc=>{
