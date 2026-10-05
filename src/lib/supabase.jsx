@@ -36,6 +36,14 @@ export async function ins(table, t, row) { const r=await fetch(`${SUPABASE_URL}/
 
 export async function upd(table, t, id, row) { const r=await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${id}`,{method:"PATCH",headers:hdrs(t),body:JSON.stringify(row)}); if(!r.ok) throw new Error(`Error actualizando ${table}`); return r.json(); }
 
+// Importación atómica de respaldo: una sola llamada, una sola transacción en la base (ver docs/migraciones).
+export async function rpcImportarRespaldo(t, payload, simular) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/importar_respaldo_excel`, { method:"POST", headers:hdrs(t), body:JSON.stringify({ p_payload: payload, p_simular: !!simular }) });
+  const cuerpo = await r.json().catch(()=>null);
+  if (!r.ok) throw Object.assign(new Error(cuerpo?.message || `HTTP ${r.status}`), { rpcStatus: r.status, rpcCuerpo: cuerpo });
+  return cuerpo;
+}
+
 export async function del(table, t, id) { const r=await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${id}`,{method:"DELETE",headers:hdrs(t)}); if(!r.ok) throw new Error(`Error eliminando en ${table}`); return r.json(); }
 
 export async function bloquearOC(t, ocId, usuarioId, usuarioNombre) {

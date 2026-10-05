@@ -80,7 +80,15 @@ export async function planificarImportacion({ sel, token, tablas, datos }) {
       for (const k of columnasJSON) if (typeof fila[k] === "string") { const a = analizar(fila[k]); if (a.ok) fila[k] = a.v; else problemas.push(`${hoja}: id ${fila.id}, columna ${k} no contiene JSON válido.`); }
       const existente = mapaActual[String(fila.id)];
       if (!existente) { nuevas.push(fila); ops.push({ op: "insert", fila }); }
-      else if (Object.keys(fila).some((k) => !igualValor(esJSON(fila[k]) ? JSON.stringify(fila[k]) : fila[k], existente[k]))) { actualizadas.push(fila); ops.push({ op: "update", fila }); }
+      else {
+        // solo las columnas que difieren, junto con el valor actual que vio la comparación (control optimista en la base)
+        const cambios = {}; const esperado = {};
+        for (const k of Object.keys(fila)) {
+          if (k === "id") continue;
+          if (!igualValor(esJSON(fila[k]) ? JSON.stringify(fila[k]) : fila[k], existente[k])) { cambios[k] = fila[k]; esperado[k] = existente[k] === undefined ? null : existente[k]; }
+        }
+        if (Object.keys(cambios).length) { actualizadas.push(fila); ops.push({ op: "update", fila, id: fila.id, cambios, esperado }); }
+      }
     }
     plan.push({ tabla, hoja, nuevas, actualizadas, ops });
   }
@@ -92,16 +100,51 @@ export const resumirPlan = (plan) => plan
   .filter((p) => p.nuevas.length || p.actualizadas.length)
   .map((p) => ({ tabla: p.tabla, hoja: p.hoja, nuevas: p.nuevas.length, actualizadas: p.actualizadas.length }));
 
-// 3) ÚNICA función que escribe. Aplica el plan en orden, fila a fila, y se detiene en el primer error.
-//    No es transaccional: si falla a mitad, lo ya escrito queda aplicado (ver `aplicadas` en el error).
-export async function aplicarPlan({ ins, upd, token, plan }) {
-  const aplicadas = [];
+// 3) Payload para la función de la base `importar_respaldo_excel` (una sola transacción).
+//    Orden y dependencias los resuelve la base con el catálogo real; aquí solo se agrupa por tabla.
+export function construirPayloadRPC(plan) {
+  const tablas = {};
   for (const { tabla, ops } of plan) {
-    for (const { op, fila } of ops) {
-      try { if (op === "insert") await ins(tabla, token, fila); else await upd(tabla, token, fila.id, fila); }
-      catch (e) { throw new ErrorImportacion(`Falló la escritura en ${tabla} (${op === "insert" ? "insertar" : "actualizar"} id ${fila.id}): ${e.message}. La importación quedó PARCIAL: ${aplicadas.length} fila(s) ya aplicadas antes del fallo.`, { aplicadas, tabla, id: fila.id, parcial: true }); }
-      aplicadas.push({ tabla, id: fila.id, op });
-    }
+    const insertar = ops.filter((o) => o.op === "insert").map((o) => o.fila);
+    const actualizar = ops.filter((o) => o.op === "update").map((o) => ({ id: String(o.id), cambios: o.cambios, esperado: o.esperado }));
+    if (insertar.length || actualizar.length) tablas[tabla] = { ...(insertar.length ? { insertar } : {}), ...(actualizar.length ? { actualizar } : {}) };
   }
-  return aplicadas;
+  return { version: 1, tablas };
 }
+
+const CAUSAS = {
+  conflicto_concurrente: "otro usuario modificó el dato después de la comparación",
+  fila_inexistente: "la fila ya no existe",
+  id_ya_existe: "el id apareció después de la comparación",
+  columna_inexistente: "la columna no existe", columna_generada: "la columna es generada", columna_obligatoria: "falta una columna obligatoria",
+  json_invalido: "JSON inválido", tipo_incompatible: "tipo incompatible", valor_incompatible: "valor incompatible con el tipo de la columna",
+  referencia_inexistente: "la referencia no existe", duplicado_en_payload: "id repetido en el archivo", tabla_no_autorizada: "tabla no autorizada",
+  dependencia_circular: "dependencia circular entre tablas", error_base: "error de la base de datos",
+};
+const AVISO = "IMPORTACIÓN CANCELADA — no se aplicó ningún cambio";
+
+// Traduce la respuesta de error de la base (código IMxxx, message, details JSON) a un mensaje para el usuario.
+export function errorDeRPC(status, cuerpo) {
+  if (status === 404 || cuerpo?.code === "PGRST202") return new ErrorImportacion(`${AVISO}. La función de importación atómica no está instalada en la base de datos.`, { causa: "rpc_no_instalada" });
+  let d = {}; try { d = JSON.parse(cuerpo?.details || "{}"); } catch { /* sin detalle */ }
+  const donde = [d.tabla && `tabla ${d.tabla}`, d.id && `id ${d.id}`, d.campo && `campo ${d.campo}`].filter(Boolean).join(" · ");
+  const causa = CAUSAS[d.causa] || (cuerpo?.message || "error desconocido").replace(/^IMPORTACION_CANCELADA:\s*/, "");
+  return new ErrorImportacion(`${AVISO}${donde ? ` (${donde})` : ""}: ${causa}.`, { causa: d.causa, tabla: d.tabla, id: d.id, campo: d.campo, codigo: cuerpo?.code, detalleServidor: cuerpo?.message });
+}
+
+// ÚNICA función que escribe: UNA llamada a la base. Si falla cualquier fila, la base revierte todo.
+// `rpc(payload, simular)` la inyecta quien llama (ver supabase.jsx: rpcImportarRespaldo).
+export async function aplicarPlan({ rpc, plan, simular = false }) {
+  const payload = construirPayloadRPC(plan);
+  let r;
+  try { r = await rpc(payload, simular); }
+  catch (e) {
+    if (e instanceof ErrorImportacion) throw e;
+    if (e && e.rpcStatus !== undefined) throw errorDeRPC(e.rpcStatus, e.rpcCuerpo);   // la base respondió con un error: no se aplicó nada
+    // sin respuesta del servidor: la operación es atómica (se aplicó completa o no se aplicó), pero el resultado se desconoce
+    throw new ErrorImportacion(`${AVISO} confirmado: no hubo respuesta del servidor (${e.message}). La operación es atómica: se aplicó completa o no se aplicó nada. Compruebe volviendo a subir el archivo antes de repetirla.`, { causa: "sin_respuesta" });
+  }
+  return r;
+}
+
+export const simularPlan = (args) => aplicarPlan({ ...args, simular: true });

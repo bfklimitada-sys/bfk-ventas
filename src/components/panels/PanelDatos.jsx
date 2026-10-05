@@ -1,8 +1,8 @@
 import { Tarjeta } from "../ui/Sistema";
 import { useState } from "react";
 import * as XLSX from "xlsx";
-import { TABLAS_EXPORT, ins, sel, upd } from "../../lib/supabase";
-import { leerArchivoImportable, planificarImportacion, resumirPlan, aplicarPlan } from "../../lib/importacion";
+import { TABLAS_EXPORT, sel, rpcImportarRespaldo } from "../../lib/supabase";
+import { leerArchivoImportable, planificarImportacion, resumirPlan, aplicarPlan, simularPlan } from "../../lib/importacion";
 import { exportarExcelRespaldo } from "../../lib/exportacion";
 import { C, btnG, btnP } from "../../lib/theme";
 import { Ic } from "../ui/Iconos";
@@ -11,7 +11,7 @@ export function PanelDatos({ session, showToast }) {
   const [exporting,setExporting]=useState(false);
   const [comparando,setComparando]=useState(false);
   const [resumenCambios,setResumenCambios]=useState(null);
-  const [archivoData,setArchivoData]=useState(null);
+  const [planImport,setPlanImport]=useState(null);       // plan calculado al comparar; se envía tal cual (con `esperado`) a la base
   const [aplicando,setAplicando]=useState(false);
   const [errorImport,setErrorImport]=useState(null);   // mensaje persistente (el toast dura 3 s y un aborto debe quedar a la vista)
 
@@ -28,34 +28,37 @@ export function PanelDatos({ session, showToast }) {
     finally { setExporting(false); }
   };
 
+  const rpc = (payload, simular) => rpcImportarRespaldo(session.access_token, payload, simular);
+
   // Importación en tres fases; solo la última escribe. Todo lo anterior es lectura y aborta sin tocar la base.
   const handleArchivoSeleccionado = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    setComparando(true); setResumenCambios(null); setArchivoData(null); setErrorImport(null);
+    setComparando(true); setResumenCambios(null); setPlanImport(null); setErrorImport(null);
     try {
       const { datos, problemas } = leerArchivoImportable(await file.arrayBuffer(), TABLAS_EXPORT);
       if (!datos) throw new Error(problemas.join(" "));
       const plan = await planificarImportacion({ sel, token: session.access_token, tablas: TABLAS_EXPORT, datos });
       const resumen = resumirPlan(plan);
-      setArchivoData(datos); setResumenCambios(resumen);
+      // la base valida el plan completo (tipos reales, referencias, conflictos) en modo simulación: no escribe nada
+      if (resumen.length) await simularPlan({ rpc, plan });
+      setPlanImport(plan); setResumenCambios(resumen);
       if (resumen.length===0) showToast("Sin cambios detectados respecto a la base de datos actual");
-    } catch (err) { const m="Importación abortada, no se modificó nada: "+err.message; setErrorImport({msg:m,parcial:false}); showToast(m, "error"); }
+    } catch (err) { const m=err.message.startsWith("IMPORTACIÓN CANCELADA")?err.message:"IMPORTACIÓN CANCELADA — no se aplicó ningún cambio: "+err.message; setErrorImport({msg:m,parcial:false}); showToast(m, "error"); }
     finally { setComparando(false); e.target.value=""; }
   };
 
   const handleAplicarCambios = async () => {
-    if (!archivoData) return;
+    if (!planImport) return;
     setAplicando(true); setErrorImport(null);
     try {
-      // 1) respaldo previo completo (si queda incompleto, se aborta); 2) lectura y validación completas; 3) escrituras.
+      // 1) respaldo previo completo (si queda incompleto, se aborta); 2) UNA llamada a la base, que aplica todo o nada.
       const erroresRespaldo = await generarExcelCompleto("bfk-RESPALDO-antes-de-importar");
       if (erroresRespaldo.length) throw new Error(`El respaldo previo quedó incompleto (${erroresRespaldo.map(e=>e.Hoja).join(", ")}). No se aplicó ningún cambio.`);
-      const plan = await planificarImportacion({ sel, token: session.access_token, tablas: TABLAS_EXPORT, datos: archivoData });
-      await aplicarPlan({ ins, upd, token: session.access_token, plan });
-      showToast("Cambios aplicados correctamente");
-      setResumenCambios(null); setArchivoData(null);
-    } catch (err) { const m=(err.parcial?"IMPORTACIÓN PARCIAL — ":"Importación abortada, no se modificó nada: ")+err.message; setErrorImport({msg:m,parcial:!!err.parcial}); showToast(m, "error"); setResumenCambios(null); setArchivoData(null); }
+      const r = await aplicarPlan({ rpc, plan: planImport });
+      showToast(`Importación aplicada: ${r.total_insertadas} nuevas, ${r.total_actualizadas} actualizadas`);
+      setResumenCambios(null); setPlanImport(null);
+    } catch (err) { const m=err.message.startsWith("IMPORTACIÓN CANCELADA")?err.message:"IMPORTACIÓN CANCELADA — no se aplicó ningún cambio: "+err.message; setErrorImport({msg:m}); showToast(m, "error"); setResumenCambios(null); setPlanImport(null); }
     finally { setAplicando(false); }
   };
 
@@ -76,7 +79,7 @@ export function PanelDatos({ session, showToast }) {
 
       {errorImport && (
         <div role="alert" style={{background:C.dangerLight||"#fdecec",border:`1.5px solid ${C.danger}`,borderRadius:14,padding:14,marginBottom:12}}>
-          <div style={{fontWeight:800,color:C.dangerText,fontSize:13.5,marginBottom:6}}>{errorImport.parcial?"Importación parcial: revise los datos":"Importación abortada"}</div>
+          <div style={{fontWeight:800,color:C.dangerText,fontSize:13.5,marginBottom:6}}>Importación cancelada: no se aplicó ningún cambio</div>
           <div style={{fontSize:12.5,color:C.ink,lineHeight:1.45}}>{errorImport.msg}</div>
           <button onClick={()=>setErrorImport(null)} style={{...btnG,marginTop:10,width:"100%"}}>Entendido</button>
         </div>
@@ -96,7 +99,7 @@ export function PanelDatos({ session, showToast }) {
           </div>
           <div style={{fontSize:12,color:C.inkMuted,marginTop:8}}><Ic n="📥"/> Al confirmar, se descargará automáticamente un respaldo del estado actual antes de aplicar los cambios.</div>
           <button onClick={handleAplicarCambios} disabled={aplicando} style={{...btnP(aplicando?C.inkFaint:C.danger),marginTop:12}}>{aplicando?"Respaldando y aplicando…":"✓ Confirmar y aplicar cambios"}</button>
-          <button onClick={()=>{setResumenCambios(null);setArchivoData(null);}} style={{...btnG,marginTop:8,width:"100%"}}>Cancelar</button>
+          <button onClick={()=>{setResumenCambios(null);setPlanImport(null);}} style={{...btnG,marginTop:8,width:"100%"}}>Cancelar</button>
         </div>
       )}
     </div>
