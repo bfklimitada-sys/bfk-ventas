@@ -1,12 +1,21 @@
 import { useState, useMemo } from "react";
 import { PanelDatos } from "./PanelDatos";
-import { C, btnG, btnP, fmt } from "../../lib/theme";
+import { C, btnG, btnP, fmt, iStyle } from "../../lib/theme";
 import { Ic } from "../ui/Iconos";
 import { Seccion, Tarjeta, Badge, BotonAdmin } from "../ui/Sistema";
 import { ImportarEntidades } from "../forms/ImportarEntidades";
 
-export function PanelUsuarios({ perfiles, ocs, onChangeRol, session, showToast, entidadesCatalogo, onEntidadesImportadas, usoMP, sincronizando, validandoTodo, exportando, onCorregirFechas, onValidarTodo, onExportarTodo }) {
+export function PanelUsuarios({ perfiles, ocs, ocsArchivadas, onRestaurarOC, onChangeRol, session, showToast, entidadesCatalogo, onEntidadesImportadas, usoMP, sincronizando, validandoTodo, exportando, onCorregirFechas, onValidarTodo, onExportarTodo }) {
   const [showImport,setShowImport]=useState(false);
+  const [filtroArch,setFiltroArch]=useState("");
+  const [archAbierta,setArchAbierta]=useState(null);
+  const [restaurando,setRestaurando]=useState(null);
+  const archivadasFiltradas=useMemo(()=>{
+    const q=filtroArch.trim().toLowerCase();
+    const lista=[...(ocsArchivadas||[])].sort((a,b)=>String(b.archivada_en||"").localeCompare(String(a.archivada_en||"")));
+    if(!q) return lista;
+    return lista.filter(o=>[o.numero_oc,o.cliente,o.rut_cliente,o.archivo_motivo,o.archivada_por_nombre].some(v=>String(v||"").toLowerCase().includes(q)));
+  },[ocsArchivadas,filtroArch]);
   const ultimaActividad = useMemo(() => {
     const map = {};
     for (const oc of ocs) {
@@ -94,6 +103,44 @@ export function PanelUsuarios({ perfiles, ocs, onChangeRol, session, showToast, 
               </BotonAdmin>
             )}
           </div>
+        </Tarjeta>
+      </Seccion>
+
+      {/* ── 4. OCs archivadas ── */}
+      <Seccion titulo="OCs archivadas" nota="Ocultas de la operación diaria, con todos sus datos intactos. Se pueden consultar y restaurar.">
+        <Tarjeta>
+          <div style={{fontSize:12,color:C.inkMuted,marginBottom:8}}>{(ocsArchivadas||[]).length===0?"No hay OCs archivadas.":`${(ocsArchivadas||[]).length} OC${(ocsArchivadas||[]).length>1?"s":""} archivada${(ocsArchivadas||[]).length>1?"s":""}`}</div>
+          {(ocsArchivadas||[]).length>0&&(
+            <input value={filtroArch} onChange={e=>setFiltroArch(e.target.value)} placeholder="Buscar por N° OC, cliente, RUT o motivo" aria-label="Buscar OCs archivadas"
+              style={{...iStyle,marginBottom:8}} />
+          )}
+          {archivadasFiltradas.map(o=>{
+            const abierta=archAbierta===o.id;
+            const n=k=>(o[k]||[]).length;
+            return (
+              <div key={o.id} data-oc-archivada={o.numero_oc} style={{borderTop:`1px solid ${C.border}`,padding:"10px 0"}}>
+                <button type="button" onClick={()=>setArchAbierta(abierta?null:o.id)} style={{background:"none",border:"none",padding:0,width:"100%",textAlign:"left",cursor:"pointer",font:"inherit",color:"inherit"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",gap:8,alignItems:"baseline"}}>
+                    <span style={{fontWeight:700,color:C.ink,fontSize:14}}>{o.numero_oc}</span>
+                    <span style={{fontSize:13,color:C.ink}}>{fmt.money(o.monto_total)}</span>
+                  </div>
+                  <div style={{fontSize:12,color:C.inkMuted}}>{o.cliente||"—"}</div>
+                  <div style={{fontSize:12,color:C.inkFaint,marginTop:2}}>Archivada {o.archivada_en?fmt.datetime(o.archivada_en):""}{o.archivada_por_nombre?` por ${o.archivada_por_nombre}`:""}{o.archivo_motivo?` · ${o.archivo_motivo}`:""}</div>
+                </button>
+                {abierta&&(
+                  <div style={{marginTop:8,fontSize:12,color:C.inkMuted,lineHeight:1.6}}>
+                    <div>RUT cliente: <b style={{color:C.ink}}>{o.rut_cliente||"—"}</b></div>
+                    <div>Emisión: <b style={{color:C.ink}}>{fmt.date(String(o.fecha_emision_mp||"").slice(0,10)||null)}</b> · Facturado: <b style={{color:C.ink}}>{fmt.money(o.monto_facturado||0)}</b> · Cobrado: <b style={{color:C.ink}}>{fmt.money(o.monto_cobrado||0)}</b></div>
+                    <div>Registros conservados: {n("eventos_compra")} compras · {n("eventos_entrega")} entregas · {n("eventos_factura")} facturas · {n("eventos_pago_cliente")} pagos cliente · {n("eventos_pago_financiamiento")} pagos financiamiento · {n("eventos_postventa")} postventa · {n("oc_reclamos")} reclamos</div>
+                    <BotonAdmin disabled={restaurando===o.id} onClick={async()=>{
+                      if(!window.confirm(`¿Restaurar la OC ${o.numero_oc}? Volverá a la operación normal con todos sus datos.`)) return;
+                      setRestaurando(o.id); try{ await onRestaurarOC(o.id); } finally { setRestaurando(null); setArchAbierta(null); }
+                    }} style={{width:"100%",marginTop:8}}>{restaurando===o.id?"Restaurando…":"Restaurar esta OC"}</BotonAdmin>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </Tarjeta>
       </Seccion>
     </div>

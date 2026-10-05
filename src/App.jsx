@@ -24,6 +24,7 @@ import { Modal, NotifBadge, Toast } from "./components/ui/Basicos";
 import { PanelNotificaciones, calcularAlertas } from "./components/ui/Multiusuario";
 import { SESSION_KEY, SUPABASE_URL, crearNotificacion, del, genId, getPerfil, hdrs, ins, registrarCambio, sel, selOCs, selPerfiles, storageGet, storageSet, supaRefresh, supaSignOut, upd, updRol } from "./lib/supabase";
 import { alimentarCatalogoDesdeOC } from "./lib/entidadesOC";
+import { rpcArchivarOC, rpcRestaurarOC } from "./lib/supabase";
 import { C, MONO, SANS, fmt } from "./lib/theme";
 import { Ic } from "./components/ui/Iconos";
 import { generarPdfPantallas } from "./lib/pdfPantallas";
@@ -52,7 +53,7 @@ export default function App() {
   const [menuMas,setMenuMas]=useState(false);
   const [toast,setToast]=useState(null);
   const [exportando,setExportando]=useState(false);
-  const [ocs,setOcs]=useState([]); const [financiadores,setFinanciadores]=useState([]); const [vendedores,setVendedores]=useState([]);
+  const [ocs,setOcs]=useState([]); const [ocsArchivadas,setOcsArchivadas]=useState([]); const [financiadores,setFinanciadores]=useState([]); const [vendedores,setVendedores]=useState([]);
   const [categoriasGasto,setCategoriasGasto]=useState([]); const [gastos,setGastos]=useState([]); const [ivaMensual,setIvaMensual]=useState([]);
   const [pagosVendedor,setPagosVendedor]=useState([]); const [ajustesSaldo,setAjustesSaldo]=useState([]); const [perfiles,setPerfiles]=useState([]);
   const [contactos,setContactos]=useState([]);
@@ -254,15 +255,16 @@ export default function App() {
       for(const r of respD){ if(!respPorOC[r.oc_id]) respPorOC[r.oc_id]=[]; respPorOC[r.oc_id].push(r); }
       for(const r of pvD){ if(!pvPorOC[r.oc_id]) pvPorOC[r.oc_id]=[]; pvPorOC[r.oc_id].push(r); }
       const ocsConReclamos=ocsD.map(oc=>({...oc,oc_reclamos:reclamosPorOC[oc.id]||[],oc_responsables:respPorOC[oc.id]||[],eventos_postventa:pvPorOC[oc.id]||[]}));
-      setOcs(ocsConReclamos); setFinanciadores(finD); setVendedores(vendD); setCategoriasGasto(catD);
+      setOcs(ocsConReclamos.filter(o=>!o.archivada)); setOcsArchivadas(ocsConReclamos.filter(o=>o.archivada)); setFinanciadores(finD); setVendedores(vendD); setCategoriasGasto(catD);
       setGastos(gastD); setIvaMensual(ivaD); setPagosVendedor(pagVD); setAjustesSaldo(ajuD); setPerfiles(perfD);
       setContactos(contD); setEntidadesCatalogo(entD); setPagoFinSueltos(pagoFinSueltosD);
       setNotificaciones(notifD); setHistorialCambios(histD); setAportes(aporD); setUltimaCartola((cartD||[])[0]||null); setSaldoBanco((sbD||[])[0]||null); setBancoMensual(bmD||[]);
 
       // Reintentar completar las OCs que se guardaron antes de ser aceptadas
-      const faltanDatos=ocsConReclamos.some(o=>esCodigoMP(o.numero_oc)&&!o.no_en_mp&&(o.sync_pendiente||!o.rut_cliente||!o.fecha_emision_mp||String(o.cliente||"").toUpperCase().includes("POR COMPLETAR")));
+      const ocsActivasCarga=ocsConReclamos.filter(o=>!o.archivada);
+      const faltanDatos=ocsActivasCarga.some(o=>esCodigoMP(o.numero_oc)&&!o.no_en_mp&&(o.sync_pendiente||!o.rut_cliente||!o.fecha_emision_mp||String(o.cliente||"").toUpperCase().includes("POR COMPLETAR")));
       if(faltanDatos){
-        sincronizarPendientes(ocsConReclamos).then(n=>{
+        sincronizarPendientes(ocsActivasCarga).then(n=>{
           if(n>0){ showToast(`${n} OC${n>1?"s":""} completada${n>1?"s":""} desde Mercado Público`); cargarTodo(); }
         }).catch(()=>{});
       }
@@ -328,8 +330,8 @@ export default function App() {
     const numero=oc.numero_oc;
 
     // No permitir duplicados
-    const yaExiste=ocs.find(o=>String(o.numero_oc).toUpperCase().replace(/[^A-Z0-9]/g,"")===String(numero).toUpperCase().replace(/[^A-Z0-9]/g,""));
-    if(yaExiste) throw new Error(`La OC ${numero} ya está cargada`);
+    const yaExiste=[...ocs,...ocsArchivadas].find(o=>String(o.numero_oc).toUpperCase().replace(/[^A-Z0-9]/g,"")===String(numero).toUpperCase().replace(/[^A-Z0-9]/g,""));
+    if(yaExiste) throw new Error(yaExiste.archivada?`La OC ${numero} está archivada: restáurela desde Administración`:`La OC ${numero} ya está cargada`);
 
     // Vendedor: el que se eligió en el formulario. Antes se usaba siempre
     // el del perfil que está logueado creando la OC — eso hacía que
@@ -659,7 +661,7 @@ export default function App() {
       const j=await r.json();
       if(!j.ok) return;
       const norm=(v)=>String(v||"").toUpperCase().replace(/[^A-Z0-9]/g,"").replace(/^N(?=\d)/,"");
-      const cargadas=new Set(ocs.map(o=>norm(o.numero_oc)));
+      const cargadas=new Set([...ocs,...ocsArchivadas].map(o=>norm(o.numero_oc)));
       const filtradas=(j.ocs||[]).filter(o=>!cargadas.has(norm(o.numero_oc)));
       setPorAceptar(filtradas);
       guardarCacheMP("porAceptar",filtradas);
@@ -681,7 +683,7 @@ export default function App() {
       const j=await r.json();
       if(!j.ok) return;
       const norm=(v)=>String(v||"").toUpperCase().replace(/[^A-Z0-9]/g,"").replace(/^N(?=\d)/,"");
-      const cargadas=new Set(ocs.map(o=>norm(o.numero_oc)));
+      const cargadas=new Set([...ocs,...ocsArchivadas].map(o=>norm(o.numero_oc)));
       const filtradas=(j.ocs||[]).filter(o=>!cargadas.has(norm(o.numero_oc)));
       setAceptadasSinCargar(filtradas);
       guardarCacheMP("aceptadas",filtradas);
@@ -1183,29 +1185,20 @@ export default function App() {
     showToast("Factura eliminada y montos corregidos"); await cargarTodo();
   };
 
-  const handleEliminarOC=async(ocId)=>{
-    const t=session.access_token;
+  // Archivar reemplaza a la eliminación física: no borra eventos, historial ni datos, y no toca saldos.
+  // La OC queda fuera de la operación normal y se consulta/restaura desde Administración.
+  const handleArchivarOC=async(ocId,motivo)=>{
     const oc=ocs.find(o=>o.id===ocId);
-
-    // Lo que esta OC le sumó a la deuda del financiador, menos lo que ya se le pagó
-    const sumaCompras=(oc?.eventos_compra||[]).reduce((s,e)=>s+(Number(e.costo_compra)||0),0)
-      || Number(oc?.costo_total)||0;
-    const sumaPagosFin=(oc?.eventos_pago_financiamiento||[]).reduce((s,e)=>s+(Number(e.monto)||0),0);
-    const deltaDeuda=-(sumaCompras-sumaPagosFin); // negativo = baja la deuda
-    if(oc?.financiador_id) await ajustarSaldoFin(oc.financiador_id, deltaDeuda);
-
-    // Borrar todo lo que cuelga de la OC
-    const tablas=["eventos_compra","eventos_entrega","eventos_factura","eventos_pago_cliente",
-      "eventos_pago_financiamiento","eventos_postventa","oc_productos_link","oc_comentarios",
-      "oc_reclamos","oc_responsables","historial_cambios","oc_bloqueos"];
-    for(const tabla of tablas){
-      try{ await fetch(`${SUPABASE_URL}/rest/v1/${tabla}?oc_id=eq.${ocId}`,{method:"DELETE",headers:hdrs(t)}); }catch{}
-    }
-    await fetch(`${SUPABASE_URL}/rest/v1/ordenes_compra_v2?id=eq.${ocId}`,{method:"DELETE",headers:hdrs(t)});
-
-    showToast(deltaDeuda
-      ? `OC eliminada · se devolvieron ${fmt.money(Math.abs(deltaDeuda))} a ${financiadores.find(f=>f.id===oc?.financiador_id)?.nombre||"el financiador"}`
-      : "OC eliminada");
+    try{ await rpcArchivarOC(session.access_token,ocId,motivo); }
+    catch(e){ showToast("No se pudo archivar: "+(e.message||"error")); return; }
+    showToast(`OC ${oc?.numero_oc||""} archivada · puede restaurarla desde Administración`);
+    await cargarTodo();
+  };
+  const handleRestaurarOC=async(ocId)=>{
+    const oc=ocsArchivadas.find(o=>o.id===ocId);
+    try{ await rpcRestaurarOC(session.access_token,ocId); }
+    catch(e){ showToast("No se pudo restaurar: "+(e.message||"error")); return; }
+    showToast(`OC ${oc?.numero_oc||""} restaurada`);
     await cargarTodo();
   };
 
@@ -1471,14 +1464,14 @@ export default function App() {
       )}
       {/* CONTENIDO */}
       <div style={{padding:16}}>
-        {(tab==="panel"||todo)&&hoja("panel",<PanelDashboard onBuscarCompras={(q)=>{setBusquedaCompras(q);setFiltroCompras(null);setOcFoco(null);setVolverA(null);setTab("compras");}} ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} aportes={aportes} perfil={perfil} onExportarTodo={handleExportarTodo} exportando={exportando} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setVolverA(null);setTab(t);}} onAccion={(k)=>setAccion(k)} onSincronizar={completarTodasDesdeMP} onCorregirFechas={corregirFechasTodas} sincronizando={sincronizando} porAceptar={porAceptar} onActualizarPorAceptar={revisarPorAceptar} verificandoPorAceptar={verificandoPorAceptar} aceptadasSinCargar={aceptadasSinCargar} onCargarOC={(numero)=>{setCodigoOcRapida(numero);setAccion("compra_oc");}} onCargarTodasAceptadas={handleCargarTodasAceptadas} cargandoAceptadas={cargandoAceptadas} onActualizarAceptadas={revisarAceptadasSinCargar} verificandoAceptadas={verificandoAceptadas} canceladasEnMP={canceladasEnMP} onEliminarCancelada={handleEliminarOC} onActualizarCanceladas={revisarCanceladasEnMP} verificandoCanceladas={verificandoCanceladas} onValidarTodo={validarTodoContraMP} validandoTodo={validandoTodo} usoMP={usoMP} actMP={actMP} esCodigoMP={esCodigoMP} ultimaCartola={ultimaCartola} saldoBanco={saldoBanco} bancoMensual={bancoMensual} onEditarSaldo={()=>setAccion("saldo_banco")} />)}
-        {(tab==="compras"||todo)&&hoja("compras",<>{!todo&&volverA==="notif"&&<button onClick={()=>{setVolverA(null);setTab("notif");}} style={{width:"100%",textAlign:"left",background:C.tealLight,color:C.tealDark,border:"none",borderRadius:10,padding:"10px 12px",marginBottom:10,fontWeight:800,fontSize:13,minHeight:44,cursor:"pointer"}}>← Volver a Alertas</button>}<PanelCompras busquedaInicial={busquedaCompras} ocs={ocs} perfiles={perfiles} filtroInicial={filtroCompras} ocFoco={ocFoco} onFocoUsado={()=>setOcFoco(null)} contactos={contactos} onEnviarReclamo={handleEnviarReclamo} onCorreoOC={handleCorreoOC} onRegistrarRespuestaReclamo={handleRegistrarRespuestaReclamo} onGuardarContacto={handleGuardarContacto} onGuardarDatosOC={handleGuardarDatosOC} onEditarEvento={handleEditarEvento} financiadores={financiadores} onConfirmarEntrega={handleEntrega} onEmitirFactura={handleFactura} onPagoCliente={handlePagoCliente} onPagoFinanciamiento={handlePagoFin} entidadesCatalogo={entidadesCatalogo} onGuardarLink={handleGuardarLink} onEliminarLink={handleEliminarLink} onEditarLink={handleEditarLink} onSincronizarFecha={handleSincronizarFecha} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={handleAgregarComentario} onEliminarComentario={handleEliminarComentario} onEliminarOC={handleEliminarOC} onEliminarFactura={handleEliminarFactura} onEliminarEvento={handleEliminarEvento} vendedores={vendedores} onIngresarCompra={handleIngresarCompra} onAsignarResponsable={handleAsignarResponsable} onGuardarPostventa={handleGuardarPostventa} /></>)}
+        {(tab==="panel"||todo)&&hoja("panel",<PanelDashboard onBuscarCompras={(q)=>{setBusquedaCompras(q);setFiltroCompras(null);setOcFoco(null);setVolverA(null);setTab("compras");}} ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} aportes={aportes} perfil={perfil} onExportarTodo={handleExportarTodo} exportando={exportando} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setVolverA(null);setTab(t);}} onAccion={(k)=>setAccion(k)} onSincronizar={completarTodasDesdeMP} onCorregirFechas={corregirFechasTodas} sincronizando={sincronizando} porAceptar={porAceptar} onActualizarPorAceptar={revisarPorAceptar} verificandoPorAceptar={verificandoPorAceptar} aceptadasSinCargar={aceptadasSinCargar} onCargarOC={(numero)=>{setCodigoOcRapida(numero);setAccion("compra_oc");}} onCargarTodasAceptadas={handleCargarTodasAceptadas} cargandoAceptadas={cargandoAceptadas} onActualizarAceptadas={revisarAceptadasSinCargar} verificandoAceptadas={verificandoAceptadas} canceladasEnMP={canceladasEnMP.filter(c=>ocs.some(o=>o.id===c.id))} onArchivarCancelada={(id)=>handleArchivarOC(id,"Cancelada en Mercado Público")} onActualizarCanceladas={revisarCanceladasEnMP} verificandoCanceladas={verificandoCanceladas} onValidarTodo={validarTodoContraMP} validandoTodo={validandoTodo} usoMP={usoMP} actMP={actMP} esCodigoMP={esCodigoMP} ultimaCartola={ultimaCartola} saldoBanco={saldoBanco} bancoMensual={bancoMensual} onEditarSaldo={()=>setAccion("saldo_banco")} />)}
+        {(tab==="compras"||todo)&&hoja("compras",<>{!todo&&volverA==="notif"&&<button onClick={()=>{setVolverA(null);setTab("notif");}} style={{width:"100%",textAlign:"left",background:C.tealLight,color:C.tealDark,border:"none",borderRadius:10,padding:"10px 12px",marginBottom:10,fontWeight:800,fontSize:13,minHeight:44,cursor:"pointer"}}>← Volver a Alertas</button>}<PanelCompras busquedaInicial={busquedaCompras} ocs={ocs} perfiles={perfiles} filtroInicial={filtroCompras} ocFoco={ocFoco} onFocoUsado={()=>setOcFoco(null)} contactos={contactos} onEnviarReclamo={handleEnviarReclamo} onCorreoOC={handleCorreoOC} onRegistrarRespuestaReclamo={handleRegistrarRespuestaReclamo} onGuardarContacto={handleGuardarContacto} onGuardarDatosOC={handleGuardarDatosOC} onEditarEvento={handleEditarEvento} financiadores={financiadores} onConfirmarEntrega={handleEntrega} onEmitirFactura={handleFactura} onPagoCliente={handlePagoCliente} onPagoFinanciamiento={handlePagoFin} entidadesCatalogo={entidadesCatalogo} onGuardarLink={handleGuardarLink} onEliminarLink={handleEliminarLink} onEditarLink={handleEditarLink} onSincronizarFecha={handleSincronizarFecha} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={handleAgregarComentario} onEliminarComentario={handleEliminarComentario} onArchivarOC={handleArchivarOC} onEliminarFactura={handleEliminarFactura} onEliminarEvento={handleEliminarEvento} vendedores={vendedores} onIngresarCompra={handleIngresarCompra} onAsignarResponsable={handleAsignarResponsable} onGuardarPostventa={handleGuardarPostventa} /></>)}
         {(tab==="notif"||todo)&&hoja("notif",<PanelNotificaciones notificaciones={notificaciones} ocs={ocs} onMarcarLeidas={handleMarcarNotificacionesLeidas} filtroAlertas={filtroAlertas} onFiltroAlertas={setFiltroAlertas} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setVolverA(ocId?"notif":null);setTab(t);}} />)}
         {(tab==="agenda"||todo)&&hoja("agenda",<PanelCalendario ocs={ocs} onMarcarFecha={handleMarcarFecha} onVerAlertas={(f)=>{setFiltroCompras(null);setOcFoco(null);setVolverA(null);setFiltroAlertas({nivel:(f&&f.nivel)||"todas",etapa:(f&&f.etapa)||null});setTab("notif");}} />)}
         {(tab==="financiamiento"||todo)&&hoja("financiamiento",<PanelFinanciamiento financiadores={financiadores} ocs={ocs} ajustes={ajustesSaldo} perfiles={perfiles} onAjustar={handleAjusteSaldo} aportes={aportes} onGuardarAporte={handleGuardarAporte} onEliminarAporte={perfil?.rol==="admin"?handleEliminarAporte:undefined} onAbonar={(finId)=>{setAbonoFinId(typeof finId==="string"||typeof finId==="number"?finId:null);setAccion("abono_fin");}} pagoFinSueltos={pagoFinSueltos} />)}
         {(tab==="gastos"||todo)&&hoja("gastos",<PanelGastos gastos={gastos} categorias={categoriasGasto} onNuevoGasto={handleNuevoGasto} />)}
         {(tab==="vendedores"||todo)&&hoja("vendedores",<PanelVendedores vendedores={vendedores} ocs={ocs} ivaMensual={ivaMensual} pagosVendedor={pagosVendedor} onGuardarIva={handleGuardarIva} onPagoVendedor={handlePagoVendedorSimple} />)}
-        {(tab==="usuarios"||todo)&&perfil?.rol==="admin"&&hoja("usuarios",<PanelUsuarios perfiles={perfiles} ocs={ocs} onChangeRol={handleChangeRol} session={session} showToast={showToast} entidadesCatalogo={entidadesCatalogo} onEntidadesImportadas={handleEntidadesImportadas} usoMP={usoMP} sincronizando={sincronizando} validandoTodo={validandoTodo} exportando={exportando} onCorregirFechas={corregirFechasTodas} onValidarTodo={validarTodoContraMP} onExportarTodo={handleExportarTodo} />)}
+        {(tab==="usuarios"||todo)&&perfil?.rol==="admin"&&hoja("usuarios",<PanelUsuarios perfiles={perfiles} ocs={ocs} ocsArchivadas={ocsArchivadas} onRestaurarOC={handleRestaurarOC} onChangeRol={handleChangeRol} session={session} showToast={showToast} entidadesCatalogo={entidadesCatalogo} onEntidadesImportadas={handleEntidadesImportadas} usoMP={usoMP} sincronizando={sincronizando} validandoTodo={validandoTodo} exportando={exportando} onCorregirFechas={corregirFechasTodas} onValidarTodo={validarTodoContraMP} onExportarTodo={handleExportarTodo} />)}
       </div>
 
       {/* NAV BOTTOM — 5 principales + Más */}

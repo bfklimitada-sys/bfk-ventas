@@ -19,6 +19,7 @@ const P = {
   hourglass: <><path d="M6 3h12M6 21h12"/><path d="M7 3c0 5 5 6 5 9s-5 4-5 9M17 3c0 5-5 6-5 9s5 4 5 9"/></>,
   wrench: <><path d="M14.5 6.5a4 4 0 005 5l-8.5 8.5a2.1 2.1 0 01-3-3L16.5 8.5"/><path d="M14.5 6.5l2-2.5 3.5 3.5-2.5 2"/></>,
   trash: <><path d="M4 7h16M10 11v6M14 11v6"/><path d="M6 7l1 13h10l1-13M9 7V4h6v3"/></>,
+  archive: <><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a1 1 0 001 1h12a1 1 0 001-1V9M10 13h4"/></>,
   pause: <><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></>,
   file: <><path d="M14 3H6a1 1 0 00-1 1v16a1 1 0 001 1h12a1 1 0 001-1V8l-5-5z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></>,
   link: <><path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1"/></>,
@@ -43,7 +44,7 @@ const P = {
 const COLOR = { dotRed:"#EF4444", dotAmber:"#F59E0B", dotOrange:"#F97316" };
 const ALIAS = {
   "📊":"chart","📦":"box","📅":"calendar","🏦":"bank","🧾":"receipt","🧑‍💼":"briefcase","💼":"briefcase","🔔":"bell","👥":"users","👋":"hand",
-  "⚠":"alert","⚠️":"alert","📧":"mail","📩":"mailIn","🚚":"truck","💰":"coins","💸":"coins","⏳":"hourglass","🛠":"wrench","🗑":"trash",
+  "⚠":"alert","⚠️":"alert","📧":"mail","📩":"mailIn","🚚":"truck","💰":"coins","💸":"coins","⏳":"hourglass","🛠":"wrench","🗑":"trash","🗄":"archive",
   "⏸":"pause","📄":"file","🔗":"link","✏️":"pencil","✅":"check","📋":"clipboard","💬":"message","🔒":"lock","🏢":"building","📥":"download",
   "☰":"menu","◀":"chevL","▶":"chevR","🔴":"dotRed","🟡":"dotAmber","🟠":"dotOrange","💚":"heart",
 };

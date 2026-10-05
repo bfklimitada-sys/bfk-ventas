@@ -56,7 +56,7 @@ function VerMasAvisoMP({n}){
   return <div style={{fontSize:12,color:C.inkFaint,marginTop:6,textAlign:"center"}}>y {n} más</div>;
 }
 
-export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, aportes: aportesLista, perfil, onExportarTodo, exportando, onNavigate, onAccion, onSincronizar, onCorregirFechas, sincronizando, porAceptar, onActualizarPorAceptar, verificandoPorAceptar, aceptadasSinCargar, onCargarOC, onCargarTodasAceptadas, cargandoAceptadas, onActualizarAceptadas, verificandoAceptadas, canceladasEnMP, onEliminarCancelada, onActualizarCanceladas, verificandoCanceladas, onValidarTodo, validandoTodo, usoMP, actMP, esCodigoMP, ultimaCartola, saldoBanco, bancoMensual, onEditarSaldo, onBuscarCompras }) {
+export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, aportes: aportesLista, perfil, onExportarTodo, exportando, onNavigate, onAccion, onSincronizar, onCorregirFechas, sincronizando, porAceptar, onActualizarPorAceptar, verificandoPorAceptar, aceptadasSinCargar, onCargarOC, onCargarTodasAceptadas, cargandoAceptadas, onActualizarAceptadas, verificandoAceptadas, canceladasEnMP, onArchivarCancelada, onActualizarCanceladas, verificandoCanceladas, onValidarTodo, validandoTodo, usoMP, actMP, esCodigoMP, ultimaCartola, saldoBanco, bancoMensual, onEditarSaldo, onBuscarCompras }) {
   const [busq,setBusq]=useState("");
   const esAdmin=perfil?.rol==="admin";
   const [verMP,setVerMP]=useState(false);
@@ -581,7 +581,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
                 {nCanceladas>0&&(
                   <AvisoMP icon="✕" color={C.danger} bg={C.dangerLight}
                     titulo={`${nCanceladas} OC${nCanceladas>1?"s":""} cancelada${nCanceladas>1?"s":""} en Mercado Público`}
-                    descripcion="Están cargadas acá, pero en Mercado Público figuran canceladas. Revisa si ya alcanzaste a comprar o gastar algo antes de eliminarlas."
+                    descripcion="Están cargadas acá, pero en Mercado Público figuran canceladas. Revisa si ya alcanzaste a comprar o gastar algo antes de archivarlas."
                     onActualizar={onActualizarCanceladas} verificando={verificandoCanceladas}>
                     {canceladasEnMP.map((o,i)=>(
                       <div key={o.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,padding:"9px 0",
@@ -592,12 +592,12 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
                         </span>
                         {esAdmin&&(
                         <button onClick={()=>{
-                            if(window.confirm(`¿Eliminar la OC ${o.numero_oc}?\n\nFigura cancelada en Mercado Público. Esta acción no se puede deshacer.`))
-                              onEliminarCancelada&&onEliminarCancelada(o.id);
+                            if(window.confirm(`¿Archivar la OC ${o.numero_oc}?\n\nFigura cancelada en Mercado Público. Se ocultará de la operación normal sin borrar ningún dato y podrá restaurarse desde Administración.`))
+                              onArchivarCancelada&&onArchivarCancelada(o.id);
                           }}
-                          style={{flexShrink:0,background:C.card,border:`1px solid ${C.danger}55`,color:C.dangerText,borderRadius:8,
+                          style={{flexShrink:0,background:C.card,border:`1px solid ${C.warn}`,color:C.warnText,borderRadius:8,
                             padding:"6px 11px",fontSize:12,fontWeight:700,cursor:"pointer"}}>
-                          <Ic n="🗑"/> Eliminar
+                          <Ic n="🗄"/> Archivar
                         </button>
                         )}
                       </div>

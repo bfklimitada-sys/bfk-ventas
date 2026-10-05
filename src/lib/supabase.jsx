@@ -54,6 +54,16 @@ export async function rpcRegistrarEntidadDesdeOC(t, { rut, nombre_entidad, comun
   return cuerpo;
 }
 
+// Archivado reversible de OC (solo administrador; lo valida la base de datos).
+async function rpcSimple(t, fn, body) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, { method:"POST", headers:hdrs(t), body:JSON.stringify(body) });
+  const cuerpo = await r.json().catch(()=>null);
+  if (!r.ok) throw Object.assign(new Error(cuerpo?.message || `HTTP ${r.status}`), { rpcStatus: r.status, rpcCuerpo: cuerpo });
+  return cuerpo;
+}
+export const rpcArchivarOC = (t, ocId, motivo) => rpcSimple(t, "archivar_oc", { p_oc_id: ocId, p_motivo: motivo || null });
+export const rpcRestaurarOC = (t, ocId) => rpcSimple(t, "restaurar_oc", { p_oc_id: ocId });
+
 export async function rpcImportarEntidades(t, operaciones, simular) {
   const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/importar_entidades_catalogo`, { method:"POST", headers:hdrs(t), body:JSON.stringify({ p_payload: { version: 1, operaciones }, p_simular: !!simular }) });
   const cuerpo = await r.json().catch(()=>null);
