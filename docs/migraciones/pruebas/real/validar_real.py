@@ -122,7 +122,7 @@ def armar(defecto_op, tdef, pos, n=100):
     if tdef == OC:
         lst = tablas[OC]["actualizar"]; lst = [o for o in lst if o["id"] != defecto_op["id"]]; lst.insert(pos - 1, defecto_op); tablas[OC]["actualizar"] = lst[:n] if pos <= n else lst
     else:
-        rel = ops_upd(min(60, max(0, n_filas(tdef) - 2)), 2, "REL", tdef) or []
+        rel = (ops_upd(min(60, max(0, n_filas(tdef) - 2)), 2, "REL", tdef) if texto_libre(tdef) else []) or []
         rel = [o for o in rel if o["id"] != defecto_op["id"]]; rel.insert(min(pos - 1, len(rel)), defecto_op); tablas[tdef] = {"actualizar": rel}
     return p(tablas)
 
@@ -145,6 +145,14 @@ if defectos:
     for nom, pos in (("A_inicio", 1), ("B_mitad", 73), ("C_final", 100)):
         r_ = caso_atomico("atomico_escritura_real_" + nom, armar(op, tdef, pos))
         RES["atomico_escritura_real_" + nom + "_error"] = limpio(r_["err"], 160)
+    # cada TIPO de restricción real (CHECK / UNIQUE / FK externa) en la posición intermedia: 0 cambios persistentes
+    for tipo in ("CHECK", "UNIQUE", "FK fuera"):
+        cand = [d for d in defectos if d[0].startswith(tipo)]
+        if not cand: RES["atomico_tipo_" + tipo.split()[0] + "_no_disponible"] = True; continue
+        d_, t_, o_ = cand[0]
+        r_ = caso_atomico("atomico_restriccion_real_" + tipo.split()[0] + "_mitad", armar(o_, t_, 73))
+        RES["atomico_restriccion_" + tipo.split()[0] + "_usada"] = f"{d_} en {t_}"
+        RES["atomico_restriccion_" + tipo.split()[0] + "_error"] = limpio(r_["err"], 160)
     prev = 100 if (ord_full and tdef in ord_full and OC in ord_full and ord_full.index(OC) < ord_full.index(tdef)) else 0
     RES["escrituras_de_OC_previas_al_fallo_posibles"] = prev
 else:
