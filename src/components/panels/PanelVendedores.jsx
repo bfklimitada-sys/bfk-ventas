@@ -4,7 +4,7 @@ import { del } from "../../lib/supabase";
 import { C, MONO, btnG, btnP, fmt, iMono, iStyle, selStyle } from "../../lib/theme";
 import { Ic } from "../ui/Iconos";
 import { Seccion, Tarjeta, Badge, Monto } from "../ui/Sistema";
-import { ocsPagablesDelMes } from "../../lib/pagosVendedor";
+import { evaluarPagoVendedor } from "../../lib/pagosVendedor";
 import { calcularPagoVendedor, mesesConFactura } from "../../lib/calculos";
 
 export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, onGuardarIva, onPagoVendedor }) {
@@ -147,7 +147,7 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
 
       {pagando&&(
         <Modal title="Pago a vendedor" onClose={()=>{setPagando(false);setPagoInicial(null);}}>
-          <FormPagoVendedorSimple vendedores={vendedores} ocs={ocs} inicial={pagoInicial} onSave={async(d)=>{await onPagoVendedor(d);setPagando(false);setPagoInicial(null);}} />
+          <FormPagoVendedorSimple vendedores={vendedores} ocs={ocs} ivaMensual={ivaMensual} pagosVendedor={pagosVendedor} inicial={pagoInicial} onSave={async(d)=>{await onPagoVendedor(d);setPagando(false);setPagoInicial(null);}} />
         </Modal>
       )}
       {editIva&&(
@@ -190,20 +190,19 @@ export function FormIvaMensual({ ivaExistente, onSave }) {
   );
 }
 
-export function FormPagoVendedorSimple({ vendedores, ocs, onSave, inicial }) {
+export function FormPagoVendedorSimple({ vendedores, ocs, ivaMensual, pagosVendedor, onSave, inicial }) {
   const [vendedorId,setVendedorId]=useState(inicial?.vendedorId||vendedores[0]?.id||"");
   const [monto,setMonto]=useState(inicial?.monto?String(inicial.monto):""); const [fecha,setFecha]=useState(new Date().toISOString().slice(0,10));
   const [mes,setMes]=useState(inicial?.mes||new Date().getMonth()+1); const [anio,setAnio]=useState(inicial?.anio||new Date().getFullYear());
-  const [marcarPagadas,setMarcarPagadas]=useState(true);
   const [err,setErr]=useState(""); const [saving,setSaving]=useState(false);
   const vend=vendedores.find(v=>v.id===vendedorId);
   const MESES=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
   const labelMes=`Ventas de ${MESES[mes-1]}/${anio}`;
-  const ocsDelMes=ocsPagablesDelMes(ocs,vendedorId,mes,anio);
+  const ev=evaluarPagoVendedor({vendedorId,mes,anio,monto:Number(monto)||0,ocs,ivaMensual,pagosVendedor});
   const handleSave=async()=>{
     if(!monto||Number(monto)<=0){setErr("Indica el monto");return;}
     setErr(""); setSaving(true);
-    try{await onSave({vendedorId,monto:Number(monto),fecha,mes:Number(mes),anio:Number(anio),label:labelMes,ocIdsAMarcar:marcarPagadas?ocsDelMes.map(o=>o.id):[]});}
+    try{await onSave({vendedorId,monto:Number(monto),fecha,mes:Number(mes),anio:Number(anio),label:labelMes});}
     catch(e){setErr(e.message);}finally{setSaving(false);};
   };
   return (
@@ -216,12 +215,14 @@ export function FormPagoVendedorSimple({ vendedores, ocs, onSave, inicial }) {
       <div style={{background:C.tealLight,borderRadius:9,padding:"10px 12px",fontSize:12.5,color:C.tealDark,fontWeight:700,marginBottom:12}}>{labelMes}</div>
       <Field label="Fecha de pago" required><input style={iStyle} type="date" value={fecha} onChange={e=>setFecha(e.target.value)} /></Field>
       <Field label="Monto pagado ($)" required><input style={iMono} type="number" value={monto} onChange={e=>setMonto(e.target.value)} /></Field>
-      {ocs&&(
-        <label style={{display:"flex",alignItems:"flex-start",gap:8,background:C.paper,borderRadius:9,padding:"10px 12px",marginBottom:12,cursor:"pointer"}}>
-          <input type="checkbox" checked={marcarPagadas} onChange={e=>setMarcarPagadas(e.target.checked)} style={{marginTop:2}} />
-          <span style={{fontSize:12,color:C.inkMuted}}>Marcar las {ocsDelMes.length} OC{ocsDelMes.length!==1?"s":""} facturadas este mes como "vendedor pagado" — evita que se vuelvan a contar si se re-emite la factura en otro mes</span>
-        </label>
-      )}
+      <div style={{background:C.paper,borderRadius:9,padding:"10px 12px",marginBottom:12,fontSize:12,color:C.inkMuted,lineHeight:1.6}}>
+        <div>Comisión del período: <b>{fmt.money(ev.comision)}</b> · Ya pagado: <b>{fmt.money(ev.pagadoAntes)}</b></div>
+        <div>Pendiente antes de este pago: <b>{fmt.money(ev.pendienteAntes)}</b></div>
+        {Number(monto)>0&&<div style={{color:ev.completo?C.tealDark:C.warnText||C.inkMuted,fontWeight:700}}>
+          Pendiente después: {fmt.money(ev.pendiente)}{ev.excedente>0?` · excedente ${fmt.money(ev.excedente)} (no se traslada a otro mes)`:""}
+        </div>}
+        <div>Las OC del período se marcan como pagadas solo cuando el pago acumulado cubre la comisión{Number(monto)>0&&ev.completo?` (se marcarán ${ev.ocIds.length})`:""}.</div>
+      </div>
       {err&&<div style={{background:C.dangerLight,color:C.dangerText,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}
       <button onClick={handleSave} disabled={saving} style={btnP(saving?C.inkFaint:C.teal)}>{saving?"Guardando…":"✓ Registrar pago"}</button>
     </div>

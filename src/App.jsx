@@ -7,6 +7,7 @@ import { NuevaOCRapida } from "./components/forms/NuevaOCRapida";
 import { FormCompraRapida } from "./components/forms/FormCompraRapida";
 import { FormAbonoFinanciador, repartirFIFO } from "./components/forms/FormAbonoFinanciador";
 import { registrarPagoFinanciador } from "./lib/pagosFinanciador";
+import { anioMesDe } from "./lib/calculos";
 import { registrarPagoVendedor } from "./lib/pagosVendedor";
 import { ImportarCartola } from "./components/forms/ImportarCartola";
 import { FormSaldoBanco } from "./components/forms/FormSaldoBanco";
@@ -817,6 +818,7 @@ export default function App() {
     const t=session.access_token;
     let nFin=0,nVen=0,nGas=0;
     const repartidoEnLote=new Map();
+    const pagosEnLote=[];
 
     for(const e of egresos){
       if(e.tipo==="financiador"){
@@ -838,17 +840,19 @@ export default function App() {
       }
 
       if(e.tipo==="vendedor"){
-        // Misma función que el pago desde Vendedores; el mes de comisión viene elegido (por defecto, el de la fecha sin desfase horario)
-        await registrarPagoVendedor({ins,upd,token:t,userId:session.user.id,id:genId("pv"),vendedorId:e.destinoId,
-          monto:e.monto,fecha:e.fecha,mes:e.mesCom,anio:e.anioCom,
-          notas:`Desde cartola: ${e.descripcion}`,ocIds:e.ocIds});
+        // Misma función y misma regla de saldo que el pago desde Vendedores.
+        // Los pagos ya hechos en este mismo lote se acumulan (el estado de pantalla aún no se recarga).
+        const r=await registrarPagoVendedor({ins,upd,token:t,userId:session.user.id,id:genId("pv"),vendedorId:e.destinoId,
+          monto:e.monto,fecha:e.fecha,mes:e.mesCom,anio:e.anioCom,notas:`Desde cartola: ${e.descripcion}`,
+          ocs,ivaMensual,pagosVendedor:[...pagosVendedor,...pagosEnLote]});
+        pagosEnLote.push(r.fila);
         nVen++;
       }
 
       if(e.tipo==="gasto"){
-        const d=new Date(e.fecha);
+        const {anio:aG,mes:mG}=anioMesDe(e.fecha);   // sin Date: el día 1 no cae en el mes anterior
         await ins("gastos_indirectos",t,{id:genId("gas"),categoria_id:e.categoriaId,
-          subcategoria:null,monto:e.monto,mes:d.getMonth()+1,anio:d.getFullYear(),
+          subcategoria:null,monto:e.monto,mes:mG,anio:aG,
           fecha:e.fecha,detalle:`Desde cartola: ${e.descripcion}`,creado_por:session.user.id});
         nGas++;
       }
@@ -1018,9 +1022,10 @@ export default function App() {
     showToast("Gasto registrado"); await cargarTodo();
   };
   const handlePagoVendedorSimple=async(data)=>{
-    const n=await registrarPagoVendedor({ins,upd,token:session.access_token,userId:session.user.id,id:genId("pv"),
-      vendedorId:data.vendedorId,monto:data.monto,fecha:data.fecha,mes:data.mes,anio:data.anio,notas:data.label,ocIds:data.ocIdsAMarcar});
-    showToast(`Pago a vendedor registrado${n?` · ${n} OCs marcadas como pagadas`:""}`); await cargarTodo();
+    const r=await registrarPagoVendedor({ins,upd,token:session.access_token,userId:session.user.id,id:genId("pv"),
+      vendedorId:data.vendedorId,monto:data.monto,fecha:data.fecha,mes:data.mes,anio:data.anio,notas:data.label,
+      ocs,ivaMensual,pagosVendedor});
+    showToast(r.completo?`Pago registrado · período saldado${r.ocIds.length?` · ${r.ocIds.length} OC marcadas como pagadas`:""}`:`Pago parcial registrado · pendiente ${fmt.money(r.pendiente)}`); await cargarTodo();
   };
   const handleGuardarIva=async(data)=>{
     const t=session.access_token; const existe=ivaMensual.find(i=>i.mes===data.mes&&i.anio===data.anio);

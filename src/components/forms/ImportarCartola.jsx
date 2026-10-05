@@ -1,5 +1,4 @@
 import { anioMesDe, facturaVigente } from "../../lib/calculos";
-import { ocsPagablesDelMes } from "../../lib/pagosVendedor";
 import { useState } from "react";
 import * as XLSX from "xlsx";
 import { C, MONO, SANS, btnP, btnG, fmt } from "../../lib/theme";
@@ -212,7 +211,7 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, re
         const dup = yaRegistrado(m, registrados);
         const antiguo = m.fecha < CORTE_EGRESOS;
         const am = anioMesDe(m.fecha);
-        return { mov: m, ...c, mesCom: am.mes, anioCom: am.anio, marcarOc: true, duplicado: dup || null, antiguo,
+        return { mov: m, ...c, mesCom: am.mes, anioCom: am.anio, duplicado: dup || null, antiguo,
                  incluir: (dup || antiguo) ? false : c.seguro };
       }));
     } catch (e) {
@@ -285,8 +284,6 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, re
         tipo: e.tipo, destinoId: e.destinoId, categoriaId: e.categoriaId || "cat_otros",
         monto: e.mov.cargo, fecha: e.mov.fecha, descripcion: e.mov.descripcion,
         mesCom: Number(e.mesCom), anioCom: Number(e.anioCom),
-        ocIds: e.tipo === "vendedor" && e.marcarOc !== false
-          ? ocsPagablesDelMes(ocs, e.destinoId, e.mesCom, e.anioCom).map(o => o.id) : [],
       })), resumenCartola());
     } catch (er) { setErr(er.message); setGuardando(false); }
   };
@@ -516,7 +513,6 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, re
                 )}
 
                 {e.incluir && e.tipo === "vendedor" && e.destinoId && (() => {
-                  const nOc = ocsPagablesDelMes(ocs, e.destinoId, e.mesCom, e.anioCom).length;
                   const set = (patch) => setEgresos(l => l.map((x, ix) => ix === i ? { ...x, ...patch } : x));
                   const MESES_C = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
                   return (
@@ -530,10 +526,9 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, re
                         <input type="number" value={e.anioCom} onChange={ev => set({ anioCom: Number(ev.target.value) })}
                           style={{ width: 80, padding: "6px 8px", borderRadius: 8, fontSize: 12, border: `1px solid ${C.border}`, background: C.card, color: C.ink, fontFamily: MONO }} />
                       </div>
-                      <label style={{ display: "flex", gap: 6, alignItems: "flex-start", marginTop: 6, fontSize: 11.5, color: C.inkMuted, cursor: "pointer" }}>
-                        <input type="checkbox" checked={e.marcarOc !== false} onChange={ev => set({ marcarOc: ev.target.checked })} style={{ marginTop: 2 }} />
-                        <span>Marcar {nOc} OC facturada{nOc !== 1 ? "s" : ""} de ese mes como "vendedor pagado"</span>
-                      </label>
+                      <div style={{ marginTop: 6, fontSize: 11.5, color: C.inkMuted }}>
+                        Las OC de ese mes se marcan como pagadas solo si los pagos acumulados cubren la comisión.
+                      </div>
                     </div>
                   );
                 })()}
