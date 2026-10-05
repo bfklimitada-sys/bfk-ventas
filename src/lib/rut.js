@@ -35,3 +35,31 @@ export function formatoAlmacenamiento(normalizado) {
   const [c, dv] = normalizado.split("-");
   return `${c.replace(/\B(?=(\d{3})+(?!\d))/g, ".")}-${dv}`;
 }
+
+// ── Normalización única para toda la app: "76.123.456-0", "76123456-0" y "761234560" son el MISMO RUT. ──
+// Solo compara por clave cuando el valor es un RUT completo y válido (evita autocompletar con un RUT a medio escribir);
+// si no es válido, compara el texto exacto (RUT históricos con dígito errado).
+export function mismoRut(a, b) {
+  const ra = analizarRut(a), rb = analizarRut(b);
+  if (ra.ok && rb.ok) return ra.normalizado === rb.normalizado;
+  if (ra.ok || rb.ok) return ra.ok ? claveComparacion(b) === ra.cuerpo + ra.dv : claveComparacion(a) === rb.cuerpo + rb.dv;
+  const ta = String(a ?? "").trim(), tb = String(b ?? "").trim();
+  return !!ta && ta === tb;
+}
+// Todas las filas de una lista cuyo campo RUT es el mismo RUT que `rut`.
+export function filtrarPorRut(lista, rut, campo = "rut") {
+  if (!String(rut ?? "").trim()) return [];
+  return (lista || []).filter(x => mismoRut(x?.[campo], rut));
+}
+// Entidad del catálogo para un RUT. ambigua=true si hay más de una (duplicados históricos pendientes de revisión).
+export function entidadPorRut(catalogo, rut) {
+  const m = filtrarPorRut(catalogo, rut);
+  if (m.length <= 1) return { entidad: m[0] || null, ambigua: false };
+  const exacta = m.find(e => String(e.rut).trim() === String(rut).trim());
+  return { entidad: exacta || m[0], ambigua: true };
+}
+// Formato en que se guarda un RUT nuevo: 76.123.456-0 si es válido; si no, el texto tal cual (sin inventar dígito).
+export function rutParaGuardar(valor) {
+  const a = analizarRut(valor);
+  return a.ok ? formatoAlmacenamiento(a.normalizado) : String(valor ?? "").trim();
+}

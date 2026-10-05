@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Field } from "../ui/Basicos";
 import { del } from "../../lib/supabase";
 import { C, btnP, iMono, iStyle, selStyle } from "../../lib/theme";
+import { entidadPorRut } from "../../lib/rut";
 
 export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, entidadesCatalogo, ocExistente, perfil }) {
   const [paso,setPaso]=useState(1);
@@ -36,7 +37,7 @@ export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, ent
 
   const handleRutChange=(val)=>{
     setRutCliente(val);
-    const match=(entidadesCatalogo||[]).find(e=>e.rut===val.trim());
+    const match=entidadPorRut(entidadesCatalogo,val).entidad;
     if(match&&val.trim()){
       if(!entidad) setEntidad(match.nombre_entidad||"");
       if(!comuna) setComuna(match.comuna||"");

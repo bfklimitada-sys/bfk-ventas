@@ -12,6 +12,7 @@ import { C, MONO, btnG, btnP, fmt, iMono, iStyle, selStyle } from "../../lib/the
 import { calcMargen, estadoVencimiento, facturaVigente, gananciaReal, plazoPago } from "../../lib/calculos";
 import { coincideBusqueda } from "../../lib/busqueda";
 import { Ic, I } from "../ui/Iconos";
+import { entidadPorRut } from "../../lib/rut";
 
 // Fecha de creación de la OC para mostrar en la lista: si el dato viene
 // de Mercado Público (fecha_hora_emision_mp) trae hora exacta; si viene
@@ -54,7 +55,7 @@ export function FormEditarDatosOC({ oc, onSave, entidadesCatalogo, perfil, ocs, 
   const [err,setErr]=useState(""); const [saving,setSaving]=useState(false);
   const handleRutChange=(val)=>{
     setRutCliente(val);
-    const match=(entidadesCatalogo||[]).find(e=>e.rut===val.trim());
+    const match=entidadPorRut(entidadesCatalogo,val).entidad;
     if(match&&val.trim()){
       if(!entidad) setEntidad(match.nombre_entidad||"");
       if(!comuna) setComuna(match.comuna||"");

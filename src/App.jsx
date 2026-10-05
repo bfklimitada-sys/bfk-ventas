@@ -23,6 +23,7 @@ import { PanelVendedores } from "./components/panels/PanelVendedores";
 import { Modal, NotifBadge, Toast } from "./components/ui/Basicos";
 import { PanelNotificaciones, calcularAlertas } from "./components/ui/Multiusuario";
 import { SESSION_KEY, SUPABASE_URL, crearNotificacion, del, genId, getPerfil, hdrs, ins, registrarCambio, sel, selOCs, selPerfiles, storageGet, storageSet, supaRefresh, supaSignOut, upd, updRol } from "./lib/supabase";
+import { alimentarCatalogoDesdeOC } from "./lib/entidadesOC";
 import { C, MONO, SANS, fmt } from "./lib/theme";
 import { Ic } from "./components/ui/Iconos";
 import { generarPdfPantallas } from "./lib/pdfPantallas";
@@ -292,10 +293,8 @@ export default function App() {
       }
       if(data.rutCliente?.trim()){
         try{
-          const existente=entidadesCatalogo.find(e=>e.rut===data.rutCliente.trim());
-          const datosEnt={rut:data.rutCliente.trim(),nombre_entidad:data.entidad||data.cliente||"",comuna:data.comuna||"",contacto:data.contacto||"",correo:data.correo||""};
-          if(existente) await upd("entidades_catalogo",t,existente.id,datosEnt);
-          else await ins("entidades_catalogo",t,{id:genId("ent"),...datosEnt,creado_por:session.user.id});
+          await alimentarCatalogoDesdeOC({catalogo:entidadesCatalogo,token:t,usuarioId:session.user.id,rut:data.rutCliente,
+            datos:{nombre_entidad:data.entidad||data.cliente||"",comuna:data.comuna||"",contacto:data.contacto||"",correo:data.correo||""}});
         }catch{}
       }
     } else {
@@ -388,11 +387,8 @@ export default function App() {
     // Guardar/actualizar el catálogo de entidades para autocompletar la próxima vez
     if(!pendienteSync && oc.rut_cliente){
       try{
-        const existente=entidadesCatalogo.find(e=>e.rut===oc.rut_cliente);
-        const datosEnt={rut:oc.rut_cliente,nombre_entidad:oc.cliente||"",comuna:oc.comuna||"",
-          contacto:oc.contacto||"",correo:correo_cliente||""};
-        if(existente) await upd("entidades_catalogo",t,existente.id,datosEnt);
-        else await ins("entidades_catalogo",t,{id:genId("ent"),...datosEnt,creado_por:session.user.id});
+        await alimentarCatalogoDesdeOC({catalogo:entidadesCatalogo,token:t,usuarioId:session.user.id,rut:oc.rut_cliente,
+          datos:{nombre_entidad:oc.cliente||"",comuna:oc.comuna||"",contacto:oc.contacto||"",correo:correo_cliente||""}});
       }catch{}
     }
 
@@ -506,11 +502,8 @@ export default function App() {
         // Alimentar el catálogo de entidades
         if(d.rut_cliente){
           try{
-            const ex=entidadesCatalogo.find(e=>e.rut===d.rut_cliente);
-            const datos={rut:d.rut_cliente,nombre_entidad:d.cliente||"",comuna:d.comuna||"",
-              contacto:d.contacto||"",correo:oc.correo_cliente||d.correo_cliente||""};
-            if(ex) await upd("entidades_catalogo",t,ex.id,datos);
-            else await ins("entidades_catalogo",t,{id:genId("ent"),...datos,creado_por:session.user.id});
+            await alimentarCatalogoDesdeOC({catalogo:entidadesCatalogo,token:t,usuarioId:session.user.id,rut:d.rut_cliente,
+              datos:{nombre_entidad:d.cliente||"",comuna:d.comuna||"",contacto:d.contacto||"",correo:oc.correo_cliente||d.correo_cliente||""}});
           }catch{}
         }
         completadas++;
@@ -1283,10 +1276,8 @@ export default function App() {
     }
     if (rutCliente?.trim()) {
       try {
-        const existente = entidadesCatalogo.find(e=>e.rut===rutCliente.trim());
-        const datos = { rut: rutCliente.trim(), nombre_entidad: entidad||cliente||"", comuna: comuna||"", contacto: contacto||"", correo: correo||"" };
-        if (existente) await upd("entidades_catalogo", session.access_token, existente.id, datos);
-        else await ins("entidades_catalogo", session.access_token, { id: genId("ent"), ...datos, creado_por: session.user.id });
+        await alimentarCatalogoDesdeOC({ catalogo: entidadesCatalogo, token: session.access_token, usuarioId: session.user.id, rut: rutCliente,
+          datos: { nombre_entidad: entidad||cliente||"", comuna: comuna||"", contacto: contacto||"", correo: correo||"" } });
       } catch {}
     }
     showToast("Datos actualizados"); await cargarTodo();

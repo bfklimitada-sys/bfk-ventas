@@ -4,9 +4,10 @@ import { del } from "../../lib/supabase";
 import { C, btnP, fmt, iStyle } from "../../lib/theme";
 import { I } from "../ui/Iconos";
 import { abrirCorreo } from "../../lib/correos";
+import { entidadPorRut, filtrarPorRut } from "../../lib/rut";
 
 export function FormEntregaFallida({ oc, onEnviar, entidadesCatalogo }) {
-  const matchCatalogo=(entidadesCatalogo||[]).find(e=>e.rut===(oc.rut_cliente||"").trim());
+  const matchCatalogo=entidadPorRut(entidadesCatalogo,oc.rut_cliente).entidad;
   const [lugar,setLugar]=useState("bodega");
   const [motivo,setMotivo]=useState("usted no estaba en el lugar");
   const [correo,setCorreo]=useState(oc.correo_cliente||matchCatalogo?.correo||"");
@@ -44,7 +45,7 @@ export function FormEntregaFallida({ oc, onEnviar, entidadesCatalogo }) {
 }
 
 export function FormFechaEntrega({ oc, onEnviar, entidadesCatalogo }) {
-  const matchCatalogo=(entidadesCatalogo||[]).find(e=>e.rut===(oc.rut_cliente||"").trim());
+  const matchCatalogo=entidadPorRut(entidadesCatalogo,oc.rut_cliente).entidad;
   const evC=(oc.eventos_compra||[])[0];
   const fechaEstimadaDefault=evC?.fecha_entrega_estimada||"";
   const [fechaEntrega,setFechaEntrega]=useState(fechaEstimadaDefault);
@@ -84,7 +85,7 @@ export function FormFechaEntrega({ oc, onEnviar, entidadesCatalogo }) {
 }
 
 export function FormReclamarFactura({ oc, evF, dias, contactos, onEnviar, onGuardarContacto }) {
-  const contactoExistente = contactos.find(c => c.rut === (oc.rut_cliente || "").trim());
+  const contactoExistente = filtrarPorRut(contactos, oc.rut_cliente)[0];
   const [rut, setRut] = useState(oc.rut_cliente || "");
   const [nombreCliente, setNombreCliente] = useState(oc.cliente || contactoExistente?.nombre_cliente || "");
   const [correo, setCorreo] = useState(oc.correo_cliente || contactoExistente?.correo || "");

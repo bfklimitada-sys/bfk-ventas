@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Field } from "../ui/Basicos";
 import { C, MONO, SANS, btnP, btnG, fmt, iStyle, iMono, selStyle } from "../../lib/theme";
 import { Ic } from "../ui/Iconos";
+import { entidadPorRut } from "../../lib/rut";
 
 // ── Heurística para sacar la dirección de entrega del texto del producto ──
 // Cuando TipoDespacho = 12 ("ver instrucciones"), Mercado Público mete la
@@ -53,7 +54,7 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
         const oc = j.oc;
         setDatos(oc);
         // Correo: primero el del catálogo por RUT, si existe
-        const enCatalogo = (entidadesCatalogo || []).find(e => e.rut === oc.rut_cliente);
+        const enCatalogo = entidadPorRut(entidadesCatalogo, oc.rut_cliente).entidad;
         setCorreo(oc.correo_cliente || enCatalogo?.correo || "");
         // Dirección: la del comprador, o la que venga en el texto del producto
         const textoItems = (oc.productos || []).map(p => p.descripcion).join(" ");
@@ -156,7 +157,7 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
   // ─────────────────────────────── PASO 2: revisar y completar
   const oc = datos || {};
   const necesitaDireccion = oc.tipo_despacho_codigo === "12" || oc.tipo_despacho_codigo === "7";
-  const esClienteNuevo = !(entidadesCatalogo || []).some(e => e.rut === oc.rut_cliente);
+  const esClienteNuevo = !entidadPorRut(entidadesCatalogo, oc.rut_cliente).entidad;
 
   return (
     <div style={{ fontFamily: SANS }}>

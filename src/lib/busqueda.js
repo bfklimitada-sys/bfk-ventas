@@ -1,5 +1,6 @@
 // Misma regla de búsqueda de OC para Compras y para el buscador rápido del Panel.
 import { facturaVigente } from "./calculos";
+import { claveComparacion } from "./rut";
 
 export function coincideBusqueda(oc, texto) {
   const q = String(texto || "").trim().toLowerCase();
@@ -11,6 +12,7 @@ export function coincideBusqueda(oc, texto) {
     (oc.comuna || "").toLowerCase().includes(q) ||
     (oc.entidad || "").toLowerCase().includes(q) ||
     (oc.rut_cliente || "").toLowerCase().includes(q) ||
+    (/^[0-9.\-\skK]{5,}$/.test(q) && claveComparacion(oc.rut_cliente).includes(claveComparacion(q))) ||
     String(numFactura || "").toLowerCase().includes(q) ||
     String(oc.monto_facturado || "").includes(q)
   );
