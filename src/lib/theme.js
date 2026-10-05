@@ -30,6 +30,10 @@ export const cardStyle = { background:C.card, border:`1px solid ${C.border}`, bo
 export const fmt = {
   money: (n) => "$"+Math.round(Number(n)||0).toLocaleString("es-CL"),
   date: (d) => { if(!d) return "—"; const[y,m,dd]=d.split("-"); return `${dd}/${m}/${y.slice(2)}`; },
+  // "lunes 12 de octubre de 2026" (para textos de correo). Se arma con el texto AAAA-MM-DD, sin zona horaria.
+  dateLong: (d) => { if(!d) return ""; const[y,m,dd]=String(d).slice(0,10).split("-").map(Number); const dt=new Date(y,m-1,dd);
+    const DS=["domingo","lunes","martes","miércoles","jueves","viernes","sábado"], MS=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+    return `${DS[dt.getDay()]} ${dd} de ${MS[m-1]} de ${y}`; },
   monthYear: (mes,anio) => { const M=["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"]; return `${M[mes-1]}/${anio}`; },
   datetime: (iso) => { if(!iso) return "—"; const d=new Date(iso); return d.toLocaleDateString("es-CL")+" "+d.toLocaleTimeString("es-CL",{hour:"2-digit",minute:"2-digit"}); },
   diasDesde: (fechaStr) => { if(!fechaStr) return null; const hoy=new Date(); hoy.setHours(0,0,0,0); const f=new Date(fechaStr+"T00:00:00"); return Math.floor((hoy-f)/(1000*60*60*24)); },

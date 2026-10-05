@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Field } from "../ui/Basicos";
 import { del } from "../../lib/supabase";
 import { C, btnP, fmt, iStyle } from "../../lib/theme";
@@ -15,11 +15,13 @@ export function FormEntregaFallida({ oc, onEnviar, entidadesCatalogo }) {
   const asunto=`Entrega OC ${oc.numero_oc}`;
   const cuerpo=`Estimado/a,\n\nJunto con saludar le comento que hoy durante la mañana nos acercamos a ${lugar} para hacer la entrega de los productos asociados a la OC del asunto, siendo esta entrega fallida debido a que ${motivo}.\n\nPor favor avisar a personal de bodega que realizaremos un nuevo intento de entrega entre hoy y el resto de la semana en curso.\n\nAgradezco su ayuda con esa gestión.\n\nSin más que agregar, saludos cordiales,\nBFK Ltda`;
 
+  const yaEnviado=useRef(false);   // evita registrar dos veces si se toca el botón dos veces seguidas
   const handleEnviar=async()=>{
+    if(yaEnviado.current) return;
     if(!correo.trim()){setErr("Indica el correo del destinatario");return;}
-    setErr(""); setSending(true);
+    yaEnviado.current=true; setErr(""); setSending(true);
     abrirCorreo({correo,asunto,cuerpo});
-    await onEnviar({correo,ocId:oc.id});
+    await onEnviar({correo,ocId:oc.id,tipo:"entrega fallida",detalle:`lugar: ${lugar} · motivo: ${motivo}`});
     setSending(false);
   };
 
@@ -53,12 +55,14 @@ export function FormFechaEntrega({ oc, onEnviar, entidadesCatalogo }) {
   const fechaFmt=fechaEntrega?fmt.dateLong(fechaEntrega):"[fecha a definir]";
   const cuerpo=`Estimado/a,\n\nJunto con saludar le informamos que la entrega de los productos asociados a la OC del asunto está programada para el día ${fechaFmt}.\n\nQuedamos atentos ante cualquier consulta.\n\nSaludos cordiales,\nBFK Ltda`;
 
+  const yaEnviado=useRef(false);   // evita registrar dos veces si se toca el botón dos veces seguidas
   const handleEnviar=async()=>{
+    if(yaEnviado.current) return;
     if(!correo.trim()){setErr("Indica el correo del destinatario");return;}
     if(!fechaEntrega){setErr("Indica la fecha estimada de entrega");return;}
-    setErr(""); setSending(true);
+    yaEnviado.current=true; setErr(""); setSending(true);
     abrirCorreo({correo,asunto,cuerpo});
-    await onEnviar({correo,ocId:oc.id});
+    await onEnviar({correo,ocId:oc.id,tipo:"fecha de entrega",detalle:`entrega programada para el ${fmt.date(fechaEntrega)}`});
     setSending(false);
   };
 
@@ -90,14 +94,16 @@ export function FormReclamarFactura({ oc, evF, dias, contactos, onEnviar, onGuar
   const asunto = `OC ${oc.numero_oc} — Consulta por pago factura N°${evF?.numero_factura || ""}`;
   const cuerpo = `Estimados,\n\nEsperamos se encuentren bien. Les escribimos porque no hemos recibido el comprobante de pago de la factura N°${evF?.numero_factura || ""} asociada a la Orden de Compra ${oc.numero_oc}, emitida con fecha ${fmt.date(evF?.fecha)} (${dias} días desde su emisión), y en nuestros registros aún no aparece como pagada.\n\nAgradeceríamos nos puedan validar si ya fue cursado el pago — de ser así, si nos pueden compartir el comprobante correspondiente nos ayudaría mucho con nuestra conciliación. Si todavía está en trámite, nos sería muy útil contar con una fecha estimada para nuestro seguimiento interno.\n\nMuchas gracias de antemano por su ayuda.\n\nDatos para transferencia:\nBanco Estado\nBFK Ltda.\nRUT: 77.322.317-3\nChequera Electrónica: 54970259913\n\nSaludos cordiales,\nBFK Ltda`;
 
+  const yaEnviado = useRef(false);   // evita registrar dos veces si se toca el botón dos veces seguidas
   const handleEnviar = async () => {
+    if (yaEnviado.current) return;
     if (!correo.trim()) { setErr("Indica el correo del cliente"); return; }
     if (!nombreCliente.trim()) { setErr("Indica el nombre del cliente"); return; }
-    setErr(""); setSending(true);
+    yaEnviado.current = true; setErr(""); setSending(true);
     try {
       if (rut.trim() && !contactoExistente) await onGuardarContacto({ rut: rut.trim(), nombreCliente: nombreCliente.trim(), correo: correo.trim() });
-      await onEnviar({ correo: correo.trim(), cc: cc.trim(), asunto, cuerpo, ocId: oc.id, rut: rut.trim() });
-    } catch (e) { setErr(e.message); } finally { setSending(false); }
+      await onEnviar({ correo: correo.trim(), cc: cc.trim(), asunto, cuerpo, ocId: oc.id, rut: rut.trim(), tipo: "reclamo de pago", detalle: `factura N°${evF?.numero_factura || ""}` });
+    } catch (e) { yaEnviado.current = false; setErr(e.message); } finally { setSending(false); }
   };
 
   return (
