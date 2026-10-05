@@ -5,6 +5,7 @@ import { calcularPagoVendedor, costoPostventa, estadoVencimiento, facturaVigente
 import { C, MONO, SANS, btnP, fmt } from "../../lib/theme";
 import { Ic } from "../ui/Iconos";
 import { coincideBusqueda } from "../../lib/busqueda";
+import { calcularF29 } from "../../lib/f29";
 import { Seccion, Tarjeta, Badge, Monto, Enlace } from "../ui/Sistema";
 
 // Tarjeta base para los avisos ligados a Mercado Público: encabezado con
@@ -141,28 +142,12 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
     // Misma regla que el panel Vendedores (lib/calculos.js).
     const deudaVendedoresMes=vendedores?.reduce((sv,v)=>
       sv+(calcularPagoVendedor({vendedorId:v.id,ocs,anio:anioActual,mes:mesActual,ivaMensual,pagosVendedor})?.deuda||0),0)||0;
-    // F29 por período (mes anterior y mes actual), solo con datos existentes:
-    //  · Determinado = iva_mensual: max(0, iva_ventas − iva_compras) del período
-    //  · Pagado      = suma de gastos "Impuesto SII" (cat_impuesto) con ese mes/año
-    //  · Pendiente   = max(0, Determinado − Pagado)
-    const periodoF29=(a,m)=>{
-      const iv=ivaMensual.find(i=>i.mes===m&&i.anio===a);
-      const det=iv?Math.max(0,(iv.iva_ventas||0)-(iv.iva_compras||0)):0;
-      const pag=gastos.filter(g=>g.categoria_id==="cat_impuesto"&&Number(g.mes)===m&&Number(g.anio)===a).reduce((s2,g)=>s2+(g.monto||0),0);
-      return {anio:a,mes:m,det,pag,pend:Math.max(0,det-pag)};
-    };
-    const mesPrev=mesActual===1?12:mesActual-1; const anioPrev=mesActual===1?anioActual-1:anioActual;
-    // Deuda F29 = suma de TODOS los períodos con pendiente (cada período aparte: un pago
-    // mayor al IVA determinado queda en $0 y no se traslada a otro período).
-    const clavesF29=new Set();
-    ivaMensual.forEach(i=>clavesF29.add(`${i.anio}-${i.mes}`));
-    gastos.forEach(g=>{ if(g.categoria_id==="cat_impuesto") clavesF29.add(`${Number(g.anio)}-${Number(g.mes)}`); });
-    const todosF29=[...clavesF29].map(k=>{const [a2,m2]=k.split("-").map(Number); return periodoF29(a2,m2);});
-    const esMostrado=(x)=>(x.anio===anioPrev&&x.mes===mesPrev)||(x.anio===anioActual&&x.mes===mesActual);
-    const f29Periodos=[periodoF29(anioPrev,mesPrev),periodoF29(anioActual,mesActual)].filter(x=>x.det>0||x.pag>0);
-    const f29Anterior=todosF29.filter(x=>!esMostrado(x)).reduce((s2,x)=>s2+x.pend,0); // pendiente de períodos más antiguos
-    const f29=todosF29.reduce((s2,x)=>s2+x.pend,0); // deuda total F29 (todos los períodos)
-    const f29Visible=f29Periodos.length>0||f29Anterior>0;
+    // F29 por período (reglas y fecha de corte F29_DESDE en lib/f29.js)
+    const f29Calc=calcularF29({ivaMensual,gastos,anioActual,mesActual});
+    const f29Periodos=f29Calc.mostrados;
+    const f29Anterior=f29Calc.anterior; // pendiente de períodos más antiguos (desde F29_DESDE)
+    const f29=f29Calc.total;            // deuda total F29 (todos los períodos desde F29_DESDE)
+    const f29Visible=f29Calc.visible;
     const deudaContadorMes=0;
     const deudaTotal=deudaFin+deudaVendedoresMes+f29+deudaContadorMes;
 
