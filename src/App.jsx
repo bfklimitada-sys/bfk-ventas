@@ -42,7 +42,8 @@ export default function App() {
   const [todo,setTodo]=useState(false); // vista de impresión de todas las pantallas
   const [pdfEstado,setPdfEstado]=useState(null); // null | {fase:"generando",txt} | {fase:"listo",url,nombre} | {fase:"error",txt}
   const [session,setSession]=useState(null); const [perfil,setPerfil]=useState(null);
-  const sesionRef=useRef(null); sesionRef.current=session; fijarProveedorToken(()=>sesionRef.current?.access_token||null); // token vigente para el ciclo de bloqueo de OC const [loadingApp,setLoadingApp]=useState(true);
+  const sesionRef=useRef(null); sesionRef.current=session; fijarProveedorToken(()=>sesionRef.current?.access_token||null); // token vigente para el ciclo de bloqueo de OC
+  const [loadingApp,setLoadingApp]=useState(true);
   const [tab,setTab]=useState("panel"); const [filtroCompras,setFiltroCompras]=useState(null); const [ocFoco,setOcFoco]=useState(null); const [filtroAlertas,setFiltroAlertas]=useState({nivel:"todas",etapa:null}); const [volverA,setVolverA]=useState(null);
   // OCs ya consultadas a la API en esta sesión (para no reintentar en bucle)
   const intentadas=useRef(new Set());
