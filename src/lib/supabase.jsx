@@ -45,6 +45,15 @@ export async function rpcImportarRespaldo(t, payload, simular) {
 }
 
 // Importación atómica de entidades: una sola llamada; el servidor revalida y aplica todo o nada.
+// Alimenta el catálogo de entidades desde una OC (RPC controlada; la escritura directa queda solo para administradores).
+export async function rpcRegistrarEntidadDesdeOC(t, { rut, nombre_entidad, comuna, contacto, correo }) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/registrar_entidad_desde_oc`, { method:"POST", headers:hdrs(t),
+    body:JSON.stringify({ p_rut: rut, p_nombre_entidad: nombre_entidad, p_comuna: comuna, p_contacto: contacto, p_correo: correo }) });
+  const cuerpo = await r.json().catch(()=>null);
+  if (!r.ok) throw Object.assign(new Error(cuerpo?.message || `HTTP ${r.status}`), { rpcStatus: r.status, rpcCuerpo: cuerpo });
+  return cuerpo;
+}
+
 export async function rpcImportarEntidades(t, operaciones, simular) {
   const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/importar_entidades_catalogo`, { method:"POST", headers:hdrs(t), body:JSON.stringify({ p_payload: { version: 1, operaciones }, p_simular: !!simular }) });
   const cuerpo = await r.json().catch(()=>null);

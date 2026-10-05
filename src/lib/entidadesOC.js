@@ -1,27 +1,23 @@
 // Alimenta el catálogo de entidades desde los datos de una OC (única lógica para todos los flujos de OC).
+// Toda la escritura la hace la RPC registrar_entidad_desde_oc en el servidor (una transacción):
 // - Busca por RUT normalizado (con o sin puntos, k/K): nunca crea un duplicado por formato.
-// - Si el RUT corresponde a más de una entidad (duplicado histórico pendiente de revisión): no toca el catálogo.
+// - RUT inválido: no toca el catálogo ('rut_invalido'); no se corrige ni se inventa el dígito verificador.
+// - Si el RUT corresponde a más de una entidad: no toca el catálogo ('ambigua').
 // - Si existe: actualiza SOLO los campos que traen un valor distinto; nunca borra un dato con un vacío ni cambia el RUT.
-// - Si no existe: la crea con el RUT en formato 76.123.456-0 (si es válido).
-import { ins, upd, genId } from "./supabase";
-import { entidadPorRut, rutParaGuardar } from "./rut";
+// - Si no existe: la crea con el RUT en formato 76.123.456-0.
+// La OC se guarda siempre: quien llama envuelve esta función en try/catch.
+import { rpcRegistrarEntidadDesdeOC } from "./supabase";
 
-const CAMPOS = ["nombre_entidad", "comuna", "contacto", "correo"];
 const txt = (v) => String(v ?? "").trim();
 
-export async function alimentarCatalogoDesdeOC({ catalogo, token, usuarioId, rut, datos }) {
+// `catalogo` y `usuarioId` se mantienen en la firma por compatibilidad con los 4 flujos de OC; el servidor decide.
+export async function alimentarCatalogoDesdeOC({ token, rut, datos }) {
   if (!txt(rut)) return { accion: "sin_rut" };
-  const { entidad, ambigua } = entidadPorRut(catalogo, rut);
-  if (ambigua) return { accion: "ambigua" };
-  if (entidad) {
-    const cambios = {};
-    for (const c of CAMPOS) if (txt(datos[c]) && txt(datos[c]) !== txt(entidad[c])) cambios[c] = txt(datos[c]);
-    if (!Object.keys(cambios).length) return { accion: "sin_cambios" };
-    await upd("entidades_catalogo", token, entidad.id, cambios);
-    return { accion: "actualizada", cambios };
-  }
-  const fila = { id: genId("ent"), rut: rutParaGuardar(rut), creado_por: usuarioId };
-  for (const c of CAMPOS) fila[c] = txt(datos[c]);
-  await ins("entidades_catalogo", token, fila);
-  return { accion: "creada" };
+  return rpcRegistrarEntidadDesdeOC(token, {
+    rut: txt(rut),
+    nombre_entidad: txt(datos?.nombre_entidad),
+    comuna: txt(datos?.comuna),
+    contacto: txt(datos?.contacto),
+    correo: txt(datos?.correo),
+  });
 }
