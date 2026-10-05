@@ -1,0 +1,41 @@
+-- BORRADOR DE DISEÑO (NO es una migración, NO se aplica, NO se ejecuta en producción).
+-- Endurecimiento de RLS de public.entidades_catalogo. Solo se prueba en la copia temporal.
+--
+-- Estado actual: una política «rw_autenticados_entidades» (ALL, auth.role()='authenticated').
+-- Escriben directamente en la tabla (REST, cualquier usuario con sesión) estos flujos de App.jsx:
+--   handleIngresarCompra (OC), handleGuardarDatosOC (OC), «alimentar catálogo» (flujo de OC),
+--   otro flujo de alta/edición (~L1295) y el importador de entidades (reemplazado por la RPC).
+-- Los usuarios normales crean OC => escriben entidades. Por eso una política «solo admin escribe» ROMPE la creación
+-- automática de entidades desde una OC para usuarios normales (se demuestra en las pruebas, opción A).
+--
+-- OPCIÓN A (NO recomendada hoy): lectura para todos, escritura solo admin.  Rompe el flujo de OC de usuarios normales.
+-- OPCIÓN B (segura hoy): lectura/INSERT/UPDATE para autenticados (no rompe nada), DELETE solo admin
+--   (ningún flujo de la app borra entidades). Reduce el riesgo sin cambiar comportamiento.
+-- OPCIÓN C (diseño final, proyecto posterior): mover las escrituras de entidades desde OC a una RPC
+--   «registrar_entidad_desde_oc» (SECURITY DEFINER acotada: solo crea si no existe por RUT normalizado o completa
+--   campos vacíos; nunca borra ni pisa datos) y recién entonces aplicar la opción A.
+
+-- ===== OPCIÓN A =====
+-- drop policy if exists rw_autenticados_entidades on public.entidades_catalogo;
+-- create policy ent_leer on public.entidades_catalogo for select to authenticated using (true);
+-- create policy ent_insertar_admin on public.entidades_catalogo for insert to authenticated
+--   with check (exists (select 1 from public.perfiles p where p.id = auth.uid() and p.rol = 'admin'));
+-- create policy ent_actualizar_admin on public.entidades_catalogo for update to authenticated
+--   using (exists (select 1 from public.perfiles p where p.id = auth.uid() and p.rol = 'admin'))
+--   with check (exists (select 1 from public.perfiles p where p.id = auth.uid() and p.rol = 'admin'));
+-- create policy ent_borrar_admin on public.entidades_catalogo for delete to authenticated
+--   using (exists (select 1 from public.perfiles p where p.id = auth.uid() and p.rol = 'admin'));
+
+-- ===== OPCIÓN B =====
+-- drop policy if exists rw_autenticados_entidades on public.entidades_catalogo;
+-- create policy ent_leer on public.entidades_catalogo for select to authenticated using (true);
+-- create policy ent_insertar on public.entidades_catalogo for insert to authenticated with check (true);
+-- create policy ent_actualizar on public.entidades_catalogo for update to authenticated using (true) with check (true);
+-- create policy ent_borrar_admin on public.entidades_catalogo for delete to authenticated
+--   using (exists (select 1 from public.perfiles p where p.id = auth.uid() and p.rol = 'admin'));
+
+-- Deshacer (cualquier opción):
+-- drop policy if exists ent_leer on public.entidades_catalogo; drop policy if exists ent_insertar on public.entidades_catalogo;
+-- drop policy if exists ent_actualizar on public.entidades_catalogo; drop policy if exists ent_borrar_admin on public.entidades_catalogo;
+-- drop policy if exists ent_insertar_admin on public.entidades_catalogo; drop policy if exists ent_actualizar_admin on public.entidades_catalogo;
+-- create policy rw_autenticados_entidades on public.entidades_catalogo for all to public using (auth.role() = 'authenticated'::text);
