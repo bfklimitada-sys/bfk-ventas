@@ -46,21 +46,6 @@ export async function rpcImportarRespaldo(t, payload, simular) {
 
 export async function del(table, t, id) { const r=await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${id}`,{method:"DELETE",headers:hdrs(t)}); if(!r.ok) throw new Error(`Error eliminando en ${table}`); return r.json(); }
 
-export async function bloquearOC(t, ocId, usuarioId, usuarioNombre) {
-  const expira = new Date(Date.now()+30000).toISOString(); // 30 segundos
-  await fetch(`${SUPABASE_URL}/rest/v1/oc_bloqueos`,{method:"POST",headers:{...hdrs(t),"Prefer":"resolution=merge-duplicates"},body:JSON.stringify({oc_id:ocId,usuario_id:usuarioId,usuario_nombre:usuarioNombre,expira_en:expira})});
-}
-
-export async function liberarOC(t, ocId) {
-  await fetch(`${SUPABASE_URL}/rest/v1/oc_bloqueos?oc_id=eq.${ocId}`,{method:"DELETE",headers:hdrs(t)});
-}
-
-export async function getBloqueosVigentes(t) {
-  const ahora=new Date().toISOString();
-  const r=await fetch(`${SUPABASE_URL}/rest/v1/oc_bloqueos?select=*&expira_en=gt.${ahora}`,{headers:hdrs(t)});
-  return r.ok?r.json():[];
-}
-
 export async function registrarCambio(t, {ocId, ocNumero, usuarioId, usuarioNombre, accion, campo, valorAnterior, valorNuevo}) {
   await ins("historial_cambios",t,{id:genId("hc"),oc_id:ocId,oc_numero:ocNumero,usuario_id:usuarioId,usuario_nombre:usuarioNombre,accion,campo:campo||null,valor_anterior:valorAnterior!=null?String(valorAnterior):null,valor_nuevo:valorNuevo!=null?String(valorNuevo):null});
 }

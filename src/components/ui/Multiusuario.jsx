@@ -1,21 +1,31 @@
 import { estadoVencimiento, facturaVigente, plazoPago } from "../../lib/calculos";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { del } from "../../lib/supabase";
 import { C, MONO, SANS, fmt } from "../../lib/theme";
 import { Leyenda } from "./Basicos";
 import { Ic, I } from "./Iconos";
 
-export function BloqueoBanner({ bloqueo }) {
-  const segs=Math.max(0,Math.round((new Date(bloqueo.expira_en)-new Date())/1000));
-  return (
-    <div style={{background:C.warnLight,border:`1px solid ${C.warn}`,borderRadius:9,padding:"10px 14px",marginBottom:12,display:"flex",alignItems:"center",gap:10}}>
+// Estado del bloqueo cooperativo de la OC abierta. El propietario no ve aviso; los demás ven solo lectura.
+export function BloqueoEstado({ estado, onReintentar }) {
+  const [,tick]=useState(0);
+  useEffect(()=>{ const id=setInterval(()=>tick(n=>n+1),1000); return()=>clearInterval(id); },[]);
+  if(!estado||estado.fase==="propietario"||estado.fase==="ninguna") return null;
+  const segs=Math.max(0,Math.ceil(((estado.hasta||0)-Date.now())/1000));
+  const caja=(titulo,detalle,boton)=>(
+    <div data-testid="bloqueo-estado" data-fase={estado.fase} style={{background:C.warnLight,border:`1px solid ${C.warn}`,borderRadius:9,padding:"10px 14px",marginBottom:12,display:"flex",alignItems:"center",gap:10}}>
       <span style={{fontSize:18}}><Ic n="🔒"/></span>
-      <div>
-        <div style={{fontSize:12.5,fontWeight:700,color:C.warnText}}>{bloqueo.usuario_nombre} está editando esta OC</div>
-        <div style={{fontSize:12,color:C.inkMuted}}>Disponible en ~{segs} segundos</div>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:12.5,fontWeight:700,color:C.warnText}}>{titulo}</div>
+        {detalle&&<div style={{fontSize:12,color:C.inkMuted}}>{detalle}</div>}
       </div>
+      {boton}
     </div>
   );
+  const btn=onReintentar&&<button type="button" onClick={onReintentar} style={{background:"none",border:`1px solid ${C.warn}`,color:C.warnText,borderRadius:8,padding:"6px 10px",fontSize:12,fontWeight:700,minHeight:36,cursor:"pointer"}}>Reintentar</button>;
+  if(estado.fase==="adquiriendo") return caja("Verificando disponibilidad de edición…","Solo lectura mientras se confirma.");
+  if(estado.fase==="sin_confirmar") return caja("No se pudo confirmar tu sesión de edición","Sin conexión con el servidor. Solo lectura; se reintenta automáticamente.",btn);
+  if(estado.fase==="perdida") return caja(`Perdiste la sesión de edición · en edición por ${estado.dueno}`,`Solo lectura · disponible en ~${segs} s. Se recuperará automáticamente si queda libre.`,btn);
+  return caja(`En edición por ${estado.dueno} · disponible en ~${segs} s`,"Solo lectura. Se habilitará automáticamente cuando quede libre.",btn);
 }
 
 export function HistorialCambiosOC({ ocId, historialCambios }) {

@@ -4,7 +4,9 @@ import { FormEntregaFallida, FormFechaEntrega, FormReclamarFactura } from "../fo
 import { FormConfirmarEntrega, FormEmitirFactura, FormPagoCliente, FormPagoFinanciamiento } from "../forms/FormulariosRapidos";
 import { DiasBadge, Field, Leyenda, Modal, Trazabilidad } from "../ui/Basicos";
 import { EtapasOC, FormPostventa } from "../ui/EtapasOC";
-import { BloqueoBanner, ComentariosOC, HistorialCambiosOC } from "../ui/Multiusuario";
+import { BloqueoEstado, ComentariosOC, HistorialCambiosOC } from "../ui/Multiusuario";
+import { bloqueoOC, useBloqueoOC } from "../../lib/bloqueoOCUso";
+import { mensajeVerificacion } from "../../lib/bloqueoOC";
 import { del } from "../../lib/supabase";
 import { C, MONO, btnG, btnP, fmt, iMono, iStyle, selStyle } from "../../lib/theme";
 import { calcMargen, estadoVencimiento, facturaVigente, gananciaReal, plazoPago } from "../../lib/calculos";
@@ -693,7 +695,7 @@ function NotasEHistorial({ oc, perfil, historialCambios, onAgregarComentario, on
   );
 }
 
-export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded, onToggle, contactos, onEnviarReclamo, onCorreoOC, onRegistrarRespuestaReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, bloqueos, perfil, historialCambios, onAgregarComentario, onEliminarComentario, onBloquear, onLiberar, onEliminarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa }) {
+export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded, onToggle, contactos, onEnviarReclamo, onCorreoOC, onRegistrarRespuestaReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, perfil, historialCambios, onAgregarComentario, onEliminarComentario, bloqueoEstado, onEliminarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa }) {
   const evF=facturaVigente(oc);
   const dias=fmt.diasDesde(evF?.fecha);
   const saldo=(oc.monto_facturado||0)-(oc.monto_cobrado||0);
@@ -711,7 +713,20 @@ export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded
   const ultimoReclamo=(oc.oc_reclamos||[]).slice().sort((a,b)=>b.fecha?.localeCompare(a.fecha))[0];
   const hrsDesdeReclamo=ultimoReclamo?Math.floor((new Date()-new Date(ultimoReclamo.fecha))/(1000*60*60)):null;
 
-  const bloqueoActivo=(bloqueos||[]).find(b=>b.oc_id===oc.id&&b.usuario_id!==perfil?.id&&new Date(b.expira_en)>new Date());
+  // Bloqueo cooperativo: solo el propietario (confirmado por el servidor) puede modificar. Los demás ven la OC en solo lectura.
+  const soloLectura=expanded&&!(bloqueoEstado&&bloqueoEstado.ocId===oc.id&&bloqueoEstado.fase==="propietario");
+  const prot=(fn)=>fn?async(...a)=>{
+    const v=await bloqueoOC.verificar(oc.id);
+    if(!v.ok){ window.alert(mensajeVerificacion(v)); return; }
+    return fn(...a);
+  }:fn;
+  onSincronizarFecha=prot(onSincronizarFecha); onEnviarReclamo=prot(onEnviarReclamo); onCorreoOC=prot(onCorreoOC);
+  onRegistrarRespuestaReclamo=prot(onRegistrarRespuestaReclamo); onGuardarContacto=prot(onGuardarContacto); onGuardarDatosOC=prot(onGuardarDatosOC);
+  onEditarEvento=prot(onEditarEvento); onConfirmarEntrega=prot(onConfirmarEntrega); onEmitirFactura=prot(onEmitirFactura);
+  onPagoCliente=prot(onPagoCliente); onPagoFinanciamiento=prot(onPagoFinanciamiento); onGuardarLink=prot(onGuardarLink);
+  onEliminarLink=prot(onEliminarLink); onEditarLink=prot(onEditarLink); onEliminarOC=prot(onEliminarOC);
+  onEliminarFactura=prot(onEliminarFactura); onEliminarEvento=prot(onEliminarEvento); onIngresarCompra=prot(onIngresarCompra);
+  onAsignarResponsable=prot(onAsignarResponsable); onGuardarPostventa=prot(onGuardarPostventa);
 
   const completadas=[
     (oc.eventos_compra||[]).length>0,
@@ -796,11 +811,7 @@ export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded
     </div>
   ):null;
 
-  const handleToggle=async()=>{
-    if(!expanded && onBloquear) await onBloquear(oc.id);
-    if(expanded && onLiberar) await onLiberar(oc.id);
-    onToggle();
-  };
+  const handleToggle=()=>{ onToggle(); }; // el bloqueo se gestiona de forma central (useBloqueoOC) según la OC expandida
 
   return (
     <div style={{background:C.card,border:`1px solid ${C.border}`,borderLeft:`4px solid ${estadoOC.color}`,borderRadius:13,marginBottom:8,overflow:"hidden"}}>
@@ -855,8 +866,10 @@ export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded
 
       {expanded&&(
         <div style={{borderTop:`1px solid ${C.border}`,padding:"12px 14px",background:C.paper}}>
-          {bloqueoActivo&&<BloqueoBanner bloqueo={bloqueoActivo} />}
+          <BloqueoEstado estado={expanded?bloqueoEstado:null} onReintentar={()=>bloqueoOC.reintentar()} />
 
+          {/* 1–3 · se deshabilitan en solo lectura (el bloqueo cooperativo lo decide el servidor) */}
+          <fieldset data-testid="oc-campos" disabled={soloLectura} style={{border:"none",margin:0,padding:0,minWidth:0,opacity:soloLectura?0.6:1}}>
           {/* 1 · Encabezado de la OC: datos, dirección y edición */}
           <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:10,marginBottom:12}}>
             <div style={{fontSize:12,color:C.inkMuted,lineHeight:1.6,minWidth:0,flex:1}}>
@@ -906,12 +919,14 @@ export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded
           {/* 3 · Productos y números */}
           <DetalleOC oc={oc} perfil={perfil} onEditarLink={onEditarLink} onEliminarLink={onEliminarLink} onGuardarLink={onGuardarLink} />
 
+          </fieldset>
+
           {/* 4 · Notas e historial */}
           <NotasEHistorial oc={oc} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={onAgregarComentario} onEliminarComentario={onEliminarComentario} />
 
           {/* 5 · Zona administrativa (solo administradores) */}
           {perfil?.rol==="admin"&&(
-            <div style={{borderTop:`1px dashed ${C.border}`,paddingTop:10,marginTop:4}}>
+            <fieldset disabled={soloLectura} style={{border:"none",margin:0,padding:0,minWidth:0,borderTop:`1px dashed ${C.border}`,paddingTop:10,marginTop:4,opacity:soloLectura?0.6:1}}>
               <div style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Zona administrativa</div>
               <button onClick={async()=>{ setSincronizandoMP(true); await onSincronizarFecha(oc); setSincronizandoMP(false); }}
                 disabled={sincronizandoMP}
@@ -925,7 +940,7 @@ export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded
               }} style={{width:"100%",background:"none",border:`1px dashed ${C.danger}`,color:C.dangerText,borderRadius:9,padding:"8px 12px",fontSize:12,fontWeight:600,cursor:"pointer"}}>
                 <Ic n="🗑"/> Eliminar esta OC
               </button>
-            </div>
+            </fieldset>
           )}
         </div>
       )}
@@ -1004,8 +1019,9 @@ const esVencidaSinCobrar=(o)=>{
   return estadoVencimiento(fmt.diasDesde(evF.fecha)||0,plazoPago(o)).vencida;
 };
 
-export function PanelCompras({ ocs, perfiles, filtroInicial, busquedaInicial, ocFoco, onFocoUsado, onSincronizarFecha, contactos, onEnviarReclamo, onCorreoOC, onRegistrarRespuestaReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, bloqueos, perfil, historialCambios, onAgregarComentario, onEliminarComentario, onBloquear, onLiberar, onEliminarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa }) {
+export function PanelCompras({ ocs, perfiles, filtroInicial, busquedaInicial, ocFoco, onFocoUsado, onSincronizarFecha, contactos, onEnviarReclamo, onCorreoOC, onRegistrarRespuestaReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, perfil, historialCambios, onAgregarComentario, onEliminarComentario, onEliminarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa }) {
   const [filtros,setFiltros]=useState({}); const [busq,setBusq]=useState(""); const [expId,setExpId]=useState(null);
+  const bloqueoEstado=useBloqueoOC(expId); // un solo ciclo de bloqueo para la OC expandida, venga de donde venga
   const [reclamandoBanner,setReclamandoBanner]=useState(null); const [comunaSel,setComunaSel]=useState("");
   const [bannerAbierto,setBannerAbierto]=useState(false);
   const [vista,setVista]=useState("todas");
@@ -1292,7 +1308,7 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, busquedaInicial, oc
           {orden==="ganancia"?"↓ Ganancia":"↓ Fecha"}
         </button>
       </div>
-      {filtered.map(oc=><FilaOC key={oc.id} oc={oc} perfiles={perfiles} todasLasOcs={ocs} onSincronizarFecha={onSincronizarFecha} expanded={expId===oc.id} onToggle={()=>setExpId(expId===oc.id?null:oc.id)} contactos={contactos} onEnviarReclamo={onEnviarReclamo} onCorreoOC={onCorreoOC} onRegistrarRespuestaReclamo={onRegistrarRespuestaReclamo} onGuardarContacto={onGuardarContacto} onGuardarDatosOC={onGuardarDatosOC} onEditarEvento={onEditarEvento} financiadores={financiadores} onConfirmarEntrega={onConfirmarEntrega} onEmitirFactura={onEmitirFactura} onPagoCliente={onPagoCliente} onPagoFinanciamiento={onPagoFinanciamiento} entidadesCatalogo={entidadesCatalogo} onGuardarLink={onGuardarLink} onEliminarLink={onEliminarLink} onEditarLink={onEditarLink} bloqueos={bloqueos} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={onAgregarComentario} onEliminarComentario={onEliminarComentario} onBloquear={onBloquear} onLiberar={onLiberar} onEliminarOC={onEliminarOC} onEliminarFactura={onEliminarFactura} onEliminarEvento={onEliminarEvento} vendedores={vendedores} onIngresarCompra={onIngresarCompra} onAsignarResponsable={onAsignarResponsable} onGuardarPostventa={onGuardarPostventa} />)}
+      {filtered.map(oc=><FilaOC key={oc.id} oc={oc} perfiles={perfiles} todasLasOcs={ocs} onSincronizarFecha={onSincronizarFecha} expanded={expId===oc.id} onToggle={()=>setExpId(expId===oc.id?null:oc.id)} contactos={contactos} onEnviarReclamo={onEnviarReclamo} onCorreoOC={onCorreoOC} onRegistrarRespuestaReclamo={onRegistrarRespuestaReclamo} onGuardarContacto={onGuardarContacto} onGuardarDatosOC={onGuardarDatosOC} onEditarEvento={onEditarEvento} financiadores={financiadores} onConfirmarEntrega={onConfirmarEntrega} onEmitirFactura={onEmitirFactura} onPagoCliente={onPagoCliente} onPagoFinanciamiento={onPagoFinanciamiento} entidadesCatalogo={entidadesCatalogo} onGuardarLink={onGuardarLink} onEliminarLink={onEliminarLink} onEditarLink={onEditarLink} bloqueoEstado={bloqueoEstado} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={onAgregarComentario} onEliminarComentario={onEliminarComentario} onEliminarOC={onEliminarOC} onEliminarFactura={onEliminarFactura} onEliminarEvento={onEliminarEvento} vendedores={vendedores} onIngresarCompra={onIngresarCompra} onAsignarResponsable={onAsignarResponsable} onGuardarPostventa={onGuardarPostventa} />)}
       {filtered.length===0&&<div style={{textAlign:"center",padding:30,color:C.inkFaint,fontSize:13}}>No hay órdenes con estos filtros.</div>}
       <Leyenda items={[
         {muestra:"✓ Cerrada",   color:C.okText,      bg:C.okLight,      texto:"Cobrada al cliente y pagada al financiador. Ciclo terminado."},
