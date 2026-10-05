@@ -1234,15 +1234,8 @@ export default function App() {
     setNotificaciones(prev=>prev.map(n=>({...n,leida:true})));
   };
 
-  const handleImportarEntidades=async(filas)=>{
-    const t=session.access_token;
-    for(const fila of filas){
-      if(!fila.rut?.trim()) continue;
-      const existente=entidadesCatalogo.find(e=>e.rut===fila.rut.trim());
-      if(existente) await upd("entidades_catalogo",t,existente.id,fila);
-      else await ins("entidades_catalogo",t,{id:genId("ent"),...fila,creado_por:session.user.id});
-    }
-    showToast(`${filas.length} entidades importadas al catálogo`);
+  const handleEntidadesImportadas=async(res)=>{
+    showToast(`Entidades importadas: ${res.creadas} nuevas · ${res.actualizadas} actualizadas`);
     await cargarTodo();
   };
   const handleGuardarDatosOC=async(ocId,{numeroOc,resincronizar,cliente,entidad,comuna,contacto,rutCliente,correo,fechaOC,vendedorId,ventaPropia})=>{
@@ -1494,7 +1487,7 @@ export default function App() {
         {(tab==="financiamiento"||todo)&&hoja("financiamiento",<PanelFinanciamiento financiadores={financiadores} ocs={ocs} ajustes={ajustesSaldo} perfiles={perfiles} onAjustar={handleAjusteSaldo} aportes={aportes} onGuardarAporte={handleGuardarAporte} onEliminarAporte={perfil?.rol==="admin"?handleEliminarAporte:undefined} onAbonar={(finId)=>{setAbonoFinId(typeof finId==="string"||typeof finId==="number"?finId:null);setAccion("abono_fin");}} pagoFinSueltos={pagoFinSueltos} />)}
         {(tab==="gastos"||todo)&&hoja("gastos",<PanelGastos gastos={gastos} categorias={categoriasGasto} onNuevoGasto={handleNuevoGasto} />)}
         {(tab==="vendedores"||todo)&&hoja("vendedores",<PanelVendedores vendedores={vendedores} ocs={ocs} ivaMensual={ivaMensual} pagosVendedor={pagosVendedor} onGuardarIva={handleGuardarIva} onPagoVendedor={handlePagoVendedorSimple} />)}
-        {(tab==="usuarios"||todo)&&perfil?.rol==="admin"&&hoja("usuarios",<PanelUsuarios perfiles={perfiles} ocs={ocs} onChangeRol={handleChangeRol} session={session} showToast={showToast} entidadesCatalogo={entidadesCatalogo} onImportarEntidades={handleImportarEntidades} usoMP={usoMP} sincronizando={sincronizando} validandoTodo={validandoTodo} exportando={exportando} onCorregirFechas={corregirFechasTodas} onValidarTodo={validarTodoContraMP} onExportarTodo={handleExportarTodo} />)}
+        {(tab==="usuarios"||todo)&&perfil?.rol==="admin"&&hoja("usuarios",<PanelUsuarios perfiles={perfiles} ocs={ocs} onChangeRol={handleChangeRol} session={session} showToast={showToast} entidadesCatalogo={entidadesCatalogo} onEntidadesImportadas={handleEntidadesImportadas} usoMP={usoMP} sincronizando={sincronizando} validandoTodo={validandoTodo} exportando={exportando} onCorregirFechas={corregirFechasTodas} onValidarTodo={validarTodoContraMP} onExportarTodo={handleExportarTodo} />)}
       </div>
 
       {/* NAV BOTTOM — 5 principales + Más */}

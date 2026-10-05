@@ -3,38 +3,10 @@ import { PanelDatos } from "./PanelDatos";
 import { C, btnG, btnP, fmt } from "../../lib/theme";
 import { Ic } from "../ui/Iconos";
 import { Seccion, Tarjeta, Badge, BotonAdmin } from "../ui/Sistema";
+import { ImportarEntidades } from "../forms/ImportarEntidades";
 
-export function PanelUsuarios({ perfiles, ocs, onChangeRol, session, showToast, entidadesCatalogo, onImportarEntidades, usoMP, sincronizando, validandoTodo, exportando, onCorregirFechas, onValidarTodo, onExportarTodo }) {
+export function PanelUsuarios({ perfiles, ocs, onChangeRol, session, showToast, entidadesCatalogo, onEntidadesImportadas, usoMP, sincronizando, validandoTodo, exportando, onCorregirFechas, onValidarTodo, onExportarTodo }) {
   const [showImport,setShowImport]=useState(false);
-  const [importFile,setImportFile]=useState(null);
-  const [importMsg,setImportMsg]=useState("");
-
-  const handleImport=async()=>{
-    if(!importFile){setImportMsg("Selecciona un archivo primero");return;}
-    setImportMsg("Procesando…");
-    try {
-      const text=await importFile.text();
-      const lines=text.split('\n').filter(l=>l.trim());
-      const header=lines[0].toLowerCase().split(',');
-      const idxRut=header.findIndex(h=>h.includes('rut'));
-      const idxNombre=header.findIndex(h=>h.includes('nombre')||h.includes('entidad'));
-      const idxComuna=header.findIndex(h=>h.includes('comuna'));
-      const idxContacto=header.findIndex(h=>h.includes('contacto'));
-      const idxCorreo=header.findIndex(h=>h.includes('correo')||h.includes('email'));
-      if(idxRut<0||idxNombre<0){setImportMsg("El archivo debe tener columnas 'rut' y 'nombre' (o 'entidad')");return;}
-      const rows=lines.slice(1).map(l=>l.split(',')).filter(r=>r[idxRut]?.trim());
-      await onImportarEntidades(rows.map(r=>({
-        rut:r[idxRut]?.trim()||"",
-        nombre_entidad:r[idxNombre]?.trim()||"",
-        comuna:idxComuna>=0?r[idxComuna]?.trim()||"":"",
-        contacto:idxContacto>=0?r[idxContacto]?.trim()||"":"",
-        correo:idxCorreo>=0?r[idxCorreo]?.trim()||"":"",
-      })));
-      setImportMsg(`✓ ${rows.length} entidades importadas`);
-      setImportFile(null);
-    } catch(e){setImportMsg("Error: "+e.message);}
-  };
-
   const ultimaActividad = useMemo(() => {
     const map = {};
     for (const oc of ocs) {
@@ -97,20 +69,9 @@ export function PanelUsuarios({ perfiles, ocs, onChangeRol, session, showToast, 
             {(entidadesCatalogo||[]).length} entidades guardadas · Se autocompletan al escribir el RUT en cualquier OC
           </div>
           {!showImport?(
-            <BotonAdmin onClick={()=>setShowImport(true)} style={{width:"100%"}}>⬆ Importar desde CSV/Excel</BotonAdmin>
+            <BotonAdmin onClick={()=>setShowImport(true)} style={{width:"100%"}}>⬆ Importar entidades (CSV o Excel .xlsx)</BotonAdmin>
           ):(
-            <div style={{background:C.tealLight,borderRadius:10,padding:"12px 14px"}}>
-              <div style={{fontSize:12.5,fontWeight:700,color:C.tealDark,marginBottom:8}}>Importar entidades desde CSV</div>
-              <div style={{fontSize:12,color:C.inkMuted,marginBottom:10}}>
-                El archivo debe tener columnas: <b>rut</b>, <b>nombre</b> (o entidad), y opcionalmente <b>comuna</b>, <b>contacto</b>, <b>correo</b>. Primera fila = encabezados.
-              </div>
-              <input type="file" accept=".csv,.txt" onChange={e=>setImportFile(e.target.files[0])} style={{marginBottom:10,fontSize:12}} />
-              {importMsg&&<div style={{fontSize:12,color:importMsg.startsWith("✓")?C.ok:C.danger,marginBottom:8,fontWeight:600}}>{importMsg}</div>}
-              <div style={{display:"flex",gap:8}}>
-                <button onClick={handleImport} style={btnP(C.teal)}>✓ Importar</button>
-                <button onClick={()=>{setShowImport(false);setImportMsg("");setImportFile(null);}} style={btnP(C.inkFaint)}>Cancelar</button>
-              </div>
-            </div>
+            <ImportarEntidades session={session} onTerminado={onEntidadesImportadas} onCancelar={()=>setShowImport(false)} />
           )}
         </Tarjeta>
       </Seccion>

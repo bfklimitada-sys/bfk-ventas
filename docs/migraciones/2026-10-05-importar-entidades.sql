@@ -164,7 +164,8 @@ begin
         if not p_simular then
           insert into public.entidades_catalogo (id, rut, nombre_entidad, comuna, contacto, correo, creado_por)
           values ('ent_' || (extract(epoch from clock_timestamp()) * 1000)::bigint::text || '_' || substr(md5(random()::text || v_i::text), 1, 5),
-                  regexp_replace(v_cuerpo, '\B(?=(\d{3})+(?!\d))', '.', 'g') || '-' || v_dv,
+                  case when length(v_cuerpo) = 8 then substr(v_cuerpo,1,2) || '.' || substr(v_cuerpo,3,3) || '.' || substr(v_cuerpo,6,3)
+                       else substr(v_cuerpo,1,1) || '.' || substr(v_cuerpo,2,3) || '.' || substr(v_cuerpo,5,3) end || '-' || v_dv,
                   v_nombre, coalesce(v_comuna,''), coalesce(v_contacto,''), coalesce(v_correo,''), v_uid);
         end if;
       else

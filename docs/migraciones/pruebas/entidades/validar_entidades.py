@@ -113,6 +113,9 @@ H1 = hash_tabla()
 r, e, _ = rpc(ops3); chk("reimportar_0_cambios", r and r["creadas"] == 0 and r["actualizadas"] == 0 and r["sin_cambios"] == 3 and hash_tabla() == H1, e)
 r, e, _ = rpc([op(2, rut_valido(L[0]), "Nueva A", "Santiago", "Ana", "a@x.cl"), op(3, dotted(L[1]).lower(), "Nueva B")]); chk("mismo_rut_con_y_sin_puntos_no_duplica", r and r["creadas"] == 0 and r["sin_cambios"] == 2 and n_ent() == N0 + 3 and hash_tabla() == H1, e)
 
+L7 = [c for c in libres(40, 5000000) if c < 10000000][:1]
+r, e, _ = rpc([op(2, rut_valido(L7[0]), "Siete digitos")]); chk("nueva_de_7_digitos_formato_x.xxx.xxx-d", r and r["creadas"] == 1 and q(f"select count(*) from public.entidades_catalogo where rut='{dotted(L7[0])}'") == "1", e)
+N0 += 1
 print("\n===== ACTUALIZAR SIN VACIAR =====", flush=True)
 r, e, _ = rpc([op(2, dotted(L[0]), "Nueva A renombrada", None, None, None)]); chk("update_solo_nombre", r and r["actualizadas"] == 1, e)
 chk("update_no_vacia_campos", q(f"select comuna||'|'||contacto||'|'||correo||'|'||nombre_entidad from public.entidades_catalogo where rut='{dotted(L[0])}'") == "Santiago|Ana|a@x.cl|Nueva A renombrada")
@@ -147,7 +150,7 @@ for nom, x in (("hist_solo_guion", guion), ("hist_con_puntos", punt), ("hist_con
     psql(f"update public.entidades_catalogo set nombre_entidad='{nombre_ant.replace(chr(39), chr(39)*2)}' where id='{x[0]}'")
 
 print("\n===== AMBIGUOS (los 51 grupos históricos) =====", flush=True)
-dup = q("""select regexp_replace(regexp_replace(upper(rut),'[^0-9K]','','g'),'^0+(?=.)','')||'|'||min(rut) from public.entidades_catalogo group by 1 having count(*)>1""").splitlines()
+dup = q("""select k||'|'||min(rut) from (select regexp_replace(regexp_replace(upper(rut),'[^0-9K]','','g'),'^0+(?=.)','') k, rut from public.entidades_catalogo) x group by k having count(*)>1""").splitlines()
 dup_validos = [d.split("|") for d in dup if valido_db(d.split("|")[1])]
 chk("grupos_duplicados_presentes", len(dup) >= 1, str(len(dup)))
 Hd = hash_tabla(); amb_ok = 0; amb_0 = True

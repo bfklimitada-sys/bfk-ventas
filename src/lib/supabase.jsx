@@ -44,6 +44,14 @@ export async function rpcImportarRespaldo(t, payload, simular) {
   return cuerpo;
 }
 
+// Importación atómica de entidades: una sola llamada; el servidor revalida y aplica todo o nada.
+export async function rpcImportarEntidades(t, operaciones, simular) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/importar_entidades_catalogo`, { method:"POST", headers:hdrs(t), body:JSON.stringify({ p_payload: { version: 1, operaciones }, p_simular: !!simular }) });
+  const cuerpo = await r.json().catch(()=>null);
+  if (!r.ok) throw Object.assign(new Error(cuerpo?.message || `HTTP ${r.status}`), { rpcStatus: r.status, rpcCuerpo: cuerpo });
+  return cuerpo;
+}
+
 export async function del(table, t, id) { const r=await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${id}`,{method:"DELETE",headers:hdrs(t)}); if(!r.ok) throw new Error(`Error eliminando en ${table}`); return r.json(); }
 
 export async function registrarCambio(t, {ocId, ocNumero, usuarioId, usuarioNombre, accion, campo, valorAnterior, valorNuevo}) {
