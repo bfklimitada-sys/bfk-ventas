@@ -298,7 +298,7 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink }) 
 
   return (
     <div style={{marginBottom:10}}>
-      <button onClick={()=>setAbierto(v=>!v)}
+      <button data-consulta="1" onClick={()=>setAbierto(v=>!v)}
         style={{width:"100%",background:C.card,border:`1px solid ${C.border}`,borderRadius:10,
           padding:"9px 12px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         <span style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4}}>
@@ -715,6 +715,12 @@ export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded
 
   // Bloqueo cooperativo: solo el propietario (confirmado por el servidor) puede modificar. Los demás ven la OC en solo lectura.
   const soloLectura=expanded&&!(bloqueoEstado&&bloqueoEstado.ocId===oc.id&&bloqueoEstado.fase==="propietario");
+  // En solo lectura se interceptan (fase de captura) los clics sobre controles que no son de consulta.
+  const bloquearEscritura=(e)=>{
+    if(!soloLectura) return;
+    const el=e.target&&e.target.closest?e.target.closest("button,input,select,textarea,[role=button]"):null;
+    if(el&&!el.closest("[data-consulta]")){ e.preventDefault(); e.stopPropagation(); }
+  };
   const prot=(fn)=>fn?async(...a)=>{
     const v=await bloqueoOC.verificar(oc.id);
     if(!v.ok){ window.alert(mensajeVerificacion(v)); return; }
@@ -868,8 +874,11 @@ export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded
         <div style={{borderTop:`1px solid ${C.border}`,padding:"12px 14px",background:C.paper}}>
           <BloqueoEstado estado={expanded?bloqueoEstado:null} onReintentar={()=>bloqueoOC.reintentar()} />
 
-          {/* 1–3 · se deshabilitan en solo lectura (el bloqueo cooperativo lo decide el servidor) */}
-          <fieldset data-testid="oc-campos" disabled={soloLectura} style={{border:"none",margin:0,padding:0,minWidth:0,opacity:soloLectura?0.6:1}}>
+          {/* 1–3 · Solo lectura: se bloquean únicamente las acciones que escriben o modifican (botones sin data-consulta).
+              PDF, enlaces, desplegables de detalle y demás consultas siguen disponibles. La barrera real es prot() + el servidor. */}
+          <div data-testid="oc-campos" data-solo-lectura={soloLectura?"1":undefined} onClickCapture={bloquearEscritura}>
+          <style>{`[data-solo-lectura] button:not([data-consulta]):not([data-consulta] *){opacity:.5;cursor:not-allowed!important}
+[data-solo-lectura] input:not([data-consulta] *),[data-solo-lectura] select:not([data-consulta] *),[data-solo-lectura] textarea:not([data-consulta] *){pointer-events:none;opacity:.5}`}</style>
           {/* 1 · Encabezado de la OC: datos, dirección y edición */}
           <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:10,marginBottom:12}}>
             <div style={{fontSize:12,color:C.inkMuted,lineHeight:1.6,minWidth:0,flex:1}}>
@@ -919,14 +928,14 @@ export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded
           {/* 3 · Productos y números */}
           <DetalleOC oc={oc} perfil={perfil} onEditarLink={onEditarLink} onEliminarLink={onEliminarLink} onGuardarLink={onGuardarLink} />
 
-          </fieldset>
+          </div>
 
           {/* 4 · Notas e historial */}
           <NotasEHistorial oc={oc} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={onAgregarComentario} onEliminarComentario={onEliminarComentario} />
 
           {/* 5 · Zona administrativa (solo administradores) */}
           {perfil?.rol==="admin"&&(
-            <fieldset disabled={soloLectura} style={{border:"none",margin:0,padding:0,minWidth:0,borderTop:`1px dashed ${C.border}`,paddingTop:10,marginTop:4,opacity:soloLectura?0.6:1}}>
+            <div data-solo-lectura={soloLectura?"1":undefined} onClickCapture={bloquearEscritura} style={{borderTop:`1px dashed ${C.border}`,paddingTop:10,marginTop:4}}>
               <div style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Zona administrativa</div>
               <button onClick={async()=>{ setSincronizandoMP(true); await onSincronizarFecha(oc); setSincronizandoMP(false); }}
                 disabled={sincronizandoMP}
@@ -940,7 +949,7 @@ export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded
               }} style={{width:"100%",background:"none",border:`1px dashed ${C.danger}`,color:C.dangerText,borderRadius:9,padding:"8px 12px",fontSize:12,fontWeight:600,cursor:"pointer"}}>
                 <Ic n="🗑"/> Eliminar esta OC
               </button>
-            </fieldset>
+            </div>
           )}
         </div>
       )}

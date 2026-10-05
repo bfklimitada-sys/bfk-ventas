@@ -299,7 +299,7 @@ export function EtapasOC({ oc, perfil, perfiles, activa, extra, onEditarEvento, 
         {etapas.map((e,i)=>(
           <>
             <div key={e.key} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2,flex:1}}>
-              <button onClick={()=>setDetalle(detalle===e.key?null:e.key)} style={{
+              <button data-consulta="1" onClick={()=>setDetalle(detalle===e.key?null:e.key)} style={{
                 width:26,height:26,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",
                 fontSize:12,background:detalle===e.key?C.teal:e.ok?C.ok:C.paper,
                 border:`2px solid ${detalle===e.key?C.teal:e.ok?C.ok:C.border}`,
@@ -320,7 +320,7 @@ export function EtapasOC({ oc, perfil, perfiles, activa, extra, onEditarEvento, 
             <span style={{fontSize:12,fontWeight:700,color:C.tealDark,textTransform:"uppercase"}}>
               {etapas.find(e=>e.key===detalle)?.icon} {etapas.find(e=>e.key===detalle)?.label}
             </span>
-            <button onClick={()=>setDetalle(null)} style={{background:"none",border:"none",color:C.inkFaint,cursor:"pointer",fontSize:16,lineHeight:1}}>✕</button>
+            <button data-consulta="1" onClick={()=>setDetalle(null)} style={{background:"none",border:"none",color:C.inkFaint,cursor:"pointer",fontSize:16,lineHeight:1}}>✕</button>
           </div>
           {renderDetalle(etapas.find(e=>e.key===detalle))}
         </div>

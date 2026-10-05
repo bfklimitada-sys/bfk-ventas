@@ -2,7 +2,7 @@ import { chromium } from "playwright-core";
 const URL_APP="http://127.0.0.1:4175/";
 const dias=(n)=>new Date(Date.now()-n*864e5).toISOString().slice(0,10);
 const base=(i,o={})=>({id:"oc"+i,numero_oc:`1000-${i}-OC26`,cliente:"Cliente "+i,vendedor_id:"v1",estado_compra:"comprado",estado_entrega:"pendiente",estado_factura_propia:"pendiente",estado_pago_cliente:"pendiente",estado_pago_financiamiento:"pendiente",monto_total:1000000,costo_total:700000,monto_facturado:0,monto_cobrado:0,financiador_id:"f1",creadoEn:new Date().toISOString(),dias_pago:30,vendedores:{nombre:"Vendedor Uno"},financiadores:{nombre:"Financiador Uno"},eventos_compra:[{id:"ec"+i,fecha:dias(30),monto:700000,fecha_entrega_estimada:dias(10),financiador_id:"f1"}],eventos_entrega:[],eventos_factura:[],eventos_pago_cliente:[],eventos_pago_financiamiento:[],eventos_postventa:[],oc_productos_link:[],oc_comentarios:[],oc_reclamos:[],oc_responsables:[],items_oc:[],...o});
-const OCS=[base(1),base(2),base(3)];
+const OCS=[base(1,{oc_productos_link:[{id:"l1",oc_id:"oc1",origen:"compra",descripcion:"Producto X",cantidad:2,precio_compra:1000,precio_venta:2000,url:"https://ejemplo.cl/producto",proveedor:"Prov"}]}),base(2),base(3)];
 const PERF={u1:{id:"u1",nombre:"Admin Uno",rol:"admin",email:"a@a.cl"},u2:{id:"u2",nombre:"Usuario Dos",rol:"admin",email:"b@b.cl"}};
 const QUIEN={tA:"u1",tB:"u2"};
 const LOCKS=new Map(); const NET={u1:{caida:false},u2:{caida:false}}; const DELS=[]; const LOG=[]; const T0=Date.now(); const ts=()=>((Date.now()-T0)/1000).toFixed(1);
@@ -49,7 +49,7 @@ async function usuario(token){
 }
 const tocar=async(U,num,ms=900)=>{await U.page.getByText(num).first().click();await U.page.waitForTimeout(ms);};
 const bannerTxt=async(U)=>{ const l=U.page.locator('[data-testid="bloqueo-estado"]'); return (await l.count())?(await l.first().innerText()).replace(/\s+/g," "):null; };
-const editable=async(U)=>{ const f=U.page.locator('[data-testid="oc-campos"]'); if(!(await f.count())) return null; return !(await f.first().evaluate(e=>e.disabled)); };
+const editable=async(U)=>{ const f=U.page.locator('[data-testid="oc-campos"]'); if(!(await f.count())) return null; return (await f.first().getAttribute("data-solo-lectura"))===null; };
 const dueno=(oc)=>{const l=LOCKS.get(oc); return l&&l.exp>Date.now()?l.usuario_id:null;};
 const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
 const R={};
@@ -57,7 +57,20 @@ const A=await usuario("tA"), B=await usuario("tB");
 // S1
 await tocar(A,"1000-1-OC26"); R.S1_A_dueno_oc1=dueno("oc1"); R.S1_A_puede_editar=await editable(A); R.S1_A_banner=await bannerTxt(A);
 await tocar(B,"1000-1-OC26"); R.S1_B_banner=await bannerTxt(B); R.S1_B_puede_editar=await editable(B); R.S1_dueno_sigue_A=dueno("oc1");
-R.S1_B_boton_eliminar_deshabilitado=await B.page.getByText("Eliminar esta OC").first().isDisabled();
+// S1b: en solo lectura se bloquean las acciones que escriben, pero las de consulta siguen disponibles
+{ const d0=DELS.length, dl0=B.dlg.length, inp0=await B.page.locator("input").count();
+  await B.page.getByText("Eliminar esta OC").first().click({force:true}).catch(()=>{}); await B.page.waitForTimeout(500);
+  R.S1b_B_eliminar_bloqueado=DELS.length===d0&&B.dlg.length===dl0;
+  await B.page.getByText("Editar datos").first().click({force:true}).catch(()=>{}); await B.page.waitForTimeout(500);
+  R.S1b_B_editar_datos_no_abre_formulario=(await B.page.locator("input").count())===inp0;
+  R.S1b_B_botones_de_consulta=await B.page.locator('[data-testid="oc-campos"] button[data-consulta]').count();
+  await B.page.getByText(/Productos y números/).first().click().catch(()=>{}); await B.page.waitForTimeout(600);
+  R.S1b_B_detalle_productos_se_abre=await B.page.getByText("Producto X").count()>0;
+  const enl=B.page.locator('a[href="https://ejemplo.cl/producto"]'); R.S1b_B_enlace_producto_visible=(await enl.count())>0;
+  if(R.S1b_B_enlace_producto_visible){ const [pop]=await Promise.all([B.page.context().waitForEvent("page",{timeout:5000}).catch(()=>null), enl.first().click().catch(()=>{})]); R.S1b_B_enlace_abre_pestana=!!pop&&/ejemplo\.cl/.test(pop.url()||"about:blank")||!!pop; if(pop) await pop.close().catch(()=>{}); }
+  R.S1b_B_botones_editar_producto_bloqueados=await (async()=>{ const c=B.page.getByText("Editar",{exact:true}); const n0=await B.page.locator("input").count(); if(await c.count()) await c.first().click({force:true}).catch(()=>{}); await B.page.waitForTimeout(400); return (await B.page.locator("input").count())===n0; })();
+  R.S1b_comentarios_siguen_disponibles=await B.page.getByText(/Notas e historial/).count()>0;
+}
 // S2: 50 s con ambas abiertas
 const ren0=LOG.filter(l=>l.u==="u1"&&l.e==="RPC renovar"&&l.oc==="oc1").length; await sleep(50000);
 R.S2_renovaciones_de_A_en_50s=LOG.filter(l=>l.u==="u1"&&l.e==="RPC renovar"&&l.oc==="oc1").length-ren0;
