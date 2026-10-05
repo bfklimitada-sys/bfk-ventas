@@ -1383,7 +1383,7 @@ export default function App() {
     const oc=ocs.find(o=>o.id===ocId);
     try{
       await registrarCambio(session.access_token,{ocId,ocNumero:oc?.numero_oc,usuarioId:perfil?.id,usuarioNombre:perfil?.nombre,
-        accion:`Correo enviado: ${tipo}${detalle?` · ${detalle}`:""}`,campo:"destinatario",valorNuevo:correo});
+        accion:`Correo generado: ${tipo}${detalle?` · ${detalle}`:""}`,campo:"destinatario",valorNuevo:correo});
     }catch{}
   };
   const handleCorreoOC=async(data)=>{ await registrarCorreoOC(data); await cargarTodo(); };
