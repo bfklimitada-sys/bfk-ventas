@@ -701,6 +701,7 @@ export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded
   const [editandoDatos,setEditandoDatos]=useState(false);
   const [editandoEvento,setEditandoEvento]=useState(null);
   const [accionRapida,setAccionRapida]=useState(null);
+  const [pvForm,setPvForm]=useState(null);   // {evento, cerrar} — editar o cerrar un incidente existente
   const [correoFallida,setCorreoFallida]=useState(false);
   const [correoFecha,setCorreoFecha]=useState(false);
   const [sincronizandoMP,setSincronizandoMP]=useState(false);
@@ -893,6 +894,8 @@ export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded
             onEliminarFactura={onEliminarFactura}
             onEliminarEvento={onEliminarEvento}
             onAccion={(key)=>setAccionRapida(key)}
+            onPostventa={(ev,modo)=>setPvForm({evento:ev,cerrar:modo==="cerrar"})}
+            onReabrirPostventa={(ev)=>onGuardarPostventa({id:ev.id,ocId:oc.id,tipo:ev.tipo,fecha:ev.fecha,descripcion:ev.descripcion,estado:"abierto",solucion:ev.solucion||null,fecha_resolucion:null,costo_extra:ev.costo_extra||0,detalle_costo:ev.detalle_costo||null})}
             onCorreoFallida={()=>setCorreoFallida(true)}
             onCorreoFecha={()=>setCorreoFecha(true)}
             onGuardarLink={onGuardarLink}
@@ -943,6 +946,11 @@ export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded
           <FormEditarEvento item={editandoEvento}
             onCancel={()=>setEditandoEvento(null)}
             onSave={async(tabla,eventoOriginal,cambios)=>{ await onEditarEvento(oc, tabla, eventoOriginal, cambios); setEditandoEvento(null); }} />
+        </Modal>
+      )}
+      {pvForm&&(
+        <Modal title={pvForm.cerrar?"Cerrar incidente":"Editar incidente"} onClose={()=>setPvForm(null)}>
+          <FormPostventa oc={oc} evento={pvForm.evento} cerrar={pvForm.cerrar} onSave={async(d)=>{ await onGuardarPostventa(d); setPvForm(null); }} />
         </Modal>
       )}
       {accionRapida==="postventa"&&(

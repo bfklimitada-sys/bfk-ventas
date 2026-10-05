@@ -1132,16 +1132,34 @@ export default function App() {
   const handleGuardarPostventa=async(d)=>{
     const t=session.access_token;
     const oc=ocs.find(o=>o.id===d.ocId);
+    const lista=oc?.eventos_postventa||[];
+    const previo=d.id?lista.find(e=>e.id===d.id):null;
     const fila={oc_id:d.ocId,fecha:d.fecha,tipo:d.tipo,descripcion:d.descripcion,estado:d.estado,
       solucion:d.solucion,fecha_resolucion:d.fecha_resolucion,
       costo_extra:d.costo_extra||0,detalle_costo:d.detalle_costo||null};
+    const cerradoAntes=previo?previo.estado==="resuelto":false, cerradoAhora=d.estado==="resuelto";
+    // Qué pasó: creado / cerrado / reabierto / editado (solo si hubo cambios reales)
+    let accion="Incidente creado", cambios=[];
+    if(previo){
+      const campos=[["tipo","tipo"],["fecha","fecha del reclamo"],["descripcion","descripción"],["solucion","solución"],["costo_extra","costo extra"],["detalle_costo","detalle del costo"]];
+      cambios=campos.filter(([k])=>String(previo[k]??"")!==String(fila[k]??"")).map(([,n])=>n);
+      if(!cerradoAntes&&cerradoAhora) accion="Incidente cerrado";
+      else if(cerradoAntes&&!cerradoAhora) accion="Incidente reabierto";
+      else if(cambios.length) accion="Incidente editado";
+      else { showToast("Sin cambios en el incidente"); return; }
+    }
     if(d.id) await upd("eventos_postventa",t,d.id,fila);
     else await ins("eventos_postventa",t,{id:genId("pv"),...fila,creado_por:session.user.id});
-    await upd("ordenes_compra_v2",t,d.ocId,{estado_postventa:d.estado==="resuelto"?"resuelta":"con_incidencia"});
-    await registrarCambio(t,{ocId:d.ocId,ocNumero:oc?.numero_oc,usuarioId:perfil.id,usuarioNombre:perfil.nombre,accion:d.id?"Post-venta actualizada":"Post-venta registrada",campo:"estado",valorNuevo:d.estado});
-    showToast(Number(d.costo_extra)>0
-      ? `Incidencia registrada · ${fmt.money(d.costo_extra)} de costo extra`
-      : (d.estado==="resuelto"?"Incidencia resuelta":"Incidencia registrada")); await cargarTodo();
+    // El estado de la OC considera TODOS sus incidentes: queda "resuelta" solo si ninguno sigue abierto.
+    const otrosAbiertos=lista.filter(e=>e.id!==d.id&&e.estado!=="resuelto").length;
+    await upd("ordenes_compra_v2",t,d.ocId,{estado_postventa:(!cerradoAhora||otrosAbiertos>0)?"con_incidencia":"resuelta"});
+    const tipoTxt={falla:"Falla del producto",faltante:"Faltante",cambio:"Cambio / reposición",devolucion:"Devolución",otro:"Otro"}[d.tipo]||d.tipo;
+    const orden=(previo?lista:[...lista,{id:"_nuevo",fecha:d.fecha}]).slice().sort((a,b)=>String(a.fecha||"").localeCompare(String(b.fecha||"")));
+    const n=Math.max(1,orden.findIndex(e=>e.id===(d.id||"_nuevo"))+1);
+    const ident=`Incidente ${n} · ${tipoTxt} · ${fmt.date(d.fecha)}`;
+    await registrarCambio(t,{ocId:d.ocId,ocNumero:oc?.numero_oc,usuarioId:perfil?.id,usuarioNombre:perfil?.nombre,accion,campo:"incidente",
+      valorNuevo:accion==="Incidente editado"?`${ident} (cambió: ${cambios.join(", ")})`:accion==="Incidente cerrado"&&d.solucion?`${ident} · cierre: ${String(d.solucion).slice(0,80)}`:ident});
+    showToast(accion==="Incidente cerrado"?"Incidente cerrado":accion==="Incidente reabierto"?"Incidente reabierto":accion==="Incidente editado"?"Incidente actualizado":(Number(d.costo_extra)>0?`Incidente registrado · ${fmt.money(d.costo_extra)} de costo extra`:"Incidente registrado")); await cargarTodo();
   };
   const handleMarcarFecha=async(codigoOC,fecha)=>{
     const t=session.access_token;

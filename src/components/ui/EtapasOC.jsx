@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useRef, useState, useEffect } from "react";
 import { Field } from "./Basicos";
 import { del } from "../../lib/supabase";
 import { C, MONO, SANS, btnP, fmt, iMono, iStyle, selStyle } from "../../lib/theme";
@@ -6,26 +6,28 @@ import { Ic, I } from "./Iconos";
 
 export const TIPOS_PV={falla:"Falla del producto",faltante:"Faltante",cambio:"Cambio / reposición",devolucion:"Devolución",otro:"Otro"};
 
-export function FormPostventa({ oc, evento, onSave }) {
+export function FormPostventa({ oc, evento, cerrar, onSave }) {
   const [tipo,setTipo]=useState(evento?.tipo||"falla");
   const [fecha,setFecha]=useState(evento?.fecha||new Date().toISOString().slice(0,10));
   const [descripcion,setDescripcion]=useState(evento?.descripcion||"");
-  const [estado,setEstado]=useState(evento?.estado||"abierto");
+  const [estado,setEstado]=useState(cerrar?"resuelto":(evento?.estado||"abierto"));
+  const yaGuardado=useRef(false);   // evita duplicados por doble toque
   const [solucion,setSolucion]=useState(evento?.solucion||"");
   const [fechaRes,setFechaRes]=useState(evento?.fecha_resolucion||"");
   const [costoExtra,setCostoExtra]=useState(evento?.costo_extra||"");
   const [detalleCosto,setDetalleCosto]=useState(evento?.detalle_costo||"");
   const [err,setErr]=useState(""); const [saving,setSaving]=useState(false);
   const guardar=async()=>{
+    if(yaGuardado.current) return;
     if(!descripcion.trim()){setErr("Describe la incidencia");return;}
-    if(estado==="resuelto"&&!solucion.trim()){setErr("Indica la solución aplicada");return;}
-    setErr("");setSaving(true);
+    if(estado==="resuelto"&&!solucion.trim()){setErr("Indica la solución o comentario de cierre");return;}
+    yaGuardado.current=true; setErr("");setSaving(true);
     try{ await onSave({id:evento?.id,ocId:oc.id,tipo,fecha,descripcion:descripcion.trim(),estado,
       solucion:solucion.trim()||null,
       fecha_resolucion:estado==="resuelto"?(fechaRes||new Date().toISOString().slice(0,10)):null,
       costo_extra:costoExtra?Number(costoExtra):0,
       detalle_costo:detalleCosto.trim()||null}); }
-    catch(e){setErr(e.message);} finally{setSaving(false);}
+    catch(e){yaGuardado.current=false;setErr(e.message);} finally{setSaving(false);}
   };
   return (
     <div>
@@ -54,24 +56,35 @@ export function FormPostventa({ oc, evento, onSave }) {
       <Field label="Estado">
         <select style={selStyle} value={estado} onChange={e=>setEstado(e.target.value)}>
           <option value="abierto">Abierto</option>
-          <option value="en_gestion">En gestión</option>
-          <option value="resuelto">Resuelto</option>
+          {evento?.estado==="en_gestion"&&<option value="en_gestion">Abierto · en gestión (registro anterior)</option>}
+          <option value="resuelto">Cerrado</option>
         </select>
       </Field>
       {estado==="resuelto"&&<>
-        <Field label="Solución aplicada" required>
-          <textarea style={{...iStyle,minHeight:60,resize:"vertical"}} value={solucion} onChange={e=>setSolucion(e.target.value)} placeholder="Qué se hizo para resolver" />
+        <Field label="Solución / comentario de cierre" required>
+          <textarea style={{...iStyle,minHeight:60,resize:"vertical"}} value={solucion} onChange={e=>setSolucion(e.target.value)} placeholder="Qué se hizo para resolverlo" />
         </Field>
-        <Field label="Fecha de resolución"><input style={iStyle} type="date" value={fechaRes} onChange={e=>setFechaRes(e.target.value)} /></Field>
+        <Field label="Fecha de cierre"><input style={iStyle} type="date" value={fechaRes} onChange={e=>setFechaRes(e.target.value)} /></Field>
       </>}
       {err&&<div style={{background:C.dangerLight,color:C.dangerText,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}
-      <button onClick={guardar} disabled={saving} style={btnP(saving?C.inkFaint:C.warn)}>{saving?"Guardando…":evento?"✓ Actualizar incidencia":"✓ Registrar incidencia"}</button>
+      <button onClick={guardar} disabled={saving} style={btnP(saving?C.inkFaint:C.warn)}>{saving?"Guardando…":cerrar?"✓ Cerrar incidente":evento?"✓ Guardar cambios":"✓ Registrar incidencia"}</button>
     </div>
   );
 }
 
-export function EtapasOC({ oc, perfil, perfiles, activa, extra, onEditarEvento, onEliminarFactura, onEliminarEvento, onAccion, onCorreoFallida, onCorreoFecha, onGuardarLink, onEliminarLink, onEditarLink, onAsignarResponsable }) {
+// Incidentes abiertos primero; dentro de cada grupo, los más recientes arriba. "En gestión" (registros anteriores) cuenta como abierto.
+export const incidenteCerrado=(e)=>e?.estado==="resuelto";
+export const ordenarIncidentes=(lista)=>(lista||[]).slice().sort((a,b)=>
+  (incidenteCerrado(a)?1:0)-(incidenteCerrado(b)?1:0)||String(b.fecha||"").localeCompare(String(a.fecha||"")));
+// Número estable de cada incidente dentro de su OC (1 = el más antiguo).
+export const numeroIncidente=(lista,ev)=>{
+  const cron=(lista||[]).slice().sort((a,b)=>String(a.fecha||"").localeCompare(String(b.fecha||""))||String(a.creadoEn||"").localeCompare(String(b.creadoEn||"")));
+  const i=cron.findIndex(e=>e.id===ev?.id); return i<0?cron.length+1:i+1;
+};
+
+export function EtapasOC({ oc, perfil, perfiles, activa, extra, onEditarEvento, onEliminarFactura, onEliminarEvento, onAccion, onCorreoFallida, onCorreoFecha, onPostventa, onReabrirPostventa, onGuardarLink, onEliminarLink, onEditarLink, onAsignarResponsable }) {
   // La etapa que toca queda abierta: es la acción principal de la OC. Al registrar, avanza sola a la siguiente.
+  const reabriendo=useRef(new Set());   // evita reabrir dos veces por doble toque
   const [detalle,setDetalle]=useState(activa||null);
   useEffect(()=>{ setDetalle(activa||null); },[activa]);
 
@@ -81,7 +94,7 @@ export function EtapasOC({ oc, perfil, perfiles, activa, extra, onEditarEvento, 
     if(key==="factura") return (oc.eventos_factura||[]);
     if(key==="cobro") return (oc.eventos_pago_cliente||[]);
     if(key==="financ") return (oc.eventos_pago_financiamiento||[]);
-    if(key==="postventa") return (oc.eventos_postventa||[]);
+    if(key==="postventa") return ordenarIncidentes(oc.eventos_postventa);
     return [];
   };
 
@@ -175,7 +188,7 @@ export function EtapasOC({ oc, perfil, perfiles, activa, extra, onEditarEvento, 
           </div>
         )}
         {eventos.map((ev,i)=>(
-          <div key={ev.id||i} style={{background:C.card,borderRadius:8,padding:"10px 12px",marginBottom:6}}>
+          <div key={ev.id||i} style={{background:C.card,borderRadius:8,padding:"10px 12px",marginBottom:6,...(etapa.key==="postventa"?(incidenteCerrado(ev)?{opacity:0.82,borderLeft:`3px solid ${C.okText}`}:{borderLeft:`3px solid ${C.dangerText}`}):{})}}>
             {etapa.key==="compra"&&<>
               <div style={{fontSize:12.5,fontWeight:600}}><Ic n="📅"/> {fmt.date(ev.fecha)||"—"}</div>
               <div style={{fontSize:12,color:C.inkMuted}}>Venta: <b>{fmt.money(ev.monto_venta||oc.monto_total)}</b> · Costo: <b>{fmt.money(ev.costo_compra||oc.costo_total)}</b></div>
@@ -206,25 +219,36 @@ export function EtapasOC({ oc, perfil, perfiles, activa, extra, onEditarEvento, 
               <div style={{fontSize:12,color:C.inkMuted}}>{fmt.date(ev.fecha)||"—"}</div>
               {ev.financiador_id&&<div style={{fontSize:12,color:C.inkMuted}}>A: {oc.financiadores?.nombre||"—"}</div>}
             </>}
-            {etapa.key==="postventa"&&<>
+            {etapa.key==="postventa"&&(()=>{
+              const cerrado=incidenteCerrado(ev);
+              const n=numeroIncidente(oc.eventos_postventa,ev);
+              return <>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:6}}>
-                <div style={{fontSize:12.5,fontWeight:600}}><Ic n="🛠"/> {TIPOS_PV[ev.tipo]||ev.tipo||"Incidencia"}</div>
-                <span style={{fontSize:12,fontWeight:700,borderRadius:5,padding:"2px 6px",background:ev.estado==="resuelto"?C.okLight:ev.estado==="en_gestion"?C.warnLight:C.dangerLight,color:ev.estado==="resuelto"?C.ok:ev.estado==="en_gestion"?C.warn:C.danger}}>
-                  {ev.estado==="resuelto"?"✓ Resuelto":ev.estado==="en_gestion"?"En gestión":"Abierto"}
+                <div style={{fontSize:12.5,fontWeight:700,color:cerrado?C.inkMuted:C.ink}}><Ic n="🛠"/> Incidente {n} · {TIPOS_PV[ev.tipo]||ev.tipo||"Incidencia"}</div>
+                <span style={{fontSize:12,fontWeight:800,borderRadius:5,padding:"2px 6px",whiteSpace:"nowrap",background:cerrado?C.okLight:C.dangerLight,color:cerrado?C.okText:C.dangerText}}>
+                  {cerrado?"✓ Incidente cerrado":"⚠ Incidente abierto"}
                 </span>
               </div>
-              <div style={{fontSize:12,color:C.inkMuted}}>{fmt.date(ev.fecha)||"—"}</div>
-              {ev.descripcion&&<div style={{fontSize:12,color:C.ink,marginTop:3}}>{ev.descripcion}</div>}
-              {ev.solucion&&<div style={{fontSize:12,color:C.okText,marginTop:3}}>Solución: {ev.solucion}{ev.fecha_resolucion?` · ${fmt.date(ev.fecha_resolucion)}`:""}</div>}
+              <div style={{fontSize:12,color:C.inkMuted}}>Reclamo: {fmt.date(ev.fecha)||"—"}{ev.estado==="en_gestion"?" · en gestión":""}</div>
+              {ev.descripcion&&<div style={{fontSize:12,color:cerrado?C.inkMuted:C.ink,marginTop:3}}>{ev.descripcion}</div>}
+              {ev.solucion&&<div style={{fontSize:12,color:C.okText,marginTop:3}}>{cerrado?"Cierre":"Solución previa"}: {ev.solucion}{cerrado&&ev.fecha_resolucion?` · ${fmt.date(ev.fecha_resolucion)}`:""}</div>}
               {Number(ev.costo_extra)>0&&(
                 <div style={{fontSize:12,color:C.dangerText,marginTop:3,fontWeight:600}}>
                   Costo extra: {fmt.money(ev.costo_extra)}{ev.detalle_costo?` · ${ev.detalle_costo}`:""}
                 </div>
               )}
-            </>}
+            </>;})()}
             <div style={{display:"flex",gap:6,marginTop:8}}>
+              {etapa.key==="postventa"?<>
+                {!incidenteCerrado(ev)&&<button onClick={()=>onPostventa&&onPostventa(ev,"cerrar")}
+                  style={{fontSize:12,background:C.okText,color:"#fff",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontWeight:700}}>✓ Cerrar incidente</button>}
+                {incidenteCerrado(ev)&&<button onClick={()=>{ if(reabriendo.current.has(ev.id)) return; if(!window.confirm("¿Reabrir este incidente?")) return; reabriendo.current.add(ev.id); Promise.resolve(onReabrirPostventa&&onReabrirPostventa(ev)).finally(()=>reabriendo.current.delete(ev.id)); }}
+                  style={{fontSize:12,background:C.warnLight,color:C.warnText,border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontWeight:700}}>↺ Reabrir</button>}
+                <button onClick={()=>onPostventa&&onPostventa(ev,"editar")}
+                  style={{fontSize:12,background:C.tealLight,color:C.tealDark,border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontWeight:600}}><Ic n="✏️"/> Editar</button>
+              </>:
               <button onClick={()=>onEditarEvento&&onEditarEvento({tipo:etapa.label,e:ev,tabla:etapa.tabla})}
-                style={{fontSize:12,background:C.tealLight,color:C.tealDark,border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontWeight:600}}><Ic n="✏️"/> Editar</button>
+                style={{fontSize:12,background:C.tealLight,color:C.tealDark,border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontWeight:600}}><Ic n="✏️"/> Editar</button>}
               {perfil?.rol==="admin"&&etapa.key==="factura"&&(
                 <button onClick={async()=>{
                   if(!window.confirm(`¿Eliminar factura N°${ev.numero_factura}?\nEsto revertirá el estado a pendiente.`)) return;
@@ -301,9 +325,9 @@ export function EtapasOC({ oc, perfil, perfiles, activa, extra, onEditarEvento, 
           {renderDetalle(etapas.find(e=>e.key===detalle))}
         </div>
       )}
-      {(oc.eventos_postventa||[]).some(e=>e.estado!=="resuelto")&&(
-        <div style={{fontSize:12,color:C.warnText,textAlign:"right",fontWeight:700}}><Ic n="🛠"/> post-venta abierta</div>
-      )}
+      {(()=>{const n=(oc.eventos_postventa||[]).filter(e=>!incidenteCerrado(e)).length; return n>0&&(
+        <div style={{fontSize:12,color:C.dangerText,textAlign:"right",fontWeight:700}}>⚠ {n} incidente{n>1?"s":""} abierto{n>1?"s":""}</div>
+      );})()}
     </div>
   );
 }
