@@ -1,6 +1,5 @@
 import { abrirCorreo } from "./lib/correos.js";
 import { useState, useEffect, useRef } from "react";
-import * as XLSX from "xlsx";
 import { LoginScreen } from "./components/auth/LoginScreen";
 import { FormIngresarCompra } from "./components/forms/FormIngresarCompra";
 import { NuevaOCRapida } from "./components/forms/NuevaOCRapida";
@@ -8,6 +7,7 @@ import { FormCompraRapida } from "./components/forms/FormCompraRapida";
 import { FormAbonoFinanciador, repartirFIFO } from "./components/forms/FormAbonoFinanciador";
 import { registrarPagoFinanciador } from "./lib/pagosFinanciador";
 import { anioMesDe } from "./lib/calculos";
+import { exportarExcelRespaldo } from "./lib/exportacion";
 import { registrarPagoVendedor } from "./lib/pagosVendedor";
 import { ImportarCartola } from "./components/forms/ImportarCartola";
 import { FormSaldoBanco } from "./components/forms/FormSaldoBanco";
@@ -917,51 +917,12 @@ export default function App() {
   };
 
   const handleExportarTodo=async()=>{
+    if(perfil?.rol!=="admin"){ showToast("Solo el administrador puede exportar"); return; }
     setExportando(true);
     try{
-      const t=session.access_token;
-      const contactosCobranza=await sel("contactos_cobranza",t).catch(()=>[]);
-      const perfilesTabla=await selPerfiles(t).catch(()=>[]);
-      const historialCambios=await sel("historial_cambios",t).catch(()=>[]);
-
-      // Las OC guardan sus eventos anidados (oc.eventos_compra, etc.) —
-      // hay que aplanarlos en hojas separadas, igual que las tablas reales.
-      const flatOC=[], evCompra=[], evEntrega=[], evFactura=[], evPagoCli=[], evPagoFin=[];
-      ocs.forEach(o=>{
-        const {eventos_compra,eventos_entrega,eventos_factura,eventos_pago_cliente,eventos_pago_financiamiento,...resto}=o;
-        flatOC.push(resto);
-        (eventos_compra||[]).forEach(e=>evCompra.push({...e,oc_id:o.id}));
-        (eventos_entrega||[]).forEach(e=>evEntrega.push({...e,oc_id:o.id}));
-        (eventos_factura||[]).forEach(e=>evFactura.push({...e,oc_id:o.id}));
-        (eventos_pago_cliente||[]).forEach(e=>evPagoCli.push({...e,oc_id:o.id}));
-        (eventos_pago_financiamiento||[]).forEach(e=>evPagoFin.push({...e,oc_id:o.id}));
-      });
-
-      // Perfiles: se agrega el nombre a cada fila del historial, para no
-      // tener que cruzar el UUID a mano cada vez que se revisa un cambio.
-      const nombrePorId=Object.fromEntries(perfilesTabla.map(p=>[p.id,p.nombre]));
-      const historialConNombre=historialCambios.map(h=>({...h,usuario_nombre_actual:nombrePorId[h.usuario_id]||h.usuario_nombre||"(desconocido)"}));
-
-      const hojas={
-        OrdenesCompra:flatOC, EventosCompra:evCompra, EventosEntrega:evEntrega,
-        EventosFactura:evFactura, EventosPagoCliente:evPagoCli, EventosPagoFinanciamiento:evPagoFin,
-        Financiadores:financiadores, Vendedores:vendedores, CategoriasGasto:categoriasGasto,
-        GastosIndirectos:gastos, IvaMensual:ivaMensual, PagosVendedor:pagosVendedor,
-        AjustesSaldo:ajustesSaldo, ContactosCobranza:contactosCobranza,
-        Perfiles:perfilesTabla, HistorialCambios:historialConNombre,
-      };
-
-      const wb=XLSX.utils.book_new();
-      Object.entries(hojas).forEach(([nombre,filas])=>{
-        const ws=XLSX.utils.json_to_sheet(filas.length?filas:[{}]);
-        XLSX.utils.book_append_sheet(wb,ws,nombre.slice(0,31));
-      });
-
-      const ahora=new Date();
-      const pad=n=>String(n).padStart(2,"0");
-      const nombreArchivo=`bfk-datos-${ahora.getFullYear()}-${pad(ahora.getMonth()+1)}-${pad(ahora.getDate())}-${pad(ahora.getHours())}-${pad(ahora.getMinutes())}.xlsx`;
-      XLSX.writeFile(wb,nombreArchivo);
-      showToast("Excel descargado");
+      // Misma función que "Exportar Excel completo" (Administración): solo lee, no escribe nada.
+      const {errores}=await exportarExcelRespaldo({sel,token:session.access_token});
+      showToast(errores.length?`Excel descargado, pero no se pudo leer: ${errores.map(e=>e.Hoja).join(", ")}`:"Excel descargado");
     }catch(e){ showToast("Error al exportar: "+e.message); }
     finally{ setExportando(false); }
   };

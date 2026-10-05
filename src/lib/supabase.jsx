@@ -1,3 +1,4 @@
+import { HOJAS_RESPALDO } from "./hojasRespaldo.js";
 
 export const SUPABASE_URL = "https://gypywxaugwuxbgmcqntp.supabase.co";
 
@@ -77,19 +78,5 @@ export const storageSet = (k,v) => { try { localStorage.setItem(k,v); } catch {}
 
 export const genId = (p) => `${p}_${Date.now()}_${Math.random().toString(36).slice(2,7)}`;
 
-export const TABLAS_EXPORT = [
-  { hoja:"OrdenesCompra", tabla:"ordenes_compra_v2" },
-  { hoja:"EventosCompra", tabla:"eventos_compra" },
-  { hoja:"EventosEntrega", tabla:"eventos_entrega" },
-  { hoja:"EventosFactura", tabla:"eventos_factura" },
-  { hoja:"EventosPagoCliente", tabla:"eventos_pago_cliente" },
-  { hoja:"EventosPagoFinanciamiento", tabla:"eventos_pago_financiamiento" },
-  { hoja:"Financiadores", tabla:"financiadores" },
-  { hoja:"Vendedores", tabla:"vendedores" },
-  { hoja:"CategoriasGasto", tabla:"categorias_gasto" },
-  { hoja:"GastosIndirectos", tabla:"gastos_indirectos" },
-  { hoja:"IvaMensual", tabla:"iva_mensual" },
-  { hoja:"PagosVendedor", tabla:"pagos_vendedor" },
-  { hoja:"AjustesSaldo", tabla:"ajustes_saldo_financiador" },
-  { hoja:"ContactosCobranza", tabla:"contactos_cobranza" },
-];
+// Hojas que se pueden volver a importar (subconjunto de la lista única de respaldo; el orden y los nombres no cambian).
+export const TABLAS_EXPORT = HOJAS_RESPALDO.filter(h=>h.importable).map(({hoja,tabla})=>({hoja,tabla}));

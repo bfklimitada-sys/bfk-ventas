@@ -2,6 +2,7 @@ import { Tarjeta } from "../ui/Sistema";
 import { useState } from "react";
 import * as XLSX from "xlsx";
 import { TABLAS_EXPORT, del, ins, sel, upd } from "../../lib/supabase";
+import { exportarExcelRespaldo } from "../../lib/exportacion";
 import { C, btnG, btnP } from "../../lib/theme";
 import { Ic } from "../ui/Iconos";
 
@@ -12,47 +13,15 @@ export function PanelDatos({ session, showToast }) {
   const [archivoData,setArchivoData]=useState(null);
   const [aplicando,setAplicando]=useState(false);
 
+  // Misma función que "Exportar todo a Excel": una sola fuente para armar el archivo.
   const generarExcelCompleto = async (prefijo="bfk-datos") => {
-    const wb = XLSX.utils.book_new();
-    for (const { hoja, tabla } of TABLAS_EXPORT) {
-      const data = await sel(tabla, session.access_token, "&order=id");
-      const ws = XLSX.utils.json_to_sheet(data.length ? data : [{}]);
-
-      if (hoja === "OrdenesCompra" && data.length) {
-        const cols = Object.keys(data[0]);
-        const colIdx = (name) => cols.indexOf(name);
-        const colLetter = (idx) => XLSX.utils.encode_col(idx);
-        const idxMontoTotal = colIdx("monto_total");
-        const idxCostoTotal = colIdx("costo_total");
-        const baseCol = cols.length;
-
-        XLSX.utils.sheet_add_aoa(ws, [["_Margen($)", "_Margen(%)"]], { origin: { r:0, c:baseCol } });
-
-        if (idxMontoTotal >= 0 && idxCostoTotal >= 0) {
-          const letMonto = colLetter(idxMontoTotal);
-          const letCosto = colLetter(idxCostoTotal);
-          data.forEach((_, i) => {
-            const row = i + 2;
-            const cellMargen = XLSX.utils.encode_cell({ r:i+1, c:baseCol });
-            const cellPct = XLSX.utils.encode_cell({ r:i+1, c:baseCol+1 });
-            ws[cellMargen] = { t:"n", f:`${letMonto}${row}-${letCosto}${row}` };
-            ws[cellPct] = { t:"n", f:`IF(${letMonto}${row}=0,0,ROUND((${letMonto}${row}-${letCosto}${row})/${letMonto}${row}*100,0))`, z:"0\"%\"" };
-          });
-        }
-        const range = XLSX.utils.decode_range(ws["!ref"]);
-        range.e.c = Math.max(range.e.c, baseCol+1);
-        ws["!ref"] = XLSX.utils.encode_range(range);
-      }
-
-      XLSX.utils.book_append_sheet(wb, ws, hoja);
-    }
-    const fechaStr = new Date().toISOString().slice(0,16).replace(/[:T]/g,"-");
-    XLSX.writeFile(wb, `${prefijo}-${fechaStr}.xlsx`);
+    const { errores } = await exportarExcelRespaldo({ sel, token: session.access_token, prefijo });
+    return errores;
   };
 
   const handleExportar = async () => {
     setExporting(true);
-    try { await generarExcelCompleto("bfk-datos"); showToast("Excel exportado"); }
+    try { const errores = await generarExcelCompleto("bfk-datos"); showToast(errores.length ? `Excel exportado, pero no se pudo leer: ${errores.map(e=>e.Hoja).join(", ")}` : "Excel exportado", errores.length ? "error" : undefined); }
     catch (e) { showToast("Error al exportar: "+e.message, "error"); }
     finally { setExporting(false); }
   };
@@ -105,7 +74,8 @@ export function PanelDatos({ session, showToast }) {
     if (!archivoData) return;
     setAplicando(true);
     try {
-      await generarExcelCompleto("bfk-RESPALDO-antes-de-importar");
+      const erroresRespaldo = await generarExcelCompleto("bfk-RESPALDO-antes-de-importar");
+      if (erroresRespaldo.length) throw new Error(`El respaldo previo quedó incompleto (${erroresRespaldo.map(e=>e.Hoja).join(", ")}). No se aplicó ningún cambio.`);
       for (const { tabla } of TABLAS_EXPORT) {
         const actuales = await sel(tabla, session.access_token, "&order=id");
         const mapaActual = Object.fromEntries(actuales.map(r => [String(r.id), r]));
