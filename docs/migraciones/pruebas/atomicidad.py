@@ -92,7 +92,6 @@ casos_f = {
  "F2_tabla_con_sql": {"ordenes_compra_v2; drop table perfiles": {"insertar": [{"id": "x"}]}},
  "F3_tabla_catalogo": {"pg_class": {"insertar": [{"id": "x"}]}},
  "F4_columna_inexistente": {"ordenes_compra_v2": {"actualizar": [{"id": "oc00001", "cambios": {"col_x": 1}, "esperado": {"col_x": 1}}]}},
- "F5_columna_generada": {"vendedores": {"actualizar": [{"id": "v1", "cambios": {"nombre_mayus": "HACK"}, "esperado": {"nombre_mayus": "VENDEDOR 1"}}]}},
  "F6_cambiar_id": {"ordenes_compra_v2": {"actualizar": [{"id": "oc00001", "cambios": {"id": "otro"}, "esperado": {"id": "oc00001"}}]}},
  "F7_clave_extra_payload": None,
 }
@@ -101,6 +100,14 @@ for k, tablas in casos_f.items():
     else: pay = p(tablas)
     r = llamar(pay); chk(k + "_0_aplicadas", (not r["ok"]) and fp() == f0, error_de(r))
 chk("F_perfiles_intactos", psql("select rol from perfiles where id='" + ADMIN + "'")[0] == "admin")
+
+# F5: una columna generada en `cambios` se ignora (no se escribe) y se informa
+r = llamar(p({"vendedores": {"actualizar": [{"id": "v1", "cambios": {"nombre_mayus": "HACK"}, "esperado": {"nombre_mayus": "VENDEDOR 1"}}]}}))
+chk("F5_columna_generada_se_ignora_y_no_se_escribe", r["ok"] and fp() == f0 and r["resp"]["columnas_generadas_ignoradas"] == ["vendedores.nombre_mayus"], error_de(r))
+# F5b: cambiar `nombre` junto con el valor (viejo) de la generada del Excel: se aplica `nombre`, la generada se recalcula
+r = llamar(p({"vendedores": {"actualizar": [{"id": "v1", "cambios": {"nombre": "Renombrado", "nombre_mayus": "OTRO"}, "esperado": {"nombre": "Vendedor 1", "nombre_mayus": "VENDEDOR 1"}}]}}))
+chk("F5b_cambia_nombre_y_generada_se_recalcula", r["ok"] and psql("select nombre_mayus from vendedores where id='v1'")[0] == "RENOMBRADO", error_de(r))
+reset(); f0 = fp()
 
 # ---------------------------------------------------------------- G. JSON inválido / tipo incompatible
 reset(); f0 = fp(); v = lambda c, e: {"vendedores": {"actualizar": [{"id": "v1", "cambios": c, "esperado": e}]}, "ordenes_compra_v2": {"actualizar": ops_upd(20)}}

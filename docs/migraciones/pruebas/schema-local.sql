@@ -65,3 +65,26 @@ insert into ordenes_compra_v2(id, numero_oc, cliente, vendedor_id, financiador_i
 insert into eventos_compra(id, oc_id, fecha, monto, financiador_id) select 'ec'||lpad(g::text,5,'0'), 'oc'||lpad(g::text,5,'0'), '2026-09-01', 700000+g, 'f'||(1+g%3) from generate_series(1,300) g;
 insert into iva_mensual values ('iva1',2026,7,1000,400,600),('iva2',2026,8,2000,500,1500);
 insert into gastos_indirectos select 'g'||lpad(g::text,4,'0'), 'cat'||(1+g%4), 50000+g, 9, 2026, '2026-09-05', 'gasto '||g from generate_series(1,200) g;
+
+-- Tablas fuera de las 14 (solo para que el exportador completo funcione en pruebas locales)
+create table public.oc_productos_link(id text primary key, oc_id text references public.ordenes_compra_v2(id), descripcion text, url text, orden int);
+create table public.eventos_postventa(id text primary key, oc_id text references public.ordenes_compra_v2(id), fecha date, tipo text, descripcion text, estado text);
+create table public.oc_reclamos(id text primary key, oc_id text references public.ordenes_compra_v2(id), fecha timestamptz, correo text);
+create table public.oc_responsables(id text primary key, oc_id text references public.ordenes_compra_v2(id), etapa text, usuario_id uuid);
+create table public.oc_comentarios(id text primary key, oc_id text references public.ordenes_compra_v2(id), texto text);
+create table public.aportes_socios(id text primary key, socio text, tipo text, monto numeric, fecha date);
+create table public.saldo_banco(id text primary key, saldo numeric, actualizado date);
+create table public.banco_mensual(id text primary key, anio int, mes int, entro numeric, salio numeric, saldo_cierre numeric);
+create table public.cartolas_importadas(id text primary key, fecha_desde date, fecha_hasta date, n_movimientos int);
+create table public.entidades_catalogo(id text primary key, rut text, nombre text);
+create table public.notificaciones(id text primary key, usuario_id uuid, mensaje text, leida boolean default false);
+insert into aportes_socios values ('ap1','Kevin','aporte',1000000,'2026-08-01'),('ap2','Byron','aporte',500000,'2026-08-02');
+insert into saldo_banco values ('actual',4321000,'2026-10-01');
+insert into entidades_catalogo values ('ent1','1-9','Entidad Uno');
+insert into oc_productos_link select 'lnk'||g, 'oc'||lpad(g::text,5,'0'), 'Producto '||g, 'http://x', 0 from generate_series(1,20) g;
+insert into eventos_pago_cliente select 'pc'||lpad(g::text,4,'0'), 'oc'||lpad(g::text,5,'0'), '2026-09-30', 1000*g from generate_series(1,20) g;
+insert into eventos_pago_financiamiento(id, financiador_id, oc_id, fecha, monto) values ('pf1','f1','oc00001','2026-09-05',300),('pf_sin_oc','f1',null,'2026-09-06',150),('pf2','f2','oc00002','2026-09-07',50);
+insert into pagos_vendedor values ('pv1','v1',2026,9,100000,'2026-10-01','pagado',null);
+insert into ajustes_saldo_financiador values ('aj1','f1',1000,'ajuste');
+insert into contactos_cobranza values ('cob1','1-9','Cliente','c@c.cl');
+grant select, insert, update, delete on all tables in schema public to authenticated;

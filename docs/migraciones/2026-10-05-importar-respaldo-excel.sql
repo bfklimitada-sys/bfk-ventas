@@ -19,7 +19,7 @@
 --        "insertar":   [ { "id": "...", "col": valor, ... } ],
 --        "actualizar": [ { "id": "...", "cambios": {col: nuevo}, "esperado": {col: valor_que_el_cliente_vio} } ]
 --     } } }
--- Columnas generadas: se ignoran en INSERT (se recalculan); modificarlas en `cambios` se rechaza.
+-- Columnas generadas: se ignoran siempre (se recalculan solas) y se informan en la respuesta.
 -- Valores json/jsonb y arrays pueden venir como objeto/array o como texto JSON (así los guarda el Excel):
 -- se convierten según el tipo REAL de la columna. Texto que parece JSON en una columna text sigue siendo texto.
 --
@@ -30,7 +30,7 @@
 --
 -- Errores: excepción con errcode IM001 (validación), IM002 (conflicto concurrente), IM003 (permisos),
 -- IM004 (otra importación en curso), IM005 (dependencia circular). detail = JSON {tabla,id,campo,causa}.
--- Respuesta: {ok, simulado, orden, tablas:{<t>:{insertadas,actualizadas}}, total_insertadas, total_actualizadas}
+-- Respuesta: {ok, simulado, orden, tablas:{<t>:{insertadas,actualizadas}}, total_insertadas, total_actualizadas, columnas_generadas_ignoradas}
 
 create or replace function public.importar_respaldo_excel(
   p_payload jsonb,
@@ -58,7 +58,7 @@ declare
   v_fase int; v_modo text; v_op jsonb; v_i int; v_j int; v_n int;
   v_obj jsonb; v_adj jsonb; v_fila_adj jsonb; v_cam_adj jsonb; v_esp_adj jsonb;
   v_actual jsonb; v_tipado jsonb; v_esperado_norm jsonb;
-  v_vistos jsonb := '{}'::jsonb; v_ins_ids jsonb := '{}'::jsonb;
+  v_vistos jsonb := '{}'::jsonb; v_ins_ids jsonb := '{}'::jsonb; v_ignoradas jsonb := '{}'::jsonb;
   v_resumen jsonb := '{}'::jsonb; v_ins int; v_upd int; v_tot_ins int := 0; v_tot_upd int := 0;
   v_cols_sql text; v_set_sql text; v_filas int; v_padre_existe boolean; v_tipo_json text;
 begin
@@ -200,10 +200,10 @@ begin
                   raise exception 'IMPORTACION_CANCELADA: % / id %: la columna "%" no existe', v_t, v_id, v_k using errcode = 'IM001', detail = jsonb_build_object('tabla',v_t,'id',v_id,'campo',v_k,'causa','columna_inexistente')::text;
                 end if;
                 if not (v_info->>'escribible')::boolean then
-                  -- Un Excel exportado trae TODAS las columnas, también las generadas (se recalculan solas):
-                  -- en INSERT y en `esperado` se ignoran; intentar CAMBIAR una columna generada sí se rechaza.
-                  continue when v_modo = 'insertar' or v_j = 3;
-                  raise exception 'IMPORTACION_CANCELADA: % / id %: la columna "%" es generada y no se puede escribir', v_t, v_id, v_k using errcode = 'IM001', detail = jsonb_build_object('tabla',v_t,'id',v_id,'campo',v_k,'causa','columna_generada')::text;
+                  -- Un Excel exportado trae TODAS las columnas, también las generadas (se recalculan solas al
+                  -- cambiar las demás): se ignoran siempre (insert, cambios y esperado) y se informan en la respuesta.
+                  v_ignoradas := v_ignoradas || jsonb_build_object(v_t || '.' || v_k, true);
+                  continue;
                 end if;
                 if v_info->>'clase' in ('json','array') and jsonb_typeof(v_v) = 'string' then
                   begin v_v := (v_v #>> '{}')::jsonb;
@@ -223,6 +223,8 @@ begin
               if v_modo = 'insertar' then v_fila_adj := v_adj;
               elsif v_j = 2 then v_cam_adj := v_adj; else v_esp_adj := v_adj; end if;
             end loop;
+
+            if v_modo = 'actualizar' and v_cam_adj = '{}'::jsonb then continue; end if;   -- solo traía columnas generadas
 
             if v_fase = 1 then
               ---------------------------------------------------- validaciones (sin escribir)
@@ -347,7 +349,8 @@ begin
   end;
 
   return jsonb_build_object('ok', true, 'simulado', p_simular, 'orden', to_jsonb(v_orden_payload), 'tablas', v_resumen,
-                            'total_insertadas', v_tot_ins, 'total_actualizadas', v_tot_upd);
+                            'total_insertadas', v_tot_ins, 'total_actualizadas', v_tot_upd,
+                            'columnas_generadas_ignoradas', (select coalesce(jsonb_agg(k order by k), '[]'::jsonb) from jsonb_object_keys(v_ignoradas) k));
 end;
 $$;
 
