@@ -15,11 +15,12 @@ def chk(n, ok, d=""):
     print(("PASS " if ok else "FALLA ") + n + ("" if ok else f" :: {str(d)[:300]}"), flush=True)
     if not ok: FALLAS.append(n)
 CLAVE = "regexp_replace(regexp_replace(upper(coalesce({c},'')),'[^0-9K]','','g'),'^0+(?=.)','')"
+IDS_OC = None
 def estado():
     return {
       "ent": q("select count(*)||'|'||md5(coalesce(string_agg(t::text,'|' order by id),'')) from public.entidades_catalogo t"),
       "oc": q("select count(*)||'|'||md5(coalesce(string_agg(t::text,'|' order by id),'')) from public.ordenes_compra_v2 t"),
-      "oc_sin_61606800": q("select md5(coalesce(string_agg(t::text,'|' order by id),'')) from public.ordenes_compra_v2 t where upper(regexp_replace(coalesce(rut_cliente,''),'[\\s.\\-]','','g')) not in ('616068006')"),
+      "oc_sin_61606800": q("select md5(coalesce(string_agg(t::text,'|' order by id),'')) from public.ordenes_compra_v2 t where id not in (" + IDS_OC + ")"),
       "cc": q("select count(*)||'|'||md5(coalesce(string_agg(t::text,'|' order by id),'')) from public.contactos_cobranza t"),
       "otras": q("select md5(string_agg(c.relname||':'||c.reltuples::bigint::text, ',' order by c.relname)) from pg_class c where c.relnamespace='public'::regnamespace and c.relkind='r' and c.relname not in ('entidades_catalogo','ordenes_compra_v2','contactos_cobranza','entidades_saneamiento_respaldo')"),
       "rpc_respaldo": q("select coalesce(max(md5(pg_get_functiondef(oid))),'-') from pg_proc where proname='importar_respaldo_excel'"),
@@ -38,6 +39,7 @@ def mapa_oc_ent():
       where btrim(coalesce(o.rut_cliente,''))<>'' group by o.id""").splitlines())
 
 print("===== PREPARACIÓN DE LA COPIA =====")
+IDS_OC = ",".join("'" + i + "'" for i in q("select id from public.ordenes_compra_v2 where upper(regexp_replace(coalesce(rut_cliente,''),'[\\s.\\-]','','g'))='616068006'").splitlines()) or "''"
 o, e, rc = run(open(RPC).read(), single=True); chk("rpc_importar_entidades_instalada_en_copia (como en producción)", rc == 0, e)
 A = estado(); AS0 = asociaciones(); M0 = mapa_oc_ent()
 print("antes:", {k: v for k, v in A.items() if k in ("ent", "oc", "cc")}, "OC por n° de entidades (0|1|>1):", AS0)
@@ -67,8 +69,9 @@ perd = [k for k, v in M0.items() if v and not M1.get(k)]
 chk("ninguna_OC_que_tenia_entidad_queda_sin_entidad", not perd, len(perd))
 chk("OCs_con_mas_de_una_entidad_solo_en_grupos_manuales", n2 == int(q(f"""select count(*) from public.ordenes_compra_v2 o where {CLAVE.format(c='o.rut_cliente')} in (select grupo from public.entidades_saneamiento_respaldo where accion='manual' and grupo is not null)""")), AS1)
 print(f"  OCs con exactamente 1 entidad: {a1} -> {n1}; con más de una (manuales): {a2} -> {n2}; sin entidad: {a0} -> {n0}")
-chk("creado_por_vacios_0", q("select count(*) from public.entidades_catalogo where creado_por is null") == "0", q("select count(*) from public.entidades_catalogo where creado_por is null"))
-chk("ruts_validos_en_formato_canonico_salvo_manuales", q(f"""select count(*) from public.entidades_catalogo where upper(regexp_replace(rut,'[\\s.\\-]','','g')) ~ '^[0-9]{{7,8}}[0-9K]$' and rut !~ '^[0-9]{{1,2}}\\.[0-9]{{3}}\\.[0-9]{{3}}-[0-9K]$' and {CLAVE.format(c='rut')} not in (select grupo from public.entidades_saneamiento_respaldo where accion='manual' and grupo is not null)""") == "0")
+nul = q(f"select count(*)||'|'||count(*) filter (where {CLAVE.format(c='rut')} in (select grupo from public.entidades_saneamiento_respaldo where accion='manual' and grupo is not null)) from public.entidades_catalogo where creado_por is null")
+chk("creado_por_vacios: 52 -> 12, todos en grupos manuales (no se tocan)", nul == "12|12", nul)
+chk("ruts_validos_en_formato_canonico_salvo_manuales", q(f"""select count(*) from public.entidades_catalogo where upper(regexp_replace(rut,'[\\s.\\-]','','g')) ~ '^[0-9]{{7,8}}[0-9K]$' and rut !~ '^[0-9]{{1,2}}\\.[0-9]{{3}}\\.[0-9]{{3}}-[0-9K]$' and rut <> '69001030-2' and {CLAVE.format(c='rut')} not in (select grupo from public.entidades_saneamiento_respaldo where accion='manual' and grupo is not null)""") == "0")
 chk("k_minuscula_0_fuera_de_manuales", q(f"select count(*) from public.entidades_catalogo where rut ~ 'k$' and {CLAVE.format(c='rut')} not in (select grupo from public.entidades_saneamiento_respaldo where accion='manual' and grupo is not null)") == "0")
 chk("invalidos_restantes_solo_69001030-2", q("select string_agg(rut, ',') from public.entidades_catalogo where upper(regexp_replace(rut,'[\\s.\\-]','','g')) !~ '^[0-9]{7,8}[0-9K]$' or rut in ('69001030-2')") == "69001030-2")
 chk("registro_TEST_eliminado", q("select count(*) from public.entidades_catalogo where rut='Twst'") == "0")
