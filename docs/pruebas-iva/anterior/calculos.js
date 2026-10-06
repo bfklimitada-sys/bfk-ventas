@@ -1,9 +1,10 @@
+// COPIA CONGELADA de la regla anterior (commit 754c466). Solo para comparar en pruebas; la app NO la usa.
 // ═══════════════════════════════════════════════════════════════
 // Reglas de negocio únicas (Fase 5).
 // Cada regla vive aquí una sola vez; las pantallas la consumen.
 // Estas funciones NO modifican datos: solo calculan.
 // ═══════════════════════════════════════════════════════════════
-import { C, fmt } from "./theme.js";
+import { C, fmt } from "../../../src/lib/theme.js";
 
 // ── Factura vigente ───────────────────────────────────────────
 // La más reciente por fecha: si hubo reemisión (NC de por medio), la
@@ -74,24 +75,9 @@ export const mesesConFactura = (vendedorId, ocs) => {
   return Array.from(set).sort((a, b) => b.localeCompare(a)).map((ym) => ({ anio: Number(ym.slice(0, 4)), mes: Number(ym.slice(5, 7)) }));
 };
 
-// ── IVA del período (regla única) ─────────────────────────────
-// Registro de iva_mensual de un período (mes/año).
-export const registroIvaDe = (ivaMensual, anio, mes) =>
-  (ivaMensual || []).find((i) => Number(i.mes) === Number(mes) && Number(i.anio) === Number(anio)) || null;
-// IVA NETO del período = IVA débito (ventas) − IVA crédito (compras). Puede ser
-// positivo, cero o negativo (crédito mayor que débito). Es el que usa la comisión:
-// la utilidad se calcula con montos que incluyen IVA, y la parte que corresponde al
-// IVA neto del período no es ganancia. No depende de lo pagado al SII.
-export const ivaNetoPeriodo = (registro) =>
-  registro ? (Number(registro.iva_ventas) || 0) - (Number(registro.iva_compras) || 0) : 0;
-// IVA A PAGAR del período (F29): el neto si es positivo; si es negativo no se paga
-// nada (queda remanente de crédito). Solo para compromisos con el SII, no para comisiones.
-export const ivaAPagarPeriodo = (registro) => Math.max(0, ivaNetoPeriodo(registro));
-
 // Pago de un vendedor en un mes. Regla única:
 //  · La comisión es sobre la UTILIDAD (venta − costo), no sobre lo facturado.
-//  · Mitad de (utilidad − IVA neto del período). El IVA neto se usa con su signo:
-//    si es negativo (más crédito que débito) suma; la comisión nunca baja de $0.
+//  · Mitad de (utilidad − IVA del mes). El IVA nunca es negativo.
 //  · Abril 2025 no descontaba IVA.
 //  · Las OC "venta propia" se pagan aparte: 100% de su utilidad menos el IVA de su factura.
 //  · Si el mes está verificado (planilla o cartola), se usa ese monto.
@@ -117,8 +103,8 @@ export const calcularPagoVendedor = ({ vendedorId, ocs, anio, mes, ivaMensual = 
   });
   if (!hayFacturas) return null;
   const sinIva = anio === 2025 && mes === 4;
-  const ivaMes = sinIva ? null : registroIvaDe(ivaMensual, anio, mes);
-  const impIva = ivaNetoPeriodo(ivaMes); // con signo (0 si el período no tiene IVA registrado)
+  const ivaMes = sinIva ? null : ivaMensual.find((i) => i.mes === mes && i.anio === anio);
+  const impIva = ivaMes ? Math.max(0, (ivaMes.iva_ventas || 0) - (ivaMes.iva_compras || 0)) : 0;
   const pagoCalculadoFormula = Math.max(0, Math.round(sumaUtilidad / 2 - impIva / 2)) + pagoVentasPropias;
   const pagosDelMes = pagosVendedor.filter((p) => p.vendedor_id === vendedorId && p.mes === mes && p.anio === anio);
   const pagado = pagosDelMes.reduce((s, p) => s + (p.monto_pagado || 0), 0);
@@ -128,7 +114,6 @@ export const calcularPagoVendedor = ({ vendedorId, ocs, anio, mes, ivaMensual = 
   return {
     mes, anio, label: fmt.monthYear(mes, anio), sumaFacts, sumaUtilidad, pagoVentasPropias, pagoCalculado, pagado,
     estado: pagado >= pagoCalculado ? "pagado" : "pendiente", esVerificado, impIva, sinIva, ivaRegistrado: !!ivaMes,
-    ivaVentas: ivaMes ? Number(ivaMes.iva_ventas) || 0 : 0, ivaCompras: ivaMes ? Number(ivaMes.iva_compras) || 0 : 0,
     deuda: Math.max(0, pagoCalculado - pagado),
   };
 };

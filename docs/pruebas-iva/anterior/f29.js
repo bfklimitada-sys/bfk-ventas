@@ -1,10 +1,9 @@
-import { registroIvaDe, ivaAPagarPeriodo } from "./calculos.js";
-
+// COPIA CONGELADA de la regla anterior (commit 754c466). Solo para comparar en pruebas; la app NO la usa.
 // ═══════════════════════════════════════════════════════════════
 // F29 / IVA por período — solo para mostrar el Panel.
 // NO modifica datos ni interviene en el cálculo de comisiones.
 //
-//  · IVA determinado = IVA a pagar del período = max(0, IVA neto) (lib/calculos.js)
+//  · IVA determinado = max(0, iva_ventas − iva_compras) de iva_mensual
 //  · Pagado          = suma de gastos "Impuesto SII" (cat_impuesto) del mismo mes/año
 //  · Pendiente       = max(0, determinado − pagado)   (cada período por separado:
 //                      un pago mayor al IVA queda en $0 y no se traslada a otro período)
@@ -19,7 +18,8 @@ const clave = (anio, mes) => anio * 12 + (mes - 1);
 export const periodoVigenteF29 = (anio, mes) => clave(anio, mes) >= clave(F29_DESDE.anio, F29_DESDE.mes);
 
 export const periodoF29 = (ivaMensual, gastos, anio, mes) => {
-  const det = ivaAPagarPeriodo(registroIvaDe(ivaMensual, anio, mes));
+  const iv = (ivaMensual || []).find((i) => Number(i.mes) === mes && Number(i.anio) === anio);
+  const det = iv ? Math.max(0, (Number(iv.iva_ventas) || 0) - (Number(iv.iva_compras) || 0)) : 0;
   const pag = (gastos || [])
     .filter((g) => g.categoria_id === "cat_impuesto" && Number(g.mes) === mes && Number(g.anio) === anio)
     .reduce((s, g) => s + (Number(g.monto) || 0), 0);

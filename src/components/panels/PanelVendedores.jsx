@@ -5,7 +5,10 @@ import { C, MONO, btnG, btnP, fmt, iMono, iStyle, selStyle } from "../../lib/the
 import { Ic } from "../ui/Iconos";
 import { Seccion, Tarjeta, Badge, Monto } from "../ui/Sistema";
 import { evaluarPagoVendedor } from "../../lib/pagosVendedor";
-import { calcularPagoVendedor, mesesConFactura } from "../../lib/calculos";
+import { calcularPagoVendedor, mesesConFactura, registroIvaDe, ivaNetoPeriodo, ivaAPagarPeriodo } from "../../lib/calculos";
+
+// Monto con signo explícito (el IVA neto puede ser negativo).
+const conSigno=(n)=>(n<0?"−":"")+fmt.money(Math.abs(n));
 
 export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, onGuardarIva, onPagoVendedor }) {
   const [editIva,setEditIva]=useState(false);
@@ -85,10 +88,10 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
                           {d.sinIva
                             ? <div style={{color:C.inkFaint}}>Sin descuento de IVA (regla especial de ese mes)</div>
                             : d.ivaRegistrado
-                              ? <div>IVA del mes a descontar: <b style={{color:C.dangerText}}>−{fmt.money(d.impIva)}</b></div>
-                              : <div style={{color:C.warnText}}><Ic n="⚠"/> IVA de este mes sin registrar todavía — se está calculando sin descontarlo, va a bajar cuando lo cargues</div>
+                              ? <div>IVA neto del período (débito {fmt.money(d.ivaVentas)} − crédito {fmt.money(d.ivaCompras)}): <b style={{color:d.impIva>0?C.dangerText:C.okText}}>{d.impIva>0?"−":d.impIva<0?"+":""}{fmt.money(Math.abs(d.impIva))}</b>{d.impIva<0&&<span style={{color:C.inkFaint}}> (crédito mayor que débito: suma)</span>}</div>
+                              : <div style={{color:C.warnText}}><Ic n="⚠"/> IVA de este mes sin registrar todavía — se está calculando sin IVA neto; cambiará cuando lo cargues</div>
                           }
-                          <div>Mitad de (utilidad − IVA): <b style={{color:C.ink}}>{fmt.money(Math.round((d.sumaUtilidad-(d.sinIva?0:d.impIva))/2))}</b></div>
+                          <div>Mitad de (utilidad − IVA neto): <b style={{color:C.ink}}>{conSigno(Math.round((d.sumaUtilidad-(d.sinIva?0:d.impIva))/2))}</b>{(d.sumaUtilidad-(d.sinIva?0:d.impIva))<0&&<span style={{color:C.inkFaint}}> (negativo: cuenta como $0)</span>}</div>
                           {d.pagoVentasPropias>0&&<div>+ Ventas propias (100% de esa utilidad, sin repartir): <b style={{color:C.ink}}>+{fmt.money(d.pagoVentasPropias)}</b></div>}
                           <div style={{fontWeight:800,color:C.ink,marginTop:2}}>= Comisión del mes: {fmt.money(d.pagoCalculado)}</div>
                         </>
@@ -116,14 +119,16 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
       })}
       </Seccion>
 
-      <Seccion titulo="IVA mensual" nota="Impuesto de la empresa. Se registra aparte y se usa para calcular las comisiones; no es un pago a vendedores.">
+      <Seccion titulo="IVA mensual" nota="Impuesto de la empresa. Su IVA neto (débito − crédito) se descuenta en las comisiones del período; no es un pago a vendedores.">
       <Tarjeta padding="14px 16px">
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
           <div style={{fontWeight:800,fontSize:14,color:C.ink}}>IVA del mes ({fmt.monthYear(mesActual,anioActual)})</div>
-          <button onClick={()=>{setEditandoIvaExistente(ivaMensual.find(i=>i.mes===mesActual&&i.anio===anioActual)||null);setEditIva(true);}} style={btnG}>{ivaMensual.find(i=>i.mes===mesActual&&i.anio===anioActual)?"Editar":"Registrar"}</button>
+          <button onClick={()=>{setEditandoIvaExistente(registroIvaDe(ivaMensual,anioActual,mesActual));setEditIva(true);}} style={btnG}>{registroIvaDe(ivaMensual,anioActual,mesActual)?"Editar":"Registrar"}</button>
         </div>
-        {ivaMensual.find(i=>i.mes===mesActual&&i.anio===anioActual)?
-          <div style={{fontFamily:MONO,fontWeight:800,fontSize:22,color:C.info}}>{fmt.money(Math.max(0,(ivaMensual.find(i=>i.mes===mesActual&&i.anio===anioActual).iva_ventas||0)-(ivaMensual.find(i=>i.mes===mesActual&&i.anio===anioActual).iva_compras||0)))}</div>:
+        {registroIvaDe(ivaMensual,anioActual,mesActual)?(()=>{ const r=registroIvaDe(ivaMensual,anioActual,mesActual); return (<>
+          <div style={{fontFamily:MONO,fontWeight:800,fontSize:22,color:C.info}}>{conSigno(ivaNetoPeriodo(r))}</div>
+          <div style={{fontSize:12,color:C.inkMuted,marginTop:2}}>IVA neto = débito {fmt.money(Number(r.iva_ventas)||0)} − crédito {fmt.money(Number(r.iva_compras)||0)} · se descuenta en comisiones · a pagar al SII: {fmt.money(ivaAPagarPeriodo(r))}</div>
+        </>); })():
           <div style={{fontSize:12.5,color:C.inkFaint}}>Sin registrar.</div>
         }
         <div style={{display:"flex",gap:14,marginTop:10,paddingTop:10,borderTop:`1px solid ${C.border}`}}>
@@ -137,7 +142,7 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
                 style={{width:"100%",background:"none",border:"none",padding:"7px 0",borderBottom:`1px solid ${C.border}`,
                   display:"flex",justifyContent:"space-between",cursor:"pointer",textAlign:"left"}}>
                 <span style={{fontSize:12,color:C.ink,fontWeight:700}}>{fmt.monthYear(i.mes,i.anio)}</span>
-                <span style={{fontFamily:MONO,fontSize:12,color:C.info,fontWeight:700}}>{fmt.money(Math.max(0,(i.iva_ventas||0)-(i.iva_compras||0)))}</span>
+                <span style={{fontFamily:MONO,fontSize:12,color:C.info,fontWeight:700}}>neto {conSigno(ivaNetoPeriodo(i))} · a pagar {fmt.money(ivaAPagarPeriodo(i))}</span>
               </button>
             ))}
           </div>
@@ -166,7 +171,9 @@ export function FormIvaMensual({ ivaExistente, onSave }) {
   const [vN,setVN]=useState(ivaExistente?.ventas_netas||""); const [iV,setIV]=useState(ivaExistente?.iva_ventas||"");
   const [cN,setCN]=useState(ivaExistente?.compras_netas||""); const [iC,setIC]=useState(ivaExistente?.iva_compras||"");
   const [err,setErr]=useState(""); const [saving,setSaving]=useState(false);
-  const ivaPagado=Math.max(0,Number(iV||0)-Number(iC||0));
+  const regForm={iva_ventas:iV,iva_compras:iC};
+  const ivaNeto=ivaNetoPeriodo(regForm);
+  const ivaPagado=ivaAPagarPeriodo(regForm); // se sigue guardando en iva_pagado (mismo significado que antes)
   const MESES=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
   const handleSave=async()=>{
     setErr(""); setSaving(true);
@@ -183,7 +190,7 @@ export function FormIvaMensual({ ivaExistente, onSave }) {
         <Field label="Compras netas ($)"><input style={iMono} type="number" value={cN} onChange={e=>setCN(e.target.value)} /></Field>
         <Field label="IVA compras ($)"><input style={iMono} type="number" value={iC} onChange={e=>setIC(e.target.value)} /></Field>
       </div>
-      <div style={{background:C.tealLight,borderRadius:9,padding:"10px 12px",fontSize:13,color:C.tealDark,fontWeight:700,marginBottom:14}}>IVA a pagar: {fmt.money(ivaPagado)}</div>
+      <div style={{background:C.tealLight,borderRadius:9,padding:"10px 12px",fontSize:13,color:C.tealDark,fontWeight:700,marginBottom:14}}>IVA neto del período (usado en comisiones): {conSigno(ivaNeto)} · IVA a pagar: {fmt.money(ivaPagado)}</div>
       {err&&<div style={{background:C.dangerLight,color:C.dangerText,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}
       <button onClick={handleSave} disabled={saving} style={btnP(saving?C.inkFaint:C.info)}>{saving?"Guardando…":"✓ Guardar IVA"}</button>
     </div>
