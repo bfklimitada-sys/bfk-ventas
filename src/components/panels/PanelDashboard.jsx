@@ -6,6 +6,7 @@ import { C, MONO, SANS, btnP, fmt } from "../../lib/theme";
 import { Ic } from "../ui/Iconos";
 import { coincideBusqueda } from "../../lib/busqueda";
 import { calcularF29 } from "../../lib/f29";
+import { resumenCaja } from "../../lib/caja";
 import { Seccion, Tarjeta, Badge, Monto, Enlace } from "../ui/Sistema";
 import { FILTROS_PANEL, cobradoEnBanco, estaCerrada, etapasCompletadas, filtrarPanel, financiamientoPagado, ingresoPendienteOC, valeVistasPendientes } from "../../lib/ocs";
 
@@ -177,6 +178,10 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
     const utilidad=ingresos-costos;
     return {saldoReal,saldoEsperado,brecha,corteBanco:corte,movDesdeCorte,gananciaMes,ventaMes,aportes:totalAportes,cobrado,porCobrar,deudaFin,utilidad,saldoProyectado,saldoCtaCte,ingresosPendientes,valeVistaPorCobrar,deudaTotal,gastoContador,gastosVendedores,gastoImpuesto,f29,f29Periodos,f29Anterior,f29Visible,margenPromPct,deudaVendedoresMes,ocsAbiertas,creditoPagadoTotal,gastosTotal,costoBFK};
   },[ocs,financiadores,gastos,pagosVendedor,ivaMensual,vendedores,pagoFinSueltos,aportesLista,saldoBanco]);
+
+  // Cierre financiero: caja, compromisos y conciliación con un solo universo de movimientos (lib/caja.js).
+  const resumen=useMemo(()=>resumenCaja({ocs,financiadores,gastos,pagosVendedor,ivaMensual,vendedores,pagoFinSueltos,aportes:aportesLista,saldoBanco}),
+    [ocs,financiadores,gastos,pagosVendedor,ivaMensual,vendedores,pagoFinSueltos,aportesLista,saldoBanco]);
 
   // ── Proyección del mes: promedio histórico completo, para tener ──
   // algo que mostrar desde el día 1, antes de que existan ventas reales.
@@ -382,71 +387,65 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
       </Seccion>
 
       <Seccion titulo="Caja">
-      {/* ── Saldo Proyectado: solo lo esencial ── */}
-      <div style={{background:`linear-gradient(135deg,${C.night},${C.nightSoft})`,borderRadius:16,padding:"16px 18px",marginBottom:8,border:"1px solid rgba(45,212,191,0.25)"}}>
-        <div style={{fontSize:13,color:"#E2E8F0",fontWeight:800,marginBottom:4,textTransform:"uppercase",letterSpacing:0.6}}>Saldo proyectado</div>
-        <div style={{fontFamily:MONO,fontWeight:800,fontSize:34,color:kpis.saldoProyectado>=0?"#2DD4BF":"#F87171",letterSpacing:-1,lineHeight:1.1}}>{fmt.money(kpis.saldoProyectado)}</div>
-        <div style={{fontSize:12,color:"#CBD5E1",marginTop:6,lineHeight:1.45}}>Cuánto quedaría si se cobra todo lo pendiente y se paga todo lo que se debe</div>
-        {/* Fase 4C: desglose explícito del saldo proyectado */}
-        <div data-desglose-saldo style={{fontSize:12,color:"#E2E8F0",marginTop:8,lineHeight:1.6,fontFamily:MONO}}>
-          <div style={{display:"flex",justifyContent:"space-between"}}><span>Caja calculada (cobros en el banco)</span><span>{fmt.money(kpis.saldoCtaCte)}</span></div>
-          <div style={{display:"flex",justifyContent:"space-between"}}><span>+ Por cobrar (facturas, abonos parciales, sin facturar)</span><span>{fmt.money(kpis.ingresosPendientes)}</span></div>
-          {kpis.valeVistaPorCobrar>0&&<div style={{display:"flex",justifyContent:"space-between",color:"#94A3B8"}}><span>&nbsp;&nbsp;incluye vale vista/cheque sin cobrar</span><span>{fmt.money(kpis.valeVistaPorCobrar)}</span></div>}
-          <div style={{display:"flex",justifyContent:"space-between"}}><span>− Deudas (financiadores, comisiones del mes, F29)</span><span>{fmt.money(kpis.deudaTotal)}</span></div>
-        </div>
-        <div style={{display:"flex",flexDirection:"column",gap:6,marginTop:12,paddingTop:12,borderTop:"1px solid rgba(255,255,255,0.14)"}}>
-          <button onClick={onEditarSaldo}
-            style={{minHeight:44,background:"rgba(45,212,191,0.14)",border:"1px solid rgba(45,212,191,0.45)",
-              borderRadius:10,padding:"8px 12px",color:"#5EEAD4",fontSize:14,fontWeight:700,cursor:"pointer",textAlign:"left",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <span>{kpis.saldoReal!==null?"Actualizar saldo de la cuenta":"Registrar saldo de la cuenta"}</span><Ic n="chevR"/>
-          </button>
-        </div>
-      </div>
-
-      </Seccion>
-
-      <Seccion titulo="Compromisos" ocultarSiVacio={!(kpis.deudaFin>0||kpis.deudaVendedoresMes>0||kpis.f29Visible)}>
-      {/* Deuda a terceros — el detalle vive en Vendedores y Financiamiento */}
-      {(kpis.deudaFin>0||kpis.deudaVendedoresMes>0||kpis.f29Visible)&&(
-        <Tarjeta padding="4px 14px">
-          {kpis.deudaFin>0&&(
-            <button onClick={()=>onNavigate&&onNavigate("financiamiento",null)}
-              style={{width:"100%",background:"none",border:"none",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",minHeight:52,textAlign:"left"}}>
-              <span style={{fontSize:14,color:C.ink,fontWeight:600}}>Deuda con financiadores</span>
-              <span style={{display:"flex",alignItems:"center",gap:4}}>
-                <Monto tam="sm" tono="danger">{fmt.money(kpis.deudaFin)}</Monto>
-                <Ic n="chevR"/>
+      {/* Cierre financiero: cada concepto por separado, todos los pendientes sin importar el mes; lo que depende
+          de un IVA aún no registrado se marca PROVISORIO (lib/caja.js). */}
+      {(()=>{
+        const r=resumen; const MES=["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+        const Fila=({k,v,signo,tono,nota,dato,onClick})=>(
+          <div data-linea={dato} onClick={onClick} style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:8,padding:"6px 0",borderBottom:"1px solid rgba(255,255,255,0.10)",cursor:onClick?"pointer":"default"}}>
+            <span style={{minWidth:0}}>
+              <span style={{display:"block",fontSize:13,color:"#E2E8F0",fontWeight:700}}>{signo?<span style={{color:"#94A3B8",marginRight:4}}>{signo}</span>:null}{k}</span>
+              {nota&&<span style={{display:"block",fontSize:11.5,color:"#94A3B8",marginTop:1,lineHeight:1.35}}>{nota}</span>}
+            </span>
+            <span data-monto={dato} style={{fontFamily:MONO,fontWeight:800,fontSize:14,color:tono||"#F1F5F9",flexShrink:0}}>{fmt.money(v)}</span>
+          </div>
+        );
+        const ivaPend=r.ivaSinRegistrar.map(p=>`${MES[p.mes-1]}-${p.anio}`).join(", ");
+        return (<>
+          <div data-resumen-caja style={{background:`linear-gradient(135deg,${C.night},${C.nightSoft})`,borderRadius:16,padding:"16px 18px",marginBottom:8,border:"1px solid rgba(45,212,191,0.25)"}}>
+            <Fila dato="caja" k="Caja" v={r.caja} nota="Calculada con los movimientos registrados (cobros en el banco, aportes, pagos, gastos y comisiones pagadas)" />
+            <Fila dato="por_cobrar" signo="+" k="Por cobrar" v={r.porCobrar} nota="Facturas vigentes y OCs sin facturar, descontados los abonos parciales" onClick={()=>onNavigate&&onNavigate("compras","cobro")} />
+            <Fila dato="vale_vista" signo="+" k="Vale vista / cheques pendientes" v={r.valeVista} tono="#FBBF24" nota={r.nValeVista?`${r.nValeVista} documento${r.nValeVista>1?"s":""} entregado${r.nValeVista>1?"s":""} y aún sin depositar en el banco`:"Ninguno pendiente"} onClick={r.nValeVista?()=>onNavigate&&onNavigate("compras","vale_vista"):undefined} />
+            <Fila dato="deuda_fin" signo="−" k="Deuda con financiadores" v={r.deudaFinanciadores} tono="#F87171"
+              nota={r.porFinanciador.map(f=>`${f.nombre.split(" ")[0]} ${f.saldo<0?"a favor de BFK ":""}${fmt.money(Math.abs(f.saldo))}`).join(" · ")} onClick={()=>onNavigate&&onNavigate("financiamiento",null)} />
+            <Fila dato="comisiones" signo="−" k="Comisiones por pagar" v={r.comisiones.total} tono="#F87171"
+              nota={r.comisiones.detalle.length?<>{r.comisiones.detalle.map(d=>`${d.vendedor.split(" ")[0]} ${MES[d.mes-1]}-${d.anio} ${fmt.money(d.deuda)}${d.provisoria?" (provisoria)":""}`).join(" · ")}{r.comisiones.provisorias>0&&<span style={{display:"block",color:"#FBBF24"}}>Provisorias {fmt.money(r.comisiones.provisorias)}: calculadas sin el IVA del mes (no registrado). No son definitivas.</span>}</>:"Ninguna pendiente"}
+              onClick={()=>onNavigate&&onNavigate("vendedores",null)} />
+            <Fila dato="f29" signo="−" k="IVA / F29 pendiente" v={r.f29Pendiente} tono="#F87171"
+              nota={<>{r.f29.periodos.filter(x=>x.pend>0).map(x=>`${MES[x.mes-1]}-${x.anio} ${fmt.money(x.pend)}`).join(" · ")||"Sin saldo pendiente en los períodos registrados"}
+                {ivaPend&&<span data-iva-sin-registrar style={{display:"block",color:"#FBBF24"}}>Pendiente de registrar: {ivaPend}. Sin el F29 real no se estima ningún monto.</span>}</>} />
+            {r.fondosExternos>0&&<Fila dato="externos" signo="−" k="Fondos de ventas externas por liquidar" v={r.fondosExternos} tono="#F87171" nota="Dinero de ventas externas que entró a la cuenta: está en la caja, pero no es de BFK hasta liquidarlo" />}
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:8,paddingTop:10}}>
+              <span>
+                <span style={{display:"block",fontSize:13,color:"#E2E8F0",fontWeight:800,textTransform:"uppercase",letterSpacing:0.6}}>= Saldo proyectado</span>
+                {r.provisorio&&<span data-proyectado-provisorio style={{display:"block",fontSize:11.5,color:"#FBBF24",fontWeight:700,marginTop:2}}>PROVISORIO: falta registrar IVA/F29 de {ivaPend||"algún período"}{r.comisiones.provisorias>0?" y hay comisiones provisorias":""}</span>}
               </span>
-            </button>
-          )}
-          {kpis.deudaVendedoresMes>0&&(
-            <button onClick={()=>onNavigate&&onNavigate("vendedores",null)}
-              style={{width:"100%",background:"none",border:"none",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",minHeight:52,textAlign:"left",borderTop:kpis.deudaFin>0?`1px solid ${C.border}`:"none"}}>
-              <span style={{fontSize:14,color:C.ink,fontWeight:600}}>Comisiones a vendedores</span>
-              <span style={{display:"flex",alignItems:"center",gap:4}}>
-                <Monto tam="sm" tono="warn">{fmt.money(kpis.deudaVendedoresMes)}</Monto>
-                <Ic n="chevR"/>
-              </span>
-            </button>
-          )}
-          {kpis.f29Periodos.map((x,i)=>(
-            <div key={x.anio+"-"+x.mes} style={{padding:"10px 0",borderTop:(kpis.deudaFin>0||kpis.deudaVendedoresMes>0||i>0)?`1px solid ${C.border}`:"none"}}>
-              <div style={{fontSize:14,color:C.ink,fontWeight:600,marginBottom:4}}>Impuesto F29 · {fmt.monthYear(x.mes,x.anio)}</div>
-              <div style={{display:"flex",justifyContent:"space-between",fontSize:13,color:C.inkMuted,minHeight:24,alignItems:"center"}}><span>IVA determinado</span><Monto tam="sm">{fmt.money(x.det)}</Monto></div>
-              <div style={{display:"flex",justifyContent:"space-between",fontSize:13,color:C.inkMuted,minHeight:24,alignItems:"center"}}><span>Pagado (gastos Impuesto SII)</span><Monto tam="sm">{fmt.money(x.pag)}</Monto></div>
-              <div style={{display:"flex",justifyContent:"space-between",fontSize:13,color:C.ink,fontWeight:700,minHeight:24,alignItems:"center"}}><span>Pendiente de pago</span><Monto tam="sm" tono={x.pend>0?"warn":undefined}>{fmt.money(x.pend)}</Monto></div>
-              {x.det===0&&x.pag>0&&<div style={{fontSize:12,color:C.warnText,marginTop:2}}>Hay un pago registrado, pero el IVA de este período aún no está cargado en Vendedores.</div>}
+              <span data-monto="proyectado" style={{fontFamily:MONO,fontWeight:800,fontSize:28,color:r.saldoProyectado>=0?"#2DD4BF":"#F87171",letterSpacing:-1}}>{fmt.money(r.saldoProyectado)}</span>
             </div>
-          ))}
-          {kpis.f29Anterior>0&&(
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",minHeight:44,borderTop:(kpis.deudaFin>0||kpis.deudaVendedoresMes>0||kpis.f29Periodos.length>0)?`1px solid ${C.border}`:"none"}}>
-              <span style={{fontSize:13,color:C.warnText,fontWeight:700}}><Ic n="⚠"/> Deuda F29 de períodos anteriores</span>
-              <Monto tam="sm" tono="warn">{fmt.money(kpis.f29Anterior)}</Monto>
-            </div>
-          )}
-        </Tarjeta>
-      )}
+          </div>
 
+          {/* Conciliación bancaria: el saldo esperado usa EXACTAMENTE los mismos movimientos que la caja */}
+          <Tarjeta padding="12px 14px">
+            <div data-conciliacion style={{fontSize:13,color:C.ink}}>
+              <div style={{fontWeight:800,marginBottom:6}}>Conciliación bancaria</div>
+              {r.conciliacion.hayCorte?(<>
+                <div style={{display:"flex",justifyContent:"space-between",color:C.inkMuted}}><span>Saldo informado del banco al {fmt.date(r.conciliacion.corte)}</span><Monto tam="sm">{fmt.money(r.conciliacion.saldoBancoCorte)}</Monto></div>
+                <div style={{display:"flex",justifyContent:"space-between",color:C.inkMuted}}><span>+ Movimientos registrados después de esa fecha ({r.conciliacion.nPosteriores})</span><Monto tam="sm">{fmt.money(r.conciliacion.movPosteriores)}</Monto></div>
+                <div style={{display:"flex",justifyContent:"space-between",fontWeight:700}}><span>= Saldo esperado en el banco</span><Monto tam="sm">{fmt.money(r.conciliacion.esperado)}</Monto></div>
+                <div style={{display:"flex",justifyContent:"space-between",fontWeight:700}}><span>Caja calculada</span><Monto tam="sm">{fmt.money(r.caja)}</Monto></div>
+                <div data-pendiente-conciliacion style={{display:"flex",justifyContent:"space-between",fontWeight:800,color:Math.abs(r.conciliacion.pendienteConciliacion)>0.5?C.warnText:C.okText,marginTop:4,paddingTop:4,borderTop:`1px solid ${C.border}`}}>
+                  <span>{Math.abs(r.conciliacion.pendienteConciliacion)>0.5?"Pendiente de conciliación bancaria":"Conciliado"}</span><Monto tam="sm">{fmt.money(r.conciliacion.pendienteConciliacion)}</Monto>
+                </div>
+                {Math.abs(r.conciliacion.pendienteConciliacion)>0.5&&<div style={{fontSize:12,color:C.inkMuted,marginTop:4,lineHeight:1.45}}>Diferencia entre lo registrado hasta el {fmt.date(r.conciliacion.corte)} y el saldo del banco a esa fecha. No es pérdida ni ganancia: se aclara con las cartolas del banco. No entra en el saldo proyectado.</div>}
+              </>):<div style={{fontSize:12,color:C.inkMuted}}>Sin saldo del banco registrado: no se puede conciliar.</div>}
+              <button onClick={onEditarSaldo}
+                style={{marginTop:10,width:"100%",minHeight:44,background:C.paper,border:`1px solid ${C.border}`,borderRadius:10,padding:"8px 12px",color:C.ink,fontSize:14,fontWeight:700,cursor:"pointer",textAlign:"left",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <span>{kpis.saldoReal!==null?"Actualizar saldo de la cuenta":"Registrar saldo de la cuenta"}</span><Ic n="chevR"/>
+              </button>
+            </div>
+          </Tarjeta>
+        </>);
+      })()}
       </Seccion>
 
       <Seccion titulo="Nuevas OC y Mercado Público">

@@ -91,7 +91,11 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
                   <div key={d.label} style={{padding:"9px 0",borderBottom:`1px solid ${C.border}`}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:3}}>
                       <span style={{fontSize:12.5,fontWeight:700,color:C.ink}}>{d.label}</span>
-                      <Badge tono={d.estado==="pagado"?"ok":"warn"}>{d.estado==="pagado"?"✓ Comisión pagada":"Comisión pendiente"}</Badge>
+                      <span style={{display:"flex",gap:4,flexWrap:"wrap",justifyContent:"flex-end"}}>
+                        {/* Cierre financiero: sin IVA registrado del mes el cálculo no es definitivo */}
+                        {!d.esVerificado&&!d.sinIva&&!d.ivaRegistrado&&<span data-comision-provisoria><Badge tono="warn">Provisoria · IVA sin registrar</Badge></span>}
+                        <Badge tono={d.estado==="pagado"?"ok":"warn"}>{d.estado==="pagado"?"✓ Comisión pagada":"Comisión pendiente"}</Badge>
+                      </span>
                     </div>
                     <div style={{fontSize:12,color:C.inkFaint,marginBottom:5,lineHeight:1.7}}>
                       {d.esVerificado ? (
@@ -147,7 +151,7 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
                     </div>
                     {d.deuda>0&&(
                       <button onClick={()=>{setPagoInicial({vendedorId:v.id,mes:d.mes,anio:d.anio,monto:Math.round(d.deuda)});setPagando(true);}}
-                        style={{...btnG,minHeight:40,fontSize:12.5,marginTop:6,padding:"6px 12px"}}>Pagar este mes · {fmt.money(d.deuda)}</button>
+                        style={{...btnG,minHeight:40,fontSize:12.5,marginTop:6,padding:"6px 12px"}}>Pagar este mes · {fmt.money(d.deuda)}{!d.esVerificado&&!d.sinIva&&!d.ivaRegistrado?" (provisorio)":""}</button>
                     )}
                     {!d.esVerificado&&d.pagado>d.pagoCalculado+1000&&(
                       <div style={{fontSize:12,color:C.warnText,marginTop:3,lineHeight:1.4}}>
