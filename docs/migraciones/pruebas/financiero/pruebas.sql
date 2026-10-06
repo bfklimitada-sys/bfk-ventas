@@ -280,6 +280,21 @@ begin
   perform pg_temp.ok('T31b_ningun_saldo_real_cambio_salvo_el_de_la_prueba_T29', n = 0, n::text);
   select count(*) - (select h.total from _t_hist h) into n from public.historial_cambios;
   perform pg_temp.ok('T31c_historial_registra_las_operaciones', n >= 15, n::text);
-  perform pg_temp.ok('T31d_importacion_exacta_sin_recalculo',
-    exists (select 1 from pg_proc p where p.proname = 'importar_respaldo_excel' and 'bfk.importacion=on' = any(p.proconfig)));
 end $$;
+
+-- T31d: la importación exacta de respaldos (administrador) restaura valores tal cual, incluso en una OC bloqueada,
+-- sin protección ni recálculo; fuera de ella, la protección sigue activa. (Dentro de la transacción de prueba.)
+set local role authenticated;
+select pg_temp.como(current_setting('t.adm')) \g /dev/null
+do $$
+declare v_oc text; v jsonb;
+begin
+  select d.entidad_id into v_oc from public.fin_diferencias_historicas d
+   where d.estado = 'pendiente' and 'financiamiento' = any(d.bloquea) order by d.entidad_id limit 1;
+  if v_oc is null then v_oc := 't4b_oc1'; end if;
+  perform pg_temp.ok('T31d_fuera_de_la_importacion_no_hay_bypass', not public.fin_es_importacion());
+  v := public.importar_respaldo_excel(jsonb_build_object('version', 1, 'tablas', jsonb_build_object('ordenes_compra_v2',
+         jsonb_build_object('actualizar', jsonb_build_array(jsonb_build_object('id', v_oc, 'cambios', jsonb_build_object('monto_pagado_fin', 12345), 'esperado', jsonb_build_object('monto_pagado_fin', (pg_temp.oc(v_oc)).monto_pagado_fin)))))), false);
+  perform pg_temp.ok('T31e_importacion_exacta_sin_recalculo_ni_proteccion', (pg_temp.oc(v_oc)).monto_pagado_fin = 12345, coalesce(v::text, ''));
+end $$;
+reset role;

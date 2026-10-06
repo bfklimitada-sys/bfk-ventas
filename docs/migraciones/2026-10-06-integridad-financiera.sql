@@ -120,10 +120,17 @@ create index if not exists idx_oc_v2_financiador on public.ordenes_compra_v2 (fi
 
 -- ── 2. Cálculo (solo lectura) ──────────────────────────────────────────────────────────────
 -- Importación exacta (importar_respaldo_excel): no recalcula ni protege, restaura los valores tal cual.
+-- Se reconoce por la pila de llamadas (la escritura ocurre dentro de importar_respaldo_excel; un cliente no puede
+-- simularlo) o, en scripts del dueño de las tablas, por la variable de transacción bfk.importacion = 'on'.
+-- (Supabase no permite fijar parámetros propios con ALTER FUNCTION ... SET a un rol que no es superusuario.)
 create or replace function public.fin_es_importacion() returns boolean
-language sql stable set search_path = public, pg_temp as $$
-  select coalesce(current_setting('bfk.importacion', true), '') = 'on'
-$$;
+language plpgsql stable set search_path = public, pg_temp as $$
+declare v_ctx text;
+begin
+  if coalesce(current_setting('bfk.importacion', true), '') = 'on' then return true; end if;
+  get diagnostics v_ctx = pg_context;
+  return v_ctx ~ 'function (public\.)?importar_respaldo_excel\(jsonb,boolean\)';
+end $$;
 
 -- Escritura directa desde la aplicación (PostgREST): roles authenticated / anon.
 create or replace function public.fin_es_cliente() returns boolean
@@ -877,8 +884,7 @@ create trigger fin_recalcular after insert or update or delete on public.eventos
 create trigger fin_bloqueo before insert or update or delete on public.eventos_pago_cliente for each row execute function public.fin_trg_bloqueo_eventos();
 create trigger fin_recalcular after insert or update or delete on public.eventos_pago_cliente for each row execute function public.fin_trg_recalcular_eventos();
 
--- La importación exacta de respaldos restaura valores tal cual (sin recálculo ni protección).
-alter function public.importar_respaldo_excel(jsonb, boolean) set bfk.importacion = 'on';
+-- La importación exacta de respaldos (importar_respaldo_excel) restaura valores tal cual: ver fin_es_importacion().
 
 -- ── 9. Permisos ────────────────────────────────────────────────────────────────────────────
 do $$

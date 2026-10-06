@@ -27,7 +27,6 @@ drop trigger if exists fin_recalcular on public.eventos_factura;
 drop trigger if exists fin_bloqueo on public.eventos_pago_cliente;
 drop trigger if exists fin_recalcular on public.eventos_pago_cliente;
 
-alter function public.importar_respaldo_excel(jsonb, boolean) reset bfk.importacion;
 
 drop function if exists public.registrar_compra_oc(text, date, numeric, text, text, date, numeric, text);
 drop function if exists public.editar_compra_oc(text, date, numeric, numeric, date, text);
