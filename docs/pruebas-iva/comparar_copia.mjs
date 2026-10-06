@@ -5,7 +5,10 @@ import * as N from "../../src/lib/calculos.js";
 import * as NF from "../../src/lib/f29.js";
 import * as A from "./anterior/calculos.js";
 import * as AF from "./anterior/f29.js";
-const sh = (sql) => execFileSync(process.env.PSQL || "psql", ["-X", "-At", "-q", "-v", "ON_ERROR_STOP=1"], { input: sql, encoding: "utf8", maxBuffer: 1 << 29 }).trim();
+// Conexión: variables PG* (copia local) o DB_URL (producción, en solo lectura). La cadena nunca se imprime.
+const conn = process.env.DB_URL ? [process.env.DB_URL] : [];
+const env = { ...process.env, PGOPTIONS: "-c default_transaction_read_only=on" };
+const sh = (sql) => execFileSync(process.env.PSQL || "psql", [...conn, "-X", "-At", "-q", "-v", "ON_ERROR_STOP=1"], { input: sql, env, encoding: "utf8", maxBuffer: 1 << 29, stdio: ["pipe", "pipe", "pipe"] }).trim();
 const tabla = (t) => JSON.parse(sh(`select coalesce(jsonb_agg(to_jsonb(x)),'[]') from public.${t} x`));
 const todas = JSON.parse(sh(`select coalesce(jsonb_agg(to_jsonb(o) || jsonb_build_object('eventos_factura',(select coalesce(jsonb_agg(to_jsonb(e)),'[]') from public.eventos_factura e where e.oc_id=o.id))),'[]') from public.ordenes_compra_v2 o`));
 const ocs = todas.filter((o) => !o.archivada);
