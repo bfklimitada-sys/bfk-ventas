@@ -5,7 +5,8 @@ import { Ic } from "../ui/Iconos";
 import { Seccion, Tarjeta, Badge, BotonAdmin, IndiceSecciones } from "../ui/Sistema";
 import { ImportarEntidades } from "../forms/ImportarEntidades";
 
-export function PanelUsuarios({ perfiles, ocs, ocsArchivadas, onRestaurarOC, onChangeRol, session, showToast, entidadesCatalogo, onEntidadesImportadas, usoMP, sincronizando, validandoTodo, exportando, onCorregirFechas, onValidarTodo, onExportarTodo }) {
+export function PanelUsuarios({ perfiles, ocs, ocsArchivadas, onRestaurarOC, onChangeRol, session, showToast, entidadesCatalogo, onEntidadesImportadas, usoMP, sincronizando, validandoTodo, exportando, onCorregirFechas, onValidarTodo, onExportarTodo, difsHistoricas }) {
+  const [verDifs,setVerDifs]=useState(false);
   const [showImport,setShowImport]=useState(false);
   const [filtroArch,setFiltroArch]=useState("");
   const [archAbierta,setArchAbierta]=useState(null);
@@ -38,6 +39,7 @@ export function PanelUsuarios({ perfiles, ocs, ocsArchivadas, onRestaurarOC, onC
         {id:"adm-datos",label:"Datos y respaldo"},
         {id:"adm-mp",label:"Mercado Público"},
         {id:"adm-archivadas",label:"OCs archivadas",n:(ocsArchivadas||[]).length},
+        {id:"adm-correcciones",label:"Correcciones pendientes",n:(difsHistoricas||[]).length},
       ]} />
       {/* ── 1. Usuarios y permisos ── */}
       <Seccion id="adm-usuarios" titulo="Usuarios y permisos">
@@ -107,6 +109,37 @@ export function PanelUsuarios({ perfiles, ocs, ocsArchivadas, onRestaurarOC, onC
           <div style={{fontSize:12,color:C.inkMuted,marginTop:8,lineHeight:1.45}}>
             Corrige solo la <b>fecha de la OC</b> (emisión en Mercado Público). La <b>fecha real de compra</b> es un dato de BFK y nunca se reemplaza.
           </div>
+        </Tarjeta>
+      </Seccion>
+
+      {/* ── Correcciones históricas pendientes (Fase 4B): solo lectura ── */}
+      <Seccion id="adm-correcciones" titulo="Correcciones históricas pendientes" nota="Diferencias encontradas al pasar a totales calculados por la base (Fase 4B). Se conservan los valores guardados hasta aprobar cada corrección; mientras tanto, las operaciones del dominio afectado quedan bloqueadas en esa OC.">
+        <Tarjeta>
+          {(()=>{
+            const l=difsHistoricas||[];
+            if(!l.length) return <div style={{fontSize:12,color:C.inkMuted}}>No hay correcciones pendientes.</div>;
+            const ocsCon=new Set(l.filter(d=>d.entidad==="oc").map(d=>d.entidad_id));
+            const seg=l.filter(d=>d.clasificacion==="segura").length;
+            const nombre={costo_total:"Costo",monto_pagado_fin:"Pagado al financiador",estado_pago_financiamiento:"Estado financiamiento",monto_facturado:"Facturado",monto_cobrado:"Cobrado",saldo_deuda:"Saldo del financiador",estado_compra:"Estado compra",estado_factura_propia:"Estado factura",estado_pago_cliente:"Estado cobro"};
+            return <>
+              <div data-correcciones-pendientes={l.length} style={{fontSize:12,color:C.inkMuted,lineHeight:1.5,marginBottom:8}}>
+                <b style={{color:C.ink}}>{l.length}</b> diferencias en <b style={{color:C.ink}}>{ocsCon.size}</b> OCs y <b style={{color:C.ink}}>{l.filter(d=>d.entidad==="financiador").length}</b> financiadores · <b style={{color:C.okText}}>{seg}</b> seguras de corregir · <b style={{color:C.warnText}}>{l.length-seg}</b> requieren decisión
+              </div>
+              <button type="button" onClick={()=>setVerDifs(v=>!v)} style={{background:"none",border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 10px",fontSize:12,fontWeight:700,color:C.tealDark,cursor:"pointer"}}>{verDifs?"Ocultar detalle":"Ver detalle"}</button>
+              {verDifs&&<div style={{marginTop:8,maxHeight:420,overflowY:"auto"}}>
+                {l.slice().sort((a,b)=>(a.clasificacion===b.clasificacion?0:a.clasificacion==="decision"?-1:1)||String(a.etiqueta).localeCompare(String(b.etiqueta))).map(d=>(
+                  <div key={d.id} style={{borderTop:`1px solid ${C.border}`,padding:"7px 0",fontSize:12,lineHeight:1.45}}>
+                    <div style={{display:"flex",justifyContent:"space-between",gap:8}}>
+                      <b style={{color:C.ink}}>{d.etiqueta||d.entidad_id} · {nombre[d.campo]||d.campo}</b>
+                      <Badge tono={d.clasificacion==="segura"?"ok":"warn"}>{d.clasificacion==="segura"?"Segura":"Decisión"}</Badge>
+                    </div>
+                    <div style={{color:C.inkMuted}}>Guardado {d.diferencia!=null?fmt.money(Number(d.valor_registrado)):d.valor_registrado} · según eventos {d.diferencia!=null?fmt.money(Number(d.valor_eventos)):d.valor_eventos}{d.diferencia!=null?` · diferencia ${fmt.money(Number(d.diferencia))}`:""}</div>
+                    <div style={{color:C.inkFaint}}>{d.causa}</div>
+                  </div>
+                ))}
+              </div>}
+            </>;
+          })()}
         </Tarjeta>
       </Seccion>
 

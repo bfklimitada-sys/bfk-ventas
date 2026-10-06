@@ -4,6 +4,8 @@ import { Field } from "./Basicos";
 import { del } from "../../lib/supabase";
 import { C, MONO, SANS, btnP, fmt, iMono, iStyle, selStyle } from "../../lib/theme";
 import { Ic, I } from "./Iconos";
+import { FormCambiarFinanciamiento } from "../forms/FormCambiarFinanciamiento";
+import { TIPOS_FINANCIAMIENTO, financiamientoNoAplica, tipoFinanciamiento } from "../../lib/finanzas";
 
 export const TIPOS_PV={falla:"Falla del producto",faltante:"Faltante",cambio:"Cambio / reposición",devolucion:"Devolución",otro:"Otro"};
 
@@ -83,7 +85,11 @@ export const numeroIncidente=(lista,ev)=>{
   const i=cron.findIndex(e=>e.id===ev?.id); return i<0?cron.length+1:i+1;
 };
 
-export function EtapasOC({ oc, perfil, perfiles, activa, extra, onEditarEvento, onEliminarFactura, onEliminarEvento, onAccion, onCorreoFallida, onCorreoFecha, onPostventa, onReabrirPostventa, onGuardarLink, onEliminarLink, onEditarLink, onAsignarResponsable }) {
+export function EtapasOC({ oc, perfil, perfiles, activa, extra, onEditarEvento, onEliminarFactura, onEliminarEvento, onAccion, onCorreoFallida, onCorreoFecha, onPostventa, onReabrirPostventa, onGuardarLink, onEliminarLink, onEditarLink, onAsignarResponsable, financiadores, difsOC, onCambiarFinanciamiento }) {
+  // Fase 4B: diferencias históricas pendientes bloquean las operaciones de su dominio hasta que se apruebe la corrección.
+  const bloqueado=(dominio)=>(difsOC||[]).some(d=>(d.bloquea||[]).includes(dominio));
+  const [cambiandoFin,setCambiandoFin]=useState(false);
+  const tipoFin=tipoFinanciamiento(oc,financiadores);
   // La etapa que toca queda abierta: es la acción principal de la OC. Al registrar, avanza sola a la siguiente.
   const reabriendo=useRef(new Set());   // evita reabrir dos veces por doble toque
   const [detalle,setDetalle]=useState(activa||null);
@@ -110,15 +116,15 @@ export function EtapasOC({ oc, perfil, perfiles, activa, extra, onEditarEvento, 
         {label:<I t={"📅 Fecha de entrega"}/>,action:onCorreoFecha,color:C.ink},
       ]},
     { key:"factura", label:"Factura", ok:estaFacturada(oc),     icon:<Ic n="🧾"/>, tabla:"eventos_factura",
-      accion: !estaFacturada(oc)
+      accion: bloqueado("facturacion")?null:!estaFacturada(oc)
         ?{label:<I t={"🧾 Emitir factura"}/>,color:C.info,key:"factura"}
         :{label:<I t={"🧾 Re-emitir (NC)"}/>,color:C.inkMuted,key:"factura"},
       correoBtns: null },
     { key:"cobro",   label:"Cobro",   ok:estaCobrada(oc),        icon:<Ic n="💰"/>, tabla:"eventos_pago_cliente",
-      accion: estaFacturada(oc)&&!estaCobrada(oc)?{label:<I t={"💰 Registrar cobro"}/>,color:C.okText,key:"pago_cliente"}:null,
+      accion: estaFacturada(oc)&&!estaCobrada(oc)&&!bloqueado("cobro")?{label:<I t={"💰 Registrar cobro"}/>,color:C.okText,key:"pago_cliente"}:null,
       correoBtns: null },
     { key:"financ",  label:"Financ.", ok:financiamientoPagado(oc), icon:<Ic n="🏦"/>, tabla:"eventos_pago_financiamiento",
-      accion: !financiamientoPagado(oc)?{label:<I t={"🏦 Registrar pago"}/>,color:C.purple,key:"pago_financ"}:null,
+      accion: !financiamientoPagado(oc)&&!bloqueado("financiamiento")&&tipoFin==="externo"?{label:<I t={"🏦 Registrar pago"}/>,color:C.purple,key:"pago_financ"}:null,
       correoBtns: null },
     { key:"postventa", label:"Post-venta", ok:(oc.eventos_postventa||[]).some(e=>e.estado==="resuelto"), icon:<Ic n="🛠"/>, tabla:"eventos_postventa",
       accion: {label:<I t={"🛠 Registrar incidencia"}/>,color:C.warnText,key:"postventa"},
@@ -130,8 +136,14 @@ export function EtapasOC({ oc, perfil, perfiles, activa, extra, onEditarEvento, 
 
   const renderDetalle=(etapa)=>{
     const eventos=getEventos(etapa.key);
+    const dominio=etapa.key==="compra"||etapa.key==="financ"?"financiamiento":etapa.key==="factura"?"facturacion":etapa.key==="cobro"?"cobro":null;
     return (
       <div>
+        {dominio&&bloqueado(dominio)&&(
+          <div data-bloqueo-historico={dominio} style={{background:C.warnLight,borderRadius:8,padding:"8px 10px",marginBottom:8,fontSize:12,color:C.warnText,fontWeight:600,lineHeight:1.4}}>
+            <Ic n="⚠"/> Corrección histórica pendiente de aprobación (Fase 4B). Hasta resolverla no se registran ni corrigen movimientos de {dominio==="financiamiento"?"compra y financiamiento":dominio==="facturacion"?"facturación":"cobro"} en esta OC.
+          </div>
+        )}
         {eventos.length===0&&(
           <div>
             {/* Estado marcado en OC pero sin evento detallado (OCs históricas) */}
@@ -155,7 +167,13 @@ export function EtapasOC({ oc, perfil, perfiles, activa, extra, onEditarEvento, 
                 <div style={{fontSize:12,color:C.warnText,marginTop:4}}>Registro histórico — sin fecha detallada</div>
               </div>
             )}
-            {etapa.key==="financ"&&financiamientoPagado(oc)&&(
+            {etapa.key==="financ"&&financiamientoNoAplica(oc)&&(
+              <div data-financiamiento="no_aplica" style={{background:C.card,borderRadius:8,padding:"10px 12px",marginBottom:8}}>
+                <div style={{fontSize:12.5,fontWeight:600}}><Ic n="🏦"/> Financiamiento: no aplica</div>
+                <div style={{fontSize:12,color:C.inkMuted}}>{TIPOS_FINANCIAMIENTO[tipoFin]?.etiqueta}: {TIPOS_FINANCIAMIENTO[tipoFin]?.detalle}</div>
+              </div>
+            )}
+            {etapa.key==="financ"&&oc.estado_pago_financiamiento==="pagado"&&(
               <div style={{background:C.card,borderRadius:8,padding:"10px 12px",marginBottom:8}}>
                 <div style={{fontSize:12.5,fontWeight:600}}><Ic n="🏦"/> Financiamiento pagado</div>
                 <div style={{fontSize:12,color:C.inkMuted}}>Monto: <b>{fmt.money(oc.costo_total)}</b> · A: <b>{oc.financiadores?.nombre||"—"}</b></div>
@@ -195,7 +213,13 @@ export function EtapasOC({ oc, perfil, perfiles, activa, extra, onEditarEvento, 
               <div style={{fontSize:12,color:C.inkMuted}}>Venta: <b>{fmt.money(ev.monto_venta||oc.monto_total)}</b> · Costo: <b>{fmt.money(ev.costo_compra||oc.costo_total)}</b></div>
               {ev.fecha_entrega_estimada&&<div style={{fontSize:12,color:C.inkMuted}}>Entrega est.: {fmt.date(ev.fecha_entrega_estimada)}</div>}
               {ev.proveedor&&<div style={{fontSize:12,color:C.inkMuted}}>Proveedor: {ev.proveedor}</div>}
-              <div style={{fontSize:12,color:C.inkMuted}}>Financiador: <b>{oc.financiadores?.nombre||"—"}</b> · Vendedor: <b>{oc.vendedores?.nombre||"—"}</b></div>
+              <div style={{fontSize:12,color:C.inkMuted}}>Financiamiento: <b data-tipo-financiamiento={tipoFin}>{TIPOS_FINANCIAMIENTO[tipoFin]?.etiqueta}</b>{tipoFin!=="venta_propia"&&<> · <b>{oc.financiadores?.nombre||"—"}</b></>} · Vendedor: <b>{oc.vendedores?.nombre||"—"}</b></div>
+              {onCambiarFinanciamiento&&i===0&&!bloqueado("financiamiento")&&!cambiandoFin&&(
+                <button data-accion="cambiar-financiamiento" onClick={()=>setCambiandoFin(true)}
+                  style={{background:"none",border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 10px",fontSize:12,fontWeight:700,color:C.tealDark,cursor:"pointer",marginTop:6}}>Cambiar financiamiento</button>
+              )}
+              {cambiandoFin&&i===0&&<FormCambiarFinanciamiento oc={oc} financiadores={financiadores} onCancel={()=>setCambiandoFin(false)}
+                onSave={async(d)=>{ await onCambiarFinanciamiento(d); setCambiandoFin(false); }} />}
               <div style={{fontSize:12,color:C.inkFaint,marginTop:6}}>Los productos y links se gestionan en «Productos y números».</div>
             </>}
             {etapa.key==="entrega"&&<>
@@ -248,15 +272,15 @@ export function EtapasOC({ oc, perfil, perfiles, activa, extra, onEditarEvento, 
                 <button onClick={()=>onPostventa&&onPostventa(ev,"editar")}
                   style={{fontSize:12,background:C.tealLight,color:C.tealDark,border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontWeight:600}}><Ic n="✏️"/> Editar</button>
               </>:
-              <button onClick={()=>onEditarEvento&&onEditarEvento({tipo:etapa.label,e:ev,tabla:etapa.tabla})}
+              !(dominio&&bloqueado(dominio))&&<button onClick={()=>onEditarEvento&&onEditarEvento({tipo:etapa.label,e:ev,tabla:etapa.tabla})}
                 style={{fontSize:12,background:C.tealLight,color:C.tealDark,border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontWeight:600}}><Ic n="✏️"/> Editar</button>}
-              {perfil?.rol==="admin"&&etapa.key==="factura"&&(
+              {perfil?.rol==="admin"&&etapa.key==="factura"&&!bloqueado("facturacion")&&(
                 <button onClick={async()=>{
                   if(!window.confirm(`¿Eliminar factura N°${ev.numero_factura}?\nEsto revertirá el estado a pendiente.`)) return;
                   await onEliminarFactura(oc.id, ev.id); setDetalle(null);
                 }} style={{fontSize:12,background:C.dangerLight,color:C.dangerText,border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontWeight:600}}><Ic n="🗑"/> Eliminar</button>
               )}
-              {perfil?.rol==="admin"&&etapa.key!=="factura"&&(
+              {perfil?.rol==="admin"&&etapa.key!=="factura"&&!(dominio&&bloqueado(dominio))&&(
                 <button onClick={async()=>{
                   if(!window.confirm(`¿Eliminar este registro de ${etapa.label}?`)) return;
                   if(onEliminarEvento) await onEliminarEvento(etapa.tabla, ev.id, oc.id, etapa.key); setDetalle(null);

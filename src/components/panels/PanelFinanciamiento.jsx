@@ -53,7 +53,7 @@ function FormAporte({ aporte, socios, onSave, onEliminar }) {
   );
 }
 
-export function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onAjustar, aportes, onGuardarAporte, onEliminarAporte, onAbonar, pagoFinSueltos }) {
+export function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onAjustar, aportes, onGuardarAporte, onEliminarAporte, onAbonar, pagoFinSueltos, difsHistoricas }) {
   const [nuevoAporte,setNuevoAporte]=useState(false);
   const [editAporte,setEditAporte]=useState(null);
   const [selFin,setSelFin]=useState(null);
@@ -62,7 +62,8 @@ export function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onA
   const [verSolo,setVerSolo]=useState(null);
 
   const cartola=(finId)=>{
-    const compras=(ocs||[]).filter(o=>o.financiador_id===finId&&(o.eventos_compra||[]).length>0).map(o=>{
+    // Regla 3 (Fase 4B): la venta propia no genera deuda con el financiador; no entra en su cartola.
+    const compras=(ocs||[]).filter(o=>o.financiador_id===finId&&!o.es_venta_propia&&(o.eventos_compra||[]).length>0).map(o=>{
       const primerEvento=(o.eventos_compra||[]).slice().sort((a,b)=>new Date(a.fecha)-new Date(b.fecha))[0];
       // El monto sale de costo_total (lo mismo que usa el saldo de deuda),
       // no de sumar los eventos — así nunca pueden desalinearse si alguien
@@ -89,11 +90,18 @@ export function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onA
         <button onClick={()=>setSelFin(null)} style={{background:"none",border:"none",color:C.tealDark,fontWeight:700,fontSize:13,cursor:"pointer",marginBottom:12,padding:0}}>← Volver</button>
         <div style={{background:`linear-gradient(135deg,${C.night},${C.nightSoft})`,borderRadius:16,padding:"18px 20px",marginBottom:16}}>
           <div style={{fontSize:12,color:C.inkOnDark,marginBottom:4}}>{fin?.nombre}</div>
-          <div style={{fontFamily:MONO,fontWeight:800,fontSize:30,color:C.danger,letterSpacing:-1}}>{fmt.money(fin?.saldo_deuda)}</div>
-          <div style={{fontSize:12,color:C.inkOnDark,marginTop:4}}>Deuda actual</div>
+          <div data-saldo-financiador={Number(fin?.saldo_deuda)||0} style={{fontFamily:MONO,fontWeight:800,fontSize:30,color:Number(fin?.saldo_deuda)<0?C.ok:C.danger,letterSpacing:-1}}>{fmt.money(Math.abs(Number(fin?.saldo_deuda)||0))}</div>
+          <div style={{fontSize:12,color:C.inkOnDark,marginTop:4}}>{fin?.tipo==="propio"?"Fondos propios (Cuenta BFK): no es deuda con un financiador":Number(fin?.saldo_deuda)<0?"Saldo a favor de BFK (se pagó más de lo adeudado)":"Deuda actual"} · calculada por la base desde compras, pagos y ajustes</div>
         </div>
-        <button onClick={()=>onAbonar&&onAbonar(fin?.id)} style={{...btnP(C.teal),marginBottom:8}}><Ic n="💸"/> Abonar a {fin?.nombre}</button>
-        <button onClick={()=>setAjustando(fin)} style={{...btnP(C.nightSoft),marginBottom:16}}>Ajustar saldo manualmente</button>
+        {(difsHistoricas||[]).filter(d=>d.entidad==="financiador"&&d.entidad_id===fin?.id).map(d=>(
+          <div key={d.id} data-diferencia-financiador={fin?.id} style={{background:C.warnLight,borderRadius:9,padding:"9px 12px",marginBottom:10,fontSize:12,color:C.warnText,lineHeight:1.45,fontWeight:600}}>
+            <Ic n="⚠"/> Corrección histórica pendiente de aprobación: se conserva el saldo guardado ({fmt.money(Number(d.valor_registrado))}); con los movimientos registrados sería {fmt.money(Number(d.valor_eventos))}. {d.causa}.
+          </div>
+        ))}
+        {fin?.tipo!=="propio"&&<>
+          <button onClick={()=>onAbonar&&onAbonar(fin?.id)} style={{...btnP(C.teal),marginBottom:8}}><Ic n="💸"/> Abonar a {fin?.nombre}</button>
+          <button onClick={()=>setAjustando(fin)} style={{...btnP(C.nightSoft),marginBottom:16}}>Ajustar saldo manualmente</button>
+        </>}
 
         {(()=>{
           const compras=movs.filter(m=>m.tipo==="compra");
@@ -192,8 +200,8 @@ export function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onA
               <div style={{marginTop:6}}><Badge tono="neutro">Ver cartola <Ic n="chevR"/></Badge></div>
             </div>
             <div style={{textAlign:"right",flexShrink:0}}>
-              <div style={{fontSize:12,color:C.inkMuted,marginBottom:2}}>Deuda actual</div>
-              <Monto tam="lg" tono={Number(f.saldo_deuda)>0?"danger":"ok"}>{fmt.money(f.saldo_deuda)}</Monto>
+              <div style={{fontSize:12,color:C.inkMuted,marginBottom:2}}>{Number(f.saldo_deuda)<0?"A favor de BFK":"Deuda actual"}</div>
+              <Monto tam="lg" tono={Number(f.saldo_deuda)>0?"danger":"ok"}>{fmt.money(Math.abs(Number(f.saldo_deuda)||0))}</Monto>
             </div>
           </div>
         </Tarjeta>

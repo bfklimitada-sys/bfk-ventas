@@ -160,8 +160,10 @@ export function FormPagoCliente({ ocs, onSave, ocPreseleccionada }) {
   );
 }
 
-export function FormPagoFinanciamiento({ ocs, financiadores, onSave, ocPreseleccionada, financiadorPreseleccionado }) {
-  const [finId,setFinId]=useState(financiadorPreseleccionado||financiadores[0]?.id||""); const [ocId,setOcId]=useState(ocPreseleccionada||null);
+export function FormPagoFinanciamiento({ ocs, financiadores: todosFin, onSave, ocPreseleccionada, financiadorPreseleccionado }) {
+  // Fase 4B: los fondos propios (Cuenta BFK) no son deuda: no se les registran pagos (regla 2).
+  const financiadores=(todosFin||[]).filter(f=>f.tipo!=="propio");
+  const [finId,setFinId]=useState((financiadores.some(f=>f.id===financiadorPreseleccionado)?financiadorPreseleccionado:financiadores[0]?.id)||""); const [ocId,setOcId]=useState(ocPreseleccionada||null);
   const [fecha,setFecha]=useState(new Date().toISOString().slice(0,10)); const [monto,setMonto]=useState("");
   const [err,setErr]=useState(""); const [saving,setSaving]=useState(false);
   const fin=financiadores.find(f=>f.id===finId);
@@ -172,10 +174,10 @@ export function FormPagoFinanciamiento({ ocs, financiadores, onSave, ocPreselecc
   return (
     <div>
       <Field label="Financiador" required><select style={selStyle} value={finId} onChange={e=>setFinId(e.target.value)}>{financiadores.map(f=><option key={f.id} value={f.id}>{f.nombre}</option>)}</select></Field>
-      {fin&&<div style={{background:C.paper,borderRadius:8,padding:"8px 12px",fontSize:12,color:C.inkMuted,marginBottom:12}}>Deuda actual: <b style={{color:C.dangerText}}>{fmt.money(fin.saldo_deuda)}</b></div>}
+      {fin&&<div style={{background:C.paper,borderRadius:8,padding:"8px 12px",fontSize:12,color:C.inkMuted,marginBottom:12}}>{Number(fin.saldo_deuda)<0?<>Saldo a favor de BFK: <b style={{color:C.okText}}>{fmt.money(-Number(fin.saldo_deuda))}</b></>:<>Deuda actual: <b style={{color:C.dangerText}}>{fmt.money(fin.saldo_deuda)}</b></>}</div>}
       {!ocPreseleccionada&&<Field label="OC relacionada (opcional)"><BuscadorOC ocs={ocs} ocId={ocId} setOcId={setOcId} /></Field>}
       <Field label="Fecha" required><input style={iStyle} type="date" value={fecha} onChange={e=>setFecha(e.target.value)} /></Field>
-      <Field label="Monto ($)" required hint="Se descuenta de la deuda automáticamente"><input style={iMono} type="number" value={monto} onChange={e=>setMonto(e.target.value)} /></Field>
+      <Field label="Monto ($)" required hint="La base descuenta el pago de la deuda; si supera lo adeudado por la OC, el resto queda como pago sin OC"><input style={iMono} type="number" value={monto} onChange={e=>setMonto(e.target.value)} /></Field>
       {err&&<div style={{background:C.dangerLight,color:C.dangerText,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}
       <button onClick={handleSave} disabled={saving} style={btnP(saving?C.inkFaint:C.purple)}>{saving?"Guardando…":"✓ Registrar pago a financiador"}</button>
     </div>

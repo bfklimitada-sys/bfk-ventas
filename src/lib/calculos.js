@@ -5,11 +5,27 @@
 // ═══════════════════════════════════════════════════════════════
 import { C, fmt } from "./theme.js";
 
+// ── Facturas vigentes (regla 4, Fase 4B) ──────────────────────
+// Una factura está ANULADA si otra factura de la misma OC la anula
+// (factura_anulada_numero = su número). Las demás son vigentes: solo
+// ellas cuentan para lo facturado, el cobro y la comisión, y el período
+// de la comisión es el de la factura vigente. Mismo criterio que la base
+// (fin_facturas_vigentes).
+const numFactura = (v) => String(v ?? "").trim();
+export const facturasVigentes = (oc) => {
+  const fs = oc?.eventos_factura || [];
+  return fs.filter((f) => !fs.some((a) => a.id !== f.id && numFactura(a.factura_anulada_numero) !== ""
+    && numFactura(a.factura_anulada_numero) === numFactura(f.numero_factura)));
+};
+export const facturaAnulada = (oc, f) => !facturasVigentes(oc).some((v) => v.id === f.id);
+
 // ── Factura vigente ───────────────────────────────────────────
-// La más reciente por fecha: si hubo reemisión (NC de por medio), la
-// primera del arreglo sería la anulada, no la que hay que cobrar.
-export const facturaVigente = (oc) =>
-  (oc.eventos_factura || []).slice().sort((a, b) => new Date(b.fecha) - new Date(a.fecha))[0];
+// La vigente más reciente por fecha (para el plazo de cobro). Si hubo
+// reemisión, la anulada nunca es la que hay que cobrar.
+export const facturaVigente = (oc) => {
+  const vig = facturasVigentes(oc);
+  return (vig.length ? vig : (oc?.eventos_factura || [])).slice().sort((a, b) => new Date(b.fecha) - new Date(a.fecha))[0];
+};
 
 // Año y mes leídos del texto "YYYY-MM-DD" (sin Date) para evitar el
 // corrimiento de zona horaria que mueve el día 1 al mes anterior.
@@ -66,7 +82,7 @@ export const calcMargen = (venta, costo) => {
 export const mesesConFactura = (vendedorId, ocs) => {
   const set = new Set();
   ocs.filter((o) => o.vendedor_id === vendedorId && o.estado_factura_propia === "emitida").forEach((o) => {
-    (o.eventos_factura || []).forEach((ef) => {
+    facturasVigentes(o).forEach((ef) => {
       const { anio, mes } = anioMesDe(ef.fecha);
       set.add(`${anio}-${String(mes).padStart(2, "0")}`);
     });
@@ -99,7 +115,8 @@ export const ivaAPagarPeriodo = (registro) => Math.max(0, ivaNetoPeriodo(registr
 export const calcularPagoVendedor = ({ vendedorId, ocs, anio, mes, ivaMensual = [], pagosVendedor = [] }) => {
   let sumaFacts = 0, sumaUtilidad = 0, pagoVentasPropias = 0, hayFacturas = false;
   ocs.filter((o) => o.vendedor_id === vendedorId && o.estado_factura_propia === "emitida").forEach((o) => {
-    const factsMes = (o.eventos_factura || []).filter((ef) => {
+    // Regla 4: solo facturas vigentes; una anulada no vuelve a generar comisión.
+    const factsMes = facturasVigentes(o).filter((ef) => {
       const p = anioMesDe(ef.fecha);
       return p.anio === anio && p.mes === mes;
     });

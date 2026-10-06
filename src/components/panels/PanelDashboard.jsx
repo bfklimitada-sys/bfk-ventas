@@ -7,7 +7,7 @@ import { Ic } from "../ui/Iconos";
 import { coincideBusqueda } from "../../lib/busqueda";
 import { calcularF29 } from "../../lib/f29";
 import { Seccion, Tarjeta, Badge, Monto, Enlace } from "../ui/Sistema";
-import { FILTROS_PANEL, etapasCompletadas, filtrarPanel, valeVistasPendientes } from "../../lib/ocs";
+import { FILTROS_PANEL, etapasCompletadas, filtrarPanel, financiamientoPagado, valeVistasPendientes } from "../../lib/ocs";
 
 // Tarjeta base para los avisos ligados a Mercado Público: encabezado con
 // icono + botón de refresco, y cuerpo blanco para el contenido/lista.
@@ -89,10 +89,11 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
       if(esAporte(oc)) continue;   // los aportes viven en aportes_socios
       ingresos+=oc.monto_total||0;                 // solo ventas reales
       costos+=(Number(oc.costo_total)||0)+costoPostventa(oc);
-      if(oc.estado_pago_financiamiento!=="pagado") creditoPendienteTotal+=oc.costo_total||0;
+      if(!financiamientoPagado(oc)) creditoPendienteTotal+=oc.costo_total||0;   // "no aplica" (venta propia / fondos propios) no es crédito pendiente
       creditoPagadoTotal+=(oc.eventos_pago_financiamiento||[]).reduce((s,e)=>s+(e.monto||0),0);
       const finNombre=oc.financiadores?.nombre||"";
-      if(finNombre.toLowerCase().includes("bfk")||finNombre.toLowerCase().includes("cuenta bfk")) costoBFK+=oc.costo_total||0;
+      // Fondos propios (regla 2): por tipo de financiador, ya no por el nombre.
+      if((financiadores||[]).some(f=>f.id===oc.financiador_id&&f.tipo==="propio")||(!financiadores?.some(f=>f.tipo)&&(finNombre.toLowerCase().includes("bfk")))) costoBFK+=oc.costo_total||0;
     }
     creditoPagadoTotal+=(pagoFinSueltos||[]).reduce((s,e)=>s+(e.monto||0),0);
 
@@ -138,7 +139,8 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
     let ingresosPendientes=0;
     for(const oc of ocs){
       if(!esVenta(oc)) continue;
-      if(oc.estado_pago_cliente!=="pagado") ingresosPendientes+=oc.monto_total||0;
+      // Lo que falta por cobrar (un cobro parcial ya está en "cobrado": no se cuenta dos veces).
+      if(oc.estado_pago_cliente!=="pagado") ingresosPendientes+=Math.max(0,(Number(oc.monto_total)||0)-(Number(oc.monto_cobrado)||0));
     }
 
     const deudaFin=financiadores.reduce((s,f)=>s+(Number(f.saldo_deuda)||0),0);

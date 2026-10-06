@@ -88,7 +88,7 @@ export function FormCompraRapida({ ocs, financiadores, perfil, onSave, ocPresele
         hint={perfil?.financiador_default ? "Precargado según tu usuario — cámbialo si fue otro" : ""}>
         <select style={selStyle} value={financiadorId} onChange={e => setFinanciadorId(e.target.value)}>
           <option value="">Selecciona…</option>
-          {financiadores.map(f => <option key={f.id} value={f.id}>{f.nombre}</option>)}
+          {financiadores.map(f => <option key={f.id} value={f.id}>{f.nombre}{f.tipo === "propio" ? " — fondos propios (no genera deuda)" : ""}</option>)}
         </select>
       </Field>
 

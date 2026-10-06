@@ -250,7 +250,7 @@ export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, ent
         <div>
           <Field label="Financiador" required>
             <select style={selStyle} value={financiadorId} onChange={e=>setFinanciadorId(e.target.value)}>
-              {financiadores.map(f=><option key={f.id} value={f.id}>{f.nombre}</option>)}
+              {financiadores.map(f=><option key={f.id} value={f.id}>{f.nombre}{f.tipo==="propio"?" — fondos propios (no genera deuda)":""}</option>)}
             </select>
           </Field>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>

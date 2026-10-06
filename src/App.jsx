@@ -4,8 +4,9 @@ import { LoginScreen } from "./components/auth/LoginScreen";
 import { FormIngresarCompra } from "./components/forms/FormIngresarCompra";
 import { NuevaOCRapida } from "./components/forms/NuevaOCRapida";
 import { FormCompraRapida } from "./components/forms/FormCompraRapida";
-import { FormAbonoFinanciador, repartirFIFO } from "./components/forms/FormAbonoFinanciador";
+import { FormAbonoFinanciador, ocsPendientesFinanciador, repartirFIFO } from "./components/forms/FormAbonoFinanciador";
 import { registrarPagoFinanciador } from "./lib/pagosFinanciador";
+import { cambiarFinanciamientoOC, deudaOC, editarCompraOC, editarPagoFinanciador, eliminarCompraOC, eliminarPagoFinanciador, esFondosPropios, registrarCompraOC } from "./lib/finanzas";
 import { anioMesDe } from "./lib/calculos";
 import { exportarExcelRespaldo } from "./lib/exportacion";
 import { registrarPagoVendedor } from "./lib/pagosVendedor";
@@ -57,6 +58,7 @@ export default function App() {
   const [contactos,setContactos]=useState([]);
   const [entidadesCatalogo,setEntidadesCatalogo]=useState([]);
   const [pagoFinSueltos,setPagoFinSueltos]=useState([]);
+  const [difsHistoricas,setDifsHistoricas]=useState([]); // Fase 4B: diferencias históricas pendientes de aprobación (solo lectura)
   const [notificaciones,setNotificaciones]=useState([]);
   const [historialCambios,setHistorialCambios]=useState([]);
   const [aportes,setAportes]=useState([]);
@@ -268,7 +270,7 @@ export default function App() {
     if(!session) return;
     const t=session.access_token;
     try {
-      const [ocsD,finD,vendD,catD,gastD,ivaD,pagVD,ajuD,perfD,contD,entD,pagoFinSueltosD,notifD,histD,reclamosD,respD,pvD,aporD,cartD,sbD,bmD]=await enLotes([
+      const [ocsD,finD,vendD,catD,gastD,ivaD,pagVD,ajuD,perfD,contD,entD,pagoFinSueltosD,notifD,histD,reclamosD,respD,pvD,aporD,cartD,sbD,bmD,difD]=await enLotes([
         ()=>conReintento(()=>selOCs(t)),
         ()=>sel("financiadores",t,"&order=nombre").catch(()=>[]),
         ()=>sel("vendedores",t,"&order=nombre").catch(()=>[]),
@@ -290,6 +292,7 @@ export default function App() {
         ()=>sel("cartolas_importadas",t,"&order=fecha_hasta.desc&limit=1").catch(()=>[]),
         ()=>sel("saldo_banco",t,"&id=eq.actual").catch(()=>[]),
         ()=>sel("banco_mensual",t,"&order=id.desc&limit=24").catch(()=>[]),
+        ()=>sel("fin_diferencias_historicas",t,"&estado=eq.pendiente").catch(()=>[]),
       ]);
       const reclamosPorOC={}, respPorOC={}, pvPorOC={};
       for(const r of reclamosD){ if(!reclamosPorOC[r.oc_id]) reclamosPorOC[r.oc_id]=[]; reclamosPorOC[r.oc_id].push(r); }
@@ -299,7 +302,7 @@ export default function App() {
       setOcs(ocsConReclamos.filter(o=>!o.archivada)); setOcsArchivadas(ocsConReclamos.filter(o=>o.archivada)); setFinanciadores(finD); setVendedores(vendD); setCategoriasGasto(catD);
       setGastos(gastD); setIvaMensual(ivaD); setPagosVendedor(pagVD); setAjustesSaldo(ajuD); setPerfiles(perfD);
       setContactos(contD); setEntidadesCatalogo(entD); setPagoFinSueltos(pagoFinSueltosD);
-      setNotificaciones(notifD); setHistorialCambios(histD); setAportes(aporD); setUltimaCartola((cartD||[])[0]||null); setSaldoBanco((sbD||[])[0]||null); setBancoMensual(bmD||[]);
+      setNotificaciones(notifD); setHistorialCambios(histD); setAportes(aporD); setUltimaCartola((cartD||[])[0]||null); setSaldoBanco((sbD||[])[0]||null); setBancoMensual(bmD||[]); setDifsHistoricas(difD||[]);
 
       // Reintentar completar las OCs que se guardaron antes de ser aceptadas
       const ocsActivasCarga=ocsConReclamos.filter(o=>!o.archivada);
@@ -332,7 +335,7 @@ export default function App() {
       if(dup) throw new Error(mensajeDuplicado(dup));
       let nOc;
       try{
-        nOc=await ins("ordenes_compra_v2",t,{id:genId("ocv2"),numero_oc:data.numNueva,cliente:data.cliente,rut_cliente:data.rutCliente||"",correo_cliente:data.correo||"",entidad:data.entidad||"",comuna:data.comuna||"",contacto:data.contacto||"",vendedor_id:data.vendedorId||null,es_venta_propia:ventaPropiaNueva,fecha_emision_mp:data.fechaOC||null,financiador_id:data.financiadorId,monto_total:data.montoVenta,costo_total:data.costoCompra,estado_compra:"comprado",creado_por:session.user.id});
+        nOc=await ins("ordenes_compra_v2",t,{id:genId("ocv2"),numero_oc:data.numNueva,cliente:data.cliente,rut_cliente:data.rutCliente||"",correo_cliente:data.correo||"",entidad:data.entidad||"",comuna:data.comuna||"",contacto:data.contacto||"",vendedor_id:data.vendedorId||null,es_venta_propia:ventaPropiaNueva,fecha_emision_mp:data.fechaOC||null,financiador_id:data.financiadorId,monto_total:data.montoVenta,creado_por:session.user.id});
       }catch(e){
         if(esErrorDuplicado(e)) throw new Error(`La OC ${data.numNueva} ya existe en la base (otra persona pudo cargarla recién). Búsquela en Compras.`);
         throw e;
@@ -369,12 +372,14 @@ export default function App() {
       await handleCompraRapida({ocId,costoCompra:data.costoCompra,fecha:data.fecha,fechaEst:data.fechaEst,financiadorId:data.financiadorId,proveedor:data.proveedor});
       return;
     }
-    await ins("eventos_compra",t,{id:genId("evc"),oc_id:ocId,fecha:data.fecha,monto_venta:data.montoVenta,costo_compra:data.costoCompra,fecha_entrega_estimada:data.fechaEst,financiador_id:data.financiadorId,proveedor:data.proveedor,creado_por:session.user.id});
-    const fin=financiadores.find(f=>f.id===data.financiadorId);
-    if(fin&&!ventaPropiaNueva) await upd("financiadores",t,fin.id,{saldo_deuda:Number(fin.saldo_deuda)+data.costoCompra});
-    await registrarCambio(t,{ocId,ocNumero:data.numNueva,usuarioId:perfil?.id,
-      usuarioNombre:perfil?.nombre,accion:"Compra registrada",campo:"costo_total",
-      valorNuevo:data.costoCompra});
+    // Compra (Fase 4B): una sola operación en la base; el costo de la OC y la deuda los calcula la base.
+    // Si fallara, la OC queda creada sin compra (sin deuda) y la compra se puede registrar después.
+    try{
+      await registrarCompraOC(t,{ocId,fecha:data.fecha,costo:data.costoCompra,financiadorId:data.financiadorId,
+        proveedor:data.proveedor,fechaEntregaEstimada:data.fechaEst,montoVenta:data.montoVenta});
+    }catch(e){
+      showToast(`OC creada, pero la compra no se registró: ${e.message}`,"error"); setAccion(null); await cargarTodo(); return;
+    }
     showToast("OC creada correctamente"); setAccion(null); await cargarTodo();
   };
   // ─── NUEVA OC RÁPIDA (datos desde Mercado Público) ───────────
@@ -674,11 +679,9 @@ export default function App() {
     const t=session.access_token;
     for(const c of cobros){
       const oc=ocs.find(o=>o.id===c.ocId);
+      // El cobrado y su estado los recalcula la base desde los cobros registrados (Fase 4B).
       await ins("eventos_pago_cliente",t,{id:genId("evp"),oc_id:c.ocId,fecha:c.fecha,
         monto:c.monto,creado_por:session.user.id});
-      const nuevoCobrado=Number(oc?.monto_cobrado||0)+c.monto;
-      await upd("ordenes_compra_v2",t,c.ocId,{monto_cobrado:nuevoCobrado,
-        estado_pago_cliente:nuevoCobrado>=(Number(oc?.monto_facturado)||0)?"pagado":"parcial"});
       await registrarCambio(t,{ocId:c.ocId,ocNumero:c.numeroOc,usuarioId:perfil?.id,
         usuarioNombre:perfil?.nombre,accion:"Cobro registrado desde la cartola del banco",
         campo:"estado_pago_cliente",valorAnterior:"pendiente",valorNuevo:"pagado"});
@@ -881,14 +884,9 @@ export default function App() {
     for(const e of egresos){
       if(e.tipo==="financiador"){
         // Lo ya repartido dentro de esta misma cartola (el estado de pantalla aún no se recarga)
-        const pendientes=ocs
-          .filter(o=>o.financiador_id===e.destinoId&&o.estado_pago_financiamiento!=="pagado")
-          .map(o=>({...o,monto_pagado_fin:Number(o.monto_pagado_fin||0)+(repartidoEnLote.get(o.id)||0)}))
-          .sort((a,b)=>{
-            const fa=(a.eventos_compra||[])[0]?.fecha||a.creadoEn||"";
-            const fb=(b.eventos_compra||[])[0]?.fecha||b.creadoEn||"";
-            return String(fa).localeCompare(String(fb));
-          });
+        // Mismo criterio que el abono manual (Fase 4B); lo ya repartido en este lote se descuenta.
+        const pendientes=ocsPendientesFinanciador(ocs,e.destinoId,difsHistoricas)
+          .map(o=>({...o,monto_pagado_fin:Number(o.monto_pagado_fin||0)+(repartidoEnLote.get(o.id)||0)}));
         const {reparto}=repartirFIFO(e.monto,pendientes);
         // Una sola operación transaccional: pagos, OC, saldo e historial juntos
         await registrarPagoFinanciador(t,{financiadorId:e.destinoId,fecha:e.fecha,monto:e.monto,origen:"cartola",
@@ -957,20 +955,8 @@ export default function App() {
     const t=session.access_token;
     const oc=ocs.find(o=>o.id===ocId);
 
-    await ins("eventos_compra",t,{id:genId("evc"),oc_id:ocId,fecha,
-      monto_venta:oc?.monto_total||0, costo_compra:costoCompra,
-      fecha_entrega_estimada:fechaEst, financiador_id:financiadorId,
-      proveedor:proveedor||"", creado_por:session.user.id});
-
-    await upd("ordenes_compra_v2",t,ocId,{estado_compra:"comprado",costo_total:costoCompra,financiador_id:financiadorId});
-
-    const fin=financiadores.find(f=>f.id===financiadorId);
-    if(fin&&!oc?.es_venta_propia) await upd("financiadores",t,fin.id,{saldo_deuda:Number(fin.saldo_deuda||0)+costoCompra});
-
-    await registrarCambio(t,{ocId,ocNumero:oc?.numero_oc,usuarioId:perfil?.id,
-      usuarioNombre:perfil?.nombre,accion:"Compra registrada",campo:"costo_total",
-      valorAnterior:oc?.costo_total,valorNuevo:costoCompra});
-
+    // Fase 4B: evento de compra, costo de la OC, deuda del financiador e historial en una sola transacción de la base.
+    await registrarCompraOC(t,{ocId,fecha,costo:costoCompra,financiadorId,proveedor,fechaEntregaEstimada:fechaEst,montoVenta:oc?.monto_total||0});
     showToast("Compra registrada"); setAccion(null); await cargarTodo();
   };
 
@@ -995,8 +981,8 @@ export default function App() {
   };
   const handleFactura=async(data)=>{
     const t=session.access_token; const oc=ocs.find(o=>o.id===data.ocId);
+    // Lo facturado (solo facturas vigentes) y el estado de cobro los recalcula la base (Fase 4B).
     await ins("eventos_factura",t,{id:genId("evf"),oc_id:data.ocId,fecha:data.fecha,numero_factura:data.numeroFactura,monto:data.monto,nota_credito:data.notaCredito||null,factura_anulada_numero:data.facturaAnuladaNumero||null,motivo_diferencia:data.motivoDiferencia||null,creado_por:session.user.id});
-    await upd("ordenes_compra_v2",t,data.ocId,{estado_factura_propia:"emitida",monto_facturado:data.monto});
     await registrarCambio(t,{ocId:data.ocId,ocNumero:oc?.numero_oc,usuarioId:perfil?.id,
       usuarioNombre:perfil?.nombre,accion:data.esReemision?"Factura reemitida":"Factura registrada",campo:"numero_factura",valorNuevo:`N°${data.numeroFactura} · ${fmt.money(data.monto)}`});
     showToast(data.esReemision?`Factura reemitida (anula N°${data.facturaAnuladaNumero} con NC ${data.notaCredito})`:"Factura registrada"); setAccion(null); await cargarTodo();
@@ -1006,8 +992,6 @@ export default function App() {
     await ins("eventos_pago_cliente",t,{id:genId("evp"),oc_id:data.ocId,fecha:data.fecha,monto:data.monto,
       medio_pago:data.medioPago||"transferencia",cobrado_en_banco:data.cobradoEnBanco!==false,institucion:data.institucion||null,
       creado_por:session.user.id});
-    const nuevoCobrado=(oc?.monto_cobrado||0)+data.monto;
-    await upd("ordenes_compra_v2",t,data.ocId,{monto_cobrado:nuevoCobrado,estado_pago_cliente:nuevoCobrado>=(oc?.monto_facturado||0)?"pagado":"parcial"});
     await registrarCambio(t,{ocId:data.ocId,ocNumero:oc?.numero_oc,usuarioId:perfil?.id,
       usuarioNombre:perfil?.nombre,accion:"Pago de cliente registrado",campo:"monto_cobrado",valorNuevo:fmt.money(data.monto)});
     showToast("Pago registrado"); setAccion(null); await cargarTodo();
@@ -1017,7 +1001,7 @@ export default function App() {
     // Lo que cubre la OC se le asigna; si el pago es mayor, el resto queda como pago sin OC.
     let asignaciones=[];
     if(oc){
-      const debe=Math.max(0,(Number(oc.costo_total)||0)-(Number(oc.monto_pagado_fin)||0));
+      const debe=deudaOC(oc);
       const asig=Math.min(data.monto,debe);
       if(asig>0) asignaciones=[{ocId:oc.id,monto:asig}];
     }
@@ -1026,9 +1010,8 @@ export default function App() {
   };
   const handleAjusteSaldo=async({financiadorId,fecha,montoAjuste,motivo})=>{
     const t=session.access_token;
+    // El ajuste es dato fuente del saldo: la base lo suma al recalcular la deuda (Fase 4B).
     await ins("ajustes_saldo_financiador",t,{id:genId("ajf"),financiador_id:financiadorId,fecha,monto_ajuste:montoAjuste,motivo,creado_por:session.user.id});
-    const fin=financiadores.find(f=>f.id===financiadorId);
-    if(fin) await upd("financiadores",t,fin.id,{saldo_deuda:Number(fin.saldo_deuda)+montoAjuste});
     showToast("Saldo ajustado"); await cargarTodo();
   };
   const handleNuevoGasto=async(data)=>{
@@ -1226,43 +1209,26 @@ export default function App() {
     showToast(`Entrega estimada de ${oc.numero_oc} marcada para ${fmt.date(fecha)}`);
     await cargarTodo();
   };
-  // Ajusta el saldo de un financiador por un delta (positivo sube la deuda)
-  const ajustarSaldoFin=async(finId,delta)=>{
-    if(!finId||!delta) return;
-    const fin=financiadores.find(f=>f.id===finId);
-    if(!fin) return;
-    await upd("financiadores",session.access_token,finId,
-      {saldo_deuda:Math.max(0,Number(fin.saldo_deuda||0)+delta)});
-  };
 
-  // Fase 4A: primero se confirma que la base eliminó el registro; solo entonces se revierten
-  // estados y saldos. Si la base no lo eliminó (sin permiso, sin conexión, ya no existía), no se toca nada.
+  // Fase 4A: primero se confirma que la base eliminó el registro; solo entonces se ajustan estados.
+  // Fase 4B: compras y pagos al financiador se eliminan con una operación atómica de la base, y en todos
+  // los casos los totales (costo, monto pagado, deuda, facturado, cobrado y sus estados) los recalcula la base.
   const handleEliminarEvento=async(tabla, eventoId, ocId, etapaKey)=>{
     const t=session.access_token;
     const oc=ocs.find(o=>o.id===ocId);
     const ev=(oc?.[tabla]||[]).find(e=>e.id===eventoId);
 
+    if(tabla==="eventos_compra"||tabla==="eventos_pago_financiamiento"){
+      try{ tabla==="eventos_compra" ? await eliminarCompraOC(t,eventoId) : await eliminarPagoFinanciador(t,eventoId); }
+      catch(e){ showToast(e.message,"error"); await cargarTodo(); return false; }
+      showToast(tabla==="eventos_compra"?"Compra eliminada · costo y deuda recalculados":"Pago eliminado · monto pagado y deuda recalculados");
+      await cargarTodo(); return true;
+    }
+
     try{ await delConfirmado(tabla,t,eventoId); }
     catch(e){ showToast(e.message,"error"); await cargarTodo(); return false; }
 
-    // Revertir el efecto que ese evento había producido (mismas reglas de siempre)
     try{
-      if(tabla==="eventos_compra"){
-        const costo=Number(ev?.costo_compra)||0;
-        await ajustarSaldoFin(ev?.financiador_id||oc?.financiador_id, -costo);
-        await upd("ordenes_compra_v2",t,ocId,{estado_compra:"pendiente",costo_total:0});
-      }
-      if(tabla==="eventos_pago_financiamiento"){
-        const monto=Number(ev?.monto)||0;
-        await ajustarSaldoFin(ev?.financiador_id||oc?.financiador_id, +monto); // vuelve a deber
-        await upd("ordenes_compra_v2",t,ocId,{estado_pago_financiamiento:"pendiente"});
-      }
-      if(tabla==="eventos_pago_cliente"){
-        const monto=Number(ev?.monto)||0;
-        const nuevoCobrado=Math.max(0,Number(oc?.monto_cobrado||0)-monto);
-        await upd("ordenes_compra_v2",t,ocId,{monto_cobrado:nuevoCobrado,
-          estado_pago_cliente:nuevoCobrado>=(oc?.monto_facturado||0)&&nuevoCobrado>0?"pagado":(nuevoCobrado>0?"parcial":"pendiente")});
-      }
       if(tabla==="eventos_entrega"){
         // Si quedan otras entregas registradas, la OC sigue entregada.
         const quedan=(oc?.eventos_entrega||[]).filter(e=>e.id!==eventoId).length;
@@ -1277,7 +1243,7 @@ export default function App() {
       await registrarCambio(t,{ocId,ocNumero:oc?.numero_oc,usuarioId:perfil?.id,
         usuarioNombre:perfil?.nombre,accion:`Eliminó registro de ${etapaKey}`,campo:etapaKey,
         valorAnterior:[ev?.fecha?String(ev.fecha).slice(0,10):null,(ev?.monto??ev?.costo_compra)!=null?fmt.money(ev?.monto??ev?.costo_compra):null].filter(Boolean).join(" · ")||null});
-      showToast("Registro eliminado y saldos corregidos");
+      showToast(tabla==="eventos_pago_cliente"?"Cobro eliminado · cobrado y estado recalculados":"Registro eliminado");
     }catch(e){
       showToast(`El registro se eliminó, pero no se pudo completar la corrección (${e.message||"error"}). Revise la OC.`,"error");
     }
@@ -1293,20 +1259,13 @@ export default function App() {
     try{ await delConfirmado("eventos_factura",t,facturaId); }
     catch(e){ showToast(e.message,"error"); await cargarTodo(); return false; }
 
+    // Fase 4B: lo facturado (solo facturas vigentes), el estado de la factura y el de cobro los recalcula la base.
     try{
-      const otras=(oc?.eventos_factura||[]).filter(f=>f.id!==facturaId);
-      const facturadoRestante=otras.reduce((s,f)=>s+(Number(f.monto)||0),0);
-      await upd("ordenes_compra_v2",t,ocId,{
-        estado_factura_propia: otras.length?"emitida":"pendiente",
-        monto_facturado: facturadoRestante,
-        // si ya no hay factura, tampoco puede haber cobro válido
-        ...(otras.length?{}:{estado_pago_cliente:"pendiente"}),
-      });
       await registrarCambio(t,{ocId,ocNumero:oc?.numero_oc,usuarioId:perfil?.id,
         usuarioNombre:perfil?.nombre,accion:`Eliminó factura N°${ev?.numero_factura||""}`});
-      showToast("Factura eliminada y montos corregidos");
+      showToast("Factura eliminada · facturado y cobro recalculados");
     }catch(e){
-      showToast(`La factura se eliminó, pero no se pudo completar la corrección (${e.message||"error"}). Revise la OC.`,"error");
+      showToast(`La factura se eliminó, pero no se pudo registrar en el historial (${e.message||"error"}).`,"error");
     }
     await cargarTodo(); return true;
   };
@@ -1371,7 +1330,6 @@ export default function App() {
     try{
       await upd("ordenes_compra_v2",t,ocId,{...(numeroOc?{numero_oc:numeroOc}:{}),cliente,entidad,comuna,contacto,rut_cliente:rutCliente,correo_cliente:correo,
         ...(vendedorId!==undefined?{vendedor_id:vendedorFinal}:{}),
-        ...(ventaPropia!==undefined?{es_venta_propia:!!(vendedorFinal&&ventaPropia)}:{}),
         ...(editaFechaOC?{fecha_emision_mp:fechaOCNueva}:{}),
         ultimo_editor:session.user.id,ultima_edicion:new Date().toISOString()});
     }catch(e){
@@ -1399,6 +1357,14 @@ export default function App() {
 
     // Volver a traer los datos con el código corregido (la fecha de compra no se toca)
     let aviso=null;   // {msg,tipo}: un solo mensaje final, para que no lo tape el siguiente
+    // Venta propia (Fase 4B): es un cambio de financiamiento; lo hace la base (deuda y etapa se recalculan solas).
+    const ventaPropiaFinal=ventaPropia!==undefined?!!(vendedorFinal&&ventaPropia):!!oc?.es_venta_propia;
+    if(ventaPropiaFinal!==!!oc?.es_venta_propia){
+      try{
+        await cambiarFinanciamientoOC(t,{ocId,financiadorId:oc?.financiador_id||null,
+          tipo:ventaPropiaFinal?"venta_propia":(esFondosPropios(financiadores.find(f=>f.id===oc?.financiador_id))?"fondos_propios":"externo")});
+      }catch(e){ aviso={msg:`Datos guardados, pero no se cambió la venta propia: ${e.message}`,tipo:"error"}; }
+    }
     if(resincronizar&&numeroOc){
       try{
         const r=await fetch(`/api/oc?codigo=${encodeURIComponent(numeroOc)}`);
@@ -1430,44 +1396,31 @@ export default function App() {
     }
     showToast(aviso?.msg||"Datos actualizados",aviso?.tipo); await cargarTodo();
   };
+  // Corrección de eventos (Fase 4B): compras y pagos al financiador con operaciones atómicas de la base; facturas,
+  // cobros y entregas actualizan solo el evento. En todos los casos los totales los recalcula la base.
   const handleEditarEvento=async(oc, tabla, eventoOriginal, cambios)=>{
     const t=session.access_token;
-    await upd(tabla, t, eventoOriginal.id, cambios);
-
     if (tabla==="eventos_compra") {
-      const difVenta = (cambios.monto_venta??eventoOriginal.monto_venta) - (eventoOriginal.monto_venta||0);
-      const difCosto = (cambios.costo_compra??eventoOriginal.costo_compra) - (eventoOriginal.costo_compra||0);
-      if (difVenta || difCosto) {
-        await upd("ordenes_compra_v2", t, oc.id, {
-          monto_total: Number(oc.monto_total||0) + difVenta,
-          costo_total: Number(oc.costo_total||0) + difCosto,
-        });
-      }
-      if (difCosto && oc.financiador_id) {
-        const fin = financiadores.find(f=>f.id===oc.financiador_id);
-        if (fin) await upd("financiadores", t, fin.id, { saldo_deuda: Math.max(0, Number(fin.saldo_deuda||0) + difCosto) });
-      }
-    }
-    if (tabla==="eventos_factura") {
-      const difMonto = (cambios.monto??eventoOriginal.monto) - (eventoOriginal.monto||0);
-      if (difMonto) await upd("ordenes_compra_v2", t, oc.id, { monto_facturado: Math.max(0, Number(oc.monto_facturado||0) + difMonto) });
-    }
-    if (tabla==="eventos_pago_cliente") {
-      const difMonto = (cambios.monto??eventoOriginal.monto) - (eventoOriginal.monto||0);
-      if (difMonto) {
-        const nuevoCobrado = Math.max(0, Number(oc.monto_cobrado||0) + difMonto);
-        await upd("ordenes_compra_v2", t, oc.id, { monto_cobrado: nuevoCobrado, estado_pago_cliente: nuevoCobrado>=(oc.monto_facturado||0) ? "pagado" : (nuevoCobrado>0 ? "parcial" : "pendiente") });
+      await editarCompraOC(t,{eventoId:eventoOriginal.id,fecha:cambios.fecha??eventoOriginal.fecha,
+        costo:cambios.costo_compra??eventoOriginal.costo_compra,montoVenta:cambios.monto_venta??null});
+    } else if (tabla==="eventos_pago_financiamiento") {
+      await editarPagoFinanciador(t,{eventoId:eventoOriginal.id,fecha:cambios.fecha??eventoOriginal.fecha,monto:cambios.monto??eventoOriginal.monto});
+    } else {
+      const filas=await upd(tabla, t, eventoOriginal.id, cambios);
+      if(!Array.isArray(filas)||!filas.length) throw new Error("La base no guardó la corrección (sin permiso o el registro ya no existe). No se modificó nada.");
+      const nombre={eventos_factura:"Factura corregida",eventos_pago_cliente:"Cobro corregido",eventos_entrega:"Entrega corregida"}[tabla];
+      if(nombre){
+        const antes=[eventoOriginal.fecha?String(eventoOriginal.fecha).slice(0,10):null,eventoOriginal.monto!=null?fmt.money(eventoOriginal.monto):null].filter(Boolean).join(" · ");
+        const despues=[cambios.fecha?String(cambios.fecha).slice(0,10):null,cambios.monto!=null?fmt.money(cambios.monto):null].filter(Boolean).join(" · ");
+        try{ await registrarCambio(t,{ocId:oc.id,ocNumero:oc.numero_oc,usuarioId:perfil?.id,usuarioNombre:perfil?.nombre,accion:nombre,campo:tabla,valorAnterior:antes||null,valorNuevo:despues||null}); }catch{}
       }
     }
-    if (tabla==="eventos_pago_financiamiento") {
-      const difMonto = (cambios.monto??eventoOriginal.monto) - (eventoOriginal.monto||0);
-      const finId = eventoOriginal.financiador_id;
-      if (difMonto && finId) {
-        const fin = financiadores.find(f=>f.id===finId);
-        if (fin) await upd("financiadores", t, fin.id, { saldo_deuda: Math.max(0, Number(fin.saldo_deuda||0) - difMonto) });
-      }
-    }
-    showToast("Evento corregido y totales actualizados"); await cargarTodo();
+    showToast("Evento corregido · totales recalculados por la base"); await cargarTodo();
+  };
+  // Cambio de financiamiento de una OC (M2): financiador externo, fondos propios o venta propia.
+  const handleCambiarFinanciamiento=async(oc,{tipo,financiadorId})=>{
+    const r=await cambiarFinanciamientoOC(session.access_token,{ocId:oc.id,tipo,financiadorId});
+    showToast(r?.sin_cambios?"Sin cambios en el financiamiento":`Financiamiento actualizado${r?.despues?`: ${r.despues}`:""} · deuda recalculada por la base`); await cargarTodo();
   };
   const handleGuardarContacto=async({rut,nombreCliente,correo})=>{
     try { await ins("contactos_cobranza",session.access_token,{id:genId("cob"),rut,nombre_cliente:nombreCliente,correo,creado_por:session.user.id}); await cargarTodo(); }
@@ -1584,13 +1537,13 @@ export default function App() {
   const contenidoPantallas=(
     <>
       {(tab==="panel"||todo)&&hoja("panel",<PanelDashboard onBuscarCompras={(q)=>{setBusquedaCompras(q);setFiltroCompras(null);setOcFoco(null);setVolverA(null);setTab("compras");}} ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} aportes={aportes} perfil={perfil} onExportarTodo={handleExportarTodo} exportando={exportando} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setVolverA(null);setTab(t);}} onAccion={(k)=>setAccion(k)} onSincronizar={completarTodasDesdeMP} onCorregirFechas={corregirFechasTodas} sincronizando={sincronizando} porAceptar={porAceptar.filter(a=>!buscarDuplicadoOC(a.numero_oc))} onActualizarPorAceptar={revisarPorAceptar} verificandoPorAceptar={verificandoPorAceptar} aceptadasSinCargar={aceptadasSinCargar.filter(a=>!buscarDuplicadoOC(a.numero_oc))} onCargarOC={(numero)=>{setCodigoOcRapida(numero);setAccion("compra_oc");}} onCargarTodasAceptadas={handleCargarTodasAceptadas} cargandoAceptadas={cargandoAceptadas} onActualizarAceptadas={revisarAceptadasSinCargar} verificandoAceptadas={verificandoAceptadas} canceladasEnMP={canceladasEnMP.filter(c=>ocs.some(o=>o.id===c.id))} onArchivarCancelada={(id)=>handleArchivarOC(id,"Cancelada en Mercado Público")} onActualizarCanceladas={revisarCanceladasEnMP} verificandoCanceladas={verificandoCanceladas} onValidarTodo={validarTodoContraMP} validandoTodo={validandoTodo} usoMP={usoMP} actMP={actMP} esCodigoMP={esCodigoMP} ultimaCartola={ultimaCartola} saldoBanco={saldoBanco} bancoMensual={bancoMensual} onEditarSaldo={()=>setAccion("saldo_banco")} />)}
-      {(tab==="compras"||todo)&&hoja("compras",<>{!todo&&volverA==="notif"&&<button onClick={()=>{setVolverA(null);setTab("notif");}} style={{width:"100%",textAlign:"left",background:C.tealLight,color:C.tealDark,border:"none",borderRadius:10,padding:"10px 12px",marginBottom:10,fontWeight:800,fontSize:13,minHeight:44,cursor:"pointer"}}>← Volver a Alertas</button>}<PanelCompras busquedaInicial={busquedaCompras} ocs={ocs} perfiles={perfiles} filtroInicial={filtroCompras} ocFoco={ocFoco} onFocoUsado={()=>setOcFoco(null)} contactos={contactos} onEnviarReclamo={handleEnviarReclamo} onCorreoOC={handleCorreoOC} onRegistrarRespuestaReclamo={handleRegistrarRespuestaReclamo} onGuardarContacto={handleGuardarContacto} onGuardarDatosOC={handleGuardarDatosOC} onEditarEvento={handleEditarEvento} financiadores={financiadores} onConfirmarEntrega={handleEntrega} onEmitirFactura={handleFactura} onPagoCliente={handlePagoCliente} onPagoFinanciamiento={handlePagoFin} entidadesCatalogo={entidadesCatalogo} onGuardarLink={handleGuardarLink} onEliminarLink={handleEliminarLink} onEditarLink={handleEditarLink} onRepartirInversion={handleRepartirInversion} buscarDuplicadoOC={buscarDuplicadoOC} onSincronizarFecha={handleSincronizarFecha} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={handleAgregarComentario} onEliminarComentario={handleEliminarComentario} onArchivarOC={handleArchivarOC} onEliminarFactura={handleEliminarFactura} onEliminarEvento={handleEliminarEvento} vendedores={vendedores} onIngresarCompra={handleIngresarCompra} onAsignarResponsable={handleAsignarResponsable} onGuardarPostventa={handleGuardarPostventa} /></>)}
+      {(tab==="compras"||todo)&&hoja("compras",<>{!todo&&volverA==="notif"&&<button onClick={()=>{setVolverA(null);setTab("notif");}} style={{width:"100%",textAlign:"left",background:C.tealLight,color:C.tealDark,border:"none",borderRadius:10,padding:"10px 12px",marginBottom:10,fontWeight:800,fontSize:13,minHeight:44,cursor:"pointer"}}>← Volver a Alertas</button>}<PanelCompras difsHistoricas={difsHistoricas} onCambiarFinanciamiento={handleCambiarFinanciamiento} busquedaInicial={busquedaCompras} ocs={ocs} perfiles={perfiles} filtroInicial={filtroCompras} ocFoco={ocFoco} onFocoUsado={()=>setOcFoco(null)} contactos={contactos} onEnviarReclamo={handleEnviarReclamo} onCorreoOC={handleCorreoOC} onRegistrarRespuestaReclamo={handleRegistrarRespuestaReclamo} onGuardarContacto={handleGuardarContacto} onGuardarDatosOC={handleGuardarDatosOC} onEditarEvento={handleEditarEvento} financiadores={financiadores} onConfirmarEntrega={handleEntrega} onEmitirFactura={handleFactura} onPagoCliente={handlePagoCliente} onPagoFinanciamiento={handlePagoFin} entidadesCatalogo={entidadesCatalogo} onGuardarLink={handleGuardarLink} onEliminarLink={handleEliminarLink} onEditarLink={handleEditarLink} onRepartirInversion={handleRepartirInversion} buscarDuplicadoOC={buscarDuplicadoOC} onSincronizarFecha={handleSincronizarFecha} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={handleAgregarComentario} onEliminarComentario={handleEliminarComentario} onArchivarOC={handleArchivarOC} onEliminarFactura={handleEliminarFactura} onEliminarEvento={handleEliminarEvento} vendedores={vendedores} onIngresarCompra={handleIngresarCompra} onAsignarResponsable={handleAsignarResponsable} onGuardarPostventa={handleGuardarPostventa} /></>)}
       {(tab==="notif"||todo)&&hoja("notif",<PanelNotificaciones notificaciones={notificaciones} ocs={ocs} onMarcarLeidas={handleMarcarNotificacionesLeidas} filtroAlertas={filtroAlertas} onFiltroAlertas={setFiltroAlertas} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setVolverA(ocId?"notif":null);setTab(t);}} />)}
       {(tab==="agenda"||todo)&&hoja("agenda",<PanelCalendario ocs={ocs} onMarcarFecha={handleMarcarFecha} onVerAlertas={(f)=>{setFiltroCompras(null);setOcFoco(null);setVolverA(null);setFiltroAlertas({nivel:(f&&f.nivel)||"todas",etapa:(f&&f.etapa)||null});setTab("notif");}} />)}
-      {(tab==="financiamiento"||todo)&&hoja("financiamiento",<PanelFinanciamiento financiadores={financiadores} ocs={ocs} ajustes={ajustesSaldo} perfiles={perfiles} onAjustar={handleAjusteSaldo} aportes={aportes} onGuardarAporte={handleGuardarAporte} onEliminarAporte={perfil?.rol==="admin"?handleEliminarAporte:undefined} onAbonar={(finId)=>{setAbonoFinId(typeof finId==="string"||typeof finId==="number"?finId:null);setAccion("abono_fin");}} pagoFinSueltos={pagoFinSueltos} />)}
+      {(tab==="financiamiento"||todo)&&hoja("financiamiento",<PanelFinanciamiento difsHistoricas={difsHistoricas} financiadores={financiadores} ocs={ocs} ajustes={ajustesSaldo} perfiles={perfiles} onAjustar={handleAjusteSaldo} aportes={aportes} onGuardarAporte={handleGuardarAporte} onEliminarAporte={perfil?.rol==="admin"?handleEliminarAporte:undefined} onAbonar={(finId)=>{setAbonoFinId(typeof finId==="string"||typeof finId==="number"?finId:null);setAccion("abono_fin");}} pagoFinSueltos={pagoFinSueltos} />)}
       {(tab==="gastos"||todo)&&hoja("gastos",<PanelGastos gastos={gastos} categorias={categoriasGasto} onNuevoGasto={handleNuevoGasto} />)}
       {(tab==="vendedores"||todo)&&hoja("vendedores",<PanelVendedores vendedores={vendedores} ocs={ocs} ivaMensual={ivaMensual} pagosVendedor={pagosVendedor} onGuardarIva={handleGuardarIva} onPagoVendedor={handlePagoVendedorSimple} onVerOCs={(filtro)=>{setFiltroCompras(filtro);setOcFoco(null);setVolverA(null);setTab("compras");}} />)}
-      {(tab==="usuarios"||todo)&&perfil?.rol==="admin"&&hoja("usuarios",<PanelUsuarios perfiles={perfiles} ocs={ocs} ocsArchivadas={ocsArchivadas} onRestaurarOC={handleRestaurarOC} onChangeRol={handleChangeRol} session={session} showToast={showToast} entidadesCatalogo={entidadesCatalogo} onEntidadesImportadas={handleEntidadesImportadas} usoMP={usoMP} sincronizando={sincronizando} validandoTodo={validandoTodo} exportando={exportando} onCorregirFechas={corregirFechasTodas} onValidarTodo={validarTodoContraMP} onExportarTodo={handleExportarTodo} />)}
+      {(tab==="usuarios"||todo)&&perfil?.rol==="admin"&&hoja("usuarios",<PanelUsuarios difsHistoricas={difsHistoricas} perfiles={perfiles} ocs={ocs} ocsArchivadas={ocsArchivadas} onRestaurarOC={handleRestaurarOC} onChangeRol={handleChangeRol} session={session} showToast={showToast} entidadesCatalogo={entidadesCatalogo} onEntidadesImportadas={handleEntidadesImportadas} usoMP={usoMP} sincronizando={sincronizando} validandoTodo={validandoTodo} exportando={exportando} onCorregirFechas={corregirFechasTodas} onValidarTodo={validarTodoContraMP} onExportarTodo={handleExportarTodo} />)}
     </>
   );
 
@@ -1618,7 +1571,7 @@ export default function App() {
         </Modal>
       )}
       {accion==="cartola"&&<Modal title="Cartola del banco: conciliar" onClose={()=>setAccion(null)}><ImportarCartola ocs={ocs} financiadores={financiadores} vendedores={vendedores} categorias={categoriasGasto} registrados={movimientosRegistrados} onRegistrar={handleCobrosDesdeCartola} onRegistrarEgresos={handleEgresosDesdeCartola} /></Modal>}
-      {accion==="abono_fin"&&<Modal title="Abonar a financiador" onClose={()=>setAccion(null)}><FormAbonoFinanciador ocs={ocs} financiadores={financiadores} financiadorInicial={abonoFinId} onSave={handleAbonoFinanciador} /></Modal>}
+      {accion==="abono_fin"&&<Modal title="Abonar a financiador" onClose={()=>setAccion(null)}><FormAbonoFinanciador ocs={ocs} financiadores={financiadores} financiadorInicial={abonoFinId} onSave={handleAbonoFinanciador} difsHistoricas={difsHistoricas} /></Modal>}
       {accion==="pago_cliente"&&<Modal title="Ingresar pago" onClose={()=>setAccion(null)}><FormPagoCliente ocs={ocs} onSave={handlePagoCliente} /></Modal>}
       {accion==="compra_manual"&&<Modal title="Nueva OC — manual" onClose={()=>setAccion(null)}><FormIngresarCompra perfil={perfil} ocs={ocs} financiadores={financiadores} vendedores={vendedores} entidadesCatalogo={entidadesCatalogo} buscarDuplicado={buscarDuplicadoOC} onSave={handleIngresarCompra} /></Modal>}
 

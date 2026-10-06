@@ -4,6 +4,7 @@ import { FormEntregaFallida, FormFechaEntrega, FormReclamarFactura } from "../fo
 import { FormConfirmarEntrega, FormEmitirFactura, FormPagoCliente, FormPagoFinanciamiento } from "../forms/FormulariosRapidos";
 import { DiasBadge, Field, Leyenda, Modal, Trazabilidad } from "../ui/Basicos";
 import { EtapasOC, FormPostventa } from "../ui/EtapasOC";
+import { diferenciasPendientes } from "../../lib/finanzas";
 import { BloqueoEstado, ComentariosOC, HistorialCambiosOC } from "../ui/Multiusuario";
 import { bloqueoOC, useBloqueoOC } from "../../lib/bloqueoOCUso";
 import { mensajeVerificacion } from "../../lib/bloqueoOC";
@@ -38,7 +39,7 @@ export const FILTROS=[
   {key:"entrega",label:"Entrega",ok:estaEntregada,okLabel:"Entregada",pendLabel:"Sin entregar"},
   {key:"factura",label:"Factura",ok:estaFacturada,okLabel:"Emitida",pendLabel:"Por emitir"},
   {key:"cobro",label:"Pagada",ok:estaCobrada,okLabel:"Cobrado",pendLabel:"Por cobrar"},
-  {key:"financ",label:"Financ.",ok:financiamientoPagado,okLabel:"Pagado",pendLabel:"Con deuda"},
+  {key:"financ",label:"Financ.",ok:financiamientoPagado,okLabel:"Pagado o no aplica",pendLabel:"Con deuda"},
 ];
 
 export function FormEditarDatosOC({ oc, onSave, entidadesCatalogo, perfil, ocs, vendedores, buscarDuplicado }) {
@@ -108,7 +109,7 @@ export function FormEditarDatosOC({ oc, onSave, entidadesCatalogo, perfil, ocs, 
       )}
       {cambiaVentaPropia&&(oc.eventos_compra||[]).length>0&&(
         <div data-aviso="venta-propia-deuda" style={{background:C.warnLight,borderRadius:8,padding:"8px 12px",fontSize:12,color:C.warnText,fontWeight:600,marginBottom:12,lineHeight:1.45}}>
-          <Ic n="⚠"/> Esta OC ya tiene la compra registrada: cambiar la condición de venta propia no ajusta la deuda con el financiador. Si corresponde, ajústela en Financiamiento.
+          <Ic n="⚠"/> Esta OC ya tiene la compra registrada: cambiar la venta propia es un cambio de financiamiento. La base recalcula la deuda con el financiador (venta propia no genera deuda) y no lo permite si ya hay pagos al financiador registrados.
         </div>
       )}
 
@@ -180,7 +181,7 @@ export function FormEditarEvento({ item, onSave, onCancel }) {
   return (
     <div>
       <div style={{background:C.warnLight,borderRadius:9,padding:"10px 12px",fontSize:12,color:C.warnText,fontWeight:600,marginBottom:14}}>
-        <Ic n="⚠"/> Editar este evento ajustará automáticamente el saldo del financiador y los totales de la OC según la diferencia.
+        <Ic n="⚠"/> Al guardar, la base recalcula desde los eventos los totales de la OC y el saldo del financiador (no se escriben desde este teléfono).
       </div>
       <Field label={({eventos_compra:"Fecha de compra",eventos_entrega:"Fecha de entrega",eventos_factura:"Fecha de emisión de la factura",eventos_pago_cliente:"Fecha de pago",eventos_pago_financiamiento:"Fecha de pago al financiador"})[tabla]||"Fecha"} required
         hint={tabla==="eventos_compra"?"Fecha real en que BFK compró al proveedor (distinta de la fecha de la OC).":undefined}><input style={iStyle} type="date" value={fecha} onChange={ev=>setFecha(ev.target.value)} /></Field>
@@ -704,7 +705,7 @@ function NotasEHistorial({ oc, perfil, historialCambios, onAgregarComentario, on
   );
 }
 
-export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded, onToggle, contactos, onEnviarReclamo, onCorreoOC, onRegistrarRespuestaReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, onRepartirInversion, buscarDuplicadoOC, perfil, historialCambios, onAgregarComentario, onEliminarComentario, bloqueoEstado, onArchivarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa }) {
+export function FilaOC({ difsHistoricas, onCambiarFinanciamiento, oc, perfiles, todasLasOcs, onSincronizarFecha, expanded, onToggle, contactos, onEnviarReclamo, onCorreoOC, onRegistrarRespuestaReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, onRepartirInversion, buscarDuplicadoOC, perfil, historialCambios, onAgregarComentario, onEliminarComentario, bloqueoEstado, onArchivarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa }) {
   const evF=facturaVigente(oc);
   const dias=fmt.diasDesde(evF?.fecha);
   const saldo=(oc.monto_facturado||0)-(oc.monto_cobrado||0);
@@ -744,7 +745,8 @@ export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded
   onAsignarResponsable=prot(onAsignarResponsable); onGuardarPostventa=prot(onGuardarPostventa); onRepartirInversion=prot(onRepartirInversion);
 
   const completadas=etapasCompletadas(oc);
-  const borderColor = oc.estado_pago_cliente==="pagado"&&oc.estado_pago_financiamiento==="pagado" ? C.ok
+  const difsOC=diferenciasPendientes(difsHistoricas,"oc",oc.id);
+  const borderColor = oc.estado_pago_cliente==="pagado"&&financiamientoPagado(oc) ? C.ok
     : puedeReclamar ? C.danger
     : evF ? C.warn
     : completadas>0 ? C.teal : C.border;
@@ -911,9 +913,23 @@ export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded
             </div>
           )}
 
+          {/* Fase 4B: diferencias históricas pendientes de aprobación (solo informativo; las operaciones del dominio quedan bloqueadas) */}
+          {difsOC.length>0&&(
+            <div data-diferencias-historicas={difsOC.length} style={{background:C.warnLight,border:`1px solid ${C.warn}55`,borderRadius:9,padding:"9px 11px",marginBottom:12}}>
+              <div style={{fontSize:12,fontWeight:800,color:C.warnText,textTransform:"uppercase",letterSpacing:0.4,marginBottom:3}}><Ic n="⚠"/> Corrección histórica pendiente de aprobación</div>
+              {difsOC.map(d=>(
+                <div key={d.id} style={{fontSize:12,color:C.ink,lineHeight:1.45}}>
+                  <b>{({costo_total:"Costo",monto_pagado_fin:"Pagado al financiador",estado_pago_financiamiento:"Estado de financiamiento",monto_facturado:"Facturado",monto_cobrado:"Cobrado",estado_compra:"Estado de compra",estado_factura_propia:"Estado de factura",estado_pago_cliente:"Estado de cobro"})[d.campo]||d.campo}:</b>{" "}
+                  se conserva {d.diferencia!=null?fmt.money(Number(d.valor_registrado)):d.valor_registrado} (los eventos dan {d.diferencia!=null?fmt.money(Number(d.valor_eventos)):d.valor_eventos}). {d.causa}.
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* 2 · Ciclo de la OC: la etapa que toca es la acción principal */}
           <div style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Ciclo de la OC</div>
-          <EtapasOC oc={oc} perfil={perfil} perfiles={perfiles}
+          <EtapasOC oc={oc} perfil={perfil} perfiles={perfiles} financiadores={financiadores} difsOC={difsOC}
+            onCambiarFinanciamiento={onCambiarFinanciamiento?prot((d)=>onCambiarFinanciamiento(oc,d)):undefined}
             activa={etapaActiva}
             extra={{cobro:bloqueCobranza}}
             onAsignarResponsable={onAsignarResponsable}
@@ -1029,7 +1045,7 @@ export function FilaOC({ oc, perfiles, todasLasOcs, onSincronizarFecha, expanded
 }
 
 
-export function PanelCompras({ ocs, perfiles, filtroInicial, busquedaInicial, ocFoco, onFocoUsado, onSincronizarFecha, contactos, onEnviarReclamo, onCorreoOC, onRegistrarRespuestaReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, onRepartirInversion, buscarDuplicadoOC, perfil, historialCambios, onAgregarComentario, onEliminarComentario, onArchivarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa }) {
+export function PanelCompras({ difsHistoricas, onCambiarFinanciamiento, ocs, perfiles, filtroInicial, busquedaInicial, ocFoco, onFocoUsado, onSincronizarFecha, contactos, onEnviarReclamo, onCorreoOC, onRegistrarRespuestaReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, onRepartirInversion, buscarDuplicadoOC, perfil, historialCambios, onAgregarComentario, onEliminarComentario, onArchivarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa }) {
   const [filtros,setFiltros]=useState({}); const [busq,setBusq]=useState(""); const [expId,setExpId]=useState(null);
   const bloqueoEstado=useBloqueoOC(expId); // un solo ciclo de bloqueo para la OC expandida, venga de donde venga
   const [reclamandoBanner,setReclamandoBanner]=useState(null); const [comunaSel,setComunaSel]=useState("");
@@ -1325,7 +1341,7 @@ export function PanelCompras({ ocs, perfiles, filtroInicial, busquedaInicial, oc
           {orden==="ganancia"?"↓ Ganancia":"↓ Fecha"}
         </button>
       </div>
-      {filtered.map(oc=><FilaOC key={oc.id} oc={oc} perfiles={perfiles} todasLasOcs={ocs} onSincronizarFecha={onSincronizarFecha} expanded={expId===oc.id} onToggle={()=>setExpId(expId===oc.id?null:oc.id)} contactos={contactos} onEnviarReclamo={onEnviarReclamo} onCorreoOC={onCorreoOC} onRegistrarRespuestaReclamo={onRegistrarRespuestaReclamo} onGuardarContacto={onGuardarContacto} onGuardarDatosOC={onGuardarDatosOC} onEditarEvento={onEditarEvento} financiadores={financiadores} onConfirmarEntrega={onConfirmarEntrega} onEmitirFactura={onEmitirFactura} onPagoCliente={onPagoCliente} onPagoFinanciamiento={onPagoFinanciamiento} entidadesCatalogo={entidadesCatalogo} onGuardarLink={onGuardarLink} onEliminarLink={onEliminarLink} onEditarLink={onEditarLink} onRepartirInversion={onRepartirInversion} buscarDuplicadoOC={buscarDuplicadoOC} bloqueoEstado={bloqueoEstado} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={onAgregarComentario} onEliminarComentario={onEliminarComentario} onArchivarOC={onArchivarOC} onEliminarFactura={onEliminarFactura} onEliminarEvento={onEliminarEvento} vendedores={vendedores} onIngresarCompra={onIngresarCompra} onAsignarResponsable={onAsignarResponsable} onGuardarPostventa={onGuardarPostventa} />)}
+      {filtered.map(oc=><FilaOC key={oc.id} difsHistoricas={difsHistoricas} onCambiarFinanciamiento={onCambiarFinanciamiento} oc={oc} perfiles={perfiles} todasLasOcs={ocs} onSincronizarFecha={onSincronizarFecha} expanded={expId===oc.id} onToggle={()=>setExpId(expId===oc.id?null:oc.id)} contactos={contactos} onEnviarReclamo={onEnviarReclamo} onCorreoOC={onCorreoOC} onRegistrarRespuestaReclamo={onRegistrarRespuestaReclamo} onGuardarContacto={onGuardarContacto} onGuardarDatosOC={onGuardarDatosOC} onEditarEvento={onEditarEvento} financiadores={financiadores} onConfirmarEntrega={onConfirmarEntrega} onEmitirFactura={onEmitirFactura} onPagoCliente={onPagoCliente} onPagoFinanciamiento={onPagoFinanciamiento} entidadesCatalogo={entidadesCatalogo} onGuardarLink={onGuardarLink} onEliminarLink={onEliminarLink} onEditarLink={onEditarLink} onRepartirInversion={onRepartirInversion} buscarDuplicadoOC={buscarDuplicadoOC} bloqueoEstado={bloqueoEstado} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={onAgregarComentario} onEliminarComentario={onEliminarComentario} onArchivarOC={onArchivarOC} onEliminarFactura={onEliminarFactura} onEliminarEvento={onEliminarEvento} vendedores={vendedores} onIngresarCompra={onIngresarCompra} onAsignarResponsable={onAsignarResponsable} onGuardarPostventa={onGuardarPostventa} />)}
       {filtered.length===0&&<div style={{textAlign:"center",padding:30,color:C.inkFaint,fontSize:13}}>No hay órdenes con estos filtros.</div>}
       <Leyenda items={[
         {muestra:"✓ Cerrada",   color:C.okText,      bg:C.okLight,      texto:"Cobrada al cliente y pagada al financiador. Ciclo terminado."},

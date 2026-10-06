@@ -297,17 +297,24 @@ async function borrar(b, numero, etapa, nombreBoton = /Eliminar/) {
 await escenario("S10", async () => {
   let b = base0({ eventos_pago_financiamiento: "rls" });
   let r = await borrar(b, "2007-107-SE26", "financ");
-  ok("S10_rls_no_ajusta_saldo_ni_estado", cuenta(r.ws, "DELETE", "eventos_pago_financiamiento") === 1 && cuenta(r.ws, "PATCH", "financiadores") === 0 && cuenta(r.ws, "PATCH", "ordenes_compra_v2") === 0 && cuenta(r.ws, "POST", "historial_cambios") === 0, r.ws);
-  ok("S10_rls_avisa", /no eliminó el registro/.test(r.t) && b.db.financiadores[0].saldo_deuda === 2500000);
+  // Fase 4B: el pago se elimina con una RPC atómica; sin permiso la base no elimina ni recalcula nada.
+  ok("S10_rls_no_ajusta_saldo_ni_estado", cuenta(r.ws, "RPC", "eliminar_pago_financiador") === 1 && cuenta(r.ws, "PATCH", "financiadores") === 0 && cuenta(r.ws, "PATCH", "ordenes_compra_v2") === 0 && cuenta(r.ws, "POST", "historial_cambios") === 0, r.ws);
+  ok("S10_rls_avisa", /Solo un administrador puede eliminar un pago/.test(r.t) && b.db.financiadores[0].saldo_deuda === 2500000 && b.db.ordenes_compra_v2.find((o) => o.id === "oc7").monto_pagado_fin === 200000);
   b = base0({ eventos_pago_financiamiento: "error" });
   r = await borrar(b, "2007-107-SE26", "financ");
-  ok("S10_error_no_ajusta", cuenta(r.ws, "PATCH", "financiadores") === 0 && cuenta(r.ws, "PATCH", "ordenes_compra_v2") === 0 && /rechazó la eliminación/.test(r.t), r.ws);
+  ok("S10_error_no_ajusta", cuenta(r.ws, "PATCH", "financiadores") === 0 && cuenta(r.ws, "PATCH", "ordenes_compra_v2") === 0 && /permission denied/.test(r.t) && b.db.financiadores[0].saldo_deuda === 2500000, r.ws);
   b = base0();
   r = await borrar(b, "2007-107-SE26", "financ");
-  ok("S10_confirmado_si_ajusta", cuenta(r.ws, "PATCH", "financiadores") === 1 && cuenta(r.ws, "PATCH", "ordenes_compra_v2", (w) => w.id === "oc7") === 1 && cuenta(r.ws, "POST", "historial_cambios") === 1, r.ws);
+  // Confirmado: la base recalcula monto pagado y deuda (el navegador no escribe totales).
+  ok("S10_confirmado_si_ajusta", cuenta(r.ws, "RPC", "eliminar_pago_financiador") === 1 && cuenta(r.ws, "PATCH", "financiadores") === 0 && cuenta(r.ws, "PATCH", "ordenes_compra_v2") === 0
+    && b.db.ordenes_compra_v2.find((o) => o.id === "oc7").monto_pagado_fin === 0 && b.db.financiadores[0].saldo_deuda === 2700000, r.ws);
   b = base0({ eventos_factura: "rls" });
   r = await borrar(b, "2004-104-SE26", "factura");
   ok("S10_factura_no_confirmada_no_ajusta", cuenta(r.ws, "PATCH", "ordenes_compra_v2") === 0 && b.db.ordenes_compra_v2.find((o) => o.id === "oc4").estado_factura_propia === "emitida", r.ws);
+  b = base0();
+  r = await borrar(b, "2004-104-SE26", "factura");
+  ok("S10_factura_confirmada_recalcula_en_la_base", cuenta(r.ws, "DELETE", "eventos_factura") === 1 && cuenta(r.ws, "PATCH", "ordenes_compra_v2") === 0
+    && b.db.ordenes_compra_v2.find((o) => o.id === "oc4").estado_factura_propia === "pendiente" && b.db.ordenes_compra_v2.find((o) => o.id === "oc4").monto_facturado === 0, r.ws);
   b = base0();
   r = await borrar(b, "2004-104-SE26", "entrega");
   ok("S10_entrega_con_otra_registrada_sigue_entregada", cuenta(r.ws, "DELETE", "eventos_entrega") === 1 && cuenta(r.ws, "PATCH", "ordenes_compra_v2") === 0 && b.db.ordenes_compra_v2.find((o) => o.id === "oc4").estado_entrega === "confirmada", r.ws);
@@ -363,7 +370,8 @@ await escenario("S11", async () => {
   let ws = desde(b, n);
   const nueva = ws.find((w) => w.metodo === "POST" && w.tabla === "ordenes_compra_v2");
   ok("S11_crea_con_vendedor_venta_propia_y_fecha", nueva && nueva.cuerpo.vendedor_id === "v2" && nueva.cuerpo.es_venta_propia === true && nueva.cuerpo.fecha_emision_mp === new Date().toISOString().slice(0, 10) && nueva.cuerpo.monto_total === 238000, nueva?.cuerpo);
-  ok("S11_venta_propia_no_suma_deuda", cuenta(ws, "PATCH", "financiadores") === 0 && cuenta(ws, "POST", "eventos_compra") === 1);
+  ok("S11_venta_propia_no_suma_deuda", cuenta(ws, "PATCH", "financiadores") === 0 && cuenta(ws, "RPC", "registrar_compra_oc") === 1 && cuenta(ws, "POST", "eventos_compra") === 0
+    && b.db.financiadores[0].saldo_deuda === 2500000 && b.db.ordenes_compra_v2.find((o) => o.numero_oc === "VD-NUEVA-1").estado_pago_financiamiento === "no_aplica");
   ok("S11_historial_oc_creada", cuenta(ws, "POST", "historial_cambios", (w) => /OC creada/.test(w.cuerpo.accion)) === 1);
   // "Sin vendedor" elegido a propósito: se guarda sin vendedor y la compra suma deuda (regla de siempre)
   m = await abrirManual();
@@ -376,7 +384,8 @@ await escenario("S11", async () => {
   n = b.escr.length; await boton(p, /Crear OC/, m); await espera(p, 1800);
   ws = desde(b, n);
   const nueva2 = ws.find((w) => w.metodo === "POST" && w.tabla === "ordenes_compra_v2");
-  ok("S11_sin_vendedor_explicito", nueva2 && nueva2.cuerpo.vendedor_id === null && nueva2.cuerpo.es_venta_propia === false && cuenta(ws, "PATCH", "financiadores") === 1, nueva2?.cuerpo);
+  ok("S11_sin_vendedor_explicito", nueva2 && nueva2.cuerpo.vendedor_id === null && nueva2.cuerpo.es_venta_propia === false && cuenta(ws, "RPC", "registrar_compra_oc") === 1
+    && cuenta(ws, "PATCH", "financiadores") === 0 && b.db.financiadores[0].saldo_deuda === 2500000 + 50000, nueva2?.cuerpo);
   ok("S11_sin_errores", errs.length === 0, errs);
   await ctx.close();
 });
@@ -404,13 +413,14 @@ await escenario("S12", async () => {
     await boton(p, /Siguiente/, m); await espera(p, 200); await boton(p, /Siguiente/, m); await espera(p, 200);
     await boton(p, /Registrar compra/, m);
   });
-  ok("S12_compra", cuenta(ws, "POST", "eventos_compra") === 1 && cuenta(ws, "PATCH", "ordenes_compra_v2", (w) => w.cuerpo.estado_compra === "comprado") === 1 && cuenta(ws, "PATCH", "financiadores") === 1, ws);
+  ok("S12_compra", cuenta(ws, "RPC", "registrar_compra_oc") === 1 && cuenta(ws, "PATCH", "financiadores") === 0 && cuenta(ws, "PATCH", "ordenes_compra_v2", (w) => "costo_total" in (w.cuerpo || {}) || "estado_compra" in (w.cuerpo || {})) === 0
+    && ocN && b.db.ordenes_compra_v2.find((o) => o.id === ocN.id).estado_compra === "comprado" && b.db.ordenes_compra_v2.find((o) => o.id === ocN.id).costo_total === 700000, ws);
   ws = await paso("entrega", async () => { await boton(p, /Confirmar entrega/); await espera(p, 400); m = enModal(p); await boton(p, /Confirmar entrega/, m); });
   ok("S12_entrega", cuenta(ws, "POST", "eventos_entrega") === 1 && cuenta(ws, "PATCH", "ordenes_compra_v2", (w) => w.cuerpo.estado_entrega === "confirmada") === 1, ws);
   ws = await paso("factura", async () => { await boton(p, /Emitir factura/); await espera(p, 400); m = enModal(p); await m.getByPlaceholder("ej: 215").fill("9001"); await boton(p, /Registrar factura/, m); });
-  ok("S12_factura", cuenta(ws, "POST", "eventos_factura") === 1 && cuenta(ws, "PATCH", "ordenes_compra_v2", (w) => w.cuerpo.estado_factura_propia === "emitida") === 1, ws);
+  ok("S12_factura", cuenta(ws, "POST", "eventos_factura") === 1 && cuenta(ws, "PATCH", "ordenes_compra_v2", (w) => "monto_facturado" in (w.cuerpo || {})) === 0 && b.db.ordenes_compra_v2.find((o) => o.id === ocN.id).estado_factura_propia === "emitida", ws);
   ws = await paso("cobro", async () => { await boton(p, /Registrar cobro/); await espera(p, 400); m = enModal(p); await boton(p, /Registrar pago/, m); });
-  ok("S12_cobro", cuenta(ws, "POST", "eventos_pago_cliente") === 1 && cuenta(ws, "PATCH", "ordenes_compra_v2", (w) => w.cuerpo.estado_pago_cliente === "pagado") === 1, ws);
+  ok("S12_cobro", cuenta(ws, "POST", "eventos_pago_cliente") === 1 && cuenta(ws, "PATCH", "ordenes_compra_v2", (w) => "monto_cobrado" in (w.cuerpo || {})) === 0 && b.db.ordenes_compra_v2.find((o) => o.id === ocN.id).estado_pago_cliente === "pagado", ws);
   ws = await paso("financ", async () => { await boton(p, /Registrar pago/); await espera(p, 400); m = enModal(p); await m.locator("input[type=number]").fill("700000"); await boton(p, /Registrar pago a financiador/, m); });
   ok("S12_pago_financiador_por_rpc", cuenta(ws, "RPC", "registrar_pago_financiador") === 1, ws);
   ok("S12_cerrada", /Cerrada/.test(await p.locator('[data-oc="4005-5-SE26"]').innerText()));

@@ -117,7 +117,8 @@ export function clasificarCargo(mov, financiadores, vendedores) {
   const desc = mov.descripcion.toUpperCase();
 
   let mejorFin = null, puntosFin = 0;
-  for (const f of financiadores || []) {
+  // Fondos propios (Cuenta BFK) no son un financista al que se le devuelva dinero (regla 2, Fase 4B).
+  for (const f of (financiadores || []).filter(x => x.tipo !== "propio")) {
     const n = coincidencias(f.nombre, desc);
     if (n > puntosFin) { puntosFin = n; mejorFin = f; }
   }
@@ -505,7 +506,7 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, re
                         onChange={ev => setEgresos(l => l.map((x, ix) => ix === i ? { ...x, destinoId: ev.target.value } : x))}
                         style={{ flex: 1, padding: "6px 8px", borderRadius: 8, fontSize: 12, border: `1px solid ${C.border}`, background: C.card, color: C.ink, fontFamily: SANS }}>
                         <option value="">Elige…</option>
-                        {(e.tipo === "financiador" ? (financiadores || []) : (vendedores || []))
+                        {(e.tipo === "financiador" ? (financiadores || []).filter(x => x.tipo !== "propio") : (vendedores || []))
                           .map(x => <option key={x.id} value={x.id}>{x.nombre}</option>)}
                       </select>
                     )}

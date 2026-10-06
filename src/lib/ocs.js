@@ -73,7 +73,8 @@ export const ESTADOS_ENTREGADA = ["confirmada", "entregado"];
 export const estaEntregada = (oc) => ESTADOS_ENTREGADA.includes(oc?.estado_entrega);
 export const estaFacturada = (oc) => oc?.estado_factura_propia === "emitida";
 export const estaCobrada = (oc) => oc?.estado_pago_cliente === "pagado";
-export const financiamientoPagado = (oc) => oc?.estado_pago_financiamiento === "pagado";
+// Etapa de financiamiento cumplida: pagada, o "no aplica" (venta propia o fondos propios, reglas 2 y 3 de la Fase 4B).
+export const financiamientoPagado = (oc) => oc?.estado_pago_financiamiento === "pagado" || oc?.estado_pago_financiamiento === "no_aplica";
 export const tieneVendedor = (oc) => !!oc?.vendedor_id;
 export const estaCerrada = (oc) => estaCobrada(oc) && financiamientoPagado(oc);
 export const etapasCompletadas = (oc) =>

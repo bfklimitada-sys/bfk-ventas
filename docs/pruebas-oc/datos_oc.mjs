@@ -18,7 +18,7 @@ export function crearDatos() {
     oc(4, "2004-104-SE26", { estado_entrega: "confirmada", estado_factura_propia: "emitida", monto_facturado: 1230000 }), // por vencer, 2 entregas
     oc(5, "2005-105-SE26", { vendedor_id: null, estado_compra: "pendiente", costo_total: 0, financiador_id: null }),     // MP sin comprar y sin vendedor
     oc(6, "VD-006", { fecha_emision_mp: null, fecha_hora_emision_mp: null }),   // venta directa (fecha de la OC editable)
-    oc(7, "2007-107-SE26", { estado_entrega: "confirmada", estado_factura_propia: "emitida", estado_pago_cliente: "parcial", monto_facturado: 1260000, monto_cobrado: 500000, monto_pagado_fin: 200000 }),
+    oc(7, "2007-107-SE26", { estado_entrega: "confirmada", estado_factura_propia: "emitida", estado_pago_cliente: "parcial", monto_facturado: 1260000, monto_cobrado: 500000, monto_pagado_fin: 200000, estado_pago_financiamiento: "parcial" }),
     oc(8, "2008-108-SE26", { vendedor_id: null, estado_entrega: "confirmada", estado_factura_propia: "emitida", estado_pago_cliente: "pagado", estado_pago_financiamiento: "pagado", monto_facturado: 1270000, monto_cobrado: 1270000, monto_pagado_fin: 840000 }), // cerrada sin vendedor
     oc(9, "2009-109-SE26", { rut_cliente: "", fecha_hora_emision_mp: null }),  // le faltan datos: se completa sola al abrir (sin tocar la compra)
     oc(10, "2010-110-SE26", { archivada: true, archivada_en: ahora(), archivada_por: "u1", archivo_motivo: "Duplicada" }),

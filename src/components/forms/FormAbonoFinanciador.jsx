@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { Field } from "../ui/Basicos";
 import { C, MONO, SANS, btnP, fmt, iStyle, iMono, selStyle } from "../../lib/theme";
+import { bloqueoDominio, deudaOC, financiadoresExternos } from "../../lib/finanzas";
 
 // Reparte un abono entre las OCs pendientes del financiador,
 // de la más antigua a la más nueva (FIFO). La última puede quedar parcial.
@@ -9,7 +10,7 @@ export function repartirFIFO(monto, ocsPendientes) {
   const reparto = [];
   for (const oc of ocsPendientes) {
     if (resto <= 0) break;
-    const debe = Math.max(0, (Number(oc.costo_total) || 0) - (Number(oc.monto_pagado_fin) || 0));
+    const debe = deudaOC(oc);   // Fase 4B: lo adeudado según los totales que calcula la base
     if (debe <= 0) continue;
     const asignado = Math.min(resto, debe);
     reparto.push({ oc, asignado, debe, completa: asignado >= debe });
@@ -18,7 +19,26 @@ export function repartirFIFO(monto, ocsPendientes) {
   return { reparto, sobrante: resto };
 }
 
-export function FormAbonoFinanciador({ ocs, financiadores, onSave, financiadorInicial }) {
+// OCs con deuda pendiente con un financiador, de la más antigua a la más nueva (criterio único para el abono
+// manual y los egresos de la cartola). Excluye venta propia y fondos propios (no son deuda, reglas 2 y 3) y las
+// OCs con una corrección histórica pendiente en financiamiento (la base las rechazaría).
+export function ocsPendientesFinanciador(ocs, finId, difsHistoricas) {
+  return (ocs || [])
+    .filter(o => o.financiador_id === finId
+      && o.estado_pago_financiamiento !== "pagado"
+      && !o.es_venta_propia
+      && !bloqueoDominio(difsHistoricas, o.id, "financiamiento")
+      && deudaOC(o) > 0)
+    .sort((a, b) => {
+      const fa = (a.eventos_compra || [])[0]?.fecha || a.creadoEn || "";
+      const fb = (b.eventos_compra || [])[0]?.fecha || b.creadoEn || "";
+      return String(fa).localeCompare(String(fb));
+    });
+}
+
+export function FormAbonoFinanciador({ ocs, financiadores: todosFin, onSave, financiadorInicial, difsHistoricas }) {
+  // Solo financiadores externos: los fondos propios (Cuenta BFK) no son deuda y no reciben abonos (regla 2).
+  const financiadores = financiadoresExternos(todosFin);
   const [finId, setFinId] = useState((financiadorInicial && financiadores.some(f => f.id === financiadorInicial) ? financiadorInicial : financiadores[0]?.id) || "");
   const [monto, setMonto] = useState("");
   const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10));
@@ -29,20 +49,10 @@ export function FormAbonoFinanciador({ ocs, financiadores, onSave, financiadorIn
   const fin = financiadores.find(f => f.id === finId);
 
   // Pendientes de ese financiador, de la más antigua a la más nueva
-  const pendientes = useMemo(() => {
-    return ocs
-      .filter(o => o.financiador_id === finId
-        && o.estado_pago_financiamiento !== "pagado"
-        && (Number(o.costo_total) || 0) > (Number(o.monto_pagado_fin) || 0))
-      .sort((a, b) => {
-        const fa = (a.eventos_compra || [])[0]?.fecha || a.creadoEn || "";
-        const fb = (b.eventos_compra || [])[0]?.fecha || b.creadoEn || "";
-        return String(fa).localeCompare(String(fb));
-      });
-  }, [ocs, finId]);
+  const pendientes = useMemo(() => ocsPendientesFinanciador(ocs, finId, difsHistoricas), [ocs, finId, difsHistoricas]);
 
-  const totalAdeudado = pendientes.reduce(
-    (s, o) => s + Math.max(0, (Number(o.costo_total) || 0) - (Number(o.monto_pagado_fin) || 0)), 0);
+  const totalAdeudado = pendientes.reduce((s, o) => s + deudaOC(o), 0);
+  const saldoFin = Number(fin?.saldo_deuda) || 0;
 
   const { reparto, sobrante } = useMemo(
     () => repartirFIFO(monto, pendientes), [monto, pendientes]);
@@ -78,6 +88,10 @@ export function FormAbonoFinanciador({ ocs, financiadores, onSave, financiadorIn
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.inkMuted }}>
             <span>{pendientes.length} OC{pendientes.length !== 1 ? "s" : ""} por devolver</span>
             <span style={{ fontFamily: MONO, fontWeight: 800, color:C.dangerText }}>{fmt.money(totalAdeudado)}</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.inkMuted, marginTop: 4 }}>
+            <span>Saldo del financiador (calculado por la base)</span>
+            <span style={{ fontFamily: MONO, fontWeight: 800, color: saldoFin < 0 ? C.okText : C.ink }}>{saldoFin < 0 ? `${fmt.money(-saldoFin)} a favor de BFK` : fmt.money(saldoFin)}</span>
           </div>
         </div>
       )}
@@ -123,7 +137,7 @@ export function FormAbonoFinanciador({ ocs, financiadores, onSave, financiadorIn
 
           {sobrante > 0 && (
             <div style={{ background: C.infoLight, borderRadius: 9, padding: "9px 12px", marginTop: 8, fontSize: 12, color: C.info, fontWeight: 600 }}>
-              Sobran {fmt.money(sobrante)} — el abono supera lo adeudado. Se registrará como pago sin OC asociada.
+              Sobran {fmt.money(sobrante)} — el abono supera lo adeudado por las OCs. Se registrará como pago sin OC asociada{(Number(monto) || 0) > saldoFin ? ` y el saldo del financiador quedará ${fmt.money((Number(monto) || 0) - saldoFin)} a favor de BFK` : ""}.
             </div>
           )}
         </div>
