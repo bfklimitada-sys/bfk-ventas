@@ -98,7 +98,7 @@ visto = saldo("tc_fin")
 q(A, "insert into public.eventos_pago_financiamiento (id, financiador_id, oc_id, fecha, monto) values ('tc_pago_old', 'tc_fin', null, %s, 100000)", (HOY,))
 q(A, "update public.financiadores set saldo_deuda = %s where id = 'tc_fin'", (visto - 100000,))
 def compra_old():
-    q(B, "insert into public.eventos_compra (id, oc_id, fecha, monto_venta, costo_compra, financiador_id) values ('tc_evc_old', 'tc_oc4', %s, 900000, 50000, 'tc_fin')", (HOY,))
+    q(B, "insert into public.eventos_compra (id, oc_id, fecha, monto_venta, costo_compra, financiador_id) values ('tc_evc_old4b', 'tc_oc4', %s, 900000, 50000, 'tc_fin')", (HOY,))
     q(B, "update public.ordenes_compra_v2 set estado_compra='comprado', costo_total=50000, financiador_id='tc_fin' where id='tc_oc4'")
     q(B, "update public.financiadores set saldo_deuda = %s where id = 'tc_fin'", (visto + 50000,))
 th = threading.Thread(target=compra_old); th.start(); time.sleep(1.0); A.commit(); th.join()
