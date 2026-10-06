@@ -3,7 +3,8 @@ import { Field, Leyenda } from "../ui/Basicos";
 import { sel } from "../../lib/supabase";
 import { C, MONO, btnP, fmt, iMono } from "../../lib/theme";
 import { Ic } from "../ui/Iconos";
-import { estadoVencimiento, facturaVigente, plazoPago } from "../../lib/calculos";
+import { facturaVigente, plazoPago } from "../../lib/calculos";
+import { entregaAtrasada, estaEntregada, facturaPorCobrar, facturaVencida } from "../../lib/ocs";
 
 // Resumen compacto de atrasos: una sola tarjeta con acceso a Alertas. No lista OC individuales.
 function ResumenAtraso({ titulo, monto, color, fondo, onVerAlertas }) {
@@ -38,7 +39,7 @@ export function PanelCalendario({ ocs, onMarcarFecha, onVerAlertas }) {
     const hoyIso=iso(hoy.getFullYear(),hoy.getMonth(),hoy.getDate());
     for(const oc of ocs){
       if((oc.tipo_registro||"venta")!=="venta"||oc.estado_pago_cliente==="pagado") continue;
-      const evF=oc.estado_factura_propia==="emitida"?facturaVigente(oc):null;
+      const evF=facturaPorCobrar(oc)?facturaVigente(oc):null;
       if(evF?.fecha){
         const k=sumarDias(evF.fecha,plazoPago(oc));
         (vp[k]=vp[k]||[]).push({oc,evF});
@@ -59,12 +60,12 @@ export function PanelCalendario({ ocs, onMarcarFecha, onVerAlertas }) {
     const hoyIso=iso(hoy.getFullYear(),hoy.getMonth(),hoy.getDate());
     for(const oc of ocs){
       const fEst=(oc.eventos_compra||[])[0]?.fecha_entrega_estimada;
-      const entregada=oc.estado_entrega==="confirmada"||oc.estado_entrega==="entregado";
       const fReal=(oc.eventos_entrega||[])[0]?.fecha;
       if(fEst){
         const k=String(fEst).slice(0,10);
         if(!est[k])est[k]=[]; est[k].push(oc);
-        if(!entregada&&k<hoyIso) ven.push({oc,fEst:k});
+        // Mismo criterio que Alertas ("Entrega atrasada"): venta, estimada ya pasada y sin entregar.
+        if(entregaAtrasada(oc)) ven.push({oc,fEst:k});
       }
       if(fReal){
         const k=String(fReal).slice(0,10);
@@ -75,14 +76,12 @@ export function PanelCalendario({ ocs, onMarcarFecha, onVerAlertas }) {
     return {estimadasPorDia:est,realesPorDia:rea,vencidas:ven};
   },[ocs]);
 
-  // Mismo criterio que el Panel y Alertas: estadoVencimiento + saldo (facturado - cobrado) por OC.
+  // Mismo criterio que el Panel y Alertas (lib/ocs.js): factura vigente vencida y sin cobrar.
   const resumenFacturas=useMemo(()=>{
     let n=0,monto=0;
     for(const oc of ocs){
-      if((oc.tipo_registro||"venta")!=="venta"||oc.estado_factura_propia!=="emitida"||oc.estado_pago_cliente==="pagado") continue;
-      const evF=facturaVigente(oc); if(!evF?.fecha) continue;
-      const dias=fmt.diasDesde(evF.fecha);
-      if(estadoVencimiento(dias||0,plazoPago(oc)).vencida){ n++; monto+=(oc.monto_facturado||0)-(oc.monto_cobrado||0); }
+      if(!facturaVencida(oc)) continue;
+      n++; monto+=(oc.monto_facturado||0)-(oc.monto_cobrado||0);
     }
     return {n,monto};
   },[ocs]);
@@ -197,7 +196,7 @@ export function PanelCalendario({ ocs, onMarcarFecha, onVerAlertas }) {
             <div style={{marginBottom:8}}>
               <div style={{fontSize:12,fontWeight:700,color:C.info,textTransform:"uppercase",marginBottom:4}}>● Entregas estimadas</div>
               {(estimadasPorDia[kSel]||[]).map(oc=>{
-                const entregada=oc.estado_entrega==="confirmada"||oc.estado_entrega==="entregado";
+                const entregada=estaEntregada(oc);
                 return (
                   <div key={oc.id} style={{fontSize:12,display:"flex",justifyContent:"space-between",marginBottom:3}}>
                     <span style={{fontFamily:MONO,fontWeight:700}}>{oc.numero_oc}</span>

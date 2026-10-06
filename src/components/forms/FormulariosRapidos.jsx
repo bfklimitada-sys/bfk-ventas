@@ -1,4 +1,5 @@
 import { facturaVigente } from "../../lib/calculos";
+import { estaEntregada } from "../../lib/ocs";
 import { useState, useEffect } from "react";
 import { BuscadorOC, Field } from "../ui/Basicos";
 import { C, MONO, btnP, fmt, iMono, iStyle, selStyle } from "../../lib/theme";
@@ -36,7 +37,7 @@ export function FormEmitirFactura({ ocs, onSave, ocPreseleccionada }) {
   const hayDif=selected&&montoFact>0&&Math.abs(dif)>0;
   const difGrande=Math.abs(dif)>Math.max(1000,montoOC*0.02); // >2% o >$1.000
 
-  const entregada=selected&&(selected.estado_entrega==="confirmada"||selected.estado_entrega==="entregado");
+  const entregada=selected&&estaEntregada(selected);
   const [confirmoSinEntrega,setConfirmoSinEntrega]=useState(false);
 
   const handleSave=async()=>{

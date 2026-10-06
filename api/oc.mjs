@@ -238,6 +238,9 @@ export default async function handler(req, res) {
   try {
     let data = null;
     let ultimoStatus = null;
+    // Respuestas válidas de Mercado Público SIN la OC (Listado vacío): significa que MP no la tiene
+    // (código inexistente, o todavía no publicada/aceptada). Es distinto de que MP esté caído.
+    let respuestasSinOC = 0;
 
     // Nunca había tenido reintento — funcionó bien todo el día porque
     // Mercado Público estaba estable, pero cuando ellos tienen un mal
@@ -252,28 +255,32 @@ export default async function handler(req, res) {
           if (!r.ok) continue;
           const j = await r.json().catch(() => null);
           if (j?.Listado?.[0]) { data = j; break; }
+          // Respuesta válida y vacía: no se prueba la variante antigua (ya no responde); se confirma una vez más.
+          if (j && Array.isArray(j.Listado) && j.Listado.length === 0) { respuestasSinOC++; break; }
         } catch { /* prueba la siguiente variante o reintenta */ }
       }
+      // Dos respuestas válidas y vacías seguidas: Mercado Público no tiene esa OC.
+      if (!data && respuestasSinOC >= 2) break;
+    }
+
+    if (!data && respuestasSinOC > 0) {
+      return res.status(404).json({
+        ok: false,
+        error: "OC no encontrada en Mercado Público",
+        detalle: "Puede que aún no esté publicada o aceptada, o que el código tenga un error.",
+        codigo,
+      });
     }
 
     if (!data) {
       return res.status(502).json({
         ok: false,
-        error: `Mercado Público respondió ${ultimoStatus}`,
+        error: `Mercado Público no respondió correctamente (código ${ultimoStatus ?? "sin respuesta"}). Intente de nuevo en unos minutos.`,
         usandoTicketPruebas: false,
       });
     }
 
-    const oc = data?.Listado?.[0];
-
-    if (!oc) {
-      return res.status(404).json({
-        ok: false,
-        error: "OC no encontrada en Mercado Público",
-        detalle: "Puede que aún no esté publicada. Reintenta más tarde.",
-        codigo,
-      });
-    }
+    const oc = data.Listado[0];
 
     const comprador = oc.Comprador || {};
     const itemsRaw = oc.Items?.Listado || [];

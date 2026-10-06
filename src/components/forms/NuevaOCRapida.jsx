@@ -3,6 +3,7 @@ import { Field } from "../ui/Basicos";
 import { C, MONO, SANS, btnP, btnG, fmt, iStyle, iMono, selStyle } from "../../lib/theme";
 import { Ic } from "../ui/Iconos";
 import { entidadPorRut } from "../../lib/rut";
+import { estadoMP, mensajeDuplicado, resultadoConsultaMP } from "../../lib/ocs";
 
 // ── Heurística para sacar la dirección de entrega del texto del producto ──
 // Cuando TipoDespacho = 12 ("ver instrucciones"), Mercado Público mete la
@@ -26,13 +27,14 @@ function extraerDireccion(texto) {
   return "";
 }
 
-export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoInicial, onGuardar, onCerrar }) {
+export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoInicial, onGuardar, onCerrar, buscarDuplicado }) {
   const [paso, setPaso] = useState(1);
   const [codigo, setCodigo] = useState(codigoInicial || "");
   const [cargando, setCargando] = useState(false);
   const [err, setErr] = useState("");
   const [datos, setDatos] = useState(null);     // respuesta normalizada de la API
-  const [pendiente, setPendiente] = useState(false); // true = OC aún no aceptada
+  const [pendiente, setPendiente] = useState(false); // true = Mercado Público aún no la tiene (404)
+  const [confirmaCancelada, setConfirmaCancelada] = useState(false); // cargar igual una OC cancelada en MP
 
   // Campos que Mati puede completar o corregir
   const [links, setLinks] = useState([""]);
@@ -43,15 +45,21 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
   const [guardando, setGuardando] = useState(false);
 
   const buscar = async (codigoForzado) => {
-    const cod = (codigoForzado ?? codigo).trim().toUpperCase();
+    // Fase 4A: el botón entregaba el evento del clic como "código" y la búsqueda fallaba en silencio
+    // (solo funcionaba con Enter). Ahora solo se acepta un texto.
+    const cod = String(typeof codigoForzado === "string" ? codigoForzado : codigo).trim().toUpperCase();
     if (!cod) { setErr("Ingresa el código de la OC"); return; }
-    setErr(""); setCargando(true); setDatos(null); setPendiente(false);
+    setErr(""); setCargando(true); setDatos(null); setPendiente(false); setConfirmaCancelada(false);
+    // Antes de consultar: ¿ya existe (activa o archivada)? Misma clave que el índice único de la base.
+    const dup = buscarDuplicado ? buscarDuplicado(cod) : null;
+    if (dup) { setErr(mensajeDuplicado(dup)); setCargando(false); return; }
     try {
       const r = await fetch(`/api/oc?codigo=${encodeURIComponent(cod)}`);
-      const j = await r.json();
+      const j = await r.json().catch(() => null);
+      const res = resultadoConsultaMP(r.status, j);
 
-      if (j.ok) {
-        const oc = j.oc;
+      if (res.tipo === "ok") {
+        const oc = res.oc;
         setDatos(oc);
         // Correo: primero el del catálogo por RUT, si existe
         const enCatalogo = entidadPorRut(entidadesCatalogo, oc.rut_cliente).entidad;
@@ -60,13 +68,13 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
         const textoItems = (oc.productos || []).map(p => p.descripcion).join(" ");
         setDireccion(oc.direccion || extraerDireccion(textoItems) || "");
         setPaso(2);
-      } else if (r.status === 404) {
-        // OC todavía no aceptada en Mercado Público
+      } else if (res.tipo === "no_disponible") {
+        // Mercado Público respondió que no tiene esa OC: aún no publicada/aceptada, o código mal escrito.
         setPendiente(true);
         setDatos({ numero_oc: cod, productos: [] });
         setPaso(2);
       } else {
-        setErr(j.error || "No se pudo consultar Mercado Público");
+        setErr(res.mensaje);
       }
     } catch (e) {
       setErr("Sin conexión con el servicio. Intenta de nuevo.");
@@ -83,6 +91,9 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
 
   const guardar = async () => {
     if (!links.some(l => l.trim())) { setErr("Agrega al menos un link de producto"); return; }
+    if (!pendiente && estadoMP(datos?.codigo_estado).tipo === "cancelada" && !confirmaCancelada) {
+      setErr("Esta OC figura cancelada en Mercado Público. Marca la casilla si de todas formas quieres cargarla."); return;
+    }
     setErr(""); setGuardando(true);
     try {
       await onGuardar({
@@ -92,7 +103,7 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
         direccion_entrega: direccion.trim(),
         correo_cliente: correo.trim(),
         vendedorId: vendedorId || null,
-        ventaPropia,
+        ventaPropia: !!(vendedorId && ventaPropia),
       });
     } catch (e) {
       setErr(e.message); setGuardando(false);
@@ -118,12 +129,17 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
         </div>
 
         <Field label="Vendedor" hint="Quién trajo esta venta">
-          <select style={selStyle} value={vendedorId} onChange={e => setVendedorId(e.target.value)}>
+          <select style={selStyle} value={vendedorId} onChange={e => { setVendedorId(e.target.value); if (!e.target.value) setVentaPropia(false); }}>
             <option value="">Sin vendedor asignado</option>
             {(vendedores || []).map(v => (
               <option key={v.id} value={v.id}>{v.nombre}</option>
             ))}
           </select>
+          {!vendedorId && (
+            <div data-aviso="sin-vendedor" style={{ fontSize: 12, color: C.warnText, fontWeight: 600, marginTop: 5 }}>
+              <Ic n="⚠"/> Sin vendedor: esta OC no entrará en ninguna comisión hasta que se le asigne uno.
+            </div>
+          )}
         </Field>
 
         {vendedorId&&(
@@ -147,7 +163,7 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
 
         {err && <div style={{ background: C.dangerLight, color:C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 12.5, marginBottom: 10, fontWeight: 600 }}>{err}</div>}
 
-        <button onClick={buscar} disabled={cargando} style={btnP(cargando ? C.inkFaint : C.teal)}>
+        <button onClick={() => buscar()} disabled={cargando} style={btnP(cargando ? C.inkFaint : C.teal)}>
           {cargando ? "Consultando Mercado Público…" : "Buscar OC →"}
         </button>
       </div>
@@ -162,18 +178,42 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
   return (
     <div style={{ fontFamily: SANS }}>
       {pendiente ? (
-        <div style={{ background: C.warnLight, border: `1px solid ${C.warn}`, borderRadius: 10, padding: "12px 14px", marginBottom: 14 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 700, color:C.warnText, marginBottom: 4 }}><Ic n="⏳"/> Aún no aceptada en Mercado Público</div>
+        <div data-estado-mp="no_disponible" style={{ background: C.warnLight, border: `1px solid ${C.warn}`, borderRadius: 10, padding: "12px 14px", marginBottom: 14 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 700, color:C.warnText, marginBottom: 4 }}><Ic n="⏳"/> Todavía no disponible en Mercado Público</div>
           <div style={{ fontSize: 12, color: C.inkMuted, lineHeight: 1.5 }}>
-            Guárdala igual con el link. La app completará el cliente, los productos y los montos
-            automáticamente cuando la OC sea aceptada.
+            Mercado Público respondió que no tiene esta OC: puede que aún no esté publicada o aceptada,
+            o que el código tenga un error (revísalo). Si el código es correcto, guárdala igual con el link:
+            la app completará el cliente, los productos y los montos cuando la OC aparezca.
           </div>
         </div>
-      ) : (
-        <div style={{ background: C.okLight, borderRadius: 10, padding: "10px 14px", marginBottom: 14 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 700, color:C.okText }}>✓ Datos traídos de Mercado Público</div>
-        </div>
-      )}
+      ) : (() => {
+        const est = estadoMP(oc.codigo_estado);
+        if (est.tipo === "cancelada") return (
+          <div data-estado-mp="cancelada" style={{ background: C.dangerLight, border: `1px solid ${C.danger}`, borderRadius: 10, padding: "12px 14px", marginBottom: 14 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 800, color: C.dangerText, marginBottom: 4 }}><Ic n="⚠"/> Cancelada en Mercado Público</div>
+            <div style={{ fontSize: 12, color: C.inkMuted, lineHeight: 1.5, marginBottom: 8 }}>
+              El comprador canceló esta OC. Normalmente no se carga: no se debe comprar ni facturar.
+            </div>
+            <label style={{ display: "flex", alignItems: "flex-start", gap: 7, cursor: "pointer" }}>
+              <input type="checkbox" checked={confirmaCancelada} onChange={e => { setConfirmaCancelada(e.target.checked); setErr(""); }} style={{ marginTop: 2 }} />
+              <span style={{ fontSize: 12, color: C.ink, fontWeight: 600 }}>Entiendo que está cancelada y quiero cargarla igual</span>
+            </label>
+          </div>
+        );
+        if (est.tipo === "sin_aceptar") return (
+          <div data-estado-mp="sin_aceptar" style={{ background: C.warnLight, border: `1px solid ${C.warn}`, borderRadius: 10, padding: "12px 14px", marginBottom: 14 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 800, color: C.warnText, marginBottom: 4 }}><Ic n="⏳"/> {est.texto}</div>
+            <div style={{ fontSize: 12, color: C.inkMuted, lineHeight: 1.5 }}>
+              Los datos ya vienen de Mercado Público, pero la OC sigue sin aceptar. Acéptala en el portal antes de comprar.
+            </div>
+          </div>
+        );
+        return (
+          <div data-estado-mp={est.tipo} style={{ background: C.okLight, borderRadius: 10, padding: "10px 14px", marginBottom: 14 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color:C.okText }}>✓ Datos traídos de Mercado Público · {est.texto}</div>
+          </div>
+        );
+      })()}
 
       {/* Resumen de lo que trajo la API */}
       <div style={{ background: C.paper, borderRadius: 10, padding: "12px 14px", marginBottom: 14 }}>
@@ -267,7 +307,7 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
       </div>
 
       <div style={{ fontSize: 12, color: C.inkFaint, textAlign: "center", marginTop: 10 }}>
-        La venta queda registrada a nombre de {perfil?.nombre || "tu usuario"}
+        Creada por {perfil?.nombre || "tu usuario"} · el vendedor es el elegido arriba
       </div>
     </div>
   );

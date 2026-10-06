@@ -73,6 +73,23 @@ export async function rpcImportarEntidades(t, operaciones, simular) {
 
 export async function del(table, t, id) { const r=await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${id}`,{method:"DELETE",headers:hdrs(t)}); if(!r.ok) throw new Error(`Error eliminando en ${table}`); return r.json(); }
 
+// Borrado CONFIRMADO (Fase 4A): devuelve las filas que la base realmente eliminó.
+// Si la base rechaza el borrado, o no elimina nada (sin permiso por RLS, o el registro
+// ya no existía), lanza un error: quien llama NO debe ajustar estados ni saldos.
+export async function delConfirmado(table, t, id) {
+  let r;
+  try { r=await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${encodeURIComponent(id)}`,{method:"DELETE",headers:hdrs(t)}); }
+  catch { throw new Error("Sin conexión con la base: no se eliminó nada."); }
+  if(!r.ok){
+    let m=""; try{ const j=await r.json(); m=j?.message||""; }catch{}
+    throw new Error(`La base rechazó la eliminación${m?` (${m})`:""}. No se modificó nada.`);
+  }
+  let filas=[]; try{ filas=await r.json(); }catch{ filas=[]; }
+  if(!Array.isArray(filas)||!filas.some(f=>String(f?.id)===String(id)))
+    throw new Error("La base no eliminó el registro (sin permiso o ya no existe). No se modificó nada.");
+  return filas;
+}
+
 export async function registrarCambio(t, {ocId, ocNumero, usuarioId, usuarioNombre, accion, campo, valorAnterior, valorNuevo}) {
   await ins("historial_cambios",t,{id:genId("hc"),oc_id:ocId,oc_numero:ocNumero,usuario_id:usuarioId,usuario_nombre:usuarioNombre,accion,campo:campo||null,valor_anterior:valorAnterior!=null?String(valorAnterior):null,valor_nuevo:valorNuevo!=null?String(valorNuevo):null});
 }

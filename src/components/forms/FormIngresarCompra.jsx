@@ -3,12 +3,21 @@ import { Field } from "../ui/Basicos";
 import { del } from "../../lib/supabase";
 import { C, btnP, iMono, iStyle, selStyle } from "../../lib/theme";
 import { entidadPorRut } from "../../lib/rut";
+import { mensajeDuplicado } from "../../lib/ocs";
+import { fmt } from "../../lib/theme";
 
-export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, entidadesCatalogo, ocExistente, perfil }) {
+// Valor del selector para "sin vendedor" elegido a propósito (distinto de "no elegido").
+const SIN_VENDEDOR="__sin_vendedor__";
+
+export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, entidadesCatalogo, ocExistente, perfil, buscarDuplicado }) {
   const [paso,setPaso]=useState(1);
   // Paso 1 — Datos OC (si ocExistente, el código viene definido)
   const [numOC,setNumOC]=useState(ocExistente?.numero_oc||"");
-  const [vendedorId,setVendedorId]=useState(ocExistente?.vendedor_id||vendedores[0]?.id||"");
+  // Fase 4A: nunca se elige en silencio el primer vendedor de la lista. Se propone el del usuario
+  // (si es vendedor); si no, queda sin elegir y hay que indicarlo (o elegir "Sin vendedor" a propósito).
+  const [vendedorId,setVendedorId]=useState(ocExistente?.vendedor_id||((vendedores||[]).some(v=>v.id===perfil?.vendedor_id)?perfil.vendedor_id:""));
+  const [ventaPropia,setVentaPropia]=useState(false);
+  const [fechaOC,setFechaOC]=useState(new Date().toISOString().slice(0,10));
   const [rutCliente,setRutCliente]=useState(ocExistente?.rut_cliente||"");
   const [cliente,setCliente]=useState(ocExistente?.cliente||"");
   const [entidad,setEntidad]=useState(ocExistente?.entidad||"");
@@ -52,8 +61,16 @@ export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, ent
   const updProducto=(i,field,val)=>setProductos(p=>p.map((x,idx)=>idx===i?{...x,[field]:val}:x));
   const delProducto=(i)=>setProductos(p=>p.filter((_,idx)=>idx!==i));
 
+  const vendedorReal=vendedorId&&vendedorId!==SIN_VENDEDOR?vendedorId:null;
+  const nombreVendedor=vendedorReal?(vendedores.find(v=>v.id===vendedorReal)?.nombre||"—"):"Sin vendedor (no entra en comisiones)";
   const validarPaso1=()=>{
     if(!numOC.trim()){setErr("Ingresa el código de la OC");return false;}
+    if(!ocExistente){
+      const dup=buscarDuplicado?buscarDuplicado(numOC.trim()):null;
+      if(dup){setErr(mensajeDuplicado(dup));return false;}
+      if(!vendedorId){setErr("Elige el vendedor de esta venta (o «Sin vendedor» si no corresponde comisión)");return false;}
+      if(!fechaOC){setErr("Indica la fecha de la OC");return false;}
+    }
     if(!cliente.trim()){setErr("Ingresa el nombre del cliente");return false;}
     setErr(""); return true;
   };
@@ -78,7 +95,8 @@ export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, ent
       await onSave({
         esNueva:!ocExistente, ocId:ocExistente?.id||null, numNueva:numOC.trim(),
         cliente:cliente.toUpperCase(), rutCliente, entidad:entidad.toUpperCase(),
-        comuna:comuna.toUpperCase(), contacto, correo, vendedorId,
+        comuna:comuna.toUpperCase(), contacto, correo, vendedorId:vendedorReal,
+        ventaPropia:!!(vendedorReal&&ventaPropia), fechaOC:ocExistente?null:fechaOC,
         montoVenta:ventaTotal, costoCompra:costoTotal,
         fecha:fechaCompra, fechaEst:fechaEst||null,
         financiadorId, proveedor:obs,
@@ -122,7 +140,10 @@ export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, ent
           <Field label="Código OC (Mercado Público)" required>
             {ocExistente
               ? <div style={{...iMono,background:C.paper,color:C.inkMuted,display:"flex",alignItems:"center"}}>{numOC} <span style={{fontSize:12,marginLeft:8,color:C.tealDark}}>✓ definida</span></div>
-              : <input style={iMono} value={numOC} onChange={e=>setNumOC(e.target.value)} placeholder="ej: 2436-690-AG26" />}
+              : <input style={iMono} value={numOC} onChange={e=>{setNumOC(e.target.value);setErr("");}} placeholder="ej: 2436-690-AG26" />}
+            {!ocExistente&&numOC.trim()&&buscarDuplicado&&buscarDuplicado(numOC.trim())&&(
+              <div data-aviso="codigo-duplicado" style={{fontSize:12,color:C.dangerText,fontWeight:700,marginTop:5}}>{mensajeDuplicado(buscarDuplicado(numOC.trim()))}</div>
+            )}
           </Field>
           {ocExistente?(
             <div style={{background:C.paper,borderRadius:10,padding:"12px 14px",marginTop:4,fontSize:12.5,lineHeight:1.8}}>
@@ -132,10 +153,25 @@ export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, ent
               <b>Monto de la OC:</b> ${(Number(ocExistente.monto_total)||0).toLocaleString("es-CL")}
             </div>
           ):(<>
-          <Field label="Vendedor" required>
-            <select style={selStyle} value={vendedorId} onChange={e=>setVendedorId(e.target.value)}>
+          <Field label="Vendedor" required hint="Quién trajo esta venta">
+            <select style={selStyle} value={vendedorId} onChange={e=>{setVendedorId(e.target.value);setErr("");if(e.target.value===SIN_VENDEDOR||!e.target.value) setVentaPropia(false);}}>
+              <option value="">Elige el vendedor…</option>
               {vendedores.map(v=><option key={v.id} value={v.id}>{v.nombre}</option>)}
+              <option value={SIN_VENDEDOR}>Sin vendedor (no entra en comisiones)</option>
             </select>
+            {vendedorId===SIN_VENDEDOR&&<div style={{fontSize:12,color:C.warnText,fontWeight:600,marginTop:5}}>Sin vendedor: esta OC no entrará en ninguna comisión.</div>}
+          </Field>
+          {vendedorReal&&(
+            <label style={{display:"flex",alignItems:"flex-start",gap:9,marginBottom:14,cursor:"pointer",background:C.paper,borderRadius:10,padding:"10px 12px"}}>
+              <input type="checkbox" checked={ventaPropia} onChange={e=>setVentaPropia(e.target.checked)} style={{marginTop:2,width:16,height:16,flexShrink:0}} />
+              <span>
+                <span style={{display:"block",fontSize:12.5,fontWeight:700,color:C.ink}}>Es venta propia del vendedor</span>
+                <span style={{display:"block",fontSize:12,color:C.inkFaint,marginTop:1}}>Se lleva el 100% de la utilidad (menos el IVA de su propia factura), en vez del 50% general. Como en la compra rápida, la compra de una venta propia no suma deuda al financiador.</span>
+              </span>
+            </label>
+          )}
+          <Field label="Fecha de la OC" required hint="Fecha de emisión de la orden. Es distinta de la fecha de compra (se indica en el paso 3).">
+            <input style={iStyle} type="date" value={fechaOC} onChange={e=>setFechaOC(e.target.value)} />
           </Field>
           <div style={{height:1,background:C.border,margin:"14px 0"}} />
           <Field label="RUT del cliente" hint="Escribe el RUT para autocompletar">
@@ -162,7 +198,7 @@ export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, ent
       {/* ─── PASO 2: Productos ─── */}
       {paso===2&&(
         <div>
-          <div style={{fontSize:12,color:C.inkMuted,marginBottom:12}}>Agrega cada producto con su cantidad, precios y link de compra.</div>
+          <div style={{fontSize:12,color:C.inkMuted,marginBottom:12}}>Agrega cada producto con su cantidad, precios y link de compra. <b>Los precios van con IVA incluido</b> (igual que el total de Mercado Público).</div>
           {productos.map((p,i)=>(
             <div key={i} style={{background:C.paper,borderRadius:10,padding:"12px 12px 8px",marginBottom:10,border:`1px solid ${C.border}`}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
@@ -179,17 +215,17 @@ export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, ent
                 <Field label="Cantidad">
                   <input style={iMono} type="number" min="1" value={p.cantidad} onChange={e=>updProducto(i,"cantidad",e.target.value)} />
                 </Field>
-                <Field label="P. Compra ($)" hint="Lo que pagas">
+                <Field label="P. Compra unit. con IVA ($)" hint="Lo que pagas al proveedor, IVA incluido">
                   <input style={iMono} type="number" value={p.precioCompra} onChange={e=>updProducto(i,"precioCompra",e.target.value)} />
                 </Field>
-                <Field label="P. Venta ($)" hint="Lo que cobras">
+                <Field label="P. Venta unit. con IVA ($)" hint="Lo que paga el cliente, IVA incluido">
                   <input style={iMono} type="number" value={p.precioVenta} onChange={e=>updProducto(i,"precioVenta",e.target.value)} />
                 </Field>
               </div>
               {(p.precioCompra||p.precioVenta)&&(
                 <div style={{fontSize:12,color:C.inkMuted,marginTop:4}}>
-                  Subtotal compra: <b>${((Number(p.precioCompra)||0)*(Number(p.cantidad)||1)).toLocaleString("es-CL")}</b>
-                  {" · "}Subtotal venta: <b>${((Number(p.precioVenta)||0)*(Number(p.cantidad)||1)).toLocaleString("es-CL")}</b>
+                  Subtotal compra con IVA: <b>${((Number(p.precioCompra)||0)*(Number(p.cantidad)||1)).toLocaleString("es-CL")}</b>
+                  {" · "}Subtotal venta con IVA: <b>${((Number(p.precioVenta)||0)*(Number(p.cantidad)||1)).toLocaleString("es-CL")}</b>
                 </div>
               )}
             </div>
@@ -198,10 +234,11 @@ export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, ent
           {ventaTotal>0&&(
             <div style={{background:C.tealLight,borderRadius:9,padding:"10px 14px",fontSize:12.5}}>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4}}>
-                <div><div style={{color:C.inkMuted,fontSize:12}}>Costo total</div><div style={{fontWeight:700,color:C.ink}}>${costoTotal.toLocaleString("es-CL")}</div></div>
-                <div><div style={{color:C.inkMuted,fontSize:12}}>{ocExistente?"Venta de la OC":"Venta total"}</div><div style={{fontWeight:700,color:C.ink}}>${ventaOC.toLocaleString("es-CL")}</div></div>
-                <div><div style={{color:C.inkMuted,fontSize:12}}>Utilidad ({margen}%)</div><div style={{fontWeight:700,color:utilidad>=0?C.ok:C.danger}}>${utilidad.toLocaleString("es-CL")}</div></div>
+                <div><div style={{color:C.inkMuted,fontSize:12}}>Costo total con IVA</div><div style={{fontWeight:700,color:C.ink}}>${costoTotal.toLocaleString("es-CL")}</div></div>
+                <div><div style={{color:C.inkMuted,fontSize:12}}>{ocExistente?"Venta de la OC con IVA":"Venta total con IVA"}</div><div style={{fontWeight:700,color:C.ink}}>${ventaOC.toLocaleString("es-CL")}</div></div>
+                <div><div style={{color:C.inkMuted,fontSize:12}}>Utilidad con IVA ({margen}%)</div><div style={{fontWeight:700,color:utilidad>=0?C.ok:C.danger}}>${utilidad.toLocaleString("es-CL")}</div></div>
               </div>
+              <div data-desglose-iva style={{fontSize:12,color:C.inkMuted,marginTop:6}}>Venta con IVA {fmt.money(ventaOC)} = neto {fmt.money(Math.round(ventaOC/1.19))} + IVA {fmt.money(ventaOC-Math.round(ventaOC/1.19))}</div>
               {difVenta&&<div style={{background:C.warnLight,color:C.warnText,borderRadius:8,padding:"8px 12px",fontSize:12,marginTop:8,fontWeight:600}}>Los productos suman ${ventaTotal.toLocaleString("es-CL")} de venta; el monto de la OC (${ventaOC.toLocaleString("es-CL")}) no se modifica.</div>}
             </div>
           )}
@@ -231,9 +268,9 @@ export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, ent
           <div style={{background:C.paper,borderRadius:9,padding:"12px 14px",marginTop:8}}>
             <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,marginBottom:8,textTransform:"uppercase"}}>Resumen financiero</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4,fontSize:12.5}}>
-              <div><div style={{color:C.inkMuted,fontSize:12}}>Costo</div><div style={{fontWeight:700}}>${costoTotal.toLocaleString("es-CL")}</div></div>
-              <div><div style={{color:C.inkMuted,fontSize:12}}>Venta</div><div style={{fontWeight:700}}>${ventaOC.toLocaleString("es-CL")}</div></div>
-              <div><div style={{color:C.inkMuted,fontSize:12}}>Utilidad ({margen}%)</div><div style={{fontWeight:700,color:utilidad>=0?C.ok:C.danger}}>${utilidad.toLocaleString("es-CL")}</div></div>
+              <div><div style={{color:C.inkMuted,fontSize:12}}>Costo con IVA</div><div style={{fontWeight:700}}>${costoTotal.toLocaleString("es-CL")}</div></div>
+              <div><div style={{color:C.inkMuted,fontSize:12}}>Venta con IVA</div><div style={{fontWeight:700}}>${ventaOC.toLocaleString("es-CL")}</div></div>
+              <div><div style={{color:C.inkMuted,fontSize:12}}>Utilidad con IVA ({margen}%)</div><div style={{fontWeight:700,color:utilidad>=0?C.ok:C.danger}}>${utilidad.toLocaleString("es-CL")}</div></div>
             </div>
             {difVenta&&<div style={{background:C.warnLight,color:C.warnText,borderRadius:8,padding:"8px 12px",fontSize:12,marginTop:8,fontWeight:600}}>Los productos suman ${ventaTotal.toLocaleString("es-CL")} de venta; el monto de la OC (${ventaOC.toLocaleString("es-CL")}) no se modifica.</div>}
           </div>
@@ -247,7 +284,8 @@ export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, ent
             <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:8}}>Datos de la OC</div>
             <div style={{fontSize:12.5,lineHeight:1.8}}>
               <b>OC:</b> {numOC}<br/>
-              <b>Vendedor:</b> {vendedores.find(v=>v.id===vendedorId)?.nombre}<br/>
+              {!ocExistente&&<><b>Fecha de la OC:</b> {fechaOC?fmt.date(fechaOC):"—"}<br/></>}
+              <b>Vendedor:</b> {ocExistente?(vendedores.find(v=>v.id===ocExistente.vendedor_id)?.nombre||"Sin vendedor asignado"):nombreVendedor}{!ocExistente&&vendedorReal&&ventaPropia?" · venta propia":""}<br/>
               <b>Cliente:</b> {cliente}{entidad?` · ${entidad}`:""}<br/>
               {comuna&&<><b>Comuna:</b> {comuna}<br/></>}
               {contacto&&<><b>Contacto:</b> {contacto}<br/></>}
@@ -267,13 +305,13 @@ export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, ent
           <div style={{background:C.tealLight,borderRadius:10,padding:"12px 14px",marginBottom:12}}>
             <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:8}}>Resumen financiero</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4,fontSize:13}}>
-              <div><div style={{color:C.inkMuted,fontSize:12}}>Costo</div><div style={{fontWeight:800}}>${costoTotal.toLocaleString("es-CL")}</div></div>
-              <div><div style={{color:C.inkMuted,fontSize:12}}>Venta</div><div style={{fontWeight:800}}>${ventaOC.toLocaleString("es-CL")}</div></div>
-              <div><div style={{color:C.inkMuted,fontSize:12}}>Utilidad</div><div style={{fontWeight:800,color:utilidad>=0?C.ok:C.danger}}>${utilidad.toLocaleString("es-CL")} ({margen}%)</div></div>
+              <div><div style={{color:C.inkMuted,fontSize:12}}>Costo con IVA</div><div style={{fontWeight:800}}>${costoTotal.toLocaleString("es-CL")}</div></div>
+              <div><div style={{color:C.inkMuted,fontSize:12}}>Venta con IVA</div><div style={{fontWeight:800}}>${ventaOC.toLocaleString("es-CL")}</div></div>
+              <div><div style={{color:C.inkMuted,fontSize:12}}>Utilidad con IVA</div><div style={{fontWeight:800,color:utilidad>=0?C.ok:C.danger}}>${utilidad.toLocaleString("es-CL")} ({margen}%)</div></div>
             </div>
             <div style={{marginTop:8,fontSize:12,color:C.inkMuted}}>
               {difVenta&&<div style={{background:C.warnLight,color:C.warnText,borderRadius:8,padding:"8px 12px",fontSize:12,marginBottom:8,fontWeight:600}}>Los productos suman ${ventaTotal.toLocaleString("es-CL")} de venta; el monto de la OC (${ventaOC.toLocaleString("es-CL")}) no se modifica.</div>}<br/>
-              <b>Financiador:</b> {financiadores.find(f=>f.id===financiadorId)?.nombre} · <b>Fecha:</b> {fechaCompra}
+              <b>Financiador:</b> {financiadores.find(f=>f.id===financiadorId)?.nombre} · <b>Fecha de compra:</b> {fmt.date(fechaCompra)}
               {fechaEst&&<> · <b>Entrega est.:</b> {fechaEst}</>}
             </div>
           </div>

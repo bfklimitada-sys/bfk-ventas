@@ -104,6 +104,9 @@ export function PanelUsuarios({ perfiles, ocs, ocsArchivadas, onRestaurarOC, onC
               </BotonAdmin>
             )}
           </div>
+          <div style={{fontSize:12,color:C.inkMuted,marginTop:8,lineHeight:1.45}}>
+            Corrige solo la <b>fecha de la OC</b> (emisión en Mercado Público). La <b>fecha real de compra</b> es un dato de BFK y nunca se reemplaza.
+          </div>
         </Tarjeta>
       </Seccion>
 

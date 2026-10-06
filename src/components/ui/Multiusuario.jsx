@@ -1,4 +1,4 @@
-import { estadoVencimiento, facturaVigente, plazoPago } from "../../lib/calculos";
+import { diasAtrasoEntrega, esVenta, estaCerrada, estaCobrada, estaComprada, estaEntregada, estaFacturada, facturaPorCobrar, fechaEntregaEstimada, financiamientoPagado, tieneVendedor, valeVistasPendientes, vencimientoFactura } from "../../lib/ocs";
 import { useState, useEffect } from "react";
 import { del } from "../../lib/supabase";
 import { C, MONO, SANS, fmt } from "../../lib/theme";
@@ -109,28 +109,29 @@ export function ComentariosOC({ oc, perfil, onAgregar, onEliminar, plano }) {
 export function calcularAlertas(ocs) {
   const alertas = [];
 
+  // Fase 4A: mismos criterios que la lista, los filtros, el Panel y la Agenda (lib/ocs.js).
   for (const oc of (ocs || [])) {
     // Aportes de socios y ventas externas no generan alertas de gestión
-    if ((oc.tipo_registro || "venta") !== "venta") continue;
-    const evF = facturaVigente(oc);
-    const dias = evF ? fmt.diasDesde(evF.fecha) : null;
-    const plazo = plazoPago(oc);
+    if (!esVenta(oc)) continue;
     const saldo = (oc.monto_facturado || 0) - (oc.monto_cobrado || 0);
+    const entregada = estaEntregada(oc);
+    const facturada = estaFacturada(oc);
 
-    // 1. Facturas vencidas o por vencer
-    if (evF && oc.estado_pago_cliente !== "pagado" && dias !== null) {
-      const venc = estadoVencimiento(dias, plazo);
-      if (venc.reclamar) {
+    // 1. Facturas vencidas o por vencer (factura emitida y sin cobrar)
+    const v = facturaPorCobrar(oc) ? vencimientoFactura(oc) : null;
+    if (v) {
+      const { evF, dias, plazo } = v;
+      if (v.reclamar) {
         alertas.push({ ocId:oc.id, nivel:"alto", icono:<Ic n="🔴"/>, oc:oc.numero_oc, cliente:oc.cliente,
           titulo:`Factura ${evF.numero_factura} lleva ${dias} días`,
           detalle:`El plazo era ${plazo} días — corresponde reclamar el pago`,
           monto:saldo, tab:"compras", filtro:"cobro", orden:1 });
-      } else if (venc.vencida) {
+      } else if (v.vencida) {
         alertas.push({ ocId:oc.id, nivel:"alto", icono:<Ic n="🟠"/>, oc:oc.numero_oc, cliente:oc.cliente,
           titulo:`Factura ${evF.numero_factura} vencida`,
           detalle:`${dias} días de ${plazo} de plazo`,
           monto:saldo, tab:"compras", filtro:"cobro", orden:2 });
-      } else if (venc.porVencer) {
+      } else if (v.porVencer) {
         alertas.push({ ocId:oc.id, nivel:"medio", icono:<Ic n="🟡"/>, oc:oc.numero_oc, cliente:oc.cliente,
           titulo:`Factura ${evF.numero_factura} vence pronto`,
           detalle:`Quedan ${plazo - dias} día${plazo - dias === 1 ? "" : "s"}`,
@@ -141,31 +142,26 @@ export function calcularAlertas(ocs) {
     // 1.5 Vale vista o cheque que el cliente ya entregó, pero que
     // todavía no se ha ido a cobrar al banco — esa plata no es real
     // hasta que se cobre.
-    (oc.eventos_pago_cliente || []).forEach(ev => {
-      if (ev.medio_pago && ev.medio_pago !== "transferencia" && !ev.cobrado_en_banco) {
-        const tipo = ev.medio_pago === "vale_vista" ? "Vale vista" : "Cheque";
-        alertas.push({ ocId:oc.id, nivel:"alto", icono:<Ic n="📄"/>, oc:oc.numero_oc, cliente:oc.cliente,
-          titulo:`${tipo} sin cobrar en el banco`,
-          detalle:ev.institucion?`Hay que ir a cobrarlo en ${ev.institucion}`:"Falta ir a cobrarlo",
-          monto:ev.monto, tab:"compras", filtro:null, orden:0 });
-      }
+    valeVistasPendientes(oc).forEach(ev => {
+      const tipo = ev.medio_pago === "vale_vista" ? "Vale vista" : "Cheque";
+      alertas.push({ ocId:oc.id, nivel:"alto", icono:<Ic n="📄"/>, oc:oc.numero_oc, cliente:oc.cliente,
+        titulo:`${tipo} sin cobrar en el banco`,
+        detalle:ev.institucion?`Hay que ir a cobrarlo en ${ev.institucion}`:"Falta ir a cobrarlo",
+        monto:ev.monto, tab:"compras", filtro:null, orden:0 });
     });
 
     // 2. Entregas atrasadas respecto de la fecha estimada
-    const fEst = (oc.eventos_compra || [])[0]?.fecha_entrega_estimada;
-    const entregada = oc.estado_entrega === "confirmada" || oc.estado_entrega === "entregado";
-    if (fEst && !entregada) {
-      const atraso = fmt.diasDesde(String(fEst).slice(0,10));
-      if (atraso !== null && atraso > 0) {
-        alertas.push({ ocId:oc.id, nivel:"alto", icono:<Ic n="🚚"/>, oc:oc.numero_oc, cliente:oc.cliente,
-          titulo:`Entrega atrasada ${atraso} día${atraso === 1 ? "" : "s"}`,
-          detalle:`Estaba estimada para el ${fmt.date(String(fEst).slice(0,10))}`,
-          monto:oc.monto_total, tab:"compras", filtro:"entrega", orden:2 });
-      }
+    const atraso = diasAtrasoEntrega(oc);
+    if (atraso !== null) {
+      const fEst = fechaEntregaEstimada(oc);
+      alertas.push({ ocId:oc.id, nivel:"alto", icono:<Ic n="🚚"/>, oc:oc.numero_oc, cliente:oc.cliente,
+        titulo:`Entrega atrasada ${atraso} día${atraso === 1 ? "" : "s"}`,
+        detalle:`Estaba estimada para el ${fmt.date(String(fEst).slice(0,10))}`,
+        monto:oc.monto_total, tab:"compras", filtro:"entrega", orden:2 });
     }
 
     // 3. Entregada hace días y todavía sin facturar
-    if (entregada && oc.estado_factura_propia !== "emitida") {
+    if (entregada && !facturada) {
       const fEnt = (oc.eventos_entrega || [])[0]?.fecha;
       const d = fEnt ? fmt.diasDesde(String(fEnt).slice(0,10)) : null;
       if (d !== null && d >= 3) {
@@ -177,18 +173,25 @@ export function calcularAlertas(ocs) {
     }
 
     // 3b. Ciclo fuera de orden: el registro quedó incompleto
-    const facturada = oc.estado_factura_propia === "emitida";
     if (facturada && !entregada) {
       alertas.push({ ocId:oc.id, nivel:"medio", icono:<Ic n="⚠"/>, oc:oc.numero_oc, cliente:oc.cliente,
         titulo:"Facturada sin registrar la entrega",
         detalle:"Falta el registro de entrega — la agenda y el historial quedan incompletos",
         monto:oc.monto_total, tab:"compras", filtro:"entrega", orden:3 });
     }
-    if (oc.estado_pago_cliente === "pagado" && !facturada) {
+    if (estaCobrada(oc) && !facturada) {
       alertas.push({ ocId:oc.id, nivel:"medio", icono:<Ic n="⚠"/>, oc:oc.numero_oc, cliente:oc.cliente,
         titulo:"Cobrada sin registrar la factura",
         detalle:"Entró la plata pero no hay factura cargada",
         monto:oc.monto_cobrado||oc.monto_total, tab:"compras", filtro:"factura", orden:3 });
+    }
+
+    // 3c. OC abierta sin vendedor: no entra en ninguna comisión (Fase 4A)
+    if (!tieneVendedor(oc) && !estaCerrada(oc)) {
+      alertas.push({ ocId:oc.id, nivel:facturada?"medio":"bajo", icono:<Ic n="⚠"/>, oc:oc.numero_oc, cliente:oc.cliente,
+        titulo:"OC sin vendedor",
+        detalle:"No entra en ninguna comisión hasta asignarle un vendedor (Editar datos)",
+        monto:oc.monto_total, tab:"compras", filtro:"sin_vendedor", orden:3 });
     }
 
     // 4. OCs a medias y sin movimiento
@@ -200,11 +203,11 @@ export function calcularAlertas(ocs) {
       ...(oc.eventos_factura||[]), ...(oc.eventos_pago_cliente||[]),
     ].map(e => e.fecha || e.creadoEn).filter(Boolean).sort();
     const etapasNombres = {
-      compra:  (oc.eventos_compra||[]).length > 0,
+      compra:  estaComprada(oc),
       entrega: entregada,
-      factura: oc.estado_factura_propia === "emitida",
-      cobro:   oc.estado_pago_cliente === "pagado",
-      financ:  oc.estado_pago_financiamiento === "pagado",
+      factura: facturada,
+      cobro:   estaCobrada(oc),
+      financ:  financiamientoPagado(oc),
     };
     const etapas = Object.values(etapasNombres).filter(Boolean).length;
     if (etapas > 0 && etapas < 5 && fechas.length) {
@@ -218,11 +221,11 @@ export function calcularAlertas(ocs) {
       }
     }
 
-    // 5. Guardadas antes de ser aceptadas en Mercado Público
+    // 5. Guardadas antes de estar disponibles en Mercado Público
     if (oc.sync_pendiente) {
       alertas.push({ ocId:oc.id, nivel:"bajo", icono:<Ic n="⏳"/>, oc:oc.numero_oc, cliente:"Por completar",
-        titulo:"Esperando aceptación en Mercado Público",
-        detalle:"Se completará sola cuando la acepten",
+        titulo:"Esperando que esté disponible en Mercado Público",
+        detalle:"Se completará sola cuando Mercado Público la tenga",
         monto:0, tab:"compras", filtro:null, orden:5 });
     }
 
@@ -352,6 +355,7 @@ export function PanelNotificaciones({ notificaciones, ocs, onMarcarLeidas, onNav
         {muestra:<Ic n="🔴"/>, texto:"Urgente: facturas pasadas de plazo o entregas atrasadas. Son las que cuestan plata."},
         {muestra:<Ic n="🟡"/>, texto:"Atención: vencen dentro de 5 días, o llevan días entregadas sin facturar."},
         {muestra:<Ic n="⏸"/>, texto:"Informativas: OCs sin avance hace más de dos semanas, o esperando Mercado Público."},
+        {muestra:<Ic n="⚠"/>, texto:"OC sin vendedor: OCs abiertas que no entran en ninguna comisión hasta asignarles un vendedor."},
         {muestra:"›", texto:"Al tocar una alerta te lleva al listado filtrado por esa etapa."},
       ]} />
     </div>

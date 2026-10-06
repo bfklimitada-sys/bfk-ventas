@@ -7,6 +7,7 @@ import { Ic } from "../ui/Iconos";
 import { coincideBusqueda } from "../../lib/busqueda";
 import { calcularF29 } from "../../lib/f29";
 import { Seccion, Tarjeta, Badge, Monto, Enlace } from "../ui/Sistema";
+import { FILTROS_PANEL, etapasCompletadas, filtrarPanel, valeVistasPendientes } from "../../lib/ocs";
 
 // Tarjeta base para los avisos ligados a Mercado Público: encabezado con
 // icono + botón de refresco, y cuerpo blanco para el contenido/lista.
@@ -60,6 +61,8 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
   const [busq,setBusq]=useState("");
   const esAdmin=perfil?.rol==="admin";
   const [verMP,setVerMP]=useState(false);
+  // Carga masiva de OCs aceptadas (Fase 4A): el vendedor es obligatorio y se puede indicar venta propia.
+  const [masiva,setMasiva]=useState(null); // null | {vendedorId, ventaPropia}
 
   const kpis=useMemo(()=>{
     const hoy=new Date(); hoy.setHours(0,0,0,0);
@@ -164,17 +167,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
     const gananciaMes=ocsDelMes.reduce((s,o)=>s+gananciaReal(o).pesos,0);
     const ventaMes=ocsDelMes.reduce((s,o)=>s+(Number(o.monto_total)||0),0);
 
-    const ocsAbiertas=ocs.filter(o=>{
-      if(!esVenta(o)) return false;
-      const completas=[
-        (o.eventos_compra||[]).length>0,
-        o.estado_entrega==="confirmada"||o.estado_entrega==="entregado",
-        o.estado_factura_propia==="emitida",
-        o.estado_pago_cliente==="pagado",
-        o.estado_pago_financiamiento==="pagado",
-      ].filter(Boolean).length;
-      return completas<5;
-    }).length;
+    const ocsAbiertas=ocs.filter(o=>esVenta(o)&&etapasCompletadas(o)<5).length;
 
     const utilidad=ingresos-costos;
     return {saldoReal,saldoEsperado,brecha,corteBanco:corte,movDesdeCorte,gananciaMes,ventaMes,aportes:totalAportes,cobrado,porCobrar,deudaFin,utilidad,saldoProyectado,saldoCtaCte,ingresosPendientes,deudaTotal,gastoContador,gastosVendedores,gastoImpuesto,f29,f29Periodos,f29Anterior,f29Visible,margenPromPct,deudaVendedoresMes,ocsAbiertas,creditoPagadoTotal,gastosTotal,costoBFK};
@@ -182,11 +175,6 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
 
   // ── Proyección del mes: promedio histórico completo, para tener ──
   // algo que mostrar desde el día 1, antes de que existan ventas reales.
-  const ocsPorCobrar=useMemo(()=>ocs.filter(o=>(o.tipo_registro||"venta")==="venta"&&o.estado_factura_propia==="emitida"&&o.estado_pago_cliente!=="pagado").map(o=>{
-    const evF=facturaVigente(o); const dias=fmt.diasDesde(evF?.fecha);
-    return {...o,fechaFactura:evF?.fecha,diasDesde:dias};
-  }),[ocs]);
-
   const proyeccionMes=useMemo(()=>{
     const historicas=ocs.filter(o=>{
       if((o.tipo_registro||"venta")!=="venta") return false;
@@ -233,75 +221,83 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
   },[ocs]);
 
   // ── Prioridades de hoy (reales, derivadas de las OCs) ──
+  // Fase 4A: cada contador usa el MISMO criterio que la lista que abre (lib/ocs.js, FILTROS_PANEL),
+  // así "N facturas por vencer" abre exactamente esas N OCs, sin filtros aproximados.
   const prioridades=useMemo(()=>{
     const items=[];
+    const saldoFact=(o)=>(o.monto_facturado||0)-(o.monto_cobrado||0);
 
     // Vale vistas o cheques que el cliente ya entregó, pero que todavía
     // no se han cobrado en el banco — esa plata no cuenta como real
     // hasta que alguien vaya físicamente a cobrarlos. Va primero: es
     // plata ya en la mano, solo falta el trámite de cobrarla.
-    const valeVistas=[];
-    ocs.forEach(o=>{
-      (o.eventos_pago_cliente||[]).forEach(ev=>{
-        if(ev.medio_pago&&ev.medio_pago!=="transferencia"&&!ev.cobrado_en_banco){
-          valeVistas.push({oc:o,ev});
-        }
-      });
-    });
+    const ocsVale=filtrarPanel(ocs,"vale_vista");
+    const valeVistas=ocsVale.flatMap(o=>valeVistasPendientes(o));
     if(valeVistas.length){
       const porInstitucion={};
-      valeVistas.forEach(({ev})=>{
+      valeVistas.forEach(ev=>{
         const inst=ev.institucion||"sin especificar";
         porInstitucion[inst]=(porInstitucion[inst]||0)+1;
       });
       const detalleInst=Object.entries(porInstitucion).map(([inst,n])=>`${n} en ${inst}`).join(" · ");
       items.push({
         label:`${valeVistas.length} vale vista${valeVistas.length>1?"s":""}/cheque${valeVistas.length>1?"s":""} por cobrar`,
-        detalle:detalleInst,
-        monto:valeVistas.reduce((s,{ev})=>s+(ev.monto||0),0),
-        color:C.dangerText,tab:"compras",filtro:null});
+        detalle:`${detalleInst}${ocsVale.length!==valeVistas.length?` · en ${ocsVale.length} OC`:""}`,
+        monto:valeVistas.reduce((s,ev)=>s+(ev.monto||0),0),
+        color:C.dangerText,tab:"compras",filtro:"vale_vista",n:ocsVale.length});
     }
 
-    const vencidas=ocsPorCobrar.filter(o=>estadoVencimiento(o.diasDesde||0,plazoPago(o)).vencida);
+    const vencidas=filtrarPanel(ocs,"vencidas");
     if(vencidas.length) items.push({
       label:`${vencidas.length} factura${vencidas.length>1?"s":""} vencida${vencidas.length>1?"s":""}`,
       detalle:"Ya se pasó el plazo de pago",
-      monto:vencidas.reduce((s,o)=>s+((o.monto_facturado||0)-(o.monto_cobrado||0)),0),
-      color:C.dangerText,tab:"compras",filtro:"vencidas"});
+      monto:vencidas.reduce((s,o)=>s+saldoFact(o),0),
+      color:C.dangerText,tab:"compras",filtro:"vencidas",n:vencidas.length});
 
-    const porVencer=ocsPorCobrar.filter(o=>estadoVencimiento(o.diasDesde||0,plazoPago(o)).porVencer);
+    const porVencer=filtrarPanel(ocs,"por_vencer");
     if(porVencer.length) items.push({
       label:`${porVencer.length} factura${porVencer.length>1?"s":""} por vencer`,
       detalle:"Vencen dentro de 5 días",
-      monto:porVencer.reduce((s,o)=>s+((o.monto_facturado||0)-(o.monto_cobrado||0)),0),
-      color:C.warnText,tab:"compras",filtro:"cobro"});
+      monto:porVencer.reduce((s,o)=>s+saldoFact(o),0),
+      color:C.warnText,tab:"compras",filtro:"por_vencer",n:porVencer.length});
 
-    const sinFacturar=ocs.filter(o=>(o.tipo_registro||"venta")==="venta"&&(o.estado_entrega==="confirmada"||o.estado_entrega==="entregado")&&o.estado_factura_propia!=="emitida");
+    const sinFacturar=filtrarPanel(ocs,"entregadas_sin_factura");
     if(sinFacturar.length) items.push({
       label:`${sinFacturar.length} entregada${sinFacturar.length>1?"s":""} sin facturar`,
       detalle:"Ya se entregó, falta emitir la factura",
       monto:sinFacturar.reduce((s,o)=>s+(o.monto_total||0),0),
-      color:C.info,tab:"compras",filtro:"factura"});
+      color:C.info,tab:"compras",filtro:"entregadas_sin_factura",n:sinFacturar.length});
 
-    const sinEntregar=ocs.filter(o=>(o.tipo_registro||"venta")==="venta"&&(o.eventos_compra||[]).length>0&&o.estado_entrega!=="confirmada"&&o.estado_entrega!=="entregado");
+    const sinEntregar=filtrarPanel(ocs,"compradas_sin_entregar");
     if(sinEntregar.length) items.push({
       label:`${sinEntregar.length} compra${sinEntregar.length>1?"s":""} sin entregar`,
       detalle:"Comprado, pendiente de entregar",
       monto:sinEntregar.reduce((s,o)=>s+(o.monto_total||0),0),
-      color:C.transit,tab:"compras",filtro:"entrega"});
+      color:C.transit,tab:"compras",filtro:"compradas_sin_entregar",n:sinEntregar.length});
 
     // OCs que llegaron desde Mercado Público (aceptadas y cargadas) pero
     // a las que todavía nadie les registró la compra — quedan "colgadas"
     // si no se les presta atención, porque no aparecen en ningún otro aviso.
-    const sinCompraDeMP=ocs.filter(o=>(o.tipo_registro||"venta")==="venta"&&esCodigoMP&&esCodigoMP(o.numero_oc)&&(o.eventos_compra||[]).length===0);
+    const sinCompraDeMP=filtrarPanel(ocs,"mp_sin_comprar");
     if(sinCompraDeMP.length) items.push({
       label:`${sinCompraDeMP.length} OC de Mercado Público sin comprar`,
       detalle:"Se cargaron desde MP, pero falta registrar la compra",
       monto:sinCompraDeMP.reduce((s,o)=>s+(o.monto_total||0),0),
-      color:C.purple,tab:"compras",filtro:"compra"});
+      color:C.purple,tab:"compras",filtro:"mp_sin_comprar",n:sinCompraDeMP.length});
+
+    // OCs sin vendedor: no entran en ninguna comisión (Fase 4A). Informativo: puede ser a propósito.
+    const sinVendedor=filtrarPanel(ocs,"sin_vendedor");
+    if(sinVendedor.length){
+      const abiertas=sinVendedor.filter(o=>!(o.estado_pago_cliente==="pagado"&&o.estado_pago_financiamiento==="pagado")).length;
+      items.push({
+        label:`${sinVendedor.length} OC sin vendedor`,
+        detalle:`No entran en ninguna comisión${abiertas?` · ${abiertas} abierta${abiertas>1?"s":""}`:""}`,
+        monto:sinVendedor.reduce((s,o)=>s+(o.monto_total||0),0),
+        color:C.inkMuted,tab:"compras",filtro:"sin_vendedor",n:sinVendedor.length});
+    }
 
     return items;
-  },[ocsPorCobrar,ocs,esCodigoMP]);
+  },[ocs]);
 
   return (
     <div style={{fontFamily:SANS}}>
@@ -328,7 +324,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
       <Tarjeta padding="4px 4px 4px 4px">
         {prioridades.length===0&&<div style={{fontSize:14,color:C.okText,fontWeight:700,padding:"14px 12px"}}>✓ Sin pendientes urgentes</div>}
         {prioridades.map((p,i)=>(
-          <button key={i} onClick={()=>onNavigate&&onNavigate(p.tab,p.filtro)}
+          <button key={i} data-prioridad={p.filtro} data-n={p.n} onClick={()=>onNavigate&&onNavigate(p.tab,p.filtro)}
             style={{width:"100%",display:"flex",alignItems:"center",gap:10,minHeight:60,
               padding:"8px 10px",background:"none",border:"none",cursor:"pointer",textAlign:"left",
               borderBottom:i<prioridades.length-1?`1px solid ${C.border}`:"none"}}>
@@ -556,14 +552,36 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
                 {nAceptadas>0&&(
                   <AvisoMP icon="✓" color={C.ok} bg={C.okLight}
                     titulo={`${nAceptadas} OC${nAceptadas>1?"s":""} aceptada${nAceptadas>1?"s":""} en MP sin registrar acá`}
-                    descripcion="Ya las aceptaron en Mercado Público, pero todavía no existen como registro en la app. Revísalas una a una, o cárgalas todas de una vez (sin link de compra — lo agregas después en cada una)."
+                    descripcion="Ya las aceptaron en Mercado Público, pero todavía no existen como registro en la app. Revísalas una a una, o cárgalas todas de una vez indicando el vendedor (sin link de compra — lo agregas después en cada una). Las que figuren canceladas en MP no se cargan."
                     onActualizar={onActualizarAceptadas} verificando={verificandoAceptadas}>
                     {cargandoAceptadas?(
                       <div style={{background:C.paper,borderRadius:10,padding:"10px 12px",fontSize:12,fontWeight:700,color:C.okText,textAlign:"center",marginBottom:2}}>
                         Cargando {cargandoAceptadas.hechas} de {cargandoAceptadas.total}…
                       </div>
+                    ):masiva?(
+                      <div data-carga-masiva style={{background:C.paper,borderRadius:10,padding:"10px 12px",marginBottom:6}}>
+                        <label style={{display:"block",fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.3,marginBottom:4}} htmlFor="masiva-vendedor">Vendedor de estas {nAceptadas} OC *</label>
+                        <select id="masiva-vendedor" value={masiva.vendedorId} onChange={e=>setMasiva(m=>({...m,vendedorId:e.target.value,ventaPropia:e.target.value?m.ventaPropia:false}))}
+                          style={{width:"100%",boxSizing:"border-box",minHeight:40,padding:"8px 10px",borderRadius:8,border:`1px solid ${C.border}`,fontSize:13,fontFamily:SANS,background:C.card,color:C.ink,marginBottom:8}}>
+                          <option value="">Elige el vendedor…</option>
+                          {(vendedores||[]).map(v=><option key={v.id} value={v.id}>{v.nombre}</option>)}
+                        </select>
+                        {masiva.vendedorId&&(
+                          <label style={{display:"flex",alignItems:"flex-start",gap:8,cursor:"pointer",marginBottom:8}}>
+                            <input type="checkbox" checked={masiva.ventaPropia} onChange={e=>setMasiva(m=>({...m,ventaPropia:e.target.checked}))} style={{marginTop:2}} />
+                            <span style={{fontSize:12,color:C.ink,fontWeight:600}}>Son ventas propias del vendedor (100% de la utilidad, menos el IVA de su factura)</span>
+                          </label>
+                        )}
+                        <div style={{display:"flex",gap:6}}>
+                          <button disabled={!masiva.vendedorId} onClick={()=>{ const m=masiva; setMasiva(null); onCargarTodasAceptadas&&onCargarTodasAceptadas({vendedorId:m.vendedorId,ventaPropia:!!(m.vendedorId&&m.ventaPropia)}); }}
+                            style={{flex:2,background:masiva.vendedorId?C.ok:C.inkFaint,border:"none",color:"#fff",borderRadius:10,padding:"10px 12px",fontSize:12.5,fontWeight:700,cursor:masiva.vendedorId?"pointer":"not-allowed"}}>
+                            Cargar las {nAceptadas} con este vendedor
+                          </button>
+                          <button onClick={()=>setMasiva(null)} style={{flex:1,background:"none",border:`1px solid ${C.border}`,color:C.inkMuted,borderRadius:10,padding:"10px 12px",fontSize:12.5,fontWeight:700,cursor:"pointer"}}>Cancelar</button>
+                        </div>
+                      </div>
                     ):(
-                      <button onClick={()=>onCargarTodasAceptadas&&onCargarTodasAceptadas()}
+                      <button onClick={()=>setMasiva({vendedorId:"",ventaPropia:false})}
                         style={{width:"100%",background:C.ok,border:"none",color:"#fff",borderRadius:10,padding:"10px 12px",
                           fontSize:12.5,fontWeight:700,cursor:"pointer",marginBottom:6,boxShadow:`0 2px 8px ${C.ok}40`}}>
                         Cargar las {nAceptadas} de una vez

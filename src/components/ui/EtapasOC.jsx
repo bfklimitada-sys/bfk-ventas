@@ -1,4 +1,5 @@
-import { useRef, useState, useEffect } from "react";
+import { Fragment, useRef, useState, useEffect } from "react";
+import { estaCobrada, estaComprada, estaEntregada, estaFacturada, financiamientoPagado } from "../../lib/ocs";
 import { Field } from "./Basicos";
 import { del } from "../../lib/supabase";
 import { C, MONO, SANS, btnP, fmt, iMono, iStyle, selStyle } from "../../lib/theme";
@@ -99,25 +100,25 @@ export function EtapasOC({ oc, perfil, perfiles, activa, extra, onEditarEvento, 
   };
 
   const etapas = [
-    { key:"compra",  label:"Compra",  ok:(oc.eventos_compra||[]).length>0,        icon:<Ic n="📦"/>, tabla:"eventos_compra",
-      accion: (oc.eventos_compra||[]).length===0?{label:<I t={"📦 Registrar compra"}/>,color:C.tealDark,key:"compra"}:null,
+    { key:"compra",  label:"Compra",  ok:estaComprada(oc),        icon:<Ic n="📦"/>, tabla:"eventos_compra",
+      accion: !estaComprada(oc)?{label:<I t={"📦 Registrar compra"}/>,color:C.tealDark,key:"compra"}:null,
       correoBtns: null },
-    { key:"entrega", label:"Entrega", ok:oc.estado_entrega==="confirmada"||oc.estado_entrega==="entregado",          icon:<Ic n="🚚"/>, tabla:"eventos_entrega",
-      accion: oc.estado_entrega!=="confirmada"&&oc.estado_entrega!=="entregado"?{label:"✓ Confirmar entrega",color:C.transit,key:"entrega"}:null,
+    { key:"entrega", label:"Entrega", ok:estaEntregada(oc),          icon:<Ic n="🚚"/>, tabla:"eventos_entrega",
+      accion: !estaEntregada(oc)?{label:"✓ Confirmar entrega",color:C.transit,key:"entrega"}:null,
       correoBtns: [
         {label:<I t={"⚠️ Entrega fallida"}/>,action:onCorreoFallida,color:C.warnText},
         {label:<I t={"📅 Fecha de entrega"}/>,action:onCorreoFecha,color:C.ink},
       ]},
-    { key:"factura", label:"Factura", ok:oc.estado_factura_propia==="emitida",     icon:<Ic n="🧾"/>, tabla:"eventos_factura",
-      accion: oc.estado_factura_propia!=="emitida"
+    { key:"factura", label:"Factura", ok:estaFacturada(oc),     icon:<Ic n="🧾"/>, tabla:"eventos_factura",
+      accion: !estaFacturada(oc)
         ?{label:<I t={"🧾 Emitir factura"}/>,color:C.info,key:"factura"}
         :{label:<I t={"🧾 Re-emitir (NC)"}/>,color:C.inkMuted,key:"factura"},
       correoBtns: null },
-    { key:"cobro",   label:"Cobro",   ok:oc.estado_pago_cliente==="pagado",        icon:<Ic n="💰"/>, tabla:"eventos_pago_cliente",
-      accion: oc.estado_factura_propia==="emitida"&&oc.estado_pago_cliente!=="pagado"?{label:<I t={"💰 Registrar cobro"}/>,color:C.okText,key:"pago_cliente"}:null,
+    { key:"cobro",   label:"Cobro",   ok:estaCobrada(oc),        icon:<Ic n="💰"/>, tabla:"eventos_pago_cliente",
+      accion: estaFacturada(oc)&&!estaCobrada(oc)?{label:<I t={"💰 Registrar cobro"}/>,color:C.okText,key:"pago_cliente"}:null,
       correoBtns: null },
-    { key:"financ",  label:"Financ.", ok:oc.estado_pago_financiamiento==="pagado", icon:<Ic n="🏦"/>, tabla:"eventos_pago_financiamiento",
-      accion: oc.estado_pago_financiamiento!=="pagado"?{label:<I t={"🏦 Registrar pago"}/>,color:C.purple,key:"pago_financ"}:null,
+    { key:"financ",  label:"Financ.", ok:financiamientoPagado(oc), icon:<Ic n="🏦"/>, tabla:"eventos_pago_financiamiento",
+      accion: !financiamientoPagado(oc)?{label:<I t={"🏦 Registrar pago"}/>,color:C.purple,key:"pago_financ"}:null,
       correoBtns: null },
     { key:"postventa", label:"Post-venta", ok:(oc.eventos_postventa||[]).some(e=>e.estado==="resuelto"), icon:<Ic n="🛠"/>, tabla:"eventos_postventa",
       accion: {label:<I t={"🛠 Registrar incidencia"}/>,color:C.warnText,key:"postventa"},
@@ -134,27 +135,27 @@ export function EtapasOC({ oc, perfil, perfiles, activa, extra, onEditarEvento, 
         {eventos.length===0&&(
           <div>
             {/* Estado marcado en OC pero sin evento detallado (OCs históricas) */}
-            {etapa.key==="factura"&&oc.estado_factura_propia==="emitida"&&(
+            {etapa.key==="factura"&&estaFacturada(oc)&&(
               <div style={{background:C.card,borderRadius:8,padding:"10px 12px",marginBottom:8}}>
                 <div style={{fontSize:12.5,fontWeight:600}}><Ic n="🧾"/> Factura registrada</div>
                 <div style={{fontSize:12,color:C.inkMuted}}>Monto: <b>{fmt.money(oc.monto_facturado)}</b></div>
                 <div style={{fontSize:12,color:C.warnText,marginTop:4}}>Sin detalle de número y fecha — usa Re-emitir para agregar</div>
               </div>
             )}
-            {etapa.key==="cobro"&&oc.estado_pago_cliente==="pagado"&&(
+            {etapa.key==="cobro"&&estaCobrada(oc)&&(
               <div style={{background:C.card,borderRadius:8,padding:"10px 12px",marginBottom:8}}>
                 <div style={{fontSize:12.5,fontWeight:600}}><Ic n="💰"/> Cobro registrado</div>
                 <div style={{fontSize:12,color:C.inkMuted}}>Monto: <b>{fmt.money(oc.monto_cobrado||oc.monto_facturado||oc.monto_total)}</b></div>
                 <div style={{fontSize:12,color:C.warnText,marginTop:4}}>Registro histórico — sin fecha detallada</div>
               </div>
             )}
-            {etapa.key==="entrega"&&(oc.estado_entrega==="confirmada"||oc.estado_entrega==="entregado")&&(
+            {etapa.key==="entrega"&&estaEntregada(oc)&&(
               <div style={{background:C.card,borderRadius:8,padding:"10px 12px",marginBottom:8}}>
                 <div style={{fontSize:12.5,fontWeight:600}}><Ic n="🚚"/> Entrega confirmada</div>
                 <div style={{fontSize:12,color:C.warnText,marginTop:4}}>Registro histórico — sin fecha detallada</div>
               </div>
             )}
-            {etapa.key==="financ"&&oc.estado_pago_financiamiento==="pagado"&&(
+            {etapa.key==="financ"&&financiamientoPagado(oc)&&(
               <div style={{background:C.card,borderRadius:8,padding:"10px 12px",marginBottom:8}}>
                 <div style={{fontSize:12.5,fontWeight:600}}><Ic n="🏦"/> Financiamiento pagado</div>
                 <div style={{fontSize:12,color:C.inkMuted}}>Monto: <b>{fmt.money(oc.costo_total)}</b> · A: <b>{oc.financiadores?.nombre||"—"}</b></div>
@@ -163,12 +164,12 @@ export function EtapasOC({ oc, perfil, perfiles, activa, extra, onEditarEvento, 
             )}
             {/* Mensaje solo cuando realmente no hay nada */}
             {!(
-              (etapa.key==="factura"&&oc.estado_factura_propia==="emitida")||
-              (etapa.key==="cobro"&&oc.estado_pago_cliente==="pagado")||
-              (etapa.key==="entrega"&&(oc.estado_entrega==="confirmada"||oc.estado_entrega==="entregado"))||
-              (etapa.key==="financ"&&oc.estado_pago_financiamiento==="pagado")
+              (etapa.key==="factura"&&estaFacturada(oc))||
+              (etapa.key==="cobro"&&estaCobrada(oc))||
+              (etapa.key==="entrega"&&estaEntregada(oc))||
+              (etapa.key==="financ"&&financiamientoPagado(oc))
             )&&(
-              etapa.key==="cobro"&&oc.estado_factura_propia!=="emitida"
+              etapa.key==="cobro"&&!estaFacturada(oc)
                 ? <div style={{fontSize:12,color:C.warnText,padding:"4px 0 8px",fontWeight:600}}><Ic n="⚠"/> Primero emite la factura para poder registrar el cobro</div>
                 : <div style={{fontSize:12,color:C.inkFaint,padding:"4px 0 8px"}}>Sin registros aún</div>
             )}
@@ -190,7 +191,7 @@ export function EtapasOC({ oc, perfil, perfiles, activa, extra, onEditarEvento, 
         {eventos.map((ev,i)=>(
           <div key={ev.id||i} style={{background:C.card,borderRadius:8,padding:"10px 12px",marginBottom:6,...(etapa.key==="postventa"?(incidenteCerrado(ev)?{opacity:0.82,borderLeft:`3px solid ${C.okText}`}:{borderLeft:`3px solid ${C.dangerText}`}):{})}}>
             {etapa.key==="compra"&&<>
-              <div style={{fontSize:12.5,fontWeight:600}}><Ic n="📅"/> {fmt.date(ev.fecha)||"—"}</div>
+              <div style={{fontSize:12.5,fontWeight:600}}><Ic n="📅"/> {ev.fecha?`Comprada el ${fmt.date(String(ev.fecha).slice(0,10))}`:"Compra sin fecha registrada"}</div>
               <div style={{fontSize:12,color:C.inkMuted}}>Venta: <b>{fmt.money(ev.monto_venta||oc.monto_total)}</b> · Costo: <b>{fmt.money(ev.costo_compra||oc.costo_total)}</b></div>
               {ev.fecha_entrega_estimada&&<div style={{fontSize:12,color:C.inkMuted}}>Entrega est.: {fmt.date(ev.fecha_entrega_estimada)}</div>}
               {ev.proveedor&&<div style={{fontSize:12,color:C.inkMuted}}>Proveedor: {ev.proveedor}</div>}
@@ -297,9 +298,9 @@ export function EtapasOC({ oc, perfil, perfiles, activa, extra, onEditarEvento, 
     <div style={{marginBottom:12}}>
       <div style={{display:"flex",alignItems:"center",gap:0,marginBottom:6}}>
         {etapas.map((e,i)=>(
-          <>
-            <div key={e.key} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2,flex:1}}>
-              <button data-consulta="1" onClick={()=>setDetalle(detalle===e.key?null:e.key)} style={{
+          <Fragment key={e.key}>
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2,flex:1}}>
+              <button data-consulta="1" data-etapa={e.key} onClick={()=>setDetalle(detalle===e.key?null:e.key)} style={{
                 width:26,height:26,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",
                 fontSize:12,background:detalle===e.key?C.teal:e.ok?C.ok:C.paper,
                 border:`2px solid ${detalle===e.key?C.teal:e.ok?C.ok:C.border}`,
@@ -311,11 +312,11 @@ export function EtapasOC({ oc, perfil, perfiles, activa, extra, onEditarEvento, 
             {i<etapas.length-1&&(
               <div style={{height:2,flex:0.5,background:etapas[i+1].ok&&e.ok?C.ok:C.border,marginBottom:14,transition:"all 0.2s"}} />
             )}
-          </>
+          </Fragment>
         ))}
       </div>
       {detalle&&(
-        <div style={{background:C.tealLight,borderRadius:10,padding:"10px 12px",marginBottom:8}}>
+        <div data-detalle-etapa={detalle} style={{background:C.tealLight,borderRadius:10,padding:"10px 12px",marginBottom:8}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
             <span style={{fontSize:12,fontWeight:700,color:C.tealDark,textTransform:"uppercase"}}>
               {etapas.find(e=>e.key===detalle)?.icon} {etapas.find(e=>e.key===detalle)?.label}

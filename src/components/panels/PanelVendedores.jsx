@@ -6,11 +6,15 @@ import { Ic } from "../ui/Iconos";
 import { Seccion, Tarjeta, Badge, Monto, IndiceSecciones } from "../ui/Sistema";
 import { evaluarPagoVendedor } from "../../lib/pagosVendedor";
 import { calcularPagoVendedor, mesesConFactura, registroIvaDe, ivaNetoPeriodo, ivaAPagarPeriodo } from "../../lib/calculos";
+import { estaFacturada, filtrarPanel } from "../../lib/ocs";
 
 // Monto con signo explícito (el IVA neto puede ser negativo).
 const conSigno=(n)=>(n<0?"−":"")+fmt.money(Math.abs(n));
 
-export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, onGuardarIva, onPagoVendedor }) {
+export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, onGuardarIva, onPagoVendedor, onVerOCs }) {
+  // Fase 4A: OCs sin vendedor no entran en ninguna comisión; se advierte para que no pase inadvertido.
+  const sinVendedor=useMemo(()=>filtrarPanel(ocs,"sin_vendedor"),[ocs]);
+  const sinVendedorFacturadas=sinVendedor.filter(estaFacturada).length;
   const [editIva,setEditIva]=useState(false);
   const [pagando,setPagando]=useState(false);
   const [pagoInicial,setPagoInicial]=useState(null); // {vendedorId,mes,anio,monto} cuando se paga desde la tarjeta
@@ -31,6 +35,14 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
       <button onClick={()=>{setPagoInicial(null);setPagando(true);}} style={{...btnP(C.tealDark),minHeight:50,fontSize:15,borderRadius:12,boxShadow:"0 4px 12px rgba(13,148,136,0.35)",marginBottom:20}}>+ Pago a vendedor</button>
       <IndiceSecciones items={[{id:"ven-comisiones",label:"Comisiones"},{id:"ven-iva",label:"IVA mensual"}]} />
       <Seccion id="ven-comisiones" titulo="Comisiones por vendedor">
+      {sinVendedor.length>0&&(
+        <div data-aviso="ocs-sin-vendedor" style={{display:"flex",alignItems:"center",gap:10,background:C.warnLight,border:`1px solid ${C.warn}55`,borderRadius:12,padding:"10px 12px",marginBottom:10}}>
+          <span style={{flex:1,minWidth:0,fontSize:13,color:C.warnText,fontWeight:700,lineHeight:1.4}}>
+            <Ic n="⚠"/> {sinVendedor.length} OC sin vendedor{sinVendedorFacturadas?` (${sinVendedorFacturadas} con factura emitida)`:""}: no entran en ninguna comisión.
+          </span>
+          {onVerOCs&&<button onClick={()=>onVerOCs("sin_vendedor")} style={{flexShrink:0,background:"none",border:"none",color:C.warnText,fontWeight:800,fontSize:13,cursor:"pointer",minHeight:44,padding:"0 6px"}}>Ver OCs →</button>}
+        </div>
+      )}
       {vendedores.map(v=>{
         const datos=datosVendedor(v);
         const ultimoPagado=datos.find(d=>d.estado==="pagado");
