@@ -3,10 +3,10 @@
 import { C, MONO, R, S, T, TOUCH, cardStyle } from "../../lib/theme";
 
 // Titulo de seccion (mismo estilo en todas las pantallas)
-export function Seccion({ titulo, nota, accion, children, ocultarSiVacio, margen = 22 }) {
+export function Seccion({ titulo, nota, accion, children, ocultarSiVacio, margen = 22, id }) {
   if (ocultarSiVacio) return null;
   return (
-    <section style={{ marginBottom: margen }}>
+    <section id={id} style={{ marginBottom: margen, scrollMarginTop: 96 }}>
       {(titulo || accion) && (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: S.md, marginBottom: nota ? 2 : S.sm, paddingLeft: 2, minHeight: accion ? 36 : undefined }}>
           <h2 style={{ margin: 0, fontSize: T.small, fontWeight: 800, color: C.inkMuted, textTransform: "uppercase", letterSpacing: 0.6 }}>{titulo}</h2>
@@ -58,4 +58,19 @@ export function BotonAdmin({ children, peligro, style, ...resto }) {
 // Acceso secundario discreto (enlace-boton)
 export function Enlace({ children, onClick, color = C.tealDark, style }) {
   return <button type="button" onClick={onClick} style={{ background: "none", border: "none", color, fontWeight: 700, fontSize: T.small, minHeight: 36, padding: "6px 4px", cursor: "pointer", ...style }}>{children}</button>;
+}
+
+// Índice de una pantalla larga: botones que llevan a cada sección (navegación dentro de la pantalla).
+export function IndiceSecciones({ items }) {
+  const ir = (id) => { const el = document.getElementById(id); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); };
+  return (
+    <nav data-noprint className="bfk-indice" aria-label="Secciones de esta pantalla" style={{ display: "flex", gap: S.sm, overflowX: "auto", margin: `0 0 ${S.lg}px`, paddingBottom: 2, WebkitOverflowScrolling: "touch" }}>
+      {items.map((it) => (
+        <button key={it.id} type="button" data-compact onClick={() => ir(it.id)}
+          style={{ flexShrink: 0, border: `1px solid ${C.border}`, background: C.card, borderRadius: R.pill, padding: "7px 13px", fontSize: T.small + 1, fontWeight: 700, color: C.inkMuted, minHeight: 36, cursor: "pointer", whiteSpace: "nowrap" }}>
+          {it.label}{it.n != null ? ` · ${it.n}` : ""}
+        </button>
+      ))}
+    </nav>
+  );
 }

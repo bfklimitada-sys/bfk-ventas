@@ -3,7 +3,7 @@ import { Field, Modal } from "../ui/Basicos";
 import { del } from "../../lib/supabase";
 import { C, MONO, btnG, btnP, fmt, iMono, iStyle, selStyle } from "../../lib/theme";
 import { Ic } from "../ui/Iconos";
-import { Seccion, Tarjeta, Badge, Monto } from "../ui/Sistema";
+import { Seccion, Tarjeta, Badge, Monto, IndiceSecciones } from "../ui/Sistema";
 import { evaluarPagoVendedor } from "../../lib/pagosVendedor";
 import { calcularPagoVendedor, mesesConFactura, registroIvaDe, ivaNetoPeriodo, ivaAPagarPeriodo } from "../../lib/calculos";
 
@@ -29,7 +29,8 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
   return (
     <div>
       <button onClick={()=>{setPagoInicial(null);setPagando(true);}} style={{...btnP(C.tealDark),minHeight:50,fontSize:15,borderRadius:12,boxShadow:"0 4px 12px rgba(13,148,136,0.35)",marginBottom:20}}>+ Pago a vendedor</button>
-      <Seccion titulo="Comisiones por vendedor">
+      <IndiceSecciones items={[{id:"ven-comisiones",label:"Comisiones"},{id:"ven-iva",label:"IVA mensual"}]} />
+      <Seccion id="ven-comisiones" titulo="Comisiones por vendedor">
       {vendedores.map(v=>{
         const datos=datosVendedor(v);
         const ultimoPagado=datos.find(d=>d.estado==="pagado");
@@ -119,7 +120,7 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
       })}
       </Seccion>
 
-      <Seccion titulo="IVA mensual" nota="Impuesto de la empresa. Su IVA neto (débito − crédito) se descuenta en las comisiones del período; no es un pago a vendedores.">
+      <Seccion id="ven-iva" titulo="IVA mensual" nota="Impuesto de la empresa. Su IVA neto (débito − crédito) se descuenta en las comisiones del período; no es un pago a vendedores.">
       <Tarjeta padding="14px 16px">
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
           <div style={{fontWeight:800,fontSize:14,color:C.ink}}>IVA del mes ({fmt.monthYear(mesActual,anioActual)})</div>

@@ -1,8 +1,8 @@
 import { useState, useMemo } from "react";
 import { PanelDatos } from "./PanelDatos";
-import { C, btnG, btnP, fmt, iStyle } from "../../lib/theme";
+import { C, btnP, fmt, iStyle } from "../../lib/theme";
 import { Ic } from "../ui/Iconos";
-import { Seccion, Tarjeta, Badge, BotonAdmin } from "../ui/Sistema";
+import { Seccion, Tarjeta, Badge, BotonAdmin, IndiceSecciones } from "../ui/Sistema";
 import { ImportarEntidades } from "../forms/ImportarEntidades";
 
 export function PanelUsuarios({ perfiles, ocs, ocsArchivadas, onRestaurarOC, onChangeRol, session, showToast, entidadesCatalogo, onEntidadesImportadas, usoMP, sincronizando, validandoTodo, exportando, onCorregirFechas, onValidarTodo, onExportarTodo }) {
@@ -33,8 +33,14 @@ export function PanelUsuarios({ perfiles, ocs, ocsArchivadas, onRestaurarOC, onC
 
   return (
     <div>
+      <IndiceSecciones items={[
+        {id:"adm-usuarios",label:"Usuarios"},
+        {id:"adm-datos",label:"Datos y respaldo"},
+        {id:"adm-mp",label:"Mercado Público"},
+        {id:"adm-archivadas",label:"OCs archivadas",n:(ocsArchivadas||[]).length},
+      ]} />
       {/* ── 1. Usuarios y permisos ── */}
-      <Seccion titulo="Usuarios y permisos">
+      <Seccion id="adm-usuarios" titulo="Usuarios y permisos">
       {perfiles.map(p=>{
         const ultima=ultimaActividad[p.id];
         const diasInactivo = ultima ? Math.floor((new Date()-new Date(ultima))/(1000*60*60*24)) : null;
@@ -58,16 +64,11 @@ export function PanelUsuarios({ perfiles, ocs, ocsArchivadas, onRestaurarOC, onC
       </Seccion>
 
       {/* ── 2. Datos y respaldo ── */}
-      <Seccion titulo="Datos y respaldo" nota="Acciones administrativas: tienen más alcance que el trabajo diario.">
+      <Seccion id="adm-datos" titulo="Datos y respaldo" nota="Acciones administrativas: tienen más alcance que el trabajo diario.">
         <Tarjeta>
-          <div style={{fontSize:12,color:C.inkMuted,marginBottom:12,lineHeight:1.5}}>
-            Se hace un respaldo cifrado de la base de datos todos los días, automáticamente, con una prueba de restauración. El estado se revisa en el repositorio de respaldos (GitHub → Actions).
+          <div style={{fontSize:12,color:C.inkMuted,lineHeight:1.5}}>
+            Se hace un respaldo cifrado de la base de datos todos los días, automáticamente, con una prueba de restauración. El estado se revisa en el repositorio de respaldos (GitHub → Actions). Para descargar toda la base en Excel, usa la tarjeta siguiente.
           </div>
-          {onExportarTodo&&(
-            <button onClick={()=>onExportarTodo()} disabled={!!exportando} style={{...btnG,width:"100%",opacity:exportando?0.6:1}}>
-              {exportando?"Armando el Excel…":"Exportar todo a Excel"}
-            </button>
-          )}
         </Tarjeta>
 
         <PanelDatos session={session} showToast={showToast} />
@@ -86,7 +87,7 @@ export function PanelUsuarios({ perfiles, ocs, ocsArchivadas, onRestaurarOC, onC
       </Seccion>
 
       {/* ── 3. Mercado Público ── */}
-      <Seccion titulo="Mercado Público" nota="Mantenimiento masivo. Consulta muchas órdenes a la vez; úsalo solo cuando haga falta.">
+      <Seccion id="adm-mp" titulo="Mercado Público" nota="Mantenimiento masivo. Consulta muchas órdenes a la vez; úsalo solo cuando haga falta.">
         <Tarjeta>
           {usoMP&&(
             <div style={{fontSize:12,color:C.inkMuted,marginBottom:10}}>Consultas de hoy: <b style={{color:C.ink}}>{(usoMP.solicitudes||0).toLocaleString("es-CL")}</b> de 10.000</div>
@@ -107,7 +108,7 @@ export function PanelUsuarios({ perfiles, ocs, ocsArchivadas, onRestaurarOC, onC
       </Seccion>
 
       {/* ── 4. OCs archivadas ── */}
-      <Seccion titulo="OCs archivadas" nota="Ocultas de la operación diaria, con todos sus datos intactos. Se pueden consultar y restaurar.">
+      <Seccion id="adm-archivadas" titulo="OCs archivadas" nota="Ocultas de la operación diaria, con todos sus datos intactos. Se pueden consultar y restaurar.">
         <Tarjeta>
           <div style={{fontSize:12,color:C.inkMuted,marginBottom:8}}>{(ocsArchivadas||[]).length===0?"No hay OCs archivadas.":`${(ocsArchivadas||[]).length} OC${(ocsArchivadas||[]).length>1?"s":""} archivada${(ocsArchivadas||[]).length>1?"s":""}`}</div>
           {(ocsArchivadas||[]).length>0&&(

@@ -35,6 +35,7 @@ const P = {
   chevL: <path d="M15 5l-7 7 7 7"/>,
   chevR: <path d="M9 5l7 7-7 7"/>,
   menu: <><path d="M4 7h16M4 12h16M4 17h16"/></>,
+  salir: <><path d="M14 4h4a1 1 0 011 1v14a1 1 0 01-1 1h-4"/><path d="M10 16l-4-4 4-4M6 12h10"/></>,
   dotRed: <circle cx="12" cy="12" r="6" fill="currentColor" stroke="none"/>,
   dotOrange: <circle cx="12" cy="12" r="6" fill="currentColor" stroke="none"/>,
   dotAmber: <circle cx="12" cy="12" r="6" fill="currentColor" stroke="none"/>,

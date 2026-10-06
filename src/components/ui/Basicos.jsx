@@ -1,15 +1,27 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef, useId } from "react";
 import { C, MONO, R, fmt, iMono } from "../../lib/theme";
 import { estadoVencimiento, plazoPago } from "../../lib/calculos";
 import { I } from "./Iconos";
 
+// Ventanas apiladas: Escape cierra solo la de más arriba.
+const pilaVentanas=[];
 export function Modal({ title, onClose, children }) {
+  const idTitulo=useId();
+  const cerrar=useRef(onClose); cerrar.current=onClose;
+  useEffect(()=>{
+    const marca={};
+    pilaVentanas.push(marca);
+    const tecla=(e)=>{ if(e.key==="Escape"&&pilaVentanas[pilaVentanas.length-1]===marca){ e.stopPropagation(); cerrar.current&&cerrar.current(); } };
+    window.addEventListener("keydown",tecla);
+    return ()=>{ window.removeEventListener("keydown",tecla); const i=pilaVentanas.indexOf(marca); if(i>=0) pilaVentanas.splice(i,1); };
+  },[]);
+  // En celular se abre como hoja desde abajo; en escritorio, centrada (clases en EstilosGlobales).
   return (
-    <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(11,17,32,0.6)",backdropFilter:"blur(2px)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:100}}>
-      <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:"18px 18px 0 0",width:"100%",maxWidth:480,maxHeight:"92vh",overflowY:"auto",boxShadow:"0 -8px 40px rgba(0,0,0,0.25)"}}>
+    <div className="bfk-ventana-fondo" onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(11,17,32,0.6)",backdropFilter:"blur(2px)",display:"flex",justifyContent:"center",zIndex:100}}>
+      <div className="bfk-ventana" role="dialog" aria-modal="true" aria-labelledby={idTitulo} onClick={e=>e.stopPropagation()} style={{background:C.card,width:"100%",maxWidth:480,overflowY:"auto",boxShadow:"0 -8px 40px rgba(0,0,0,0.25)"}}>
         <div style={{position:"sticky",top:0,background:C.card,padding:"16px 20px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",zIndex:2}}>
-          <span style={{fontWeight:800,fontSize:15,color:C.ink}}>{title}</span>
-          <button onClick={onClose} style={{background:C.paper,border:"none",borderRadius:R.sm,width:40,height:40,cursor:"pointer",fontSize:15,color:C.inkMuted}}>✕</button>
+          <span id={idTitulo} style={{fontWeight:800,fontSize:15,color:C.ink}}>{title}</span>
+          <button onClick={onClose} aria-label="Cerrar" style={{background:C.paper,border:"none",borderRadius:R.sm,width:40,height:40,cursor:"pointer",fontSize:15,color:C.inkMuted}}>✕</button>
         </div>
         <div style={{padding:20}}>{children}</div>
       </div>
@@ -31,7 +43,7 @@ export function Field({ label, required, hint, children }) {
 
 export function Toast({ toast }) {
   if(!toast) return null;
-  return <div style={{position:"fixed",bottom:80,left:"50%",transform:"translateX(-50%)",background:toast.type==="error"?C.danger:C.ink,color:"#fff",padding:"11px 20px",borderRadius:10,fontSize:13,fontWeight:600,zIndex:200,boxShadow:"0 8px 24px rgba(0,0,0,0.25)",maxWidth:"90vw",textAlign:"center"}}>{toast.msg}</div>;
+  return <div className="bfk-aviso" role="status" style={{position:"fixed",left:"50%",transform:"translateX(-50%)",background:toast.type==="error"?C.danger:C.ink,color:"#fff",padding:"11px 20px",borderRadius:10,fontSize:13,fontWeight:600,zIndex:200,boxShadow:"0 8px 24px rgba(0,0,0,0.25)",maxWidth:"90vw",textAlign:"center"}}>{toast.msg}</div>;
 }
 
 export function Trazabilidad({ creadoPor, creadoEn, perfiles }) {

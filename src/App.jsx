@@ -20,7 +20,7 @@ import { PanelFinanciamiento } from "./components/panels/PanelFinanciamiento";
 import { PanelGastos } from "./components/panels/PanelGastos";
 import { PanelUsuarios } from "./components/panels/PanelUsuarios";
 import { PanelVendedores } from "./components/panels/PanelVendedores";
-import { Modal, NotifBadge, Toast } from "./components/ui/Basicos";
+import { Modal, Toast } from "./components/ui/Basicos";
 import { PanelNotificaciones, calcularAlertas } from "./components/ui/Multiusuario";
 import { SESSION_KEY, SUPABASE_URL, crearNotificacion, del, genId, getPerfil, hdrs, ins, registrarCambio, sel, selOCs, selPerfiles, storageGet, storageSet, supaRefresh, supaSignOut, upd, updRol } from "./lib/supabase";
 import { alimentarCatalogoDesdeOC } from "./lib/entidadesOC";
@@ -28,17 +28,12 @@ import { rpcArchivarOC, rpcRestaurarOC } from "./lib/supabase";
 import { C, MONO, SANS, fmt } from "./lib/theme";
 import { Ic } from "./components/ui/Iconos";
 import { generarPdfPantallas } from "./lib/pdfPantallas";
+import { PANTALLAS, PANTALLA_INICIAL, pantallaDe, pantallaDesdeHash, hashDe, puedeVer, visiblesPara, tituloDocumento } from "./lib/navegacion";
+import { BarraInferior, BarraLateral, MenuMas, contarAlertas, useEsEscritorio } from "./components/ui/Navegacion";
 
-export const TABS=[
-  {key:"panel",label:"Panel",icon:<Ic n="📊"/>},
-  {key:"compras",label:"Compras",icon:<Ic n="📦"/>},
-  {key:"agenda",label:"Agenda",icon:<Ic n="📅"/>},
-  {key:"notif",label:"Alertas",icon:<Ic n="🔔"/>},
-  {key:"financiamiento",label:"Financiamiento",icon:<Ic n="🏦"/>},
-  {key:"vendedores",label:"Vendedores",icon:<Ic n="🧑‍💼"/>},
-  {key:"gastos",label:"Gastos",icon:<Ic n="🧾"/>},
-  {key:"usuarios",label:"Administración",icon:<Ic n="👥"/>,adminOnly:true},
-];
+// Pantallas, grupos, direcciones (#/ruta) y permisos: una sola definición en lib/navegacion.js.
+export const TABS=PANTALLAS.map(p=>({key:p.key,label:p.label,icon:<Ic n={p.icono}/>,adminOnly:!!p.adminOnly}));
+const ANCHO_CONTENIDO=1040; // ancho máximo del contenido en escritorio
 
 export default function App() {
   const [todo,setTodo]=useState(false); // vista de impresión de todas las pantallas
@@ -46,7 +41,8 @@ export default function App() {
   const [session,setSession]=useState(null); const [perfil,setPerfil]=useState(null);
   const sesionRef=useRef(null); sesionRef.current=session; fijarProveedorToken(()=>sesionRef.current?.access_token||null); // token vigente para el ciclo de bloqueo de OC
   const [loadingApp,setLoadingApp]=useState(true);
-  const [tab,setTab]=useState("panel"); const [filtroCompras,setFiltroCompras]=useState(null); const [ocFoco,setOcFoco]=useState(null); const [filtroAlertas,setFiltroAlertas]=useState({nivel:"todas",etapa:null}); const [volverA,setVolverA]=useState(null);
+  // La pantalla inicial sale de la dirección (#/compras…) para que recargar o abrir un enlace mantenga la pantalla.
+  const [tab,setTab]=useState(()=>pantallaDesdeHash(typeof window!=="undefined"?window.location.hash:"")||PANTALLA_INICIAL); const [filtroCompras,setFiltroCompras]=useState(null); const [ocFoco,setOcFoco]=useState(null); const [filtroAlertas,setFiltroAlertas]=useState({nivel:"todas",etapa:null}); const [volverA,setVolverA]=useState(null);
   // OCs ya consultadas a la API en esta sesión (para no reintentar en bucle)
   const intentadas=useRef(new Set());
   const [accion,setAccion]=useState(null); const [abonoFinId,setAbonoFinId]=useState(null); const [busquedaCompras,setBusquedaCompras]=useState(null);
@@ -72,6 +68,49 @@ export default function App() {
   const showToast=(msg,type="success")=>{ setToast({msg,type}); setTimeout(()=>setToast(null),3000); };
 
   useEffect(()=>{ if(tab!=="compras") setBusquedaCompras(null); },[tab]);
+
+  // ── Navegación (Fase 3) ─────────────────────────────────────────
+  // Cada pantalla tiene su dirección (#/compras…): atrás/adelante del navegador o del
+  // celular cambian de pantalla, y recargar deja al usuario donde estaba.
+  const esEscritorio=useEsEscritorio();
+  const modoHistorial=useRef("reemplazar"); // la primera pantalla reemplaza la entrada; las siguientes se agregan
+  useEffect(()=>{
+    const h=hashDe(tab);
+    const actual=window.location.hash;
+    // Al abrir, una dirección con datos (p. ej. "#access_token=…" de un correo de Supabase) no se toca.
+    const conDatos=modoHistorial.current==="reemplazar"&&/[=&]/.test(actual);
+    if(actual!==h&&!conDatos){
+      if(modoHistorial.current==="reemplazar") window.history.replaceState(window.history.state,"",h);
+      else window.history.pushState(null,"",h);
+    }
+    modoHistorial.current="agregar";
+    window.scrollTo(0,0); // cada pantalla empieza arriba
+  },[tab]);
+  useEffect(()=>{ document.title=session?tituloDocumento(tab):tituloDocumento(null); },[session,tab]);
+  const estadoNav=useRef({}); estadoNav.current={tab,accion,menuMas};
+  useEffect(()=>{
+    const alNavegarAtras=()=>{
+      const {tab:actual,accion:acc,menuMas:mm}=estadoNav.current;
+      if(acc||mm){
+        // Atrás con una ventana o el menú abiertos: se cierran y se queda en la misma pantalla.
+        setAccion(null); setMenuMas(false); setCodigoOcRapida("");
+        window.history.pushState(null,"",hashDe(actual));
+        return;
+      }
+      const destino=pantallaDesdeHash(window.location.hash)||PANTALLA_INICIAL;
+      // Dirección escrita a mano o desconocida: se corrige sin agregar otra entrada al historial.
+      if(window.location.hash!==hashDe(destino)) window.history.replaceState(null,"",hashDe(destino));
+      setFiltroCompras(null); setOcFoco(null); setVolverA(null);
+      setTab(destino);
+    };
+    window.addEventListener("popstate",alNavegarAtras);
+    return ()=>window.removeEventListener("popstate",alNavegarAtras);
+  },[]);
+  // Una pantalla solo de administración no se muestra a quien no es administrador (p. ej. un enlace #/administracion).
+  useEffect(()=>{
+    if(perfil&&!puedeVer(tab,perfil.rol==="admin")){ modoHistorial.current="reemplazar"; setTab(PANTALLA_INICIAL); }
+  },[perfil,tab]);
+  const irA=(t)=>{ setTab(t); setFiltroCompras(null); setOcFoco(null); setVolverA(null); setMenuMas(false); };
   useEffect(()=>{
     (async()=>{
       const saved=storageGet(SESSION_KEY);
@@ -1365,7 +1404,6 @@ export default function App() {
   // ─── RENDER ───────────────────────────────────
   if(loadingApp) return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",color:C.inkMuted,fontFamily:SANS}}>Cargando…</div>;
   if(!session) return <LoginScreen onLogin={handleLogin} />;
-  const visTabs=TABS.filter(t=>!t.adminOnly||perfil?.rol==="admin");
   const alertasUrgentes=calcularAlertas(ocs).filter(a=>a.nivel==="alto").length;
 
   // Todo lo que ya está registrado, para que la cartola no lo duplique
@@ -1417,109 +1455,32 @@ export default function App() {
     setTimeout(()=>{ generarPdfTodo(); },1200);
   };
 
-  return (
-    <div style={{minHeight:"100vh",background:C.paper,fontFamily:SANS,paddingBottom:"calc(104px + env(safe-area-inset-bottom))"}}>
-      {/* HEADER */}
-      <div data-noprint style={{background:`linear-gradient(135deg,${C.night} 0%,#16213E 100%)`,padding:"calc(16px + env(safe-area-inset-top)) 16px 14px",color:"#fff",boxShadow:"0 2px 12px rgba(11,17,32,0.25)",position:"sticky",top:0,zIndex:30}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0,flex:1}}>
-            <div style={{width:38,height:38,background:"rgba(20,184,166,0.15)",border:`1.5px solid ${C.teal}`,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:MONO,color:C.teal,fontWeight:800,fontSize:13}}>BFK</div>
-            <div>
-              {tab==="panel"?(
-                <>
-                  <div style={{fontWeight:800,fontSize:15,letterSpacing:-0.3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
-                    {(()=>{ const h=new Date().getHours(); return h<12?"Buenos días":h<19?"Buenas tardes":"Buenas noches"; })()}, {perfil?.nombre?.split(" ")[0]||""}
-                  </div>
-                  <div style={{fontSize:12,color:"#8B9AB5"}}>
-                    {new Date().toLocaleDateString("es-CL",{weekday:"long",day:"numeric",month:"long"})}
-                  </div>
-                </>
-              ):(
-                <>
-                  <div style={{fontWeight:800,fontSize:15,letterSpacing:-0.3}}>{TABS.find(t=>t.key===tab)?.label||"BFK Ltda"}</div>
-                  <div style={{fontSize:12,color:"#8B9AB5"}}>{perfil?.nombre} · {perfil?.rol==="admin"?"Administrador":"Usuario"}</div>
-                </>
-              )}
-            </div>
-          </div>
-          <div style={{display:"flex",gap:8,alignItems:"center"}}>
-            <button onClick={()=>setAccion("compra_oc")} style={{background:C.teal,border:"none",color:"#fff",borderRadius:10,padding:"9px 14px",fontSize:12.5,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0,boxShadow:"0 3px 10px rgba(20,184,166,0.35)"}}>+ Nueva OC</button>
-            {perfil?.rol==="admin"&&<button onClick={imprimirTodo} aria-label="Imprimir o guardar como PDF todas las pantallas" style={{background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.12)",color:"#B8C4D9",borderRadius:9,padding:"8px 10px",fontSize:12,fontWeight:600,cursor:"pointer"}}><Ic n="printer" /></button>}
-            <button onClick={handleLogout} style={{background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.12)",color:"#B8C4D9",borderRadius:9,padding:"8px 10px",fontSize:12,fontWeight:600,cursor:"pointer"}}>⏻</button>
-          </div>
-        </div>
-      </div>
+  // ── Encabezado y estructura (Fase 3) ─────────────────────────────
+  const pantalla=pantallaDe(tab)||pantallaDe(PANTALLA_INICIAL);
+  const saludo=(()=>{ const h=new Date().getHours(); return h<12?"Buenos días":h<19?"Buenas tardes":"Buenas noches"; })();
+  const tituloPantalla=tab==="panel"?`${saludo}, ${perfil?.nombre?.split(" ")[0]||""}`:pantalla.label;
+  const subtituloPantalla=tab==="panel"?new Date().toLocaleDateString("es-CL",{weekday:"long",day:"numeric",month:"long"}):pantalla.desc;
+  const visibles=visiblesPara(perfil?.rol==="admin");
+  const nAlertas=contarAlertas(notificaciones,alertasUrgentes);
+  const salir=()=>{ setMenuMas(false); handleLogout(); };
+  const nuevaOC=()=>{ setMenuMas(false); setAccion("compra_oc"); };
 
-      {todo&&(
-        <div data-noprint style={{position:"sticky",top:0,zIndex:30,background:C.tealLight,borderBottom:`2px solid ${C.teal}`,padding:"12px 16px",display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
-          <div style={{flex:1,minWidth:180,fontSize:13,color:C.ink,fontWeight:700,lineHeight:1.35}}>
-            {pdfEstado?.fase==="generando"?pdfEstado.txt:pdfEstado?.fase==="listo"?"PDF listo con todas las pantallas.":pdfEstado?.fase==="error"?pdfEstado.txt:"Preparando todas las pantallas…"}
-            {pdfEstado?.fase==="listo"&&<span style={{display:"block",fontWeight:500,color:C.inkMuted,fontSize:12}}>Toca "Guardar PDF" y elige "Guardar en Archivos".</span>}
-          </div>
-          {pdfEstado?.fase==="listo"&&<button onClick={compartirPdf} style={{background:C.tealDark,color:"#fff",border:"none",borderRadius:10,padding:"10px 14px",fontSize:13,fontWeight:700,cursor:"pointer"}}>Guardar PDF</button>}
-          {pdfEstado?.fase==="listo"&&<a href={pdfEstado.url} target="_blank" rel="noreferrer" style={{color:C.tealDark,fontSize:13,fontWeight:700,padding:"10px 6px"}}>Abrir</a>}
-          {pdfEstado?.fase==="error"&&<button onClick={generarPdfTodo} style={{background:C.tealDark,color:"#fff",border:"none",borderRadius:10,padding:"10px 14px",fontSize:13,fontWeight:700,cursor:"pointer"}}>Reintentar</button>}
-          <button onClick={cerrarVistaTodo} style={{background:"transparent",color:C.inkMuted,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 14px",fontSize:13,fontWeight:600,cursor:"pointer"}}>Volver</button>
-        </div>
-      )}
-      {/* CONTENIDO */}
-      <div style={{padding:16}}>
-        {(tab==="panel"||todo)&&hoja("panel",<PanelDashboard onBuscarCompras={(q)=>{setBusquedaCompras(q);setFiltroCompras(null);setOcFoco(null);setVolverA(null);setTab("compras");}} ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} aportes={aportes} perfil={perfil} onExportarTodo={handleExportarTodo} exportando={exportando} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setVolverA(null);setTab(t);}} onAccion={(k)=>setAccion(k)} onSincronizar={completarTodasDesdeMP} onCorregirFechas={corregirFechasTodas} sincronizando={sincronizando} porAceptar={porAceptar} onActualizarPorAceptar={revisarPorAceptar} verificandoPorAceptar={verificandoPorAceptar} aceptadasSinCargar={aceptadasSinCargar} onCargarOC={(numero)=>{setCodigoOcRapida(numero);setAccion("compra_oc");}} onCargarTodasAceptadas={handleCargarTodasAceptadas} cargandoAceptadas={cargandoAceptadas} onActualizarAceptadas={revisarAceptadasSinCargar} verificandoAceptadas={verificandoAceptadas} canceladasEnMP={canceladasEnMP.filter(c=>ocs.some(o=>o.id===c.id))} onArchivarCancelada={(id)=>handleArchivarOC(id,"Cancelada en Mercado Público")} onActualizarCanceladas={revisarCanceladasEnMP} verificandoCanceladas={verificandoCanceladas} onValidarTodo={validarTodoContraMP} validandoTodo={validandoTodo} usoMP={usoMP} actMP={actMP} esCodigoMP={esCodigoMP} ultimaCartola={ultimaCartola} saldoBanco={saldoBanco} bancoMensual={bancoMensual} onEditarSaldo={()=>setAccion("saldo_banco")} />)}
-        {(tab==="compras"||todo)&&hoja("compras",<>{!todo&&volverA==="notif"&&<button onClick={()=>{setVolverA(null);setTab("notif");}} style={{width:"100%",textAlign:"left",background:C.tealLight,color:C.tealDark,border:"none",borderRadius:10,padding:"10px 12px",marginBottom:10,fontWeight:800,fontSize:13,minHeight:44,cursor:"pointer"}}>← Volver a Alertas</button>}<PanelCompras busquedaInicial={busquedaCompras} ocs={ocs} perfiles={perfiles} filtroInicial={filtroCompras} ocFoco={ocFoco} onFocoUsado={()=>setOcFoco(null)} contactos={contactos} onEnviarReclamo={handleEnviarReclamo} onCorreoOC={handleCorreoOC} onRegistrarRespuestaReclamo={handleRegistrarRespuestaReclamo} onGuardarContacto={handleGuardarContacto} onGuardarDatosOC={handleGuardarDatosOC} onEditarEvento={handleEditarEvento} financiadores={financiadores} onConfirmarEntrega={handleEntrega} onEmitirFactura={handleFactura} onPagoCliente={handlePagoCliente} onPagoFinanciamiento={handlePagoFin} entidadesCatalogo={entidadesCatalogo} onGuardarLink={handleGuardarLink} onEliminarLink={handleEliminarLink} onEditarLink={handleEditarLink} onSincronizarFecha={handleSincronizarFecha} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={handleAgregarComentario} onEliminarComentario={handleEliminarComentario} onArchivarOC={handleArchivarOC} onEliminarFactura={handleEliminarFactura} onEliminarEvento={handleEliminarEvento} vendedores={vendedores} onIngresarCompra={handleIngresarCompra} onAsignarResponsable={handleAsignarResponsable} onGuardarPostventa={handleGuardarPostventa} /></>)}
-        {(tab==="notif"||todo)&&hoja("notif",<PanelNotificaciones notificaciones={notificaciones} ocs={ocs} onMarcarLeidas={handleMarcarNotificacionesLeidas} filtroAlertas={filtroAlertas} onFiltroAlertas={setFiltroAlertas} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setVolverA(ocId?"notif":null);setTab(t);}} />)}
-        {(tab==="agenda"||todo)&&hoja("agenda",<PanelCalendario ocs={ocs} onMarcarFecha={handleMarcarFecha} onVerAlertas={(f)=>{setFiltroCompras(null);setOcFoco(null);setVolverA(null);setFiltroAlertas({nivel:(f&&f.nivel)||"todas",etapa:(f&&f.etapa)||null});setTab("notif");}} />)}
-        {(tab==="financiamiento"||todo)&&hoja("financiamiento",<PanelFinanciamiento financiadores={financiadores} ocs={ocs} ajustes={ajustesSaldo} perfiles={perfiles} onAjustar={handleAjusteSaldo} aportes={aportes} onGuardarAporte={handleGuardarAporte} onEliminarAporte={perfil?.rol==="admin"?handleEliminarAporte:undefined} onAbonar={(finId)=>{setAbonoFinId(typeof finId==="string"||typeof finId==="number"?finId:null);setAccion("abono_fin");}} pagoFinSueltos={pagoFinSueltos} />)}
-        {(tab==="gastos"||todo)&&hoja("gastos",<PanelGastos gastos={gastos} categorias={categoriasGasto} onNuevoGasto={handleNuevoGasto} />)}
-        {(tab==="vendedores"||todo)&&hoja("vendedores",<PanelVendedores vendedores={vendedores} ocs={ocs} ivaMensual={ivaMensual} pagosVendedor={pagosVendedor} onGuardarIva={handleGuardarIva} onPagoVendedor={handlePagoVendedorSimple} />)}
-        {(tab==="usuarios"||todo)&&perfil?.rol==="admin"&&hoja("usuarios",<PanelUsuarios perfiles={perfiles} ocs={ocs} ocsArchivadas={ocsArchivadas} onRestaurarOC={handleRestaurarOC} onChangeRol={handleChangeRol} session={session} showToast={showToast} entidadesCatalogo={entidadesCatalogo} onEntidadesImportadas={handleEntidadesImportadas} usoMP={usoMP} sincronizando={sincronizando} validandoTodo={validandoTodo} exportando={exportando} onCorregirFechas={corregirFechasTodas} onValidarTodo={validarTodoContraMP} onExportarTodo={handleExportarTodo} />)}
-      </div>
+  const contenidoPantallas=(
+    <>
+      {(tab==="panel"||todo)&&hoja("panel",<PanelDashboard onBuscarCompras={(q)=>{setBusquedaCompras(q);setFiltroCompras(null);setOcFoco(null);setVolverA(null);setTab("compras");}} ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} aportes={aportes} perfil={perfil} onExportarTodo={handleExportarTodo} exportando={exportando} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setVolverA(null);setTab(t);}} onAccion={(k)=>setAccion(k)} onSincronizar={completarTodasDesdeMP} onCorregirFechas={corregirFechasTodas} sincronizando={sincronizando} porAceptar={porAceptar} onActualizarPorAceptar={revisarPorAceptar} verificandoPorAceptar={verificandoPorAceptar} aceptadasSinCargar={aceptadasSinCargar} onCargarOC={(numero)=>{setCodigoOcRapida(numero);setAccion("compra_oc");}} onCargarTodasAceptadas={handleCargarTodasAceptadas} cargandoAceptadas={cargandoAceptadas} onActualizarAceptadas={revisarAceptadasSinCargar} verificandoAceptadas={verificandoAceptadas} canceladasEnMP={canceladasEnMP.filter(c=>ocs.some(o=>o.id===c.id))} onArchivarCancelada={(id)=>handleArchivarOC(id,"Cancelada en Mercado Público")} onActualizarCanceladas={revisarCanceladasEnMP} verificandoCanceladas={verificandoCanceladas} onValidarTodo={validarTodoContraMP} validandoTodo={validandoTodo} usoMP={usoMP} actMP={actMP} esCodigoMP={esCodigoMP} ultimaCartola={ultimaCartola} saldoBanco={saldoBanco} bancoMensual={bancoMensual} onEditarSaldo={()=>setAccion("saldo_banco")} />)}
+      {(tab==="compras"||todo)&&hoja("compras",<>{!todo&&volverA==="notif"&&<button onClick={()=>{setVolverA(null);setTab("notif");}} style={{width:"100%",textAlign:"left",background:C.tealLight,color:C.tealDark,border:"none",borderRadius:10,padding:"10px 12px",marginBottom:10,fontWeight:800,fontSize:13,minHeight:44,cursor:"pointer"}}>← Volver a Alertas</button>}<PanelCompras busquedaInicial={busquedaCompras} ocs={ocs} perfiles={perfiles} filtroInicial={filtroCompras} ocFoco={ocFoco} onFocoUsado={()=>setOcFoco(null)} contactos={contactos} onEnviarReclamo={handleEnviarReclamo} onCorreoOC={handleCorreoOC} onRegistrarRespuestaReclamo={handleRegistrarRespuestaReclamo} onGuardarContacto={handleGuardarContacto} onGuardarDatosOC={handleGuardarDatosOC} onEditarEvento={handleEditarEvento} financiadores={financiadores} onConfirmarEntrega={handleEntrega} onEmitirFactura={handleFactura} onPagoCliente={handlePagoCliente} onPagoFinanciamiento={handlePagoFin} entidadesCatalogo={entidadesCatalogo} onGuardarLink={handleGuardarLink} onEliminarLink={handleEliminarLink} onEditarLink={handleEditarLink} onSincronizarFecha={handleSincronizarFecha} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={handleAgregarComentario} onEliminarComentario={handleEliminarComentario} onArchivarOC={handleArchivarOC} onEliminarFactura={handleEliminarFactura} onEliminarEvento={handleEliminarEvento} vendedores={vendedores} onIngresarCompra={handleIngresarCompra} onAsignarResponsable={handleAsignarResponsable} onGuardarPostventa={handleGuardarPostventa} /></>)}
+      {(tab==="notif"||todo)&&hoja("notif",<PanelNotificaciones notificaciones={notificaciones} ocs={ocs} onMarcarLeidas={handleMarcarNotificacionesLeidas} filtroAlertas={filtroAlertas} onFiltroAlertas={setFiltroAlertas} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setVolverA(ocId?"notif":null);setTab(t);}} />)}
+      {(tab==="agenda"||todo)&&hoja("agenda",<PanelCalendario ocs={ocs} onMarcarFecha={handleMarcarFecha} onVerAlertas={(f)=>{setFiltroCompras(null);setOcFoco(null);setVolverA(null);setFiltroAlertas({nivel:(f&&f.nivel)||"todas",etapa:(f&&f.etapa)||null});setTab("notif");}} />)}
+      {(tab==="financiamiento"||todo)&&hoja("financiamiento",<PanelFinanciamiento financiadores={financiadores} ocs={ocs} ajustes={ajustesSaldo} perfiles={perfiles} onAjustar={handleAjusteSaldo} aportes={aportes} onGuardarAporte={handleGuardarAporte} onEliminarAporte={perfil?.rol==="admin"?handleEliminarAporte:undefined} onAbonar={(finId)=>{setAbonoFinId(typeof finId==="string"||typeof finId==="number"?finId:null);setAccion("abono_fin");}} pagoFinSueltos={pagoFinSueltos} />)}
+      {(tab==="gastos"||todo)&&hoja("gastos",<PanelGastos gastos={gastos} categorias={categoriasGasto} onNuevoGasto={handleNuevoGasto} />)}
+      {(tab==="vendedores"||todo)&&hoja("vendedores",<PanelVendedores vendedores={vendedores} ocs={ocs} ivaMensual={ivaMensual} pagosVendedor={pagosVendedor} onGuardarIva={handleGuardarIva} onPagoVendedor={handlePagoVendedorSimple} />)}
+      {(tab==="usuarios"||todo)&&perfil?.rol==="admin"&&hoja("usuarios",<PanelUsuarios perfiles={perfiles} ocs={ocs} ocsArchivadas={ocsArchivadas} onRestaurarOC={handleRestaurarOC} onChangeRol={handleChangeRol} session={session} showToast={showToast} entidadesCatalogo={entidadesCatalogo} onEntidadesImportadas={handleEntidadesImportadas} usoMP={usoMP} sincronizando={sincronizando} validandoTodo={validandoTodo} exportando={exportando} onCorregirFechas={corregirFechasTodas} onValidarTodo={validarTodoContraMP} onExportarTodo={handleExportarTodo} />)}
+    </>
+  );
 
-      {/* NAV BOTTOM — 5 principales + Más */}
-      {(()=>{
-        const principales=visTabs.filter(t=>["panel","compras","agenda","notif"].includes(t.key));
-        const secundarias=visTabs.filter(t=>!["panel","compras","agenda","notif"].includes(t.key));
-        const enMas=secundarias.some(t=>t.key===tab);
-        return (
-          <>
-            {menuMas&&(
-              <div data-noprint onClick={()=>setMenuMas(false)} style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.35)",zIndex:40}}>
-                <div onClick={e=>e.stopPropagation()} style={{position:"fixed",bottom:"calc(64px + env(safe-area-inset-bottom))",left:12,right:12,background:C.card,borderRadius:16,padding:"12px",boxShadow:"0 -10px 40px rgba(15,23,42,0.2)",zIndex:41}}>
-                  <div style={{width:36,height:4,background:C.border,borderRadius:2,margin:"0 auto 12px"}} />
-                  <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
-                    {secundarias.map(t=>(
-                      <button key={t.key} onClick={()=>{setTab(t.key);setFiltroCompras(null);setOcFoco(null);setVolverA(null);setMenuMas(false);}} style={{background:tab===t.key?C.tealLight:C.paper,border:"none",borderRadius:12,padding:"12px 6px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:5}}>
-                        <span style={{fontSize:20}}>{t.icon}</span>
-                        <span style={{fontSize:12,fontWeight:700,color:tab===t.key?C.tealDark:C.inkMuted}}>{t.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-            <div data-noprint style={{position:"fixed",bottom:0,left:0,right:0,background:"rgba(255,255,255,0.96)",backdropFilter:"blur(12px)",borderTop:`1px solid ${C.border}`,display:"flex",padding:"6px 4px calc(6px + env(safe-area-inset-bottom))",boxShadow:"0 -4px 20px rgba(15,23,42,0.06)",zIndex:42}}>
-              {principales.map(t=>{
-                const activo=tab===t.key;
-                return (
-                  <button key={t.key} onClick={()=>{setTab(t.key);setFiltroCompras(null);setOcFoco(null);setVolverA(null);setMenuMas(false);}} style={{flex:1,background:"none",border:"none",padding:"6px 1px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
-                    <span style={{fontSize:17,position:"relative",display:"flex",alignItems:"center",justifyContent:"center",width:44,height:28,borderRadius:14,background:activo?C.tealLight:"transparent",transition:"all 0.18s"}}>
-                      {t.icon}
-                      {t.key==="notif"&&<NotifBadge notificaciones={notificaciones} urgentes={alertasUrgentes} />}
-                    </span>
-                    <span style={{fontSize:12,fontWeight:activo?800:600,color:activo?C.tealDark:C.inkMuted}}>{t.label}</span>
-                  </button>
-                );
-              })}
-              {secundarias.length>0&&(
-                <button onClick={()=>setMenuMas(v=>!v)} style={{flex:1,background:"none",border:"none",padding:"6px 1px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
-                  <span style={{fontSize:17,display:"flex",alignItems:"center",justifyContent:"center",width:44,height:28,borderRadius:14,background:enMas||menuMas?C.tealLight:"transparent",transition:"all 0.18s"}}><Ic n="☰"/></span>
-                  <span style={{fontSize:12,fontWeight:enMas||menuMas?800:600,color:enMas||menuMas?C.tealDark:C.inkMuted}}>Más</span>
-                </button>
-              )}
-            </div>
-          </>
-        );
-      })()}
-
+  // Contenido + ventanas, igual en celular y escritorio
+  const ventanas=(
+    <>
       {/* MODAL NUEVA OC */}
       {accion==="compra_oc"&&(
         <Modal title="Nueva OC" onClose={()=>{setAccion(null);setCodigoOcRapida("");}}>
@@ -1546,6 +1507,78 @@ export default function App() {
       {accion==="compra_manual"&&<Modal title="Nueva OC — manual" onClose={()=>setAccion(null)}><FormIngresarCompra perfil={perfil} ocs={ocs} financiadores={financiadores} vendedores={vendedores} entidadesCatalogo={entidadesCatalogo} onSave={handleIngresarCompra} /></Modal>}
 
       <Toast toast={toast} />
+    </>
+  );
+
+  if(esEscritorio){
+    return (
+      <div style={{minHeight:"100vh",background:C.paper,fontFamily:SANS,display:"flex",alignItems:"flex-start"}}>
+        <BarraLateral visibles={visibles} tab={tab} onIr={irA} nAlertas={nAlertas} perfil={perfil} onNuevaOC={nuevaOC} onImprimir={imprimirTodo} onSalir={salir} />
+        <div style={{flex:1,minWidth:0}}>
+          <header data-noprint style={{position:"sticky",top:0,zIndex:20,background:"rgba(247,248,250,0.94)",backdropFilter:"blur(10px)",borderBottom:`1px solid ${C.border}`}}>
+            <div style={{maxWidth:ANCHO_CONTENIDO,margin:"0 auto",padding:"18px 28px 14px",boxSizing:"border-box"}}>
+              <h1 style={{margin:0,fontSize:22,fontWeight:800,color:C.ink,letterSpacing:-0.4,lineHeight:1.2}}>{tituloPantalla}</h1>
+              <div style={{fontSize:13,color:C.inkMuted,marginTop:3}}>{subtituloPantalla}</div>
+            </div>
+          </header>
+          {todo&&(
+            <div data-noprint style={{position:"sticky",top:0,zIndex:30,background:C.tealLight,borderBottom:`2px solid ${C.teal}`,padding:"12px 16px",display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+              <div style={{flex:1,minWidth:180,fontSize:13,color:C.ink,fontWeight:700,lineHeight:1.35}}>
+                {pdfEstado?.fase==="generando"?pdfEstado.txt:pdfEstado?.fase==="listo"?"PDF listo con todas las pantallas.":pdfEstado?.fase==="error"?pdfEstado.txt:"Preparando todas las pantallas…"}
+                {pdfEstado?.fase==="listo"&&<span style={{display:"block",fontWeight:500,color:C.inkMuted,fontSize:12}}>Toca "Guardar PDF" y elige "Guardar en Archivos".</span>}
+              </div>
+              {pdfEstado?.fase==="listo"&&<button onClick={compartirPdf} style={{background:C.tealDark,color:"#fff",border:"none",borderRadius:10,padding:"10px 14px",fontSize:13,fontWeight:700,cursor:"pointer"}}>Guardar PDF</button>}
+              {pdfEstado?.fase==="listo"&&<a href={pdfEstado.url} target="_blank" rel="noreferrer" style={{color:C.tealDark,fontSize:13,fontWeight:700,padding:"10px 6px"}}>Abrir</a>}
+              {pdfEstado?.fase==="error"&&<button onClick={generarPdfTodo} style={{background:C.tealDark,color:"#fff",border:"none",borderRadius:10,padding:"10px 14px",fontSize:13,fontWeight:700,cursor:"pointer"}}>Reintentar</button>}
+              <button onClick={cerrarVistaTodo} style={{background:"transparent",color:C.inkMuted,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 14px",fontSize:13,fontWeight:600,cursor:"pointer"}}>Volver</button>
+            </div>
+          )}
+          <main id="contenido" className={todo?"bfk-modo-todo":undefined} style={{maxWidth:ANCHO_CONTENIDO,margin:"0 auto",padding:"20px 28px 56px",boxSizing:"border-box"}}>
+            {contenidoPantallas}
+          </main>
+        </div>
+        {ventanas}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{minHeight:"100vh",background:C.paper,fontFamily:SANS,paddingBottom:"calc(104px + env(safe-area-inset-bottom))"}}>
+      {/* ENCABEZADO (celular): título de la pantalla y + Nueva OC. Imprimir y Cerrar sesión están en "Más". */}
+      <header data-noprint style={{background:`linear-gradient(135deg,${C.night} 0%,#16213E 100%)`,padding:"calc(14px + env(safe-area-inset-top)) 16px 12px",color:"#fff",boxShadow:"0 2px 12px rgba(11,17,32,0.25)",position:"sticky",top:0,zIndex:30}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0,flex:1}}>
+            <div style={{width:38,height:38,background:"rgba(20,184,166,0.15)",border:`1.5px solid ${C.teal}`,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:MONO,color:C.teal,fontWeight:800,fontSize:13,flexShrink:0}}>BFK</div>
+            <div style={{minWidth:0}}>
+              <h1 style={{margin:0,fontWeight:800,fontSize:15,letterSpacing:-0.3,lineHeight:1.3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{tituloPantalla}</h1>
+              <div style={{fontSize:12,color:"#8B9AB5",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{subtituloPantalla}</div>
+            </div>
+          </div>
+          <button onClick={nuevaOC} style={{background:C.teal,border:"none",color:"#fff",borderRadius:10,padding:"9px 14px",fontSize:12.5,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0,boxShadow:"0 3px 10px rgba(20,184,166,0.35)"}}>+ Nueva OC</button>
+        </div>
+      </header>
+
+      {todo&&(
+        <div data-noprint style={{position:"sticky",top:0,zIndex:30,background:C.tealLight,borderBottom:`2px solid ${C.teal}`,padding:"12px 16px",display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+          <div style={{flex:1,minWidth:180,fontSize:13,color:C.ink,fontWeight:700,lineHeight:1.35}}>
+            {pdfEstado?.fase==="generando"?pdfEstado.txt:pdfEstado?.fase==="listo"?"PDF listo con todas las pantallas.":pdfEstado?.fase==="error"?pdfEstado.txt:"Preparando todas las pantallas…"}
+            {pdfEstado?.fase==="listo"&&<span style={{display:"block",fontWeight:500,color:C.inkMuted,fontSize:12}}>Toca "Guardar PDF" y elige "Guardar en Archivos".</span>}
+          </div>
+          {pdfEstado?.fase==="listo"&&<button onClick={compartirPdf} style={{background:C.tealDark,color:"#fff",border:"none",borderRadius:10,padding:"10px 14px",fontSize:13,fontWeight:700,cursor:"pointer"}}>Guardar PDF</button>}
+          {pdfEstado?.fase==="listo"&&<a href={pdfEstado.url} target="_blank" rel="noreferrer" style={{color:C.tealDark,fontSize:13,fontWeight:700,padding:"10px 6px"}}>Abrir</a>}
+          {pdfEstado?.fase==="error"&&<button onClick={generarPdfTodo} style={{background:C.tealDark,color:"#fff",border:"none",borderRadius:10,padding:"10px 14px",fontSize:13,fontWeight:700,cursor:"pointer"}}>Reintentar</button>}
+          <button onClick={cerrarVistaTodo} style={{background:"transparent",color:C.inkMuted,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 14px",fontSize:13,fontWeight:600,cursor:"pointer"}}>Volver</button>
+        </div>
+      )}
+      <main id="contenido" className={todo?"bfk-modo-todo":undefined} style={{padding:16,maxWidth:760,margin:"0 auto"}}>
+        {contenidoPantallas}
+      </main>
+
+      {/* NAVEGACIÓN (celular): 4 principales + Más */}
+      <MenuMas abierto={menuMas} onCerrar={()=>setMenuMas(false)} visibles={visibles} tab={tab} onIr={irA} perfil={perfil} onImprimir={imprimirTodo} onSalir={salir} />
+      <BarraInferior visibles={visibles} tab={tab} onIr={irA} menuAbierto={menuMas} onAlternarMenu={()=>setMenuMas(v=>!v)} nAlertas={nAlertas} />
+
+      {ventanas}
     </div>
   );
 }
