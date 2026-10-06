@@ -4,7 +4,7 @@ import { sel } from "../../lib/supabase";
 import { C, MONO, btnP, fmt, iMono } from "../../lib/theme";
 import { Ic } from "../ui/Iconos";
 import { facturaVigente, plazoPago } from "../../lib/calculos";
-import { entregaAtrasada, estaEntregada, facturaPorCobrar, facturaVencida } from "../../lib/ocs";
+import { entregaAtrasada, esVenta, estadoOperativo, estaEntregada, facturaPorCobrar, facturaVencida } from "../../lib/ocs";
 
 // Resumen compacto de atrasos: una sola tarjeta con acceso a Alertas. No lista OC individuales.
 function ResumenAtraso({ titulo, monto, color, fondo, onVerAlertas }) {
@@ -43,7 +43,8 @@ export function PanelCalendario({ ocs, onMarcarFecha, onVerAlertas }) {
       if(evF?.fecha){
         const k=sumarDias(evF.fecha,plazoPago(oc));
         (vp[k]=vp[k]||[]).push({oc,evF});
-        if(k<hoyIso) fv.push({oc,evF,k});
+        // Fase 4C: "vencida" con el mismo criterio que Panel, Alertas y la lista (lib/ocs.js, facturaVencida).
+        if(facturaVencida(oc)) fv.push({oc,evF,k});
       }
       const ultimo=(oc.oc_reclamos||[]).slice().sort((a,b)=>(b.fecha||"").localeCompare(a.fecha||""))[0];
       if(ultimo?.fecha_prometida){
@@ -59,6 +60,7 @@ export function PanelCalendario({ ocs, onMarcarFecha, onVerAlertas }) {
     const est={},rea={},ven=[];
     const hoyIso=iso(hoy.getFullYear(),hoy.getMonth(),hoy.getDate());
     for(const oc of ocs){
+      if(!esVenta(oc)) continue;   // Fase 4C: aportes y ventas externas no tienen entregas (igual que Alertas)
       const fEst=(oc.eventos_compra||[])[0]?.fecha_entrega_estimada;
       const fReal=(oc.eventos_entrega||[])[0]?.fecha;
       if(fEst){
@@ -200,7 +202,7 @@ export function PanelCalendario({ ocs, onMarcarFecha, onVerAlertas }) {
                 return (
                   <div key={oc.id} style={{fontSize:12,display:"flex",justifyContent:"space-between",marginBottom:3}}>
                     <span style={{fontFamily:MONO,fontWeight:700}}>{oc.numero_oc}</span>
-                    <span style={{color:entregada?C.ok:C.warn,fontSize:12,fontWeight:600}}>{entregada?"✓ Entregada":"Pendiente"}</span>
+                    <span data-estado-agenda style={{color:entregada?C.ok:C.warn,fontSize:12,fontWeight:600}}>{entregada?"✓ Entregada":estadoOperativo(oc).texto}</span>
                   </div>
                 );
               })}

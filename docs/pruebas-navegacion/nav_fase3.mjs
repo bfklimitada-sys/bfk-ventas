@@ -111,7 +111,8 @@ for(const [modo,ancho,alto,movil] of [["movil",390,844,true],["escritorio",1440,
     if(!esc){ await p.locator('[data-nav="mas"]').click(); await espera(p,250); }
     await p.locator('[data-nav="salir"]').click(); await espera(p,900);
     ok(`${tag}_cerrar_sesion`, (await p.locator('input[type="password"]').count())>0);
-    ok(`${tag}_sin_escrituras`, escr.filter(e=>!/oc_bloqueos/.test(e)).length===0); if(escr.length) console.log("ESCRITURAS",tag,escr);
+    // Fase 4C: la revisión automática de Mercado Público escribe solo en tablas técnicas de caché (mp_cache_avisos, mp_uso_diario).
+    ok(`${tag}_sin_escrituras`, escr.filter(e=>!/oc_bloqueos|mp_cache_avisos|mp_uso_diario/.test(e)).length===0); if(escr.length) console.log("ESCRITURAS",tag,escr);
     ok(`${tag}_sin_errores`, errs.length===0); if(errs.length) console.log("ERRORES",tag,errs.slice(0,3));
     await p.context().close();
   }

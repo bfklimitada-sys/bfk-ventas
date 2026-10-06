@@ -303,17 +303,12 @@ export function EtapasOC({ oc, perfil, perfiles, activa, extra, onEditarEvento, 
           </button>
         ))}
         {extra&&extra[etapa.key]}
-        {/* Responsable de la etapa */}
-        <div style={{marginTop:10,paddingTop:8,borderTop:`1px solid ${C.border}`}}>
-          <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:5}}>Responsable</div>
-          <select
-            value={(oc.oc_responsables||[]).find(r=>r.etapa===etapa.key)?.usuario_id||""}
-            onChange={e=>onAsignarResponsable&&onAsignarResponsable(oc.id,etapa.key,e.target.value)}
-            style={{width:"100%",padding:"7px 10px",borderRadius:8,border:`1px solid ${C.border}`,fontSize:12.5,fontFamily:SANS,background:C.card,color:C.ink}}>
-            <option value="">Sin asignar</option>
-            {(perfiles||[]).map(p=><option key={p.id} value={p.id}>{p.nombre}</option>)}
-          </select>
-        </div>
+        {/* Fase 4C: "Responsable" no se usa en la operación diaria: se oculta. Si una etapa ya tiene uno asignado,
+            se muestra solo como dato (no se borra nada). */}
+        {(()=>{ const r=(oc.oc_responsables||[]).find(x=>x.etapa===etapa.key); return r?(
+          <div data-responsable style={{marginTop:10,paddingTop:8,borderTop:`1px solid ${C.border}`,fontSize:12,color:C.inkMuted}}>
+            Responsable: <b style={{color:C.ink}}>{r.usuario_nombre||(perfiles||[]).find(p=>p.id===r.usuario_id)?.nombre||"—"}</b>
+          </div>):null; })()}
       </div>
     );
   };

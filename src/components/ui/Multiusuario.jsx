@@ -1,4 +1,4 @@
-import { diasAtrasoEntrega, esVenta, estaCerrada, estaCobrada, estaComprada, estaEntregada, estaFacturada, facturaPorCobrar, fechaEntregaEstimada, financiamientoPagado, tieneVendedor, valeVistasPendientes, vencimientoFactura } from "../../lib/ocs";
+import { diasAtrasoEntrega, esVenta, ocCanceladaEnMP, estaCerrada, estaCobrada, estaComprada, estaEntregada, estaFacturada, facturaPorCobrar, fechaEntregaEstimada, financiamientoPagado, tieneVendedor, valeVistasPendientes, vencimientoFactura } from "../../lib/ocs";
 import { useState, useEffect } from "react";
 import { del } from "../../lib/supabase";
 import { C, MONO, SANS, fmt } from "../../lib/theme";
@@ -137,6 +137,14 @@ export function calcularAlertas(ocs) {
           detalle:`Quedan ${plazo - dias} día${plazo - dias === 1 ? "" : "s"}`,
           monto:saldo, tab:"compras", filtro:"cobro", orden:3 });
       }
+    }
+
+    // 0. Mercado Público la informa cancelada (última consulta) y no está cobrada (Fase 4C, mismo criterio que el Panel).
+    if (ocCanceladaEnMP(oc)) {
+      alertas.push({ ocId:oc.id, nivel:"alto", icono:<Ic n="🔴"/>, oc:oc.numero_oc, cliente:oc.cliente,
+        titulo:"Cancelada en Mercado Público",
+        detalle:"Revisar antes de comprar, entregar o facturar (se puede archivar desde la OC)",
+        monto:oc.monto_total, tab:"compras", filtro:"mp_cancelada", orden:0 });
     }
 
     // 1.5 Vale vista o cheque que el cliente ya entregó, pero que

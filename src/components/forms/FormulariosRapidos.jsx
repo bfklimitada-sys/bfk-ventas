@@ -125,6 +125,12 @@ export function FormPagoCliente({ ocs, onSave, ocPreseleccionada }) {
       {selected&&!sinFactura&&<div style={{background:C.paper,borderRadius:8,padding:"8px 12px",fontSize:12,color:C.inkMuted,marginBottom:12}}>Facturado: <b style={{color:C.ink}}>{fmt.money(selected.monto_facturado)}</b> · Cobrado: <b style={{color:C.okText}}>{fmt.money(selected.monto_cobrado)}</b> · Saldo: <b style={{color:C.dangerText}}>{fmt.money(saldo)}</b></div>}
       <Field label="Fecha de pago" required><input style={iStyle} type="date" value={fecha} onChange={e=>setFecha(e.target.value)} /></Field>
       <Field label="Monto pagado ($)" required><input style={iMono} type="number" value={monto} onChange={e=>setMonto(e.target.value)} /></Field>
+      {/* Fase 4C: abono parcial explícito (la base recalcula el cobrado y deja la OC en "parcial") */}
+      {selected&&!sinFactura&&Number(monto)>0&&Number(monto)<saldo&&(
+        <div data-aviso-abono-parcial style={{background:C.infoLight,borderRadius:8,padding:"8px 12px",fontSize:12,color:C.info,fontWeight:600,marginTop:-6,marginBottom:12}}>
+          Abono parcial: quedará {fmt.money(saldo-Number(monto))} por cobrar de esta factura.
+        </div>
+      )}
       <Field label="Medio de pago" hint="Algunas entidades transfieren directo, otras generan vale vista o cheque que hay que ir a cobrar">
         <select style={selStyle} value={medioPago} onChange={e=>{
             const val=e.target.value; setMedioPago(val);

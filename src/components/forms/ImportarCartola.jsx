@@ -1,8 +1,9 @@
-import { anioMesDe, facturaVigente } from "../../lib/calculos";
+import { anioMesDe } from "../../lib/calculos";
 import { useState } from "react";
 import * as XLSX from "xlsx";
 import { C, MONO, SANS, btnP, btnG, fmt } from "../../lib/theme";
 import { Ic, I } from "../ui/Iconos";
+import { calzarAbonos, validarSeleccion } from "../../lib/cobranza";
 
 const aNumero = (v) => {
   if (v === null || v === undefined) return 0;
@@ -10,7 +11,6 @@ const aNumero = (v) => {
   const n = Number(s);
   return Number.isFinite(n) ? n : 0;
 };
-const soloDigitos = (s) => String(s || "").replace(/[^0-9kK]/g, "").toUpperCase();
 
 // ── Lectura de cartolas de BancoEstado ──────────────────────
 // Vienen en dos formatos:
@@ -68,34 +68,6 @@ export function leerCartola(workbook) {
     });
   }
   return movimientos;
-}
-
-// ── Puntaje de coincidencia entre un abono y una factura ────
-// El monto siempre debe calzar. El RUT y el nombre desempatan.
-function puntuar(abono, oc) {
-  let puntos = 0;
-  const desc = abono.descripcion.toUpperCase();
-
-  const rutOC = soloDigitos(oc.rut_cliente);
-  if (rutOC.length > 6) {
-    const rutsEnDesc = (desc.match(/\d{7,9}\s*-?\s*[0-9K]/g) || []).map(soloDigitos);
-    if (rutsEnDesc.some(r => r === rutOC)) puntos += 100;
-  }
-
-  // Palabras distintivas del cliente que aparezcan en la descripción
-  const ignorar = new Set(["ILUSTRE", "MUNICIPALIDAD", "MUNIC", "DE", "DEL", "LA", "EL", "SERVICIO", "SALUD", "DEPARTAMENTO"]);
-  const palabras = String(oc.cliente || "").toUpperCase().split(/[^A-ZÁÉÍÓÚÑ]+/)
-    .filter(p => p.length >= 5 && !ignorar.has(p));
-  if (palabras.some(p => desc.includes(p))) puntos += 40;
-
-  // Cercanía con la fecha de la factura: lo normal es cobrar después de emitir
-  const evF = facturaVigente(oc);
-  if (evF?.fecha) {
-    const dias = (new Date(abono.fecha) - new Date(String(evF.fecha).slice(0, 10))) / 86400000;
-    if (dias >= 0 && dias <= 90) puntos += 10;
-    if (dias < 0) puntos -= 50;   // un cobro anterior a la factura es improbable
-  }
-  return puntos;
 }
 
 // ── Clasificación de un cargo (plata que sale) ──────────────
@@ -220,53 +192,31 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, re
     } finally { setLeyendo(false); }
   };
 
+  // Fase 4C: un abono puede pagar una factura exacta, varias del mismo RUT, ser un abono parcial
+  // o el depósito de un vale vista ya registrado (lib/cobranza.js). Solo se marca lo inequívoco.
   const calzar = (movimientos) => {
-    const pendientes = ocs
-      .filter(o => (o.tipo_registro || "venta") === "venta"
-        && o.estado_factura_propia === "emitida"
-        && o.estado_pago_cliente !== "pagado")
-      .map(o => ({ oc: o, saldo: (Number(o.monto_facturado) || 0) - (Number(o.monto_cobrado) || 0) }))
-      .filter(x => x.saldo > 0);
-
-    const resultado = [];
-    const yaPropuestas = new Set();
-
-    for (const mov of movimientos.filter(m => m.abono > 0)) {
-      const candidatos = pendientes
-        .filter(p => p.saldo === mov.abono && !yaPropuestas.has(p.oc.id))
-        .map(p => ({ ...p, puntos: puntuar(mov, p.oc) }))
-        .sort((a, b) => b.puntos - a.puntos);
-
-      if (!candidatos.length) continue;
-      if (yaRegistrado(mov, registrados)) continue;   // ese cobro ya está en la base
-
-      const mejor = candidatos[0];
-      const segundo = candidatos[1];
-      // Es claro si hay un solo candidato, o si el primero saca ventaja
-      const claro = candidatos.length === 1 || (mejor.puntos - (segundo?.puntos ?? 0)) >= 40;
-
-      if (claro) yaPropuestas.add(mejor.oc.id);
-      resultado.push({ mov, candidatos, sugerido: claro ? mejor.oc.id : "", claro });
-    }
-
+    const resultado = calzarAbonos(movimientos, ocs, registrados);
     setItems(resultado);
-    setElegido(Object.fromEntries(resultado.map((r, i) => [i, r.sugerido])));
+    setElegido(Object.fromEntries(resultado.map((r, i) => [i, r.sugerida])));
   };
 
+  const opcionDe = (i) => items[i]?.opciones.find((o) => o.id === elegido[i]) || null;
+
   const registrar = async () => {
-    const cobros = items
-      .map((it, i) => ({ it, ocId: elegido[i] }))
-      .filter(x => x.ocId)
-      .map(({ it, ocId }) => {
-        const c = it.candidatos.find(c => c.oc.id === ocId);
-        return { ocId, numeroOc: c.oc.numero_oc, monto: c.saldo,
-                 fecha: it.mov.fecha, descripcion: it.mov.descripcion };
-      });
-    if (!cobros.length) { setErr("No hay ningún cobro seleccionado"); return; }
-    const ids = cobros.map(c => c.ocId);
-    if (new Set(ids).size !== ids.length) { setErr("Hay una OC asignada a dos abonos distintos"); return; }
+    const cobros = [], valeVistas = [];
+    items.forEach((it, i) => {
+      const op = opcionDe(i);
+      if (!op) return;
+      if (op.valeVista) valeVistas.push({ ...op.valeVista, fecha: it.mov.fecha, monto: it.mov.abono, descripcion: it.mov.descripcion });
+      for (const a of op.asignaciones)
+        cobros.push({ ocId: a.ocId, numeroOc: a.numeroOc, monto: a.monto, parcial: a.parcial, tipo: op.tipo,
+                      fecha: it.mov.fecha, descripcion: it.mov.descripcion });
+    });
+    if (!cobros.length && !valeVistas.length) { setErr("No hay ningún cobro seleccionado"); return; }
+    const problema = validarSeleccion(items, elegido);
+    if (problema) { setErr(problema); return; }
     setErr(""); setGuardando(true);
-    try { await onRegistrar(cobros, resumenCartola()); }
+    try { await onRegistrar(cobros, resumenCartola(), valeVistas); }
     catch (e) { setErr(e.message); setGuardando(false); }
   };
 
@@ -320,8 +270,8 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, re
 
   const nSel = Object.values(elegido).filter(Boolean).length;
   const totalSel = items.reduce((s, it, i) => {
-    const c = it.candidatos.find(c => c.oc.id === elegido[i]);
-    return s + (c ? c.saldo : 0);
+    const op = it.opciones.find((o) => o.id === elegido[i]);
+    return s + (op ? it.mov.abono : 0);
   }, 0);
 
   if (!movs.length) {
@@ -341,8 +291,9 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, re
         </label>
         {err && <div style={{ background: C.dangerLight, color:C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 12.5, marginTop: 12, fontWeight: 600 }}>{err}</div>}
         <div style={{ fontSize: 12, color: C.inkFaint, marginTop: 14, lineHeight: 1.5 }}>
-          Los abonos se cruzan por monto, y el RUT o el nombre del pagador
-          desempatan cuando hay varias facturas del mismo valor.
+          Los abonos se cruzan por monto. Con el RUT del pagador también se reconocen
+          pagos de varias facturas juntas y abonos parciales; los depósitos de vale vista
+          ya registrados se marcan como cobrados en el banco.
         </div>
       </div>
     );
@@ -378,7 +329,7 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, re
       {vista === "cobros" && (<>
       {items.length === 0 ? (
         <div style={{ textAlign: "center", padding: "24px 0", color: C.inkFaint, fontSize: 13 }}>
-          Ningún abono calza con una factura pendiente
+          Ningún abono calza con una factura pendiente ni con un vale vista por cobrar
         </div>
       ) : (
         <>
@@ -401,20 +352,33 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, re
 
                 {!it.claro && (
                   <div style={{ fontSize: 12, color:C.warnText, fontWeight: 700, margin: "5px 0 3px" }}>
-                    <Ic n="⚠"/> {it.candidatos.length} facturas de ese monto — elige cuál corresponde
+                    <Ic n="⚠"/> {it.opciones.length > 1 ? `${it.opciones.length} posibilidades — elige cuál corresponde` : "Revisa antes de registrar"}
                   </div>
                 )}
 
-                <select value={sel || ""} onChange={e => setElegido(m => ({ ...m, [i]: e.target.value }))}
+                <select data-abono={i} value={sel || ""} onChange={e => setElegido(m => ({ ...m, [i]: e.target.value }))}
                   style={{ width: "100%", marginTop: 6, padding: "7px 9px", borderRadius: 8, fontSize: 12,
                     border: `1px solid ${C.border}`, background: C.card, color: C.ink, fontFamily: SANS }}>
                   <option value="">— No registrar este abono —</option>
-                  {it.candidatos.map(c => (
-                    <option key={c.oc.id} value={c.oc.id}>
-                      {c.oc.numero_oc}{c.oc.cliente ? ` · ${String(c.oc.cliente).slice(0, 28)}` : ""}
+                  {it.opciones.map(o => (
+                    <option key={o.id} value={o.id}>
+                      {({ exacto: "Factura", varias: "Varias facturas", parcial: "Abono parcial", vale_vista: "Vale vista" })[o.tipo]} · {o.etiqueta}
                     </option>
                   ))}
                 </select>
+                {(() => {
+                  const op = it.opciones.find(o => o.id === sel);
+                  if (!op || op.tipo === "exacto") return null;
+                  return (
+                    <div data-detalle-abono={op.tipo} style={{ fontSize: 12, color: C.inkMuted, marginTop: 6, lineHeight: 1.5 }}>
+                      {op.tipo === "vale_vista"
+                        ? <>Se marcará como cobrado en el banco (no se registra un cobro nuevo: ya estaba registrado).</>
+                        : op.asignaciones.map(a => (
+                            <div key={a.ocId}>{a.numeroOc}: <b style={{ color: C.ink }}>{fmt.money(a.monto)}</b>{a.parcial ? <> de {fmt.money(a.saldoAntes)} · queda {fmt.money(a.saldoAntes - a.monto)}</> : " (completa)"}</div>
+                          ))}
+                    </div>
+                  );
+                })()}
               </div>
             );
           })}

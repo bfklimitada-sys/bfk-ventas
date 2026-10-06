@@ -70,6 +70,8 @@ export function crearBase(inicial, { mp = {}, borrado = {} } = {}) {
       if (["select", "order", "limit", "offset"].includes(k)) continue;
       if (v.startsWith("eq.")) { const x = decodeURIComponent(v.slice(3)); r = r.filter((f) => String(f[k]) === x); }
       else if (v === "is.null") r = r.filter((f) => f[k] === null || f[k] === undefined);
+      else if (v.startsWith("like.")) { const re = new RegExp("^" + decodeURIComponent(v.slice(5)).replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*") + "$"); r = r.filter((f) => re.test(String(f[k]))); }
+      else if (v.startsWith("in.(")) { const xs = decodeURIComponent(v.slice(4, -1)).split(","); r = r.filter((f) => xs.includes(String(f[k]))); }
     }
     return r;
   };

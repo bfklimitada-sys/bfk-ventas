@@ -23,8 +23,8 @@ export const facturaAnulada = (oc, f) => !facturasVigentes(oc).some((v) => v.id 
 // La vigente más reciente por fecha (para el plazo de cobro). Si hubo
 // reemisión, la anulada nunca es la que hay que cobrar.
 export const facturaVigente = (oc) => {
-  const vig = facturasVigentes(oc);
-  return (vig.length ? vig : (oc?.eventos_factura || [])).slice().sort((a, b) => new Date(b.fecha) - new Date(a.fecha))[0];
+  // Fase 4C: solo entre las vigentes (si todas están anuladas no hay factura que cobrar ni comisionar).
+  return facturasVigentes(oc).slice().sort((a, b) => String(b.fecha || "").localeCompare(String(a.fecha || "")) || String(b.numero_factura || "").localeCompare(String(a.numero_factura || ""), "es", { numeric: true }))[0] || null;
 };
 
 // Año y mes leídos del texto "YYYY-MM-DD" (sin Date) para evitar el
@@ -82,12 +82,18 @@ export const calcMargen = (venta, costo) => {
 export const mesesConFactura = (vendedorId, ocs) => {
   const set = new Set();
   ocs.filter((o) => o.vendedor_id === vendedorId && o.estado_factura_propia === "emitida").forEach((o) => {
-    facturasVigentes(o).forEach((ef) => {
-      const { anio, mes } = anioMesDe(ef.fecha);
-      set.add(`${anio}-${String(mes).padStart(2, "0")}`);
-    });
+    const p = periodoComision(o);
+    if (p) set.add(`${p.anio}-${String(p.mes).padStart(2, "0")}`);
   });
   return Array.from(set).sort((a, b) => b.localeCompare(a)).map((ym) => ({ anio: Number(ym.slice(0, 4)), mes: Number(ym.slice(5, 7)) }));
+};
+
+// Período de la comisión de una OC (Fase 4C): el mes de su factura VIGENTE (la más reciente
+// entre las vigentes). Una OC entra en un solo mes: una factura anulada o un registro duplicado
+// nunca la hace contar en otro mes.
+export const periodoComision = (oc) => {
+  const f = facturaVigente(oc);
+  return f?.fecha ? anioMesDe(f.fecha) : null;
 };
 
 // ── IVA del período (regla única) ─────────────────────────────
@@ -114,23 +120,28 @@ export const ivaAPagarPeriodo = (registro) => Math.max(0, ivaNetoPeriodo(registr
 // Devuelve null si el vendedor no tiene facturas ese mes.
 export const calcularPagoVendedor = ({ vendedorId, ocs, anio, mes, ivaMensual = [], pagosVendedor = [] }) => {
   let sumaFacts = 0, sumaUtilidad = 0, pagoVentasPropias = 0, hayFacturas = false;
+  const detalle = [];   // las OCs que forman el cálculo del mes (Fase 4C)
   ocs.filter((o) => o.vendedor_id === vendedorId && o.estado_factura_propia === "emitida").forEach((o) => {
-    // Regla 4: solo facturas vigentes; una anulada no vuelve a generar comisión.
-    const factsMes = facturasVigentes(o).filter((ef) => {
-      const p = anioMesDe(ef.fecha);
-      return p.anio === anio && p.mes === mes;
-    });
-    if (!factsMes.length) return;
+    // Regla 4: solo la factura vigente define el mes; una anulada no vuelve a generar comisión.
+    const p = periodoComision(o);
+    if (!p || p.anio !== anio || p.mes !== mes) return;
     hayFacturas = true;
-    const montoFacts = factsMes.reduce((ss, ef) => ss + (ef.monto || 0), 0);
+    const vigentes = facturasVigentes(o);
+    const montoFacts = vigentes.reduce((ss, ef) => ss + (Number(ef.monto) || 0), 0);
     const utilOC = (Number(o.monto_total) || 0) - (Number(o.costo_total) || 0);
+    const fv = facturaVigente(o);
+    const linea = { ocId: o.id, numero_oc: o.numero_oc, cliente: o.cliente || o.entidad || "", factura: vigentes.map((f) => f.numero_factura).join(", "),
+      fechaFactura: fv?.fecha || null, montoFacturas: montoFacts, venta: Number(o.monto_total) || 0, costo: Number(o.costo_total) || 0,
+      utilidad: utilOC, ventaPropia: !!o.es_venta_propia, pagoVentaPropia: 0 };
     if (o.es_venta_propia) {
       const ivaFactura = montoFacts - montoFacts / 1.19;
-      pagoVentasPropias += Math.max(0, Math.round(utilOC - ivaFactura));
+      linea.pagoVentaPropia = Math.max(0, Math.round(utilOC - ivaFactura));
+      pagoVentasPropias += linea.pagoVentaPropia;
     } else {
       sumaFacts += montoFacts;
       sumaUtilidad += utilOC;
     }
+    detalle.push(linea);
   });
   if (!hayFacturas) return null;
   const sinIva = anio === 2025 && mes === 4;
@@ -147,5 +158,6 @@ export const calcularPagoVendedor = ({ vendedorId, ocs, anio, mes, ivaMensual = 
     estado: pagado >= pagoCalculado ? "pagado" : "pendiente", esVerificado, impIva, sinIva, ivaRegistrado: !!ivaMes,
     ivaVentas: ivaMes ? Number(ivaMes.iva_ventas) || 0 : 0, ivaCompras: ivaMes ? Number(ivaMes.iva_compras) || 0 : 0,
     deuda: Math.max(0, pagoCalculado - pagado),
+    detalle: detalle.sort((a, b) => String(a.fechaFactura || "").localeCompare(String(b.fechaFactura || "")) || String(a.numero_oc).localeCompare(String(b.numero_oc))),
   };
 };

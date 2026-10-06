@@ -26,6 +26,7 @@ import { PanelNotificaciones, calcularAlertas } from "./components/ui/Multiusuar
 import { SESSION_KEY, SUPABASE_URL, crearNotificacion, del, delConfirmado, genId, getPerfil, hdrs, ins, registrarCambio, sel, selOCs, selPerfiles, storageGet, storageSet, supaRefresh, supaSignOut, upd, updRol } from "./lib/supabase";
 import { buscarOCPorCodigo, esCodigoMP, esErrorDuplicado, estadoMP, fechaOCEditable, mensajeDuplicado, normalizarCodigoOC, resultadoConsultaMP } from "./lib/ocs";
 import { cambiosProducto } from "./lib/productosOC";
+import { CLAVE_REVISION_AUTO, LIMITE_USO_DIARIO, PREFIJO_FOTO_MP, cambiosOCDesdeMP, claveFotoMP, elegirRevisionAutomatica, fotoMP, lineaVentaDesdeMP, mpCancelada, planProductosVenta, toca } from "./lib/mercadoPublico";
 import { alimentarCatalogoDesdeOC } from "./lib/entidadesOC";
 import { rpcArchivarOC, rpcRestaurarOC } from "./lib/supabase";
 import { C, MONO, SANS, fmt } from "./lib/theme";
@@ -48,6 +49,7 @@ export default function App() {
   const [tab,setTab]=useState(()=>pantallaDesdeHash(typeof window!=="undefined"?window.location.hash:"")||PANTALLA_INICIAL); const [filtroCompras,setFiltroCompras]=useState(null); const [ocFoco,setOcFoco]=useState(null); const [filtroAlertas,setFiltroAlertas]=useState({nivel:"todas",etapa:null}); const [volverA,setVolverA]=useState(null);
   // OCs ya consultadas a la API en esta sesión (para no reintentar en bucle)
   const intentadas=useRef(new Set());
+  const revisionAutoHecha=useRef(false);
   const [accion,setAccion]=useState(null); const [abonoFinId,setAbonoFinId]=useState(null); const [busquedaCompras,setBusquedaCompras]=useState(null);
   const [menuMas,setMenuMas]=useState(false);
   const [toast,setToast]=useState(null);
@@ -242,7 +244,7 @@ export default function App() {
 
   const cargarCacheMP=async()=>{
     try{
-      const filas=await sel("mp_cache_avisos",session.access_token).catch(()=>[]);
+      const filas=await sel("mp_cache_avisos",session.access_token,"&id=in.(porAceptar,aceptadas,canceladas)").catch(()=>[]);
       const porId={}; for(const f of (filas||[])) porId[f.id]=f;
       if(porId.porAceptar){ setPorAceptar(porId.porAceptar.datos||[]); setActMP(a=>({...a,porAceptar:porId.porAceptar.actualizado_en})); }
       if(porId.aceptadas){ setAceptadasSinCargar(porId.aceptadas.datos||[]); setActMP(a=>({...a,aceptadas:porId.aceptadas.actualizado_en})); }
@@ -270,7 +272,7 @@ export default function App() {
     if(!session) return;
     const t=session.access_token;
     try {
-      const [ocsD,finD,vendD,catD,gastD,ivaD,pagVD,ajuD,perfD,contD,entD,pagoFinSueltosD,notifD,histD,reclamosD,respD,pvD,aporD,cartD,sbD,bmD,difD]=await enLotes([
+      const [ocsD,finD,vendD,catD,gastD,ivaD,pagVD,ajuD,perfD,contD,entD,pagoFinSueltosD,notifD,histD,reclamosD,respD,pvD,aporD,cartD,sbD,bmD,difD,fotosD]=await enLotes([
         ()=>conReintento(()=>selOCs(t)),
         ()=>sel("financiadores",t,"&order=nombre").catch(()=>[]),
         ()=>sel("vendedores",t,"&order=nombre").catch(()=>[]),
@@ -293,12 +295,15 @@ export default function App() {
         ()=>sel("saldo_banco",t,"&id=eq.actual").catch(()=>[]),
         ()=>sel("banco_mensual",t,"&order=id.desc&limit=24").catch(()=>[]),
         ()=>sel("fin_diferencias_historicas",t,"&estado=eq.pendiente").catch(()=>[]),
+        ()=>sel("mp_cache_avisos",t,`&id=like.${PREFIJO_FOTO_MP}*`).catch(()=>[]),
       ]);
       const reclamosPorOC={}, respPorOC={}, pvPorOC={};
       for(const r of reclamosD){ if(!reclamosPorOC[r.oc_id]) reclamosPorOC[r.oc_id]=[]; reclamosPorOC[r.oc_id].push(r); }
       for(const r of respD){ if(!respPorOC[r.oc_id]) respPorOC[r.oc_id]=[]; respPorOC[r.oc_id].push(r); }
       for(const r of pvD){ if(!pvPorOC[r.oc_id]) pvPorOC[r.oc_id]=[]; pvPorOC[r.oc_id].push(r); }
-      const ocsConReclamos=ocsD.map(oc=>({...oc,oc_reclamos:reclamosPorOC[oc.id]||[],oc_responsables:respPorOC[oc.id]||[],eventos_postventa:pvPorOC[oc.id]||[]}));
+      // Fase 4C: foto de Mercado Público (caché: neto, IVA, estado, aceptación, recepción e ítems) en oc.mp.
+      const fotos={}; for(const f of (fotosD||[])) if(String(f?.id||"").startsWith(PREFIJO_FOTO_MP)&&f.datos&&!Array.isArray(f.datos)) fotos[String(f.id).slice(PREFIJO_FOTO_MP.length)]=f.datos;
+      const ocsConReclamos=ocsD.map(oc=>({...oc,oc_reclamos:reclamosPorOC[oc.id]||[],oc_responsables:respPorOC[oc.id]||[],eventos_postventa:pvPorOC[oc.id]||[],mp:fotos[oc.id]||null}));
       setOcs(ocsConReclamos.filter(o=>!o.archivada)); setOcsArchivadas(ocsConReclamos.filter(o=>o.archivada)); setFinanciadores(finD); setVendedores(vendD); setCategoriasGasto(catD);
       setGastos(gastD); setIvaMensual(ivaD); setPagosVendedor(pagVD); setAjustesSaldo(ajuD); setPerfiles(perfD);
       setContactos(contD); setEntidadesCatalogo(entD); setPagoFinSueltos(pagoFinSueltosD);
@@ -311,6 +316,11 @@ export default function App() {
         sincronizarPendientes(ocsActivasCarga).then(n=>{
           if(n>0){ showToast(`${n} OC${n>1?"s":""} completada${n>1?"s":""} desde Mercado Público`); cargarTodo(); }
         }).catch(()=>{});
+      } else if(!revisionAutoHecha.current){
+        // Fase 4C: revisión automática y prudente del estado en Mercado Público (una vez por sesión,
+        // y como mucho cada 6 horas entre todos los usuarios; ver lib/mercadoPublico.js).
+        revisionAutoHecha.current=true;
+        revisionAutomaticaMP(ocsActivasCarga,fotos).catch(()=>{});
       }
     } catch(e){ showToast(e.message,"error"); }
   };
@@ -432,12 +442,12 @@ export default function App() {
     // Productos: uno por cada ítem de la OC, con su link
     const productos = (oc.productos||[]);
     if(productos.length){
+      // Fase 4C: ítems estructurados (descripción, cantidad, total de la línea y categoría), como lo vendido.
       for(let i=0;i<productos.length;i++){
-        const p=productos[i];
-        const desc=`${p.descripcion} × ${p.cantidad} | Venta: ${fmt.money(p.total_linea)}${p.categoria?` | ${p.categoria}`:""}`;
-        await ins("oc_productos_link",t,{id:genId("lnk"),oc_id:ocId,descripcion:desc,
-          url:links[i]||links[0]||"sin-link",orden:i,creado_por:session.user.id});
+        await ins("oc_productos_link",t,{id:genId("lnk"),oc_id:ocId,...lineaVentaDesdeMP(productos[i],i),
+          url:links[i]||links[0]||"sin-link",creado_por:session.user.id});
       }
+      await guardarFotoMP(ocId,oc);
     } else {
       // OC pendiente de sincronizar: guardamos solo los links
       for(let i=0;i<links.length;i++){
@@ -471,6 +481,64 @@ export default function App() {
   // Todo lo demás (ventas directas, otras plataformas) no existe allá.
   // Duplicados: misma clave normalizada que el índice único de la base, entre activas y archivadas.
   const buscarDuplicadoOC=(codigo,excluirId=null)=>buscarOCPorCodigo(codigo,[ocs,ocsArchivadas],excluirId);
+
+  // Foto de Mercado Público de una OC (caché en mp_cache_avisos, id "oc_mp:<id>"). Si falla, no afecta la OC.
+  const guardarFotoMP=async(ocId,d)=>{
+    const foto=fotoMP(d); if(!foto||!session) return null;
+    const t=session.access_token, id=claveFotoMP(ocId), iso=new Date().toISOString();
+    try{
+      const act=await upd("mp_cache_avisos",t,id,{datos:foto,actualizado_en:iso}).catch(()=>[]);
+      if(!Array.isArray(act)||!act.length) await ins("mp_cache_avisos",t,{id,datos:foto,actualizado_en:iso}).catch(()=>{});
+    }catch{}
+    return foto;
+  };
+
+  // Productos vendidos desde Mercado Público: completa solo lo vacío y agrega lo que falta (lib/mercadoPublico.js).
+  const aplicarProductosMP=async(oc,productos)=>{
+    const t=session.access_token;
+    const {actualizar,insertar}=planProductosVenta(oc.oc_productos_link||[],productos||[]);
+    for(const a of actualizar) await upd("oc_productos_link",t,a.id,a.patch);
+    for(const fila of insertar) await ins("oc_productos_link",t,{id:genId("lnk"),oc_id:oc.id,...fila,url:"sin-link",creado_por:session.user.id});
+  };
+
+  // ─── Revisión automática del estado en Mercado Público (Fase 4C) ───
+  // Prudente: una marca compartida en la base (mp_cache_avisos "revision_auto") evita que cada usuario
+  // o cada recarga repita consultas; se revisan pocas OCs por vez, solo las abiertas cuyo estado puede
+  // cambiar y que no se revisaron en los últimos días; nunca cerca del tope diario de Mercado Público.
+  const revisionAutomaticaMP=async(listaOcs,fotos)=>{
+    if(!session) return;
+    const t=session.access_token, ahora=new Date();
+    const marca=(await sel("mp_cache_avisos",t,`&id=eq.${CLAVE_REVISION_AUTO}`).catch(()=>[]))[0];
+    if(!toca(marca?.datos?.ultima,ahora)) return;
+    const uso=(await sel("mp_uso_diario",t,`&id=eq.${hoyISO()}`).catch(()=>[]))[0];
+    if((uso?.solicitudes||0)>LIMITE_USO_DIARIO) return;
+    const elegidas=elegirRevisionAutomatica(listaOcs,fotos,ahora);
+    // Se toma la marca ANTES de consultar: otro dispositivo que abra la app ahora no repite la revisión.
+    const datosMarca={ultima:ahora.toISOString(),revisadas:elegidas.length};
+    const act=await upd("mp_cache_avisos",t,CLAVE_REVISION_AUTO,{datos:datosMarca,actualizado_en:ahora.toISOString()}).catch(()=>[]);
+    if(!Array.isArray(act)||!act.length) await ins("mp_cache_avisos",t,{id:CLAVE_REVISION_AUTO,datos:datosMarca,actualizado_en:ahora.toISOString()}).catch(()=>{});
+    if(!elegidas.length) return;
+    const canceladasNuevas=[];
+    for(const oc of elegidas){
+      try{
+        const r=await fetch(`/api/oc?codigo=${encodeURIComponent(oc.numero_oc)}`);
+        if(r.status===429) break;   // límite por minuto: se deja para la próxima revisión
+        const j=await r.json().catch(()=>null);
+        const res=resultadoConsultaMP(r.status,j);
+        if(res.tipo!=="ok") continue;
+        const foto=await guardarFotoMP(oc.id,res.oc);
+        if(mpCancelada(foto)) canceladasNuevas.push({id:oc.id,numero_oc:oc.numero_oc,cliente:oc.cliente,nombre:res.oc.nombre_oc});
+      }catch{ /* esta OC queda para la próxima revisión */ }
+      await new Promise(res=>setTimeout(res,300));
+    }
+    registrarUsoMP(elegidas.length);
+    if(canceladasNuevas.length){
+      const lista=[...canceladasEnMP.filter(c=>!canceladasNuevas.some(n=>n.id===c.id)),...canceladasNuevas];
+      setCanceladasEnMP(lista); guardarCacheMP("canceladas",lista);
+      showToast(`${canceladasNuevas.length} OC cancelada${canceladasNuevas.length>1?"s":""} en Mercado Público: revísala${canceladasNuevas.length>1?"s":""} en el Panel`,"error");
+    }
+    await cargarTodo();
+  };
 
   const sincronizarPendientes=async(listaOcs,forzar=false)=>{
     const sinDatos=(o)=>
@@ -507,59 +575,12 @@ export default function App() {
         if(!j.ok||!j.oc) continue;
         const d=j.oc;
 
-        // Solo rellenamos lo que está vacío
-        const cambios={sync_pendiente:false, no_en_mp:false};
-        const vacio=(v)=>!v||String(v).trim()===""||String(v).toUpperCase().includes("POR COMPLETAR");
-        if(vacio(oc.cliente))        cambios.cliente=d.cliente||"";
-        if(vacio(oc.entidad))        cambios.entidad=d.entidad||"";
-        if(vacio(oc.rut_cliente))    cambios.rut_cliente=d.rut_cliente||"";
-        if(vacio(oc.comuna))         cambios.comuna=d.comuna||"";
-        if(vacio(oc.contacto))       cambios.contacto=d.contacto||"";
-        if(vacio(oc.correo_cliente)) cambios.correo_cliente=d.correo_cliente||"";
-        if(vacio(oc.tipo_despacho))  cambios.tipo_despacho=d.tipo_despacho||"";
-        // La fecha de emisión no es un dato editable como el cliente o el
-        // contacto: Mercado Público es la única fuente de verdad, así que
-        // siempre se sincroniza (no solo cuando está vacía), para que una
-        // fecha vieja o mal cargada se autocorrija en la próxima pasada.
-        // Se prioriza fecha_envio (la que Mercado Público muestra en
-        // pantalla junto al código) sobre fecha_creacion (la del proceso
-        // interno, que puede ser bastante anterior en compras ágiles).
-        const fechaHoraMP=d.fecha_envio||d.fecha_creacion||"";
-        const fechaMP=String(fechaHoraMP).slice(0,10);
-        if(fechaMP&&fechaMP!==oc.fecha_emision_mp) cambios.fecha_emision_mp=fechaMP;
-        if(fechaHoraMP&&fechaHoraMP!==oc.fecha_hora_emision_mp) cambios.fecha_hora_emision_mp=fechaHoraMP;
-        if(!oc.tipo_despacho&&d.tipo_despacho) cambios.tipo_despacho=d.tipo_despacho;
-        if(!oc.dias_pago)            cambios.dias_pago=d.dias_pago||30;
-        if(!Number(oc.monto_total))  cambios.monto_total=d.monto_total||0;
-
-        await upd("ordenes_compra_v2",t,oc.id,cambios);
-
-        // Fase 4A: la fecha de la OC (emisión en MP) vive en fecha_emision_mp. La fecha real de
-        // compra (evento de compra) es otro dato y Mercado Público nunca la reemplaza.
-
-        // Completar descripciones de productos que quedaron en blanco.
-        // Solo las líneas de lo VENDIDO (origen venta): los productos comprados (origen compra:
-        // proveedor, link, costo) son datos de BFK y la sincronización nunca los reemplaza.
-        const links=(oc.oc_productos_link||[]).filter(l=>(l.origen||"venta")==="venta").sort((a,b)=>a.orden-b.orden);
-        for(let i=0;i<(d.productos||[]).length;i++){
-          const p=d.productos[i];
-          const fila={descripcion:p.descripcion,cantidad:p.cantidad||null,
-            precio_venta:p.total_linea||null,categoria:p.categoria||null,origen:"venta"};
-          if(links[i]){
-            if(!links[i].descripcion||links[i].descripcion==="Producto por completar"||!links[i].cantidad)
-              await upd("oc_productos_link",t,links[i].id,fila);
-          } else {
-            // No duplicar: si ya existe uno igual, no se inserta de nuevo
-            const yaEsta=(oc.oc_productos_link||[]).some(x=>
-              (x.origen||"venta")==="venta" &&
-              x.descripcion===p.descripcion &&
-              Number(x.cantidad||0)===Number(p.cantidad||0));
-            if(!yaEsta){
-              await ins("oc_productos_link",t,{id:genId("lnk"),oc_id:oc.id,...fila,
-                url:"sin-link",orden:i,creado_por:session.user.id});
-            }
-          }
-        }
+        // Solo se rellena lo vacío; la fecha de emisión siempre viene de Mercado Público (lib/mercadoPublico.js).
+        await upd("ordenes_compra_v2",t,oc.id,cambiosOCDesdeMP(oc,d));
+        // Fase 4A: la fecha real de compra (evento de compra) es otro dato y Mercado Público nunca la reemplaza.
+        // Productos vendidos: solo se completan campos vacíos; los comprados (origen compra) nunca se tocan.
+        await aplicarProductosMP(oc,d.productos);
+        await guardarFotoMP(oc.id,d);
 
         // Alimentar el catálogo de entidades
         if(d.rut_cliente){
@@ -675,21 +696,32 @@ export default function App() {
     }catch{}
   };
 
-  const handleCobrosDesdeCartola=async(cobros,infoCartola)=>{
+  // Fase 4C: un abono puede cubrir una factura, varias del mismo RUT o ser parcial; todos los cobros
+  // de la cartola se insertan en UNA sola solicitud (todo o nada). Los depósitos de vale vista ya
+  // registrados solo se marcan como cobrados en el banco (no se duplica el cobro).
+  const handleCobrosDesdeCartola=async(cobros,infoCartola,valeVistas=[])=>{
     const t=session.access_token;
-    for(const c of cobros){
-      const oc=ocs.find(o=>o.id===c.ocId);
+    if(cobros.length){
       // El cobrado y su estado los recalcula la base desde los cobros registrados (Fase 4B).
-      await ins("eventos_pago_cliente",t,{id:genId("evp"),oc_id:c.ocId,fecha:c.fecha,
-        monto:c.monto,creado_por:session.user.id});
-      await registrarCambio(t,{ocId:c.ocId,ocNumero:c.numeroOc,usuarioId:perfil?.id,
-        usuarioNombre:perfil?.nombre,accion:"Cobro registrado desde la cartola del banco",
-        campo:"estado_pago_cliente",valorAnterior:"pendiente",valorNuevo:"pagado"});
+      await ins("eventos_pago_cliente",t,cobros.map(c=>({id:genId("evp"),oc_id:c.ocId,fecha:c.fecha,monto:c.monto,
+        notas:`Desde cartola: ${String(c.descripcion||"").slice(0,120)}`,creado_por:session.user.id})));
+      for(const c of cobros){
+        const oc=ocs.find(o=>o.id===c.ocId);
+        await registrarCambio(t,{ocId:c.ocId,ocNumero:c.numeroOc,usuarioId:perfil?.id,usuarioNombre:perfil?.nombre,
+          accion:c.parcial?"Abono parcial registrado desde la cartola del banco":c.tipo==="varias"?"Cobro registrado desde la cartola (un abono para varias facturas)":"Cobro registrado desde la cartola del banco",
+          campo:"monto_cobrado",valorAnterior:fmt.money(oc?.monto_cobrado||0),valorNuevo:`+${fmt.money(c.monto)}`}).catch(()=>{});
+      }
+    }
+    for(const v of valeVistas){
+      await upd("eventos_pago_cliente",t,v.eventoId,{cobrado_en_banco:true});
+      await registrarCambio(t,{ocId:v.ocId,ocNumero:v.numeroOc,usuarioId:perfil?.id,usuarioNombre:perfil?.nombre,
+        accion:"Vale vista/cheque cobrado en el banco (cartola)",campo:"cobrado_en_banco",valorAnterior:"no",valorNuevo:`sí · ${fmt.date(v.fecha)}`}).catch(()=>{});
     }
     const total=cobros.reduce((s,c)=>s+c.monto,0);
     await registrarCartola(infoCartola,{cobros:cobros.length});
-    showToast(cobros.length
-      ? `${cobros.length} cobro${cobros.length!==1?"s":""} registrado${cobros.length!==1?"s":""} · ${fmt.money(total)}`
+    showToast(cobros.length||valeVistas.length
+      ? [cobros.length&&`${cobros.length} cobro${cobros.length!==1?"s":""} registrado${cobros.length!==1?"s":""} · ${fmt.money(total)}`,
+         valeVistas.length&&`${valeVistas.length} vale vista${valeVistas.length!==1?"s":""} cobrado${valeVistas.length!==1?"s":""} en el banco`].filter(Boolean).join(" · ")
       : `Totales del banco guardados · ${(infoCartola?.meses||[]).length} mes(es)`);
     setAccion(null); await cargarTodo();
   };
@@ -809,6 +841,7 @@ export default function App() {
           const j=await r.json();
           if(!j.ok||!j.oc) return;
           if(oc.no_en_mp) await upd("ordenes_compra_v2",t,oc.id,{no_en_mp:false}).catch(()=>{});
+          await guardarFotoMP(oc.id,j.oc);
           if(Number(j.oc.codigo_estado)===9){
             canceladas.push({id:oc.id,numero_oc:oc.numero_oc,cliente:oc.cliente,nombre:j.oc.nombre_oc});
           }
@@ -1122,15 +1155,10 @@ export default function App() {
       // Fase 4A: la fecha de la OC vive en fecha_emision_mp. La fecha real de compra
       // (evento de compra) es un dato de BFK y Mercado Público nunca la reemplaza.
       const fechaAntes=String(oc.fecha_emision_mp||"").slice(0,10);
-      await upd("ordenes_compra_v2",t,oc.id,{
-        cliente:d.cliente||oc.cliente, entidad:d.entidad||oc.entidad,
-        rut_cliente:d.rut_cliente||oc.rut_cliente, comuna:d.comuna||oc.comuna,
-        contacto:d.contacto||oc.contacto,
-        correo_cliente:oc.correo_cliente||d.correo_cliente||"",
-        tipo_despacho:d.tipo_despacho||oc.tipo_despacho,
-        fecha_emision_mp:fechaMP||oc.fecha_emision_mp,
-        fecha_hora_emision_mp:fechaHoraMP||oc.fecha_hora_emision_mp,
-        dias_pago:d.dias_pago||oc.dias_pago||30});
+      // Fase 4C: los datos ingresados a mano (cliente, contacto, correo…) no se pisan: solo se completa lo vacío.
+      await upd("ordenes_compra_v2",t,oc.id,cambiosOCDesdeMP(oc,d));
+      await aplicarProductosMP(oc,d.productos);
+      await guardarFotoMP(oc.id,d);
       if(fechaMP&&fechaMP!==fechaAntes){
         await registrarCambio(t,{ocId:oc.id,ocNumero:oc.numero_oc,usuarioId:perfil?.id,
           usuarioNombre:perfil?.nombre,accion:"Fecha de la OC actualizada desde Mercado Público",
@@ -1542,7 +1570,7 @@ export default function App() {
       {(tab==="agenda"||todo)&&hoja("agenda",<PanelCalendario ocs={ocs} onMarcarFecha={handleMarcarFecha} onVerAlertas={(f)=>{setFiltroCompras(null);setOcFoco(null);setVolverA(null);setFiltroAlertas({nivel:(f&&f.nivel)||"todas",etapa:(f&&f.etapa)||null});setTab("notif");}} />)}
       {(tab==="financiamiento"||todo)&&hoja("financiamiento",<PanelFinanciamiento difsHistoricas={difsHistoricas} financiadores={financiadores} ocs={ocs} ajustes={ajustesSaldo} perfiles={perfiles} onAjustar={handleAjusteSaldo} aportes={aportes} onGuardarAporte={handleGuardarAporte} onEliminarAporte={perfil?.rol==="admin"?handleEliminarAporte:undefined} onAbonar={(finId)=>{setAbonoFinId(typeof finId==="string"||typeof finId==="number"?finId:null);setAccion("abono_fin");}} pagoFinSueltos={pagoFinSueltos} />)}
       {(tab==="gastos"||todo)&&hoja("gastos",<PanelGastos gastos={gastos} categorias={categoriasGasto} onNuevoGasto={handleNuevoGasto} />)}
-      {(tab==="vendedores"||todo)&&hoja("vendedores",<PanelVendedores vendedores={vendedores} ocs={ocs} ivaMensual={ivaMensual} pagosVendedor={pagosVendedor} onGuardarIva={handleGuardarIva} onPagoVendedor={handlePagoVendedorSimple} onVerOCs={(filtro)=>{setFiltroCompras(filtro);setOcFoco(null);setVolverA(null);setTab("compras");}} />)}
+      {(tab==="vendedores"||todo)&&hoja("vendedores",<PanelVendedores vendedores={vendedores} ocs={ocs} ivaMensual={ivaMensual} pagosVendedor={pagosVendedor} onGuardarIva={handleGuardarIva} onPagoVendedor={handlePagoVendedorSimple} onVerOCs={(filtro)=>{setFiltroCompras(filtro);setOcFoco(null);setVolverA(null);setTab("compras");}} onAbrirOC={(ocId)=>{setFiltroCompras(null);setOcFoco(ocId);setVolverA(null);setTab("compras");}} />)}
       {(tab==="usuarios"||todo)&&perfil?.rol==="admin"&&hoja("usuarios",<PanelUsuarios difsHistoricas={difsHistoricas} perfiles={perfiles} ocs={ocs} ocsArchivadas={ocsArchivadas} onRestaurarOC={handleRestaurarOC} onChangeRol={handleChangeRol} session={session} showToast={showToast} entidadesCatalogo={entidadesCatalogo} onEntidadesImportadas={handleEntidadesImportadas} usoMP={usoMP} sincronizando={sincronizando} validandoTodo={validandoTodo} exportando={exportando} onCorregirFechas={corregirFechasTodas} onValidarTodo={validarTodoContraMP} onExportarTodo={handleExportarTodo} />)}
     </>
   );

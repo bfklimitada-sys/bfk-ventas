@@ -11,7 +11,7 @@ for(const [modo,ancho,alto,movil] of [["escritorio",1440,900,false],["movil",390
   const hojas=await p.locator("[data-hoja]").count();
   const indices=await p.locator(".bfk-indice").evaluateAll(els=>els.filter(e=>getComputedStyle(e).display!=="none").length);
   const bytes=await p.evaluate(async()=>{const a=document.querySelector('a[href^="blob:"]'); if(!a) return 0; const r=await fetch(a.href); return (await r.arrayBuffer()).byteLength;});
-  R[modo]={listo:(await p.getByText("PDF listo",{exact:false}).count())>0,hojas,indices_visibles_en_pdf:indices,pdf_bytes:bytes,escrituras:escr.length,errores:errs.length};
+  R[modo]={listo:(await p.getByText("PDF listo",{exact:false}).count())>0,hojas,indices_visibles_en_pdf:indices,pdf_bytes:bytes,escrituras:escr.filter(e=>!/oc_bloqueos|mp_cache_avisos|mp_uso_diario/.test(e)).length,errores:errs.length};   // Fase 4C: caché técnica de Mercado Público aparte
   await p.getByText("Volver",{exact:true}).click(); await p.waitForTimeout(500);
   R[modo].volvio=(await p.locator("[data-hoja]").count())===0;
   await p.context().close();

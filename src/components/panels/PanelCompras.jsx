@@ -14,6 +14,10 @@ import { calcMargen, estadoVencimiento, facturaVigente, gananciaReal, plazoPago 
 import { coincideBusqueda } from "../../lib/busqueda";
 import { Ic, I } from "../ui/Iconos";
 import { entidadPorRut } from "../../lib/rut";
+import { estadoOperativo } from "../../lib/ocs";
+import { exportarVistaExcel, generarFichaPDF } from "../../lib/exportacionVista";
+import { cumpleCriterios, listaProveedores } from "../../lib/busqueda";
+import { recepcionMP } from "../../lib/mercadoPublico";
 import { FILTROS_PANEL, esFiltroPanel, esVenta, estaCobrada, estaComprada, estaEntregada, estaFacturada, etapasCompletadas, facturaVencida, fechaCompra, fechaOC, fechaOCEditable, financiamientoPagado, mensajeDuplicado, normalizarCodigoOC, tieneVendedor } from "../../lib/ocs";
 import { repartirInversion as calcularReparto } from "../../lib/productosOC";
 
@@ -317,6 +321,39 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
       {abierto&&(
         <div style={{background:C.card,border:`1px solid ${C.border}`,borderTop:"none",
           borderRadius:"0 0 10px 10px",padding:"10px 12px",marginTop:-1}}>
+
+          {/* Fase 4C: datos de Mercado Público (caché de la última consulta): neto/IVA, aceptación, recepción e ítems */}
+          {oc.mp&&(()=>{
+            const mp=oc.mp; const rec=recepcionMP(mp.codigo_estado);
+            return (
+              <div data-mp-detalle style={{background:C.paper,border:`1px solid ${C.border}`,borderRadius:9,padding:"8px 10px",marginBottom:12}}>
+                <div style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:4}}>Mercado Público</div>
+                <Dato k="Estado" v={mp.estado||"—"} />
+                <Dato k="Aceptación" v={mp.fecha_aceptacion?fmt.date(String(mp.fecha_aceptacion).slice(0,10)):(mp.aceptada?"Aceptada":"Sin aceptar")} />
+                <Dato k="Recepción" v={rec?rec.texto:"Sin información"} />
+                <Dato k="Neto" v={fmt.money(mp.neto)} />
+                <Dato k="IVA" v={fmt.money(mp.iva)} />
+                {(mp.descuentos>0||mp.cargos>0)&&<Dato k="Descuentos / cargos" v={`${fmt.money(mp.descuentos)} / ${fmt.money(mp.cargos)}`} />}
+                <Dato k="Total OC en MP" v={fmt.money(mp.total)} />
+                {Number(mp.total)>0&&Number(oc.monto_total)>0&&Math.abs(Number(mp.total)-Number(oc.monto_total))>1&&(
+                  <div data-mp-diferencia style={{fontSize:12,color:C.warnText,marginTop:4}}><Ic n="⚠"/> El monto registrado ({fmt.money(oc.monto_total)}) es distinto del total en Mercado Público: no se cambió (puede ser un ajuste manual).</div>
+                )}
+                {(mp.items||[]).length>0&&(
+                  <div style={{marginTop:6}}>
+                    {(mp.items||[]).map(it=>(
+                      <div key={it.n} style={{fontSize:12,color:C.ink,padding:"4px 0",borderTop:`1px dashed ${C.border}`}}>
+                        <b>{it.cantidad??"?"}{it.unidad?` ${it.unidad}`:""} ×</b> {it.descripcion}
+                        {it.precio_unitario?<span style={{color:C.inkMuted}}> · {fmt.money(it.precio_unitario)} c/u neto</span>:null}
+                        {it.total?<span style={{color:C.inkMuted}}> · total {fmt.money(it.total)}</span>:null}
+                        {it.especificacion_proveedor&&it.especificacion_proveedor!==it.descripcion&&<div style={{color:C.inkFaint}}>Ofertado: {it.especificacion_proveedor}</div>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div style={{fontSize:11.5,color:C.inkFaint,marginTop:4}}>Consultado {fmt.date(String(mp.revisado_en||"").slice(0,10))}</div>
+              </div>
+            );
+          })()}
 
           {/* Productos: cantidad y precio separados del nombre */}
           {links.length>0&&(
@@ -705,6 +742,13 @@ function NotasEHistorial({ oc, perfil, historialCambios, onAgregarComentario, on
   );
 }
 
+// Tono del estado único → colores de la lista (Fase 4C).
+const TONOS={ok:{color:C.okText,bg:C.okLight},warn:{color:C.warnText,bg:C.warnLight},danger:{color:C.dangerText,bg:C.dangerLight},
+  info:{color:C.info,bg:C.infoLight},transit:{color:C.transit,bg:C.transitLight},purple:{color:C.purple,bg:C.purpleLight},muted:{color:C.inkFaint,bg:C.paper}};
+const ICONO_ESTADO={mp_cancelada:<Ic n="🔴"/>,facturada_sin_entrega:<Ic n="⚠"/>,cobrada_sin_factura:<Ic n="⚠"/>,vale_vista:<Ic n="📄"/>,cerrada:"✓",
+  falta_financiamiento:<Ic n="🏦"/>,reclamar:<Ic n="⚠"/>,vencida:<Ic n="🔴"/>,por_vencer:<Ic n="🟡"/>,facturada:<Ic n="🧾"/>,entregada:<Ic n="📦"/>,
+  comprada:<Ic n="🚚"/>,mp_sin_aceptar:<Ic n="⏳"/>,sin_compra:"○"};
+
 export function FilaOC({ difsHistoricas, onCambiarFinanciamiento, oc, perfiles, todasLasOcs, onSincronizarFecha, expanded, onToggle, contactos, onEnviarReclamo, onCorreoOC, onRegistrarRespuestaReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, onRepartirInversion, buscarDuplicadoOC, perfil, historialCambios, onAgregarComentario, onEliminarComentario, bloqueoEstado, onArchivarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa }) {
   const evF=facturaVigente(oc);
   const dias=fmt.diasDesde(evF?.fecha);
@@ -761,38 +805,11 @@ export function FilaOC({ difsHistoricas, onCambiarFinanciamiento, oc, perfiles, 
   const diasEstancada=ultimaActividad?Math.floor((new Date()-new Date(ultimaActividad))/(1000*60*60*24)):null;
   const estancada=completadas>0&&completadas<5&&diasEstancada!==null&&diasEstancada>=7;
 
-  // Estado único: define color de la franja y la línea de estado
+  // Estado único (Fase 4C): el mismo texto que usan Panel, Alertas y Agenda (lib/ocs.js, estadoOperativo).
   const estadoOC=(()=>{
-    const comprada=estaComprada(oc);
-    const entregada=estaEntregada(oc);
-    const facturada=estaFacturada(oc);
-    const cobrada=estaCobrada(oc);
-    const finPagado=financiamientoPagado(oc);
-    const plazo=plazoPago(oc);
-    // El cliente entregó un vale vista o cheque, pero todavía no se
-    // fue a cobrar al banco — esa plata no es real todavía.
-    const valeVistaPendiente=(oc.eventos_pago_cliente||[]).some(ev=>ev.medio_pago&&ev.medio_pago!=="transferencia"&&!ev.cobrado_en_banco);
-
-    // El ciclo saltó una etapa: el registro quedó incompleto
-    if(facturada&&!entregada)
-      return {color:C.warnText, bg:C.warnLight, icono:<Ic n="⚠"/>, texto:"Facturada sin registrar la entrega"};
-    if(cobrada&&!facturada)
-      return {color:C.warnText, bg:C.warnLight, icono:<Ic n="⚠"/>, texto:"Cobrada sin registrar la factura"};
-
-    if(cobrada&&valeVistaPendiente)
-      return {color:C.warnText, bg:C.warnLight, icono:<Ic n="📄"/>, texto:"Cobrada · vale vista/cheque sin cobrar en el banco"};
-    if(cobrada&&finPagado)  return {color:C.okText,      bg:C.okLight,      icono:"✓", texto:"Cerrada"};
-    if(cobrada&&!finPagado) return {color:C.purple,  bg:C.purpleLight,  icono:<Ic n="🏦"/>, texto:"Cobrada · falta pagar financiamiento"};
-    if(facturada&&dias!==null){
-      if(estadoVencimiento(dias,plazo).reclamar) return {color:C.dangerText,  bg:C.dangerLight,  icono:<Ic n="⚠"/>, texto:`Reclamar pago · ${dias} de ${plazo} días`};
-      if(estadoVencimiento(dias,plazo).vencida) return {color:C.dangerText,  bg:C.dangerLight,  icono:<Ic n="🔴"/>, texto:`Vencida · ${dias} de ${plazo} días`};
-      if(estadoVencimiento(dias,plazo).porVencer) return {color:C.warnText,    bg:C.warnLight,    icono:<Ic n="🟡"/>, texto:`Por vencer · quedan ${plazo-dias} días`};
-      return {color:C.warnText, bg:C.warnLight, icono:<Ic n="🧾"/>, texto:`Facturada · ${dias} de ${plazo} días`};
-    }
-    if(facturada)           return {color:C.warnText,    bg:C.warnLight,    icono:<Ic n="🧾"/>, texto:"Facturada · esperando pago"};
-    if(entregada)           return {color:C.info,    bg:C.infoLight,    icono:<Ic n="📦"/>, texto:"Entregada · falta facturar"};
-    if(comprada)            return {color:C.transit, bg:C.transitLight, icono:<Ic n="🚚"/>, texto:"Comprada · falta entregar"};
-    return {color:C.inkFaint, bg:C.paper, icono:"○", texto:"Sin compra registrada"};
+    const e=estadoOperativo(oc);
+    const col=TONOS[e.tono]||TONOS.muted;
+    return {...col, icono:ICONO_ESTADO[e.clave]||"○", texto:e.texto, clave:e.clave};
   })();
 
   // ¿Qué toca hacer ahora en esta OC?
@@ -901,8 +918,13 @@ export function FilaOC({ difsHistoricas, onCambiarFinanciamiento, oc, perfiles, 
                 </>;
               })()}
             </div>
-            <button onClick={()=>setEditandoDatos(true)}
-              style={{...btnG,flexShrink:0,fontSize:12,minHeight:36,padding:"6px 10px"}}><Ic n="✏️"/> Editar datos</button>
+            <div style={{display:"flex",flexDirection:"column",gap:6,flexShrink:0}}>
+              <button onClick={()=>setEditandoDatos(true)}
+                style={{...btnG,flexShrink:0,fontSize:12,minHeight:36,padding:"6px 10px"}}><Ic n="✏️"/> Editar datos</button>
+              {/* Fase 4C: ficha PDF de la OC (solo lectura: disponible también en modo consulta) */}
+              <button data-consulta="1" data-ficha-pdf onClick={async()=>{ try{ await generarFichaPDF(oc); }catch(e){ window.alert(`No se pudo generar la ficha: ${e.message}`); } }}
+                style={{...btnG,flexShrink:0,fontSize:12,minHeight:36,padding:"6px 10px"}}><Ic n="📄"/> Ficha PDF</button>
+            </div>
           </div>
 
           {oc.direccion_entrega&&(
@@ -1056,6 +1078,11 @@ export function PanelCompras({ difsHistoricas, onCambiarFinanciamiento, ocs, per
   const [masFiltros,setMasFiltros]=useState(false);
   const [desde,setDesde]=useState(""); const [hasta,setHasta]=useState("");
   const [orden,setOrden]=useState("fecha");   // fecha | ganancia
+  // Fase 4C: filtros por vendedor, financiador, proveedor, producto y vale vista (lib/busqueda.js).
+  const [crit,setCrit]=useState({vendedor:"",financiador:"",proveedor:"",producto:"",valeVista:""});
+  const setC=(k,v)=>setCrit(c=>({...c,[k]:v}));
+  const proveedores=useMemo(()=>listaProveedores(ocs),[ocs]);
+  const [exportandoVista,setExportandoVista]=useState(false);
 
   const fechaDe=(o)=>String(o.fecha_emision_mp||(o.eventos_compra||[])[0]?.fecha||o.creadoEn||"").slice(0,10);
 
@@ -1088,7 +1115,7 @@ export function PanelCompras({ difsHistoricas, onCambiarFinanciamiento, ocs, per
   useEffect(()=>{
     if(!ocFoco) return;
     const oc=ocs.find(o=>o.id===ocFoco);
-    setVista("todas"); setFiltros({}); setComunaSel(""); setFiltroExacto(null);
+    setVista("todas"); setFiltros({}); setComunaSel(""); setFiltroExacto(null); setCrit({vendedor:"",financiador:"",proveedor:"",producto:"",valeVista:""});
     setBusq(oc?.numero_oc||"");
     setExpId(ocFoco);
     // Navegación de una sola vez: se consume el foco para que una recarga de `ocs` no reabra la OC ni borre filtros.
@@ -1101,6 +1128,7 @@ export function PanelCompras({ difsHistoricas, onCambiarFinanciamiento, ocs, per
     // Mismo criterio exacto que el contador del Panel que abrió esta lista.
     if(filtroExacto&&!FILTROS_PANEL[filtroExacto].pred(oc)) return false;
     if(comunaSel&&oc.comuna!==comunaSel) return false;
+    if(!cumpleCriterios(oc,crit)) return false;
     if(!cumpleVista(oc,vista)) return false;
     const f=fechaDe(oc);
     if(desde&&(!f||f<desde)) return false;
@@ -1118,7 +1146,7 @@ export function PanelCompras({ difsHistoricas, onCambiarFinanciamiento, ocs, per
     const fa=a.fecha_hora_emision_mp||a.fecha_emision_mp||((a.eventos_compra||[])[0]?.fecha)||a.creadoEn||"";
     const fb=b.fecha_hora_emision_mp||b.fecha_emision_mp||((b.eventos_compra||[])[0]?.fecha)||b.creadoEn||"";
     return String(fb).localeCompare(String(fa));
-  }),[ocs,filtros,busq,comunaSel,vista,desde,hasta,orden,filtroExacto]);
+  }),[ocs,filtros,busq,comunaSel,vista,desde,hasta,orden,filtroExacto,crit]);
 
   // Mismo criterio que el contador "facturas vencidas" del Panel (lib/ocs.js).
   const alertas=useMemo(()=>ocs.filter(facturaVencida).sort((a,b)=>{
@@ -1199,7 +1227,7 @@ export function PanelCompras({ difsHistoricas, onCambiarFinanciamiento, ocs, per
       )}
       {/* ── Buscador ── */}
       <div style={{marginBottom:10}}>
-        <input style={{...iStyle,fontSize:13,padding:"9px 11px"}} placeholder="Buscar OC, cliente, RUT, comuna, factura…"
+        <input style={{...iStyle,fontSize:13,padding:"9px 11px"}} placeholder="Buscar OC, cliente, RUT, factura, producto, proveedor…"
           value={busq} onChange={e=>setBusq(e.target.value)} />
       </div>
 
@@ -1234,8 +1262,9 @@ export function PanelCompras({ difsHistoricas, onCambiarFinanciamiento, ocs, per
         const etapasActivas=Object.values(filtros).filter(Boolean).length;
         const rangoActivo=(desde||hasta)?1:0;
         const comunaActiva=comunaSel?1:0;
-        const totalActivos=etapasActivas+rangoActivo+comunaActiva;
-        const limpiarTodo=()=>{ setDesde(""); setHasta(""); setFiltros({}); setComunaSel(""); };
+        const critActivos=Object.values(crit).filter(Boolean).length;
+        const totalActivos=etapasActivas+rangoActivo+comunaActiva+critActivos;
+        const limpiarTodo=()=>{ setDesde(""); setHasta(""); setFiltros({}); setComunaSel(""); setCrit({vendedor:"",financiador:"",proveedor:"",producto:"",valeVista:""}); };
         return (<>
           <button onClick={()=>setMasFiltros(m=>!m)}
             style={{display:"flex",alignItems:"center",gap:7,background:"none",border:"none",
@@ -1259,6 +1288,34 @@ export function PanelCompras({ difsHistoricas, onCambiarFinanciamiento, ocs, per
                     ✕ Limpiar todo
                   </button>
                 )}
+              </div>
+
+              {/* Fase 4C: quién vendió, quién financió, a quién se compró, qué producto y vale vista */}
+              <div data-filtros-4c style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+                <label style={{fontSize:12,fontWeight:700,color:C.inkFaint}}>Vendedor
+                  <select data-filtro="vendedor" style={{...selStyle,fontSize:12,padding:"8px 10px",marginTop:4}} value={crit.vendedor} onChange={e=>setC("vendedor",e.target.value)}>
+                    <option value="">Todos</option>
+                    {(vendedores||[]).map(v=><option key={v.id} value={v.id}>{v.nombre}</option>)}
+                    <option value="__sin__">Sin vendedor</option>
+                  </select></label>
+                <label style={{fontSize:12,fontWeight:700,color:C.inkFaint}}>Financiador
+                  <select data-filtro="financiador" style={{...selStyle,fontSize:12,padding:"8px 10px",marginTop:4}} value={crit.financiador} onChange={e=>setC("financiador",e.target.value)}>
+                    <option value="">Todos</option>
+                    {(financiadores||[]).map(f=><option key={f.id} value={f.id}>{f.nombre}</option>)}
+                  </select></label>
+                <label style={{fontSize:12,fontWeight:700,color:C.inkFaint}}>Proveedor
+                  <select data-filtro="proveedor" style={{...selStyle,fontSize:12,padding:"8px 10px",marginTop:4}} value={crit.proveedor} onChange={e=>setC("proveedor",e.target.value)}>
+                    <option value="">Todos</option>
+                    {proveedores.map(p=><option key={p} value={p}>{p}</option>)}
+                  </select></label>
+                <label style={{fontSize:12,fontWeight:700,color:C.inkFaint}}>Vale vista / cheque
+                  <select data-filtro="valeVista" style={{...selStyle,fontSize:12,padding:"8px 10px",marginTop:4}} value={crit.valeVista} onChange={e=>setC("valeVista",e.target.value)}>
+                    <option value="">Todos</option>
+                    <option value="pendiente">Sin cobrar en el banco</option>
+                    <option value="cualquiera">Pagadas con vale vista o cheque</option>
+                  </select></label>
+                <label style={{fontSize:12,fontWeight:700,color:C.inkFaint,gridColumn:"1 / -1"}}>Producto
+                  <input data-filtro="producto" style={{...iStyle,fontSize:12,padding:"8px 10px",marginTop:4}} value={crit.producto} onChange={e=>setC("producto",e.target.value)} placeholder="ej: silla, notebook, toner…" /></label>
               </div>
 
               {comunas.length>0&&(<>
@@ -1333,6 +1390,24 @@ export function PanelCompras({ difsHistoricas, onCambiarFinanciamiento, ocs, per
             );
           })()}
         </span>
+        <span style={{display:"flex",gap:6,flexShrink:0}}>
+        {/* Fase 4C: Excel con exactamente las órdenes que se ven (filtros y búsqueda incluidos) */}
+        <button data-exportar-vista onClick={()=>{
+            setExportandoVista(true);
+            try{
+              const desc=[busq.trim()&&`búsqueda "${busq.trim()}"`,filtroExacto&&FILTROS_PANEL[filtroExacto].etiqueta,vista!=="todas"&&`vista ${vista}`,
+                comunaSel&&`comuna ${comunaSel}`,(desde||hasta)&&`fechas ${desde||"…"} a ${hasta||"…"}`,
+                crit.vendedor&&`vendedor ${crit.vendedor==="__sin__"?"sin vendedor":(vendedores||[]).find(v=>v.id===crit.vendedor)?.nombre||crit.vendedor}`,
+                crit.financiador&&`financiador ${(financiadores||[]).find(f=>f.id===crit.financiador)?.nombre||crit.financiador}`,
+                crit.proveedor&&`proveedor ${crit.proveedor}`,crit.producto&&`producto "${crit.producto}"`,crit.valeVista&&`vale vista ${crit.valeVista}`,
+                ...FILTROS.filter(f=>filtros[f.key]).map(f=>`${f.label}: ${filtros[f.key]==="ok"?f.okLabel:f.pendLabel}`)].filter(Boolean).join(" · ");
+              exportarVistaExcel(filtered,{descripcion:desc});
+            }catch(e){ window.alert(`No se pudo exportar: ${e.message}`); }
+            finally{ setExportandoVista(false); }
+          }} disabled={exportandoVista||!filtered.length}
+          style={{flexShrink:0,fontSize:12,fontWeight:700,padding:"4px 9px",borderRadius:7,cursor:"pointer",border:`1px solid ${C.border}`,background:C.card,color:C.inkMuted}}>
+          <Ic n="📥"/> Excel
+        </button>
         <button onClick={()=>setOrden(o=>o==="fecha"?"ganancia":"fecha")}
           style={{flexShrink:0,fontSize:12,fontWeight:700,padding:"4px 9px",borderRadius:7,cursor:"pointer",
             border:`1px solid ${orden==="ganancia"?C.ok:C.border}`,
@@ -1340,6 +1415,7 @@ export function PanelCompras({ difsHistoricas, onCambiarFinanciamiento, ocs, per
             color:orden==="ganancia"?C.ok:C.inkMuted}}>
           {orden==="ganancia"?"↓ Ganancia":"↓ Fecha"}
         </button>
+        </span>
       </div>
       {filtered.map(oc=><FilaOC key={oc.id} difsHistoricas={difsHistoricas} onCambiarFinanciamiento={onCambiarFinanciamiento} oc={oc} perfiles={perfiles} todasLasOcs={ocs} onSincronizarFecha={onSincronizarFecha} expanded={expId===oc.id} onToggle={()=>setExpId(expId===oc.id?null:oc.id)} contactos={contactos} onEnviarReclamo={onEnviarReclamo} onCorreoOC={onCorreoOC} onRegistrarRespuestaReclamo={onRegistrarRespuestaReclamo} onGuardarContacto={onGuardarContacto} onGuardarDatosOC={onGuardarDatosOC} onEditarEvento={onEditarEvento} financiadores={financiadores} onConfirmarEntrega={onConfirmarEntrega} onEmitirFactura={onEmitirFactura} onPagoCliente={onPagoCliente} onPagoFinanciamiento={onPagoFinanciamiento} entidadesCatalogo={entidadesCatalogo} onGuardarLink={onGuardarLink} onEliminarLink={onEliminarLink} onEditarLink={onEditarLink} onRepartirInversion={onRepartirInversion} buscarDuplicadoOC={buscarDuplicadoOC} bloqueoEstado={bloqueoEstado} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={onAgregarComentario} onEliminarComentario={onEliminarComentario} onArchivarOC={onArchivarOC} onEliminarFactura={onEliminarFactura} onEliminarEvento={onEliminarEvento} vendedores={vendedores} onIngresarCompra={onIngresarCompra} onAsignarResponsable={onAsignarResponsable} onGuardarPostventa={onGuardarPostventa} />)}
       {filtered.length===0&&<div style={{textAlign:"center",padding:30,color:C.inkFaint,fontSize:13}}>No hay órdenes con estos filtros.</div>}

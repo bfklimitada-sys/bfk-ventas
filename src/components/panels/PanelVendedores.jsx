@@ -11,7 +11,8 @@ import { estaFacturada, filtrarPanel } from "../../lib/ocs";
 // Monto con signo explícito (el IVA neto puede ser negativo).
 const conSigno=(n)=>(n<0?"−":"")+fmt.money(Math.abs(n));
 
-export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, onGuardarIva, onPagoVendedor, onVerOCs }) {
+export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, onGuardarIva, onPagoVendedor, onVerOCs, onAbrirOC }) {
+  const [detalleMes,setDetalleMes]=useState(null); // "vendedor|anio|mes" con las OCs del cálculo desplegadas (Fase 4C)
   // Fase 4A: OCs sin vendedor no entran en ninguna comisión; se advierte para que no pase inadvertido.
   const sinVendedor=useMemo(()=>filtrarPanel(ocs,"sin_vendedor"),[ocs]);
   const sinVendedorFacturadas=sinVendedor.filter(estaFacturada).length;
@@ -110,6 +111,36 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
                         </>
                       )}
                     </div>
+                    {/* Fase 4C: las OCs que forman el cálculo del mes (cada una entra solo por su factura vigente) */}
+                    {(()=>{ const k=`${v.id}|${d.anio}|${d.mes}`; const ab=detalleMes===k; return (<>
+                      <button data-ver-ocs-comision={k} onClick={()=>setDetalleMes(ab?null:k)}
+                        style={{background:"none",border:"none",color:C.info,fontWeight:700,fontSize:12.5,cursor:"pointer",padding:"4px 0",minHeight:36}}>
+                        {ab?"▾":"▸"} {d.detalle.length} OC{d.detalle.length!==1?"s":""} en este cálculo
+                      </button>
+                      {ab&&(
+                        <div data-ocs-comision={k} style={{background:C.paper,border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 8px",marginBottom:6}}>
+                          {d.detalle.map(l=>(
+                            <div key={l.ocId} style={{padding:"5px 0",borderBottom:`1px dashed ${C.border}`,fontSize:12,lineHeight:1.5}}>
+                              <div style={{display:"flex",justifyContent:"space-between",gap:8}}>
+                                <button onClick={()=>onAbrirOC&&onAbrirOC(l.ocId)} style={{background:"none",border:"none",padding:0,cursor:onAbrirOC?"pointer":"default",fontFamily:MONO,fontWeight:700,color:C.ink,textDecoration:onAbrirOC?"underline dotted":"none"}}>{l.numero_oc}</button>
+                                <span style={{fontFamily:MONO,fontWeight:700,color:l.utilidad>=0?C.okText:C.dangerText}}>{l.utilidad>=0?"+":"−"}{fmt.money(Math.abs(l.utilidad))}</span>
+                              </div>
+                              <div style={{color:C.inkMuted}}>
+                                Factura vigente N° {l.factura} · {l.fechaFactura?fmt.date(String(l.fechaFactura).slice(0,10)):"—"} · {fmt.money(l.montoFacturas)}
+                              </div>
+                              <div style={{color:C.inkFaint}}>
+                                Venta {fmt.money(l.venta)} − costo {fmt.money(l.costo)} = utilidad {fmt.money(l.utilidad)}
+                                {l.ventaPropia&&<> · <b style={{color:C.ink}}>venta propia</b>: 100% de la utilidad menos el IVA de su factura = {fmt.money(l.pagoVentaPropia)}</>}
+                              </div>
+                            </div>
+                          ))}
+                          <div style={{fontSize:12,color:C.inkMuted,paddingTop:5}}>
+                            Utilidad (sin ventas propias): <b style={{color:C.ink}}>{fmt.money(d.sumaUtilidad)}</b>
+                            {d.pagoVentasPropias>0&&<> · Ventas propias: <b style={{color:C.ink}}>{fmt.money(d.pagoVentasPropias)}</b></>}
+                          </div>
+                        </div>
+                      )}
+                    </>); })()}
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
                       <span style={{fontSize:12,color:C.inkMuted}}>Ya se le pagó: {fmt.money(d.pagado)}</span>
                       {d.deuda>0&&<span style={{fontSize:12,fontWeight:700,color:C.dangerText}}>Falta pagarle: {fmt.money(d.deuda)}</span>}

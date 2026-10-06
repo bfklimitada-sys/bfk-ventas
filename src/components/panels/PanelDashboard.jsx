@@ -7,7 +7,7 @@ import { Ic } from "../ui/Iconos";
 import { coincideBusqueda } from "../../lib/busqueda";
 import { calcularF29 } from "../../lib/f29";
 import { Seccion, Tarjeta, Badge, Monto, Enlace } from "../ui/Sistema";
-import { FILTROS_PANEL, etapasCompletadas, filtrarPanel, financiamientoPagado, valeVistasPendientes } from "../../lib/ocs";
+import { FILTROS_PANEL, cobradoEnBanco, estaCerrada, etapasCompletadas, filtrarPanel, financiamientoPagado, ingresoPendienteOC, valeVistasPendientes } from "../../lib/ocs";
 
 // Tarjeta base para los avisos ligados a Mercado Público: encabezado con
 // icono + botón de refresco, y cuerpo blanco para el contenido/lista.
@@ -85,7 +85,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
 
     for(const oc of ocs){
       if(!enCaja(oc)) continue;                    // externa: fuera de todo
-      cobrado+=oc.monto_cobrado||0;                // caja: ventas + aportes
+      cobrado+=cobradoEnBanco(oc);                 // caja: ventas + aportes (Fase 4C: un vale vista o cheque sin cobrar en el banco aún no es caja)
       if(esAporte(oc)) continue;   // los aportes viven en aportes_socios
       ingresos+=oc.monto_total||0;                 // solo ventas reales
       costos+=(Number(oc.costo_total)||0)+costoPostventa(oc);
@@ -119,7 +119,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
     if(corte){
       for(const oc of ocs){
         for(const e of (oc.eventos_pago_cliente||[]))
-          if(String(e.fecha||"").slice(0,10) > corte) movDesdeCorte += Number(e.monto)||0;
+          if(String(e.fecha||"").slice(0,10) > corte && !(e.medio_pago&&e.medio_pago!=="transferencia"&&!e.cobrado_en_banco)) movDesdeCorte += Number(e.monto)||0;
         for(const e of (oc.eventos_pago_financiamiento||[]))
           if(String(e.fecha||"").slice(0,10) > corte) movDesdeCorte -= Number(e.monto)||0;
       }
@@ -136,11 +136,14 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
     const saldoEsperado = saldoReal!==null ? saldoReal + movDesdeCorte : null;
     const brecha = saldoEsperado!==null ? saldoCtaCte - saldoEsperado : null;
 
-    let ingresosPendientes=0;
+    // Fase 4C: lo que falta que entre a la cuenta, OC por OC (lib/ocs.js, ingresoPendienteOC): contra la factura
+    // vigente si ya se facturó, o contra el monto de la OC si no; los abonos parciales se descuentan una vez
+    // y un vale vista o cheque sin cobrar en el banco se cuenta aquí (no en la caja).
+    let ingresosPendientes=0, valeVistaPorCobrar=0;
     for(const oc of ocs){
       if(!esVenta(oc)) continue;
-      // Lo que falta por cobrar (un cobro parcial ya está en "cobrado": no se cuenta dos veces).
-      if(oc.estado_pago_cliente!=="pagado") ingresosPendientes+=Math.max(0,(Number(oc.monto_total)||0)-(Number(oc.monto_cobrado)||0));
+      ingresosPendientes+=ingresoPendienteOC(oc);
+      valeVistaPorCobrar+=valeVistasPendientes(oc).reduce((s,e)=>s+(Number(e.monto)||0),0);
     }
 
     const deudaFin=financiadores.reduce((s,f)=>s+(Number(f.saldo_deuda)||0),0);
@@ -172,7 +175,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
     const ocsAbiertas=ocs.filter(o=>esVenta(o)&&etapasCompletadas(o)<5).length;
 
     const utilidad=ingresos-costos;
-    return {saldoReal,saldoEsperado,brecha,corteBanco:corte,movDesdeCorte,gananciaMes,ventaMes,aportes:totalAportes,cobrado,porCobrar,deudaFin,utilidad,saldoProyectado,saldoCtaCte,ingresosPendientes,deudaTotal,gastoContador,gastosVendedores,gastoImpuesto,f29,f29Periodos,f29Anterior,f29Visible,margenPromPct,deudaVendedoresMes,ocsAbiertas,creditoPagadoTotal,gastosTotal,costoBFK};
+    return {saldoReal,saldoEsperado,brecha,corteBanco:corte,movDesdeCorte,gananciaMes,ventaMes,aportes:totalAportes,cobrado,porCobrar,deudaFin,utilidad,saldoProyectado,saldoCtaCte,ingresosPendientes,valeVistaPorCobrar,deudaTotal,gastoContador,gastosVendedores,gastoImpuesto,f29,f29Periodos,f29Anterior,f29Visible,margenPromPct,deudaVendedoresMes,ocsAbiertas,creditoPagadoTotal,gastosTotal,costoBFK};
   },[ocs,financiadores,gastos,pagosVendedor,ivaMensual,vendedores,pagoFinSueltos,aportesLista,saldoBanco]);
 
   // ── Proyección del mes: promedio histórico completo, para tener ──
@@ -290,13 +293,21 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
     // OCs sin vendedor: no entran en ninguna comisión (Fase 4A). Informativo: puede ser a propósito.
     const sinVendedor=filtrarPanel(ocs,"sin_vendedor");
     if(sinVendedor.length){
-      const abiertas=sinVendedor.filter(o=>!(o.estado_pago_cliente==="pagado"&&o.estado_pago_financiamiento==="pagado")).length;
+      const abiertas=sinVendedor.filter(o=>!estaCerrada(o)).length;   // mismo criterio que Alertas (pagado o "no aplica")
       items.push({
         label:`${sinVendedor.length} OC sin vendedor`,
         detalle:`No entran en ninguna comisión${abiertas?` · ${abiertas} abierta${abiertas>1?"s":""}`:""}`,
         monto:sinVendedor.reduce((s,o)=>s+(o.monto_total||0),0),
         color:C.inkMuted,tab:"compras",filtro:"sin_vendedor",n:sinVendedor.length});
     }
+
+    // Fase 4C: OCs que Mercado Público informa canceladas (última consulta) y que no están cobradas.
+    const canceladasMP=filtrarPanel(ocs,"mp_cancelada");
+    if(canceladasMP.length) items.unshift({
+      label:`${canceladasMP.length} OC cancelada${canceladasMP.length>1?"s":""} en Mercado Público`,
+      detalle:"Revisar antes de comprar, entregar o facturar",
+      monto:canceladasMP.reduce((s,o)=>s+(o.monto_total||0),0),
+      color:C.dangerText,tab:"compras",filtro:"mp_cancelada",n:canceladasMP.length});
 
     return items;
   },[ocs]);
@@ -376,6 +387,13 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
         <div style={{fontSize:13,color:"#E2E8F0",fontWeight:800,marginBottom:4,textTransform:"uppercase",letterSpacing:0.6}}>Saldo proyectado</div>
         <div style={{fontFamily:MONO,fontWeight:800,fontSize:34,color:kpis.saldoProyectado>=0?"#2DD4BF":"#F87171",letterSpacing:-1,lineHeight:1.1}}>{fmt.money(kpis.saldoProyectado)}</div>
         <div style={{fontSize:12,color:"#CBD5E1",marginTop:6,lineHeight:1.45}}>Cuánto quedaría si se cobra todo lo pendiente y se paga todo lo que se debe</div>
+        {/* Fase 4C: desglose explícito del saldo proyectado */}
+        <div data-desglose-saldo style={{fontSize:12,color:"#E2E8F0",marginTop:8,lineHeight:1.6,fontFamily:MONO}}>
+          <div style={{display:"flex",justifyContent:"space-between"}}><span>Caja calculada (cobros en el banco)</span><span>{fmt.money(kpis.saldoCtaCte)}</span></div>
+          <div style={{display:"flex",justifyContent:"space-between"}}><span>+ Por cobrar (facturas, abonos parciales, sin facturar)</span><span>{fmt.money(kpis.ingresosPendientes)}</span></div>
+          {kpis.valeVistaPorCobrar>0&&<div style={{display:"flex",justifyContent:"space-between",color:"#94A3B8"}}><span>&nbsp;&nbsp;incluye vale vista/cheque sin cobrar</span><span>{fmt.money(kpis.valeVistaPorCobrar)}</span></div>}
+          <div style={{display:"flex",justifyContent:"space-between"}}><span>− Deudas (financiadores, comisiones del mes, F29)</span><span>{fmt.money(kpis.deudaTotal)}</span></div>
+        </div>
         <div style={{display:"flex",flexDirection:"column",gap:6,marginTop:12,paddingTop:12,borderTop:"1px solid rgba(255,255,255,0.14)"}}>
           <button onClick={onEditarSaldo}
             style={{minHeight:44,background:"rgba(45,212,191,0.14)",border:"1px solid rgba(45,212,191,0.45)",

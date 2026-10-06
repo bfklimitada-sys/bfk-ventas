@@ -132,9 +132,56 @@ export const FILTROS_PANEL = {
   compradas_sin_entregar: { etiqueta: "Compradas sin entregar", pred: (oc) => esVenta(oc) && estaComprada(oc) && !estaEntregada(oc) },
   mp_sin_comprar: { etiqueta: "OC de Mercado Público sin compra registrada", pred: (oc) => esVenta(oc) && esCodigoMP(oc?.numero_oc) && !estaComprada(oc) },
   sin_vendedor: { etiqueta: "OC sin vendedor (no entran en ninguna comisión)", pred: (oc) => esVenta(oc) && !tieneVendedor(oc) },
+  mp_cancelada: { etiqueta: "OC cancelada en Mercado Público (no cobrada)", pred: (oc) => esVenta(oc) && ocCanceladaEnMP(oc) },
 };
 export const filtrarPanel = (ocs, clave) => {
   const f = FILTROS_PANEL[clave];
   return f ? (ocs || []).filter(f.pred) : [];
 };
 export const esFiltroPanel = (clave) => !!FILTROS_PANEL[clave];
+
+// ── Fase 4C: estado operativo único (lista de OCs, Panel, Alertas y Agenda) ──
+// Un solo texto/tono por OC. `tono` lo traduce cada pantalla a sus colores:
+// ok | warn | danger | info | transit | purple | muted.
+// La foto de Mercado Público (oc.mp, caché) solo agrega "cancelada" o "sin aceptar".
+export const MP_CANCELADA = 9;
+export const ocCanceladaEnMP = (oc) => Number(oc?.mp?.codigo_estado) === MP_CANCELADA && !estaCobrada(oc);
+export function estadoOperativo(oc) {
+  const comprada = estaComprada(oc), entregada = estaEntregada(oc), facturada = estaFacturada(oc);
+  const cobrada = estaCobrada(oc), finPagado = financiamientoPagado(oc);
+  if (ocCanceladaEnMP(oc)) return { clave: "mp_cancelada", tono: "danger", texto: "Cancelada en Mercado Público" };
+  if (facturada && !entregada) return { clave: "facturada_sin_entrega", tono: "warn", texto: "Facturada sin registrar la entrega" };
+  if (cobrada && !facturada) return { clave: "cobrada_sin_factura", tono: "warn", texto: "Cobrada sin registrar la factura" };
+  if (cobrada && valeVistasPendientes(oc).length) return { clave: "vale_vista", tono: "warn", texto: "Cobrada · vale vista/cheque sin cobrar en el banco" };
+  if (cobrada && finPagado) return { clave: "cerrada", tono: "ok", texto: "Cerrada" };
+  if (cobrada) return { clave: "falta_financiamiento", tono: "purple", texto: "Cobrada · falta pagar financiamiento" };
+  if (facturada) {
+    const v = vencimientoFactura(oc);
+    if (v?.reclamar) return { clave: "reclamar", tono: "danger", texto: `Reclamar pago · ${v.dias} de ${v.plazo} días` };
+    if (v?.vencida) return { clave: "vencida", tono: "danger", texto: `Vencida · ${v.dias} de ${v.plazo} días` };
+    if (v?.porVencer) return { clave: "por_vencer", tono: "warn", texto: `Por vencer · quedan ${v.plazo - v.dias} días` };
+    const parcial = oc?.estado_pago_cliente === "parcial";
+    if (v) return { clave: "facturada", tono: "warn", texto: `${parcial ? "Abono parcial" : "Facturada"} · ${v.dias} de ${v.plazo} días` };
+    return { clave: "facturada", tono: "warn", texto: parcial ? "Abono parcial · falta el resto" : "Facturada · esperando pago" };
+  }
+  if (entregada) return { clave: "entregada", tono: "info", texto: "Entregada · falta facturar" };
+  if (comprada) return { clave: "comprada", tono: "transit", texto: "Comprada · falta entregar" };
+  if (Number(oc?.mp?.codigo_estado) === 4 || Number(oc?.mp?.codigo_estado) === 5) return { clave: "mp_sin_aceptar", tono: "muted", texto: "Sin aceptar en Mercado Público" };
+  return { clave: "sin_compra", tono: "muted", texto: "Sin compra registrada" };
+}
+
+// ── Fase 4C: plata real vs. plata por llegar (Panel) ──
+// Cobrado que ya está en el banco: un vale vista o cheque entregado y no cobrado todavía no es caja.
+export const cobradoEnBanco = (oc) =>
+  (oc?.eventos_pago_cliente || []).filter((e) => !(e.medio_pago && e.medio_pago !== "transferencia" && !e.cobrado_en_banco))
+    .reduce((s, e) => s + (Number(e.monto) || 0), 0);
+// Lo que falta que entre a la cuenta por una venta: contra la factura vigente si ya se facturó
+// (es el documento que se cobra), o contra el monto adjudicado si todavía no. Los cobros parciales
+// se descuentan una sola vez y un vale vista sin cobrar se cuenta aquí (aún no es caja).
+export const ingresoPendienteOC = (oc) => {
+  if (!esVenta(oc)) return 0;
+  const facturado = Number(oc?.monto_facturado) || 0;
+  const base = facturado > 0 ? facturado : (Number(oc?.monto_total) || 0);
+  return Math.max(0, base - cobradoEnBanco(oc));
+};
+

@@ -295,6 +295,8 @@ export default async function handler(req, res) {
         especificacion_proveedor: txt(it.EspecificacionProveedor),
         categoria: txt(it.Categoria),
         codigo_producto: txt(it.CodigoProducto),
+        producto: txt(it.Producto),
+        unidad: txt(it.Unidad),
         cantidad,
         precio_venta_unitario: precioNeto,
         total_linea: num(it.Total) || precioNeto * cantidad,
@@ -332,6 +334,8 @@ export default async function handler(req, res) {
       fecha_creacion: txt(oc.Fechas?.FechaCreacion),
       fecha_envio: txt(oc.Fechas?.FechaEnvio),
       fecha_aceptacion: txt(oc.Fechas?.FechaAceptacion),
+      fecha_cancelacion: txt(oc.Fechas?.FechaCancelacion),
+      fecha_ultima_modificacion: txt(oc.Fechas?.FechaUltimaModificacion),
 
       // ── Entrega y pago ──
       tipo_despacho_codigo: txt(oc.TipoDespacho),
