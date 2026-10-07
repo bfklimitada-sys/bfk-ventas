@@ -36,19 +36,19 @@ begin
 end $$;
 
 -- Registro de un cambio (solo dentro de esta transacción).
-create function pg_temp.reg(p_tabla text, p_id text, p_campo text, p_antes text, p_despues text, p_motivo text) returns void
+create or replace function pg_temp.reg(p_tabla text, p_id text, p_campo text, p_antes text, p_despues text, p_motivo text) returns void
 language sql as $$
   insert into public.fin_correcciones_registro (lote, tabla, fila_id, campo, antes, despues, motivo)
   values ('conciliacion-banco-20261007', p_tabla, p_id, p_campo, p_antes, p_despues, p_motivo)
 $$;
-create function pg_temp.aplicado(p_caso text) returns boolean language sql as $$
+create or replace function pg_temp.aplicado(p_caso text) returns boolean language sql as $$
   select exists (select 1 from public.fin_correcciones_registro r where r.lote = 'conciliacion-banco-20261007'
                  and r.revertida_en is null and r.motivo like p_caso || ' %')
 $$;
-create function pg_temp.resultado(p_caso text, p_estado text, p_det text) returns void language plpgsql as $$
+create or replace function pg_temp.resultado(p_caso text, p_estado text, p_det text) returns void language plpgsql as $$
 begin raise notice 'CONC|%|%|%', p_caso, p_estado, p_det; end $$;
 -- Consistencia de la base acotada a las OCs del caso (o global si no se indican).
-create function pg_temp.consistente() returns boolean language sql as $$ select not exists (select 1 from public.fin_verificar_consistencia()) $$;
+create or replace function pg_temp.consistente() returns boolean language sql as $$ select not exists (select 1 from public.fin_verificar_consistencia()) $$;
 
 -- ── C1 · Purén 3799-62-AG26 · cobro factura 136 ─────────────────────────────────────────────
 do $$
@@ -99,7 +99,7 @@ begin
 end $$;
 
 -- ── C3 / C4 · quitar la atribución de un abono que pertenece a otra OC ─────────────────────────
-create function pg_temp.quitar_cobro(p_caso text, p_evento text, p_oc text, p_monto numeric, p_fecha date, p_dueno text, p_motivo text) returns void
+create or replace function pg_temp.quitar_cobro(p_caso text, p_evento text, p_oc text, p_monto numeric, p_fecha date, p_dueno text, p_motivo text) returns void
 language plpgsql as $$
 declare p public.eventos_pago_cliente;
 begin
