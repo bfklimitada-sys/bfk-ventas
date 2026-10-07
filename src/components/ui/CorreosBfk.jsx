@@ -60,6 +60,7 @@ export function CorreosPendientes({ correos, ocs, onMarcar, onAbrirOC }) {
   const [verGestionados, setVerGestionados] = useState(false);
   const todos = ordenarCorreos(correos || []);
   const pendientes = todos.filter(esPendiente);
+  const nAccion = pendientes.filter((c) => Number(c.prioridad) >= 1).length;
   const base = verGestionados ? todos.filter((c) => !esPendiente(c)) : pendientes;
   const lista = filtrarCorreos(base, filtro);
   const porId = new Map((ocs || []).map((o) => [o.id, o]));
@@ -72,12 +73,13 @@ export function CorreosPendientes({ correos, ocs, onMarcar, onAbrirOC }) {
     </button>
   );
   return (
-    <section data-correos-pendientes={pendientes.length} style={{ marginBottom: 18 }}>
+    <section data-correos-pendientes={pendientes.length} data-correos-accion={nAccion} style={{ marginBottom: 18 }}>
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
         <div>
           <div style={{ fontWeight: 800, fontSize: 14, color: C.ink }}><Ic n="📩" /> Correos de BFK</div>
           <div style={{ fontSize: 12, color: C.inkFaint, marginTop: 2 }}>
-            {pendientes.length === 0 ? "Sin correos pendientes de gestión" : `${pendientes.length} pendiente${pendientes.length > 1 ? "s" : ""} de gestión · los urgentes primero`}
+            {pendientes.length === 0 ? "Sin correos pendientes de gestión"
+              : `${nAccion} requiere${nAccion === 1 ? "" : "n"} acción${pendientes.length > nAccion ? ` · ${pendientes.length - nAccion} informativo${pendientes.length - nAccion > 1 ? "s" : ""}` : ""} · los urgentes primero`}
           </div>
         </div>
         <button data-correos-ver-gestionados onClick={() => setVerGestionados((v) => !v)}
@@ -92,7 +94,7 @@ export function CorreosPendientes({ correos, ocs, onMarcar, onAbrirOC }) {
         ? <div style={{ fontSize: 12.5, color: C.inkFaint, padding: "10px 0" }}>{verGestionados ? "Ningún correo gestionado en los últimos 30 días." : "✓ Nada pendiente aquí."}</div>
         : lista.map((c) => <TarjetaCorreo key={c.id} correo={c} oc={porId.get(c.oc_id)} onMarcar={onMarcar} onAbrirOC={onAbrirOC} />)}
       <div style={{ fontSize: 12, color: C.inkFaint, lineHeight: 1.5 }}>
-        Se revisa el buzón de BFK cada hora (solo lectura: BFK no marca, mueve, borra ni responde correos). Un correo se asocia a una OC solo con evidencia inequívoca; si no la hay, queda como general.
+        Se revisa el buzón de BFK cada hora (solo lectura: BFK no marca, mueve, borra ni responde correos). El contador de Alertas suma solo los que requieren acción. Un correo se asocia a una OC solo con evidencia inequívoca; si no la hay, queda como general.
       </div>
     </section>
   );

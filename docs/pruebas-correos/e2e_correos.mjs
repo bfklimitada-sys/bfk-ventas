@@ -19,6 +19,7 @@ const CORREOS = () => [
   correo(2, { categoria: "solicitud", prioridad: 1, rut_detectado: "69.200.800-6", asunto: "Solicitud de cotización" }),
   correo(3, { categoria: "facturacion", prioridad: 2, oc_id: "oc1", asociacion: "factura", estado: "gestionado", gestionado_en: iso(0), gestionado_por: "u1", gestionado_por_nombre: "Admin" }),
   correo(4, { categoria: "entrega", prioridad: 2, oc_id: "oc_archivada", asociacion: "rut_unico", asunto: "Despacho" }),
+  correo(5, { categoria: "general", prioridad: 0, oc_id: "oc2", asociacion: "factura", asunto: "Acuse de recibo" }),
 ];
 const TABLAS = (conCorreos) => ({ ordenes_compra_v2: [base(1), base(2)], perfiles: [{ id: "u1", nombre: "Admin", rol: "admin", email: "a@a.cl" }],
   vendedores: [{ id: "v1", nombre: "Vendedor Uno" }], financiadores: [], categorias_gasto: [], gastos_indirectos: [], iva_mensual: [], pagos_vendedor: [],
@@ -59,25 +60,27 @@ for (const [modo, vp] of [["escritorio", { width: 1280, height: 900 }], ["movil"
     r.sin_correos_pendientes = (await sec.getAttribute("data-correos-pendientes")) === "0" && /Sin correos pendientes/.test(await sec.innerText());
   } else {
     r.contador_incluye_correos = n0 >= 3;
-    r.tres_pendientes = (await sec.getAttribute("data-correos-pendientes")) === "3" && (await sec.locator("[data-correo]").count()) === 3;
+    r.cuatro_pendientes_tres_accion = (await sec.getAttribute("data-correos-pendientes")) === "4" && (await sec.getAttribute("data-correos-accion")) === "3"
+      && (await sec.locator("[data-correo]").count()) === 4 && /3 requieren acción · 1 informativo/.test(await sec.innerText());
+    r.informativo_al_final = (await sec.locator("[data-correo]").last().getAttribute("data-correo")) === "5";
     r.urgente_primero = (await sec.locator("[data-correo]").first().getAttribute("data-correo")) === "1";
     r.muestra_remitente_asunto_resumen = await sec.locator('[data-correo="1"]').evaluate((el) => /Compras Muni/.test(el.innerText) && /Reclamo entrega OC TEST-1-AG26/.test(el.innerText) && /Resumen del correo 1/.test(el.innerText) && /Urgente/.test(el.innerText));
     r.vinculo_oc = /OC TEST-1-AG26/.test(await sec.locator('[data-correo="1"] [data-correo-abrir-oc]').innerText());
     r.general_sin_oc = /General · cliente RUT 69\.200\.800-6, sin OC única/.test(await sec.locator('[data-correo="2"]').innerText());
     r.oc_archivada_sin_enlace = /OC archivada/.test(await sec.locator('[data-correo="4"]').innerText()) && (await sec.locator('[data-correo="4"] [data-correo-abrir-oc]').count()) === 0;
-    await sec.locator('[data-correos-filtro="oc"]').click(); r.filtro_con_oc = (await sec.locator("[data-correo]").count()) === 2;
+    await sec.locator('[data-correos-filtro="oc"]').click(); r.filtro_con_oc = (await sec.locator("[data-correo]").count()) === 3;
     await sec.locator('[data-correos-filtro="general"]').click(); r.filtro_generales = (await sec.locator("[data-correo]").count()) === 1;
     await sec.locator('[data-correos-filtro="todos"]').click();
     // Marcar gestionado
     await sec.locator('[data-correo="1"] [data-correo-marcar]').click(); await page.waitForTimeout(700);
     const llamada = escr.find((e) => e.t === "correo_bfk_marcar");
     r.rpc_gestionado = !!llamada && llamada.body.p_id === 1 && llamada.body.p_estado === "gestionado";
-    r.sale_de_pendientes = (await sec.getAttribute("data-correos-pendientes")) === "2" && (await sec.locator('[data-correo="1"]').count()) === 0;
+    r.sale_de_pendientes = (await sec.getAttribute("data-correos-pendientes")) === "3" && (await sec.locator('[data-correo="1"]').count()) === 0;
     r.contador_baja = (await numAlertas(page)) === n0 - 1;
     await sec.locator("[data-correos-ver-gestionados]").click(); await page.waitForTimeout(300);
     r.ver_gestionados = (await sec.locator('[data-correo-estado="gestionado"]').count()) === 2 && /Gestionado por Admin/.test(await sec.locator('[data-correo="1"]').innerText());
     await sec.locator('[data-correo="1"] [data-correo-marcar]').click(); await page.waitForTimeout(700);
-    r.reabrir = escr.filter((e) => e.t === "correo_bfk_marcar").at(-1)?.body.p_estado === "pendiente" && (await sec.getAttribute("data-correos-pendientes")) === "3";
+    r.reabrir = escr.filter((e) => e.t === "correo_bfk_marcar").at(-1)?.body.p_estado === "pendiente" && (await sec.getAttribute("data-correos-pendientes")) === "4";
     await sec.locator("[data-correos-ver-gestionados]").click(); await page.waitForTimeout(300);
     // Ir a la OC y ver la sección Comunicaciones
     await sec.locator('[data-correo="1"] [data-correo-abrir-oc]').click(); await page.waitForTimeout(1500);

@@ -30,7 +30,7 @@ import { cambiosProducto } from "./lib/productosOC";
 import { CLAVE_REVISION_AUTO, LIMITE_USO_DIARIO, PREFIJO_FOTO_MP, cambiosOCDesdeMP, claveFotoMP, elegirRevisionAutomatica, fotoMP, lineaVentaDesdeMP, mpCancelada, planProductosVenta, toca } from "./lib/mercadoPublico";
 import { alimentarCatalogoDesdeOC } from "./lib/entidadesOC";
 import { rpcArchivarOC, rpcRestaurarOC, cargarCorreosBfk, rpcMarcarCorreo } from "./lib/supabase";
-import { contarCorreosPendientes, desdeCorreos, reemplazarCorreo } from "./lib/correosBfk";
+import { contarCorreosAccion, desdeCorreos, reemplazarCorreo } from "./lib/correosBfk";
 import { C, MONO, SANS, fmt } from "./lib/theme";
 import { Ic } from "./components/ui/Iconos";
 import { generarPdfPantallas } from "./lib/pdfPantallas";
@@ -1594,7 +1594,7 @@ export default function App() {
   const tituloPantalla=tab==="panel"?`${saludo}, ${perfil?.nombre?.split(" ")[0]||""}`:pantalla.label;
   const subtituloPantalla=tab==="panel"?new Date().toLocaleDateString("es-CL",{weekday:"long",day:"numeric",month:"long"}):pantalla.desc;
   const visibles=visiblesPara(perfil?.rol==="admin");
-  const nAlertas=contarAlertas(notificaciones,alertasUrgentes)+contarCorreosPendientes(correosBfk);
+  const nAlertas=contarAlertas(notificaciones,alertasUrgentes)+contarCorreosAccion(correosBfk);
   const salir=()=>{ setMenuMas(false); handleLogout(); };
   const nuevaOC=()=>{ setMenuMas(false); setAccion("compra_oc"); };
 

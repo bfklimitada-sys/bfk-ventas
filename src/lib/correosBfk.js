@@ -33,6 +33,8 @@ export const ordenarCorreos = (lista) =>
 
 export const pendientesCorreo = (lista) => ordenarCorreos((lista || []).filter(esPendiente));
 export const contarCorreosPendientes = (lista) => (lista || []).filter(esPendiente).length;
+// Para la campana: solo los pendientes que implican una acción (prioridad ≥ 1); los informativos se listan pero no suman.
+export const contarCorreosAccion = (lista) => (lista || []).filter((c) => esPendiente(c) && Number(c.prioridad) >= 1).length;
 export const correosDeOC = (lista, ocId) => ordenarCorreos((lista || []).filter((c) => ocId && c.oc_id === ocId));
 
 // filtro: "todos" | "oc" (asociados a una OC) | "general" (sin OC)
