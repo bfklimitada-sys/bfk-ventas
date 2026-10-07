@@ -103,8 +103,8 @@ select pg_temp.error('V_venta_propia_exige_vendedor', $q$select public.asignar_v
 select public.asignar_financiador_oc('tvf_a', 'tvf_f2') \g /dev/null
 select pg_temp.ok('F_venta_propia_conserva', (pg_temp.oc('tvf_a')).es_venta_propia and (pg_temp.oc('tvf_a')).financiador_id = 'tvf_f2') \g /dev/null
 
-select pg_temp.ok('N_consistencia', not exists (select 1 from public.fin_verificar_consistencia())) \g /dev/null
 reset role;
+select pg_temp.ok('N_consistencia', not exists (select 1 from public.fin_verificar_consistencia())) \g /dev/null
 set local role anon;
 select pg_temp.error('P_anon_no_ejecuta', $q$select public.asignar_vendedor_oc('tvf_a', null)$q$, 'permission denied|permiso') \g /dev/null
 reset role;
