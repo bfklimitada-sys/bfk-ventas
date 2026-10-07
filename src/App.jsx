@@ -29,7 +29,8 @@ import { buscarOCPorCodigo, esCodigoMP, esErrorDuplicado, estadoMP, fechaOCEdita
 import { cambiosProducto } from "./lib/productosOC";
 import { CLAVE_REVISION_AUTO, LIMITE_USO_DIARIO, PREFIJO_FOTO_MP, cambiosOCDesdeMP, claveFotoMP, elegirRevisionAutomatica, fotoMP, lineaVentaDesdeMP, mpCancelada, planProductosVenta, toca } from "./lib/mercadoPublico";
 import { alimentarCatalogoDesdeOC } from "./lib/entidadesOC";
-import { rpcArchivarOC, rpcRestaurarOC } from "./lib/supabase";
+import { rpcArchivarOC, rpcRestaurarOC, cargarCorreosBfk, rpcMarcarCorreo } from "./lib/supabase";
+import { contarCorreosPendientes, desdeCorreos, reemplazarCorreo } from "./lib/correosBfk";
 import { C, MONO, SANS, fmt } from "./lib/theme";
 import { Ic } from "./components/ui/Iconos";
 import { generarPdfPantallas } from "./lib/pdfPantallas";
@@ -63,6 +64,7 @@ export default function App() {
   const [pagoFinSueltos,setPagoFinSueltos]=useState([]);
   const [difsHistoricas,setDifsHistoricas]=useState([]); // Fase 4B: diferencias históricas pendientes de aprobación (solo lectura)
   const [notificaciones,setNotificaciones]=useState([]);
+  const [correosBfk,setCorreosBfk]=useState([]); // Fase Correos: correos del buzón de BFK como notificaciones (solo lectura)
   const [historialCambios,setHistorialCambios]=useState([]);
   const [aportes,setAportes]=useState([]);
   const [porAceptar,setPorAceptar]=useState([]); // OCs enviadas y sin aceptar en MP
@@ -273,7 +275,7 @@ export default function App() {
     if(!session) return;
     const t=session.access_token;
     try {
-      const [ocsD,finD,vendD,catD,gastD,ivaD,pagVD,ajuD,perfD,contD,entD,pagoFinSueltosD,notifD,histD,reclamosD,respD,pvD,aporD,cartD,sbD,bmD,difD,fotosD]=await enLotes([
+      const [ocsD,finD,vendD,catD,gastD,ivaD,pagVD,ajuD,perfD,contD,entD,pagoFinSueltosD,notifD,histD,reclamosD,respD,pvD,aporD,cartD,sbD,bmD,difD,fotosD,correosD]=await enLotes([
         ()=>conReintento(()=>selOCs(t)),
         ()=>sel("financiadores",t,"&order=nombre").catch(()=>[]),
         ()=>sel("vendedores",t,"&order=nombre").catch(()=>[]),
@@ -297,6 +299,7 @@ export default function App() {
         ()=>sel("banco_mensual",t,"&order=id.desc&limit=24").catch(()=>[]),
         ()=>sel("fin_diferencias_historicas",t,"&estado=eq.pendiente").catch(()=>[]),
         ()=>sel("mp_cache_avisos",t,`&id=like.${PREFIJO_FOTO_MP}*`).catch(()=>[]),
+        ()=>cargarCorreosBfk(t,desdeCorreos()).catch(()=>[]),
       ]);
       const reclamosPorOC={}, respPorOC={}, pvPorOC={};
       for(const r of reclamosD){ if(!reclamosPorOC[r.oc_id]) reclamosPorOC[r.oc_id]=[]; reclamosPorOC[r.oc_id].push(r); }
@@ -308,7 +311,7 @@ export default function App() {
       setOcs(ocsConReclamos.filter(o=>!o.archivada)); setOcsArchivadas(ocsConReclamos.filter(o=>o.archivada)); setFinanciadores(finD); setVendedores(vendD); setCategoriasGasto(catD);
       setGastos(gastD); setIvaMensual(ivaD); setPagosVendedor(pagVD); setAjustesSaldo(ajuD); setPerfiles(perfD);
       setContactos(contD); setEntidadesCatalogo(entD); setPagoFinSueltos(pagoFinSueltosD);
-      setNotificaciones(notifD); setHistorialCambios(histD); setAportes(aporD); setUltimaCartola((cartD||[])[0]||null); setSaldoBanco((sbD||[])[0]||null); setBancoMensual(bmD||[]); setDifsHistoricas(difD||[]);
+      setNotificaciones(notifD); setHistorialCambios(histD); setAportes(aporD); setUltimaCartola((cartD||[])[0]||null); setSaldoBanco((sbD||[])[0]||null); setBancoMensual(bmD||[]); setDifsHistoricas(difD||[]); setCorreosBfk(correosD||[]);
 
       // Reintentar completar las OCs que se guardaron antes de ser aceptadas
       const ocsActivasCarga=ocsConReclamos.filter(o=>!o.archivada);
@@ -326,6 +329,12 @@ export default function App() {
     } catch(e){ showToast(e.message,"error"); }
   };
   useEffect(()=>{ if(session) cargarTodo(); },[session]);
+  // Correos de BFK: se refrescan cada 5 minutos con la app abierta (la sincronización con Gmail corre aparte, cada hora).
+  useEffect(()=>{
+    if(!session) return;
+    const id=setInterval(()=>{ const t=sesionRef.current?.access_token; if(t) cargarCorreosBfk(t,desdeCorreos()).then(setCorreosBfk).catch(()=>{}); },5*60*1000);
+    return()=>clearInterval(id);
+  },[session?.user?.id]);
 
   useEffect(()=>{
     if(!session) return;
@@ -1346,6 +1355,14 @@ export default function App() {
     catch(e){ showToast(e.message,"error"); }
     await cargarTodo();
   };
+  // Pendiente ⇄ gestionado (solo el estado en BFK; el correo original no se toca).
+  const handleMarcarCorreo=async(id,estado)=>{
+    try{
+      const fila=await rpcMarcarCorreo(session.access_token,id,estado);
+      setCorreosBfk(prev=>reemplazarCorreo(prev,fila));
+      showToast(estado==="gestionado"?"Correo marcado como gestionado":"Correo pendiente otra vez");
+    }catch(e){ showToast(e.message,"error"); }
+  };
   const handleMarcarNotificacionesLeidas=async()=>{
     const t=session.access_token;
     const noLeidas=notificaciones.filter(n=>!n.leida);
@@ -1577,15 +1594,15 @@ export default function App() {
   const tituloPantalla=tab==="panel"?`${saludo}, ${perfil?.nombre?.split(" ")[0]||""}`:pantalla.label;
   const subtituloPantalla=tab==="panel"?new Date().toLocaleDateString("es-CL",{weekday:"long",day:"numeric",month:"long"}):pantalla.desc;
   const visibles=visiblesPara(perfil?.rol==="admin");
-  const nAlertas=contarAlertas(notificaciones,alertasUrgentes);
+  const nAlertas=contarAlertas(notificaciones,alertasUrgentes)+contarCorreosPendientes(correosBfk);
   const salir=()=>{ setMenuMas(false); handleLogout(); };
   const nuevaOC=()=>{ setMenuMas(false); setAccion("compra_oc"); };
 
   const contenidoPantallas=(
     <>
       {(tab==="panel"||todo)&&hoja("panel",<PanelDashboard onBuscarCompras={(q)=>{setBusquedaCompras(q);setFiltroCompras(null);setOcFoco(null);setVolverA(null);setTab("compras");}} ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} aportes={aportes} perfil={perfil} onExportarTodo={handleExportarTodo} exportando={exportando} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setVolverA(null);setTab(t);}} onAccion={(k)=>setAccion(k)} onSincronizar={completarTodasDesdeMP} onCorregirFechas={corregirFechasTodas} sincronizando={sincronizando} porAceptar={porAceptar.filter(a=>!buscarDuplicadoOC(a.numero_oc))} onActualizarPorAceptar={revisarPorAceptar} verificandoPorAceptar={verificandoPorAceptar} aceptadasSinCargar={aceptadasSinCargar.filter(a=>!buscarDuplicadoOC(a.numero_oc))} onCargarOC={(numero)=>{setCodigoOcRapida(numero);setAccion("compra_oc");}} onCargarTodasAceptadas={handleCargarTodasAceptadas} cargandoAceptadas={cargandoAceptadas} onActualizarAceptadas={revisarAceptadasSinCargar} verificandoAceptadas={verificandoAceptadas} canceladasEnMP={canceladasEnMP.filter(c=>ocs.some(o=>o.id===c.id))} onArchivarCancelada={(id)=>handleArchivarOC(id,"Cancelada en Mercado Público")} onActualizarCanceladas={revisarCanceladasEnMP} verificandoCanceladas={verificandoCanceladas} onValidarTodo={validarTodoContraMP} validandoTodo={validandoTodo} usoMP={usoMP} actMP={actMP} esCodigoMP={esCodigoMP} ultimaCartola={ultimaCartola} saldoBanco={saldoBanco} bancoMensual={bancoMensual} onEditarSaldo={()=>setAccion("saldo_banco")} />)}
-      {(tab==="compras"||todo)&&hoja("compras",<>{!todo&&volverA==="notif"&&<button onClick={()=>{setVolverA(null);setTab("notif");}} style={{width:"100%",textAlign:"left",background:C.tealLight,color:C.tealDark,border:"none",borderRadius:10,padding:"10px 12px",marginBottom:10,fontWeight:800,fontSize:13,minHeight:44,cursor:"pointer"}}>← Volver a Alertas</button>}<PanelCompras difsHistoricas={difsHistoricas} onCambiarFinanciamiento={handleCambiarFinanciamiento} busquedaInicial={busquedaCompras} ocs={ocs} perfiles={perfiles} filtroInicial={filtroCompras} ocFoco={ocFoco} onFocoUsado={()=>setOcFoco(null)} contactos={contactos} onEnviarReclamo={handleEnviarReclamo} onCorreoOC={handleCorreoOC} onRegistrarRespuestaReclamo={handleRegistrarRespuestaReclamo} onGuardarContacto={handleGuardarContacto} onGuardarDatosOC={handleGuardarDatosOC} onEditarEvento={handleEditarEvento} financiadores={financiadores} onConfirmarEntrega={handleEntrega} onEmitirFactura={handleFactura} onPagoCliente={handlePagoCliente} onPagoFinanciamiento={handlePagoFin} entidadesCatalogo={entidadesCatalogo} onGuardarLink={handleGuardarLink} onEliminarLink={handleEliminarLink} onEditarLink={handleEditarLink} onRepartirInversion={handleRepartirInversion} buscarDuplicadoOC={buscarDuplicadoOC} onSincronizarFecha={handleSincronizarFecha} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={handleAgregarComentario} onEliminarComentario={handleEliminarComentario} onArchivarOC={handleArchivarOC} onEliminarFactura={handleEliminarFactura} onRegistrarNC={handleNotaCredito} onEliminarEvento={handleEliminarEvento} vendedores={vendedores} onIngresarCompra={handleIngresarCompra} onAsignarResponsable={handleAsignarResponsable} onGuardarPostventa={handleGuardarPostventa} /></>)}
-      {(tab==="notif"||todo)&&hoja("notif",<PanelNotificaciones notificaciones={notificaciones} ocs={ocs} onMarcarLeidas={handleMarcarNotificacionesLeidas} filtroAlertas={filtroAlertas} onFiltroAlertas={setFiltroAlertas} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setVolverA(ocId?"notif":null);setTab(t);}} />)}
+      {(tab==="compras"||todo)&&hoja("compras",<>{!todo&&volverA==="notif"&&<button onClick={()=>{setVolverA(null);setTab("notif");}} style={{width:"100%",textAlign:"left",background:C.tealLight,color:C.tealDark,border:"none",borderRadius:10,padding:"10px 12px",marginBottom:10,fontWeight:800,fontSize:13,minHeight:44,cursor:"pointer"}}>← Volver a Alertas</button>}<PanelCompras correosBfk={correosBfk} onMarcarCorreo={handleMarcarCorreo} difsHistoricas={difsHistoricas} onCambiarFinanciamiento={handleCambiarFinanciamiento} busquedaInicial={busquedaCompras} ocs={ocs} perfiles={perfiles} filtroInicial={filtroCompras} ocFoco={ocFoco} onFocoUsado={()=>setOcFoco(null)} contactos={contactos} onEnviarReclamo={handleEnviarReclamo} onCorreoOC={handleCorreoOC} onRegistrarRespuestaReclamo={handleRegistrarRespuestaReclamo} onGuardarContacto={handleGuardarContacto} onGuardarDatosOC={handleGuardarDatosOC} onEditarEvento={handleEditarEvento} financiadores={financiadores} onConfirmarEntrega={handleEntrega} onEmitirFactura={handleFactura} onPagoCliente={handlePagoCliente} onPagoFinanciamiento={handlePagoFin} entidadesCatalogo={entidadesCatalogo} onGuardarLink={handleGuardarLink} onEliminarLink={handleEliminarLink} onEditarLink={handleEditarLink} onRepartirInversion={handleRepartirInversion} buscarDuplicadoOC={buscarDuplicadoOC} onSincronizarFecha={handleSincronizarFecha} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={handleAgregarComentario} onEliminarComentario={handleEliminarComentario} onArchivarOC={handleArchivarOC} onEliminarFactura={handleEliminarFactura} onRegistrarNC={handleNotaCredito} onEliminarEvento={handleEliminarEvento} vendedores={vendedores} onIngresarCompra={handleIngresarCompra} onAsignarResponsable={handleAsignarResponsable} onGuardarPostventa={handleGuardarPostventa} /></>)}
+      {(tab==="notif"||todo)&&hoja("notif",<PanelNotificaciones correos={correosBfk} onMarcarCorreo={handleMarcarCorreo} notificaciones={notificaciones} ocs={ocs} onMarcarLeidas={handleMarcarNotificacionesLeidas} filtroAlertas={filtroAlertas} onFiltroAlertas={setFiltroAlertas} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setVolverA(ocId?"notif":null);setTab(t);}} />)}
       {(tab==="agenda"||todo)&&hoja("agenda",<PanelCalendario ocs={ocs} onMarcarFecha={handleMarcarFecha} onVerAlertas={(f)=>{setFiltroCompras(null);setOcFoco(null);setVolverA(null);setFiltroAlertas({nivel:(f&&f.nivel)||"todas",etapa:(f&&f.etapa)||null});setTab("notif");}} />)}
       {(tab==="financiamiento"||todo)&&hoja("financiamiento",<PanelFinanciamiento difsHistoricas={difsHistoricas} financiadores={financiadores} ocs={ocs} ajustes={ajustesSaldo} perfiles={perfiles} onAjustar={handleAjusteSaldo} aportes={aportes} onGuardarAporte={handleGuardarAporte} onEliminarAporte={perfil?.rol==="admin"?handleEliminarAporte:undefined} onAbonar={(finId)=>{setAbonoFinId(typeof finId==="string"||typeof finId==="number"?finId:null);setAccion("abono_fin");}} pagoFinSueltos={pagoFinSueltos} />)}
       {(tab==="gastos"||todo)&&hoja("gastos",<PanelGastos gastos={gastos} categorias={categoriasGasto} ivaMensual={ivaMensual} onNuevoGasto={handleNuevoGasto} onGuardarIva={handleGuardarIva} />)}

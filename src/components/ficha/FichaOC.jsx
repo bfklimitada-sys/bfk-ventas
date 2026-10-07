@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Field } from "../ui/Basicos";
 import { Badge } from "../ui/Sistema";
 import { Ic } from "../ui/Iconos";
+import { TarjetaCorreo } from "../ui/CorreosBfk";
 import { C, MONO, btnP, fmt, iMono, iStyle, selStyle } from "../../lib/theme";
 import { gananciaReal, estadoVencimiento, plazoPago } from "../../lib/calculos";
 import {
@@ -310,7 +311,8 @@ export function CobranzaFicha({ oc }) {
 }
 
 // ── Comunicaciones / pendientes ────────────────────────────────
-export function ComunicacionesFicha({ oc, pendientes }) {
+export function ComunicacionesFicha({ oc, pendientes, correos = [], onMarcarCorreo }) {
+  const correosPend = correos.filter((c) => c.estado === "pendiente"), correosGest = correos.filter((c) => c.estado !== "pendiente");
   const reclamos = (oc.oc_reclamos || []).slice().sort((a, b) => String(b.fecha || "").localeCompare(String(a.fecha || "")));
   return (
     <div data-comunicaciones>
@@ -326,8 +328,19 @@ export function ComunicacionesFicha({ oc, pendientes }) {
             {r.fecha ? fmt.date(String(r.fecha).slice(0, 10)) : "—"} · {r.tipo || "reclamo de pago"} · {r.correo || "—"}{r.respuesta ? ` · respuesta: ${r.respuesta}` : ""}
           </div>
         ))}
-      <div data-correos-pendiente style={{ marginTop: 10, border: `1px dashed ${C.border}`, borderRadius: 10, padding: "10px 12px", fontSize: 12, color: C.inkFaint, lineHeight: 1.5 }}>
-        <Ic n="📧" /> Aquí se mostrarán los correos relacionados con esta OC (cliente, proveedor y SII) cuando se conecte el correo. Por ahora no se leen correos.
+      <div data-correos-oc={correos.length} style={{ marginTop: 10 }}>
+        <div style={{ ...titulo, marginBottom: 4 }}>Correos recibidos{correosPend.length ? ` · ${correosPend.length} pendiente${correosPend.length > 1 ? "s" : ""}` : ""}</div>
+        {correos.length === 0
+          ? <div style={{ fontSize: 12, color: C.inkFaint, lineHeight: 1.5 }}><Ic n="📧" /> Ningún correo del buzón de BFK asociado a esta OC en los últimos 30 días.</div>
+          : <>
+              {correosPend.map((c) => <TarjetaCorreo key={c.id} correo={c} mostrarOC={false} onMarcar={onMarcarCorreo} />)}
+              {correosGest.length > 0 && (
+                <details style={{ marginTop: 4 }}>
+                  <summary style={{ fontSize: 12, color: C.inkMuted, cursor: "pointer", minHeight: 32 }}>Gestionados ({correosGest.length})</summary>
+                  {correosGest.map((c) => <TarjetaCorreo key={c.id} correo={c} mostrarOC={false} onMarcar={onMarcarCorreo} />)}
+                </details>
+              )}
+            </>}
       </div>
     </div>
   );

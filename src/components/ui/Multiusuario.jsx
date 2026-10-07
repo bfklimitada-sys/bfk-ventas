@@ -1,4 +1,5 @@
 import { diasAtrasoEntrega, esVenta, ocCanceladaEnMP, estaCerrada, estaCobrada, estaComprada, estaEntregada, estaFacturada, facturaPorCobrar, fechaEntregaEstimada, financiamientoPagado, tieneVendedor, valeVistasPendientes, vencimientoFactura } from "../../lib/ocs";
+import { CorreosPendientes } from "./CorreosBfk";
 import { useState, useEffect } from "react";
 import { del } from "../../lib/supabase";
 import { C, MONO, SANS, fmt } from "../../lib/theme";
@@ -261,7 +262,7 @@ export function calcularAlertas(ocs) {
 // nivel: todas | alto | medio | bajo · etapa (opcional): refina con el campo `filtro` que ya trae cada alerta
 // ("entrega" = entregas atrasadas, "cobro" = facturas vencidas), sin categorías nuevas.
 const ETAPA_ALERTA = { entrega: "entregas atrasadas", cobro: "facturas vencidas sin cobrar" };
-export function PanelNotificaciones({ notificaciones, ocs, onMarcarLeidas, onNavigate, filtroAlertas, onFiltroAlertas }) {
+export function PanelNotificaciones({ notificaciones, ocs, onMarcarLeidas, onNavigate, filtroAlertas, onFiltroAlertas, correos, onMarcarCorreo }) {
   const [filtroLocal, setFiltroLocal] = useState({ nivel: "todas", etapa: null });
   const fa = filtroAlertas || filtroLocal;
   const setFa = onFiltroAlertas || setFiltroLocal;
@@ -291,6 +292,7 @@ export function PanelNotificaciones({ notificaciones, ocs, onMarcarLeidas, onNav
 
   return (
     <div style={{fontFamily:SANS}}>
+      {correos && <CorreosPendientes correos={correos} ocs={ocs} onMarcar={onMarcarCorreo} onAbrirOC={(ocId) => onNavigate && onNavigate("compras", null, ocId)} />}
       <div style={{marginBottom:12}}>
         <div style={{fontWeight:800,fontSize:14,color:C.ink}}>Alertas</div>
         <div style={{fontSize:12,color:C.inkFaint,marginTop:2}}>

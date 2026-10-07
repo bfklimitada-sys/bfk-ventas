@@ -117,3 +117,15 @@ export const genId = (p) => `${p}_${Date.now()}_${Math.random().toString(36).sli
 
 // Hojas que se pueden volver a importar (subconjunto de la lista única de respaldo; el orden y los nombres no cambian).
 export const TABLAS_EXPORT = HOJAS_RESPALDO.filter(h=>h.importable).map(({hoja,tabla})=>({hoja,tabla}));
+
+// Correos de BFK (Fase Correos): pendientes + gestionados de los últimos 30 días, y cambio de estado.
+// Solo lectura de la tabla; el estado se cambia con la RPC (el correo original en Gmail no se toca).
+export async function cargarCorreosBfk(t, desdeIso) {
+  return sel("correos_bfk", t, `&or=(estado.eq.pendiente,fecha.gte.${encodeURIComponent(desdeIso)})&order=fecha.desc&limit=500`);
+}
+export async function rpcMarcarCorreo(t, id, estado) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/correo_bfk_marcar`, { method:"POST", headers:hdrs(t), body:JSON.stringify({ p_id: id, p_estado: estado }) });
+  const cuerpo = await r.json().catch(()=>null);
+  if (!r.ok) throw new Error(cuerpo?.message || `No se pudo actualizar el correo (HTTP ${r.status})`);
+  return cuerpo;
+}
