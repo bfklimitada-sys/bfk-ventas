@@ -120,6 +120,6 @@ begin
   delete from public.eventos_factura where id = 'tsii_nc2';
   perform pg_temp.ok('T12_borrar_nc_restaura', (pg_temp.oc('tsii_2')).monto_facturado = 238000 and pg_temp.est('tsii_f2') = 'vigente');
   -- Las OCs reales no cambiaron
-  perform pg_temp.ok('T13_ocs_reales_intactas', not exists (select 1 from _t_antes a join public.ordenes_compra_v2 o on o.id = a.id where md5(to_jsonb(o)::text) <> a.h));
+  perform pg_temp.ok('T13_ocs_reales_intactas', not exists (select 1 from _t_antes a join public.ordenes_compra_v2 x on x.id = a.id where md5(to_jsonb(x)::text) <> a.h));
 end $$;
 reset role;
