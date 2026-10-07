@@ -4,23 +4,24 @@
 \set ON_ERROR_STOP on
 \pset tuples_only on
 \pset format unaligned
+reset role;
 
 select id as adm from public.perfiles where rol = 'admin' order by id limit 1 \gset
 select set_config('t.adm', :'adm', true) \g /dev/null
 
-create function pg_temp.ok(p_nombre text, p_cond boolean, p_det text default '') returns void language plpgsql as $$
+create or replace function pg_temp.ok(p_nombre text, p_cond boolean, p_det text default '') returns void language plpgsql as $$
 begin
   if coalesce(p_cond, false) then raise notice 'RESULT|%|OK', p_nombre; else raise notice 'FALLA|%|%', p_nombre, p_det; end if;
 end $$;
-create function pg_temp.error(p_nombre text, p_sql text, p_patron text) returns void language plpgsql as $$
+create or replace function pg_temp.error(p_nombre text, p_sql text, p_patron text) returns void language plpgsql as $$
 begin
   begin execute p_sql; raise notice 'FALLA|%|no falló', p_nombre;
   exception when others then
     if sqlerrm ~* p_patron then raise notice 'RESULT|%|OK', p_nombre; else raise notice 'FALLA|%|%', p_nombre, sqlerrm; end if;
   end;
 end $$;
-create function pg_temp.oc(p_id text) returns public.ordenes_compra_v2 language sql as $$ select * from public.ordenes_compra_v2 where id = p_id $$;
-create function pg_temp.est(p_id text) returns text language sql as $$ select estado from public.documentos_tributarios where id = p_id $$;
+create or replace function pg_temp.oc(p_id text) returns public.ordenes_compra_v2 language sql as $$ select * from public.ordenes_compra_v2 where id = p_id $$;
+create or replace function pg_temp.est(p_id text) returns text language sql as $$ select estado from public.documentos_tributarios where id = p_id $$;
 
 -- Conciliación aplicada (datos reales; solo lectura)
 do $$
@@ -47,8 +48,8 @@ begin
   perform pg_temp.ok('C_consistencia_vacia', not exists (select 1 from public.fin_verificar_consistencia()));
 end $$;
 
-create temp table _t_antes as select o.id, md5(to_jsonb(o)::text) h from public.ordenes_compra_v2 o;
-grant all on _t_antes to authenticated;
+create temp table _tsii_antes as select o.id, md5(to_jsonb(o)::text) h from public.ordenes_compra_v2 o;
+grant all on _tsii_antes to authenticated;
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', current_setting('t.adm'), true), set_config('request.jwt.claim.role', 'authenticated', true),
@@ -120,6 +121,6 @@ begin
   delete from public.eventos_factura where id = 'tsii_nc2';
   perform pg_temp.ok('T12_borrar_nc_restaura', (pg_temp.oc('tsii_2')).monto_facturado = 238000 and pg_temp.est('tsii_f2') = 'vigente');
   -- Las OCs reales no cambiaron
-  perform pg_temp.ok('T13_ocs_reales_intactas', not exists (select 1 from _t_antes a join public.ordenes_compra_v2 x on x.id = a.id where md5(to_jsonb(x)::text) <> a.h));
+  perform pg_temp.ok('T13_ocs_reales_intactas', not exists (select 1 from _tsii_antes a join public.ordenes_compra_v2 x on x.id = a.id where md5(to_jsonb(x)::text) <> a.h));
 end $$;
 reset role;
