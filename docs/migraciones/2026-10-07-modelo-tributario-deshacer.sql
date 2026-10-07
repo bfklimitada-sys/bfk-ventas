@@ -86,7 +86,7 @@ end $$;
 drop function if exists public.fin_monto_tributario(text);
 drop index if exists public.idx_eventos_factura_oc_tipo;
 alter table public.eventos_factura drop constraint chk_factura_positiva;
-alter table public.eventos_factura add constraint chk_factura_positiva check (monto > (0)::numeric);
+alter table public.eventos_factura add constraint chk_factura_positiva check (coalesce(monto, (0)::numeric) > (0)::numeric);
 alter table public.eventos_factura
   drop constraint if exists eventos_factura_ref_nc_chk,
   drop constraint if exists eventos_factura_origen_chk,

@@ -70,12 +70,12 @@ declare d text;
 begin
   select pg_get_constraintdef(c.oid) into d from pg_constraint c
    where c.conrelid = 'public.eventos_factura'::regclass and c.conname = 'chk_factura_positiva';
-  if d is distinct from 'CHECK ((monto > (0)::numeric))' then
+  if d is distinct from 'CHECK ((COALESCE(monto, (0)::numeric) > (0)::numeric))' then
     raise exception 'SII-MODELO: chk_factura_positiva no es la esperada (%). No se aplicó nada.', d;
   end if;
 end $$;
 alter table public.eventos_factura drop constraint chk_factura_positiva;
-alter table public.eventos_factura add constraint chk_factura_positiva check (monto > 0 or (tipo_dte = 61 and monto >= 0));
+alter table public.eventos_factura add constraint chk_factura_positiva check (coalesce(monto, 0) > 0 or (tipo_dte = 61 and monto >= 0));
 
 create index if not exists idx_eventos_factura_oc_tipo on public.eventos_factura (oc_id, tipo_dte);
 
