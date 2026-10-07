@@ -76,9 +76,12 @@ export const calcMargen = (venta, costo) => {
 
 // ── Comisión de vendedores ────────────────────────────────────
 // Meses (YYYY-MM) en que el vendedor tiene facturas emitidas.
+// Solo una VENTA de BFK con factura emitida genera comisión. Una venta externa (el vendedor la cobró y el
+// dinero es suyo) o un aporte nunca generan comisión, aunque tengan vendedor asignado.
+export const generaComision = (o) => (o?.tipo_registro || "venta") === "venta" && o?.estado_factura_propia === "emitida";
 export const mesesConFactura = (vendedorId, ocs) => {
   const set = new Set();
-  ocs.filter((o) => o.vendedor_id === vendedorId && o.estado_factura_propia === "emitida").forEach((o) => {
+  ocs.filter((o) => o.vendedor_id === vendedorId && generaComision(o)).forEach((o) => {
     const p = periodoComision(o);
     if (p) set.add(`${p.anio}-${String(p.mes).padStart(2, "0")}`);
   });
@@ -131,7 +134,7 @@ export const retencionesPeriodo = (registro) => {
 export const calcularPagoVendedor = ({ vendedorId, ocs, anio, mes, ivaMensual = [], pagosVendedor = [] }) => {
   let sumaFacts = 0, sumaUtilidad = 0, pagoVentasPropias = 0, hayFacturas = false;
   const detalle = [];   // las OCs que forman el cálculo del mes (Fase 4C)
-  ocs.filter((o) => o.vendedor_id === vendedorId && o.estado_factura_propia === "emitida").forEach((o) => {
+  ocs.filter((o) => o.vendedor_id === vendedorId && generaComision(o)).forEach((o) => {
     // Regla 4: solo la factura vigente define el mes; una anulada no vuelve a generar comisión.
     const p = periodoComision(o);
     if (!p || p.anio !== anio || p.mes !== mes) return;
