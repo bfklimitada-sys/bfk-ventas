@@ -24,6 +24,8 @@ const TABLAS = () => ({
       eventos_compra: [{ id: "c5", oc_id: "oc5", fecha: "2026-09-05", costo_compra: 50000, monto_venta: 119000, financiador_id: "f1" }],
       eventos_pago_financiamiento: [{ id: "p5", oc_id: "oc5", fecha: "2026-09-06", monto: 50000, financiador_id: "f1" }] }),
     base(6, { vendedor_id: "v1", financiador_id: "f2" }),                                     // misma persona
+    base(7, { vendedor_id: null, financiador_id: "fb", capitalizacion_bfk: true }),            // capitalización BFK Ltda.
+    base(8, { vendedor_id: "v1", financiador_id: "f1", comision_excluida: true }),             // vendedor histórico, mes cerrado
   ].map(conNombres),
   perfiles: [{ id: "u1", nombre: "Admin", rol: "admin" }], vendedores: VEND, financiadores: FIN,
   pagos_vendedor: [{ id: "pv1", vendedor_id: "v1", anio: 2026, mes: 5, monto_pagado: 1000, fecha: "2026-05-31", estado: "pagado" }],
@@ -42,7 +44,7 @@ for (const [modo, vp] of [["escritorio", { width: 1280, height: 900 }], ["movil"
     const t = u.pathname.split("/").pop();
     if (u.pathname.includes("/rpc/")) { const body = route.request().postDataJSON() || {}; rpcs.push({ t, body });
       if (t === "gestionar_bloqueo_oc") return route.fulfill({ json: { ok: true } });
-      if (t === "asignar_vendedor_oc") { const o = T.ordenes_compra_v2.find((x) => x.id === body.p_oc_id); o.vendedor_id = body.p_vendedor_id; Object.assign(o, conNombres(o)); return route.fulfill({ json: { ok: true, despues: o.vendedores?.nombre || "Sin definir" } }); }
+      if (t === "asignar_vendedor_oc") { const o = T.ordenes_compra_v2.find((x) => x.id === body.p_oc_id); o.capitalizacion_bfk = body.p_vendedor_id === "__capitalizacion__"; o.vendedor_id = o.capitalizacion_bfk ? null : body.p_vendedor_id; Object.assign(o, conNombres(o)); return route.fulfill({ json: { ok: true, despues: o.vendedores?.nombre || "Sin definir" } }); }
       if (t === "asignar_financiador_oc") { const o = T.ordenes_compra_v2.find((x) => x.id === body.p_oc_id); o.financiador_id = body.p_financiador_id; for (const c of o.eventos_compra) c.financiador_id = body.p_financiador_id; Object.assign(o, conNombres(o)); return route.fulfill({ json: { ok: true, despues: o.financiadores?.nombre || "Sin definir" } }); }
       return route.fulfill({ json: [] }); }
     if (m !== "GET") return route.fulfill({ json: [] });
@@ -58,7 +60,7 @@ for (const [modo, vp] of [["escritorio", { width: 1280, height: 900 }], ["movil"
   // Filtros (siempre visibles)
   const contar = async () => page.locator("[data-oc]").count();
   await page.locator('[data-filtro="vendedor"]').selectOption("v1"); await page.waitForTimeout(300);
-  r.filtro_vendedor = (await contar()) === 4;
+  r.filtro_vendedor = (await contar()) === 5;
   await page.locator('[data-filtro="vendedor"]').selectOption("__sin__"); await page.waitForTimeout(300);
   r.filtro_falta_vendedor = (await contar()) === 1 && (await fila(2).count()) === 1;
   await page.locator('[data-filtro="vendedor"]').selectOption(""); await page.locator('[data-filtro="financiador"]').selectOption("f2"); await page.waitForTimeout(300);
@@ -66,7 +68,12 @@ for (const [modo, vp] of [["escritorio", { width: 1280, height: 900 }], ["movil"
   await page.locator('[data-filtro="financiador"]').selectOption("__sin__"); await page.waitForTimeout(300);
   r.filtro_falta_financiador = (await contar()) === 1 && (await fila(2).count()) === 1;
   await page.locator('[data-filtro="financiador"]').selectOption(""); await page.waitForTimeout(300);
-  r.filtros_limpios = (await contar()) === 6;
+  r.filtros_limpios = (await contar()) === 8;
+  await page.locator('[data-filtro="vendedor"]').selectOption("__capitalizacion__"); await page.waitForTimeout(300);
+  r.filtro_capitalizacion = (await contar()) === 1 && (await fila(7).count()) === 1;
+  await page.locator('[data-filtro="vendedor"]').selectOption(""); await page.waitForTimeout(300);
+  r.lista_capitalizacion = (await fila(7).locator("[data-chip-capitalizacion]").count()) === 1 && (await fila(7).locator('[data-aviso="sin-vendedor"]').count()) === 0
+    && /BFK Ltda\. · Capitalización/.test(await fila(7).innerText()) && /F: Cuenta/.test(await fila(7).innerText());
 
   const abrir = async (n) => { await fila(n).locator("> div").first().click(); await page.waitForTimeout(900); return page.locator(`[data-ficha-oc="TVF-${n}-AG26"]`); };
   const cerrar = async (n) => { await fila(n).locator("> div").first().click(); await page.waitForTimeout(400); };
@@ -119,6 +126,25 @@ for (const [modo, vp] of [["escritorio", { width: 1280, height: 900 }], ["movil"
   await f.locator('[data-asignacion="financiador"] [data-asignacion-select]').selectOption("f2");
   r.financiamiento_pagado_bloqueado = /pagados al financiador/.test(await f.locator("[data-asignacion-bloqueo]").innerText());
   await f.locator('[data-asignacion="financiador"] [data-asignacion-cancelar]').click(); await cerrar(5);
+  // OC 7: capitalización · OC 8: comisión excluida
+  f = await abrir(7);
+  r.ficha_capitalizacion = /BFK Ltda\. · Capitalización/.test(await f.locator('[data-asignacion="vendedor"]').innerText())
+    && /No genera comisión/.test(await f.locator('[data-asignacion="vendedor"]').innerText())
+    && (await f.locator('[data-asignacion="vendedor"]').getAttribute("data-asignacion-valor")) === "__capitalizacion__"
+    && /Cuenta BFK/.test(await f.locator('[data-asignacion="financiador"]').innerText());
+  await cerrar(7);
+  f = await abrir(8);
+  r.ficha_comision_excluida = /Matías Vegas/.test(await f.locator('[data-asignacion="vendedor"]').innerText()) && /No genera comisión/.test(await f.locator('[data-asignacion="vendedor"]').innerText());
+  await cerrar(8);
+  // Marcar una OC sin vendedor como capitalización desde la ficha
+  f = await abrir(2);
+  await f.locator('[data-asignacion="vendedor"] [data-asignacion-editar]').click();
+  await f.locator('[data-asignacion="vendedor"] [data-asignacion-select]').selectOption("__capitalizacion__");
+  r.capitalizacion_aviso = /no genera comisión/i.test(await f.locator("[data-asignacion-aviso]").first().innerText());
+  await f.locator('[data-asignacion="vendedor"] [data-asignacion-guardar]').click(); await page.waitForTimeout(1200);
+  r.marcar_capitalizacion = rpcs.some((x) => x.t === "asignar_vendedor_oc" && x.body.p_oc_id === "oc2" && x.body.p_vendedor_id === "__capitalizacion__")
+    && /BFK Ltda\. · Capitalización/.test(await page.locator('[data-ficha-oc="TVF-2-AG26"] [data-asignacion="vendedor"]').innerText());
+  await cerrar(2);
   // OC 6: la misma persona vende y financia
   f = await abrir(6);
   r.misma_persona = (await f.locator("[data-misma-persona]").count()) === 1;

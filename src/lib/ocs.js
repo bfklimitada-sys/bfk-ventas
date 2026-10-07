@@ -76,7 +76,8 @@ export const estaFacturada = (oc) => oc?.estado_factura_propia === "emitida";
 export const estaCobrada = (oc) => oc?.estado_pago_cliente === "pagado";
 // Etapa de financiamiento cumplida: pagada, o "no aplica" (venta propia o fondos propios, reglas 2 y 3 de la Fase 4B).
 export const financiamientoPagado = (oc) => oc?.estado_pago_financiamiento === "pagado" || oc?.estado_pago_financiamiento === "no_aplica";
-export const tieneVendedor = (oc) => !!oc?.vendedor_id;
+// Vendedor definido: una persona, o venta de capitalización de BFK Ltda. (sin vendedor personal, no es un faltante).
+export const tieneVendedor = (oc) => !!oc?.vendedor_id || !!oc?.capitalizacion_bfk;
 export const estaCerrada = (oc) => estaCobrada(oc) && financiamientoPagado(oc);
 export const etapasCompletadas = (oc) =>
   [estaComprada(oc), estaEntregada(oc), estaFacturada(oc), estaCobrada(oc), financiamientoPagado(oc)].filter(Boolean).length;

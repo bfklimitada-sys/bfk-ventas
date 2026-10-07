@@ -78,7 +78,10 @@ export const calcMargen = (venta, costo) => {
 // Meses (YYYY-MM) en que el vendedor tiene facturas emitidas.
 // Solo una VENTA de BFK con factura emitida genera comisión. Una venta externa (el vendedor la cobró y el
 // dinero es suyo) o un aporte nunca generan comisión, aunque tengan vendedor asignado.
-export const generaComision = (o) => (o?.tipo_registro || "venta") === "venta" && o?.estado_factura_propia === "emitida";
+// Tampoco una venta de capitalización de BFK Ltda. ni una OC con la comisión excluida (vendedor asignado después del
+// cierre del mes: figura con su vendedor, pero no altera la comisión ya cerrada de ese mes).
+export const generaComision = (o) => (o?.tipo_registro || "venta") === "venta" && o?.estado_factura_propia === "emitida"
+  && !o?.capitalizacion_bfk && !o?.comision_excluida;
 export const mesesConFactura = (vendedorId, ocs) => {
   const set = new Set();
   ocs.filter((o) => o.vendedor_id === vendedorId && generaComision(o)).forEach((o) => {

@@ -914,6 +914,8 @@ export function FilaOC({ correosOC = SIN_CORREOS, onMarcarCorreo, pagosVendedor,
           <div data-asignaciones-fila style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:7,fontSize:12}}>
             {faltaVendedor(oc)
               ? <span data-aviso="sin-vendedor" style={{background:C.warnLight,color:C.warnText,fontWeight:800,padding:"2px 8px",borderRadius:999}}><Ic n="⚠"/> Falta vendedor</span>
+              : oc.capitalizacion_bfk
+              ? <span data-chip-capitalizacion style={{background:C.tealLight,color:C.tealDark,fontWeight:800,padding:"2px 8px",borderRadius:999}}>BFK Ltda. · Capitalización</span>
               : <span data-chip-vendedor style={{background:C.paper,border:`1px solid ${C.border}`,color:C.ink,fontWeight:700,padding:"2px 8px",borderRadius:999}}>V: {primerNombre(nombreVendedor(oc,vendedores))}</span>}
             {faltaFinanciador(oc)
               ? <span data-aviso="sin-financiador" style={{background:C.warnLight,color:C.warnText,fontWeight:800,padding:"2px 8px",borderRadius:999}}><Ic n="⚠"/> Falta financiador</span>
@@ -1391,6 +1393,7 @@ export function PanelCompras({ pagosVendedor, onAsignarVendedor, onAsignarFinanc
               <select data-filtro="vendedor" style={{...selStyle,fontSize:12,padding:"8px 10px",marginTop:4,borderColor:crit.vendedor?C.info:undefined}} value={crit.vendedor} onChange={e=>setC("vendedor",e.target.value)}>
                 <option value="">Todos</option>
                 {(vendedores||[]).map(v=><option key={v.id} value={v.id}>{v.nombre}</option>)}
+                <option value="__capitalizacion__">BFK Ltda. · Capitalización ({ocs.filter(o=>o.capitalizacion_bfk).length})</option>
                 <option value="__sin__">Falta vendedor ({ocs.filter(faltaVendedor).length})</option>
               </select></label>
             <label style={{fontSize:12,fontWeight:700,color:C.inkFaint,minWidth:0}}>Financiador
@@ -1520,7 +1523,7 @@ export function PanelCompras({ pagosVendedor, onAsignarVendedor, onAsignarFinanc
             try{
               const desc=[busq.trim()&&`búsqueda "${busq.trim()}"`,filtroExacto&&FILTROS_PANEL[filtroExacto].etiqueta,vista!=="todas"&&`vista ${vista}`,
                 comunaSel&&`comuna ${comunaSel}`,(desde||hasta)&&`fechas ${desde||"…"} a ${hasta||"…"}`,
-                crit.vendedor&&`vendedor ${crit.vendedor==="__sin__"?"sin vendedor":(vendedores||[]).find(v=>v.id===crit.vendedor)?.nombre||crit.vendedor}`,
+                crit.vendedor&&`vendedor ${crit.vendedor==="__sin__"?"sin vendedor":crit.vendedor==="__capitalizacion__"?"BFK Ltda. · Capitalización":(vendedores||[]).find(v=>v.id===crit.vendedor)?.nombre||crit.vendedor}`,
                 crit.financiador&&`financiador ${crit.financiador==="__sin__"?"sin financiador":(financiadores||[]).find(f=>f.id===crit.financiador)?.nombre||crit.financiador}`,
                 crit.proveedor&&`proveedor ${crit.proveedor}`,crit.producto&&`producto "${crit.producto}"`,crit.valeVista&&`vale vista ${crit.valeVista}`,
                 ...FILTROS.filter(f=>filtros[f.key]).map(f=>`${f.label}: ${filtros[f.key]==="ok"?f.okLabel:f.pendLabel}`)].filter(Boolean).join(" · ");

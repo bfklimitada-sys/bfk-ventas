@@ -9,7 +9,7 @@ import { estadoOperativo, etapasCompletadas, fechaCompra, fechaOC, valeVistasPen
 import { productosDe, proveedoresDe } from "./busqueda.js";
 import { recepcionMP } from "./mercadoPublico.js";
 import { esDocumentoBancario, etiquetaMedio } from "./mediosPago.js";
-import { nombreFinanciador, nombreVendedor } from "./asignaciones.js";
+import { estadoComision, nombreFinanciador, nombreVendedor } from "./asignaciones.js";
 
 const fecha10 = (v) => (v ? String(v).slice(0, 10) : "");
 const n = (v) => Number(v) || 0;
@@ -27,6 +27,7 @@ export function filasVista(ocs) {
       "RUT cliente": oc.rut_cliente || "",
       "Comuna": oc.comuna || "",
       "Vendedor": nombreVendedor(oc),
+      "Comisión": estadoComision(oc).texto,
       "Venta propia": oc.es_venta_propia ? "Sí" : "No",
       "Financiador": nombreFinanciador(oc),
       "Estado": estadoOperativo(oc).texto,
@@ -91,7 +92,7 @@ export function contenidoFicha(oc) {
     { titulo: "Orden de compra", pares: [
       ["Código", oc.numero_oc], ["Fecha de la OC", fCL(fechaOC(oc).valor)], ["Estado", estadoOperativo(oc).texto],
       ["Cliente", oc.cliente || "—"], ["Entidad", oc.entidad || "—"], ["RUT", oc.rut_cliente || "—"], ["Comuna", oc.comuna || "—"],
-      ["Vendedor", nombreVendedor(oc)], ["Venta propia", oc.es_venta_propia ? "Sí" : "No"],
+      ["Vendedor", nombreVendedor(oc)], ["Comisión", estadoComision(oc).texto], ["Venta propia", oc.es_venta_propia ? "Sí" : "No"],
       ["Financiador", nombreFinanciador(oc)], ["Plazo de pago", `${oc.dias_pago || 30} días`],
       ["Dirección de despacho", oc.direccion_entrega || "—"],
     ] },

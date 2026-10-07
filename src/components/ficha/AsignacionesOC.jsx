@@ -3,10 +3,10 @@
 import { useState } from "react";
 import { C, R, TOUCH, selStyle } from "../../lib/theme";
 import { Ic } from "../ui/Iconos";
-import { SIN_DEFINIR, evaluarCambioFinanciador, evaluarCambioVendedor, faltaFinanciador, faltaVendedor, nombreFinanciador, nombreVendedor } from "../../lib/asignaciones";
+import { CAPITALIZACION, ETIQUETA_CAPITALIZACION, SIN_DEFINIR, esCapitalizacion, estadoComision, evaluarCambioFinanciador, evaluarCambioVendedor, faltaFinanciador, faltaVendedor, nombreFinanciador, nombreVendedor, valorVendedor } from "../../lib/asignaciones";
 import { tipoFinanciamiento, TIPOS_FINANCIAMIENTO } from "../../lib/finanzas";
 
-function Fila({ etiqueta, rol, nombre, falta, detalle, opciones, valor, evaluar, onGuardar, deshabilitado }) {
+function Fila({ etiqueta, rol, nombre, falta, detalle, opciones, extras = [], valor, evaluar, onGuardar, deshabilitado }) {
   const [editando, setEditando] = useState(false);
   const [sel, setSel] = useState(valor || "");
   const [err, setErr] = useState(""); const [guardando, setGuardando] = useState(false);
@@ -40,6 +40,7 @@ function Fila({ etiqueta, rol, nombre, falta, detalle, opciones, valor, evaluar,
           <select data-asignacion-select autoFocus style={selStyle} value={sel} onChange={(e) => { setSel(e.target.value); setErr(""); }}>
             <option value="">{SIN_DEFINIR}</option>
             {opciones.map((o) => <option key={o.id} value={o.id}>{o.nombre}</option>)}
+            {extras.map((o) => <option key={o.id} value={o.id}>{o.nombre}</option>)}
           </select>
           {ev?.bloqueado && <div data-asignacion-bloqueo style={{ background: C.dangerLight, color: C.dangerText, borderRadius: 8, padding: "8px 10px", fontSize: 12, fontWeight: 700, marginTop: 8, lineHeight: 1.45 }}><Ic n="⚠" /> {ev.motivo}</div>}
           {!ev?.bloqueado && (ev?.avisos || []).map((a, i) => <div key={i} data-asignacion-aviso style={{ background: C.warnLight, color: C.warnText, borderRadius: 8, padding: "8px 10px", fontSize: 12, fontWeight: 600, marginTop: 8, lineHeight: 1.45 }}>{a}</div>)}
@@ -62,13 +63,14 @@ function Fila({ etiqueta, rol, nombre, falta, detalle, opciones, valor, evaluar,
 export function AsignacionesOC({ oc, vendedores, financiadores, pagosVendedor, onAsignarVendedor, onAsignarFinanciador }) {
   const tipoFin = oc.financiador_id || oc.es_venta_propia ? tipoFinanciamiento(oc, financiadores) : null;
   const detalleFin = tipoFin === "venta_propia" ? "Venta propia · no genera deuda" : tipoFin === "fondos_propios" ? TIPOS_FINANCIAMIENTO.fondos_propios.etiqueta : null;
-  const mismaPersona = !faltaVendedor(oc) && !faltaFinanciador(oc)
+  const com = estadoComision(oc);
+  const mismaPersona = !esCapitalizacion(oc) && !faltaVendedor(oc) && !faltaFinanciador(oc)
     && String(nombreVendedor(oc, vendedores)).trim().toLowerCase() === String(nombreFinanciador(oc, financiadores)).trim().toLowerCase();
   return (
     <div data-asignaciones-oc style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: R.md, padding: "2px 12px 4px", marginBottom: 12 }}>
       <Fila etiqueta="Vendedor" rol="vendedor" nombre={nombreVendedor(oc, vendedores)} falta={faltaVendedor(oc)}
-        detalle={(oc.tipo_registro || "venta") === "externa" ? "Venta externa · no genera comisión" : (oc.es_venta_propia ? "Venta propia del vendedor" : null)}
-        opciones={(vendedores || []).filter((v) => v.activo !== false || v.id === oc.vendedor_id)} valor={oc.vendedor_id}
+        detalle={com.genera ? (oc.es_venta_propia ? "Venta propia del vendedor" : null) : (faltaVendedor(oc) ? null : com.texto)}
+        opciones={(vendedores || []).filter((v) => v.activo !== false || v.id === oc.vendedor_id)} extras={[{ id: CAPITALIZACION, nombre: ETIQUETA_CAPITALIZACION }]} valor={valorVendedor(oc)}
         evaluar={(id) => evaluarCambioVendedor(oc, id, pagosVendedor)} onGuardar={(id) => onAsignarVendedor(oc.id, id)} deshabilitado={!onAsignarVendedor} />
       <Fila etiqueta="Financiador" rol="financiador" nombre={nombreFinanciador(oc, financiadores)} falta={faltaFinanciador(oc)} detalle={detalleFin}
         opciones={(financiadores || []).filter((f) => f.activo !== false || f.id === oc.financiador_id)} valor={oc.financiador_id}

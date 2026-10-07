@@ -64,3 +64,41 @@ test("solo las ventas de BFK generan comisión (venta externa y aporte no)", () 
   const venta = oc({ vendedor_id: "v1" });
   assert.equal(calcularPagoVendedor({ vendedorId: "v1", ocs: [venta, ext], anio: 2026, mes: 5 }).detalle.length, 1);
 });
+
+test("venta de capitalización BFK Ltda.: no es faltante, no genera comisión, filtro propio", async () => {
+  const { esCapitalizacion, estadoComision, CAPITALIZACION, valorVendedor } = await import("../../src/lib/asignaciones.js");
+  const cap = oc({ capitalizacion_bfk: true, vendedor_id: null, financiador_id: "fb" });
+  const falta = oc({ vendedor_id: null });
+  assert.equal(esCapitalizacion(cap), true);
+  assert.equal(faltaVendedor(cap), false); assert.equal(faltaVendedor(falta), true);
+  assert.equal(nombreVendedor(cap, V), "BFK Ltda. · Capitalización");
+  assert.equal(valorVendedor(cap), CAPITALIZACION);
+  assert.deepEqual([cap, falta].filter((o) => pasaFiltroVendedor(o, CAPITALIZACION)), [cap]);
+  assert.deepEqual([cap, falta].filter((o) => pasaFiltroVendedor(o, SIN)), [falta]);
+  assert.equal(estadoComision(cap).genera, false);
+  assert.match(estadoComision(cap).texto, /capitalización/);
+  assert.equal(nombreFinanciador(cap, F), "Cuenta BFK");   // el financiador real se mantiene
+  const { tieneVendedor } = await import("../../src/lib/ocs.js");
+  assert.equal(tieneVendedor(cap), true); assert.equal(tieneVendedor(falta), false);
+});
+
+test("comisión excluida (mes cerrado): figura el vendedor, no cambia la comisión del mes", async () => {
+  const { estadoComision } = await import("../../src/lib/asignaciones.js");
+  const base = oc({ vendedor_id: "v1" }), excl = oc({ id: "b", numero_oc: "B", vendedor_id: "v1", comision_excluida: true });
+  const c1 = calcularPagoVendedor({ vendedorId: "v1", ocs: [base], anio: 2026, mes: 5 });
+  const c2 = calcularPagoVendedor({ vendedorId: "v1", ocs: [base, excl], anio: 2026, mes: 5 });
+  assert.equal(c1.pagoCalculado, c2.pagoCalculado); assert.equal(c2.detalle.length, 1);
+  assert.deepEqual(mesesConFactura("v1", [excl]), []);
+  assert.equal(nombreVendedor(excl, V), "Matías Vegas"); assert.equal(faltaVendedor(excl), false);
+  assert.equal(estadoComision(excl).genera, false);
+  // su vendedor se puede corregir aunque el mes esté pagado (no está en ese pago)
+  assert.equal(evaluarCambioVendedor(excl, "v2", [{ vendedor_id: "v1", anio: 2026, mes: 5 }]).bloqueado, false);
+});
+
+test("cambiar a capitalización: aviso y bloqueos", async () => {
+  const { CAPITALIZACION } = await import("../../src/lib/asignaciones.js");
+  assert.match(evaluarCambioVendedor(oc({ vendedor_id: null }), CAPITALIZACION, []).avisos.join(" "), /capitalización/);
+  assert.equal(evaluarCambioVendedor(oc({ vendedor_id: "v1" }), CAPITALIZACION, [{ vendedor_id: "v1", anio: 2026, mes: 5 }]).bloqueado, true);
+  assert.equal(evaluarCambioVendedor(oc({ vendedor_id: "v1", es_venta_propia: true }), CAPITALIZACION, []).bloqueado, true);
+  assert.equal(evaluarCambioVendedor(oc({ capitalizacion_bfk: true }), CAPITALIZACION, []).sinCambios, true);
+});
