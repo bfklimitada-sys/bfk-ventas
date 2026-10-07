@@ -15,7 +15,7 @@ begin
   end loop;
   perform set_config('bfk.importacion', 'on', true);   -- vuelve al estado exacto anterior sin pasar por las reglas nuevas
   update public.ordenes_compra_v2 o set vendedor_id = null
-    from public.fin_correcciones_registro r where r.lote = 'capitalizacion-comisiones-20261007' and r.revertida_en is null and r.campo = 'vendedor_id' and o.id = r.fila_id;
+    from public.fin_correcciones_registro x where x.lote = 'capitalizacion-comisiones-20261007' and x.revertida_en is null and x.campo = 'vendedor_id' and o.id = x.fila_id;
   insert into public.historial_cambios (id, oc_id, oc_numero, usuario_id, usuario_nombre, accion, campo, valor_anterior, valor_nuevo)
   select public.fin_nuevo_id('hc'), o.id, o.numero_oc, null, 'Migración vendedor/financiador', 'Capitalización / vendedor histórico: deshecho', 'vendedor_id',
          case when o.capitalizacion_bfk then 'BFK Ltda. · Capitalización' else 'Matías Vegas' end, 'Sin definir'
