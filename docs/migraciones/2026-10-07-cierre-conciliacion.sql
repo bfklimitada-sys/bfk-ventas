@@ -8,7 +8,7 @@
 --  K1–K6 Cobros BancoEstado que faltaban (transferencia, en banco): Colbún, Máfil, Osorno, Purén, Delegación Aysén, SLEP Chiloé.
 --  K7    Pago a Kevin Vergara 29/09 $485.469 = deuda exacta de sus 3 OCs pendientes → pago a financiador (RPC oficial).
 --  K8    Pago a Byron Vegas 07/10 $5.000.000 ≤ su deuda → pago a financiador repartido FIFO (misma regla que la app).
---  K9    Matías 21/09 $30.000 → gasto "Apoyo en gestión y actualización de datos" (no comisión, no adelanto, no financiamiento).
+--  K9    Matías 21/09 $30.000 → Aguinaldo de Fiestas Patrias (gasto Gratificación · Aguinaldo; no comisión, adelanto, apoyo ni financiamiento).
 --  K10   Matías abril 2026: el pago de $350.000 incluía $16.929 de apoyo en gestión (documentado en el propio registro):
 --        se separa en comisión $333.071 + apoyo $16.929, misma fecha (la caja no cambia).
 --  K11   Saldo bancario informado: $1.020.584 al 07/10/2026.
@@ -110,27 +110,27 @@ end $$;
 select pg_temp.pago_fin('K7', 'fin_kevin', '2026-09-29', 485469, true);
 select pg_temp.pago_fin('K8', 'fin_byron', '2026-10-07', 5000000, false);
 
--- ── K9 / K10 · Matías: apoyo en gestión y actualización de datos ─────────────────────────────
+-- ── K9 · Matías: aguinaldo Fiestas Patrias · K10 · apoyo en gestión (evidencia documentada) ─────────────────────────────
 do $$
 declare v public.pagos_vendedor;
 begin
-  if not exists (select 1 from public.categorias_gasto where id = 'cat_apoyo_gestion') then
-    insert into public.categorias_gasto (id, nombre, subcategorias) values ('cat_apoyo_gestion', 'Apoyo en gestión y actualización de datos', '[]'::jsonb);
-    perform pg_temp.reg('categorias_gasto', 'cat_apoyo_gestion', '*fila_nueva*', null, 'Apoyo en gestión y actualización de datos',
-      'K9 Categoría para pagos extra a vendedores que no son comisión, adelanto ni financiamiento');
-  end if;
   if pg_temp.hecho('K9') then perform pg_temp.res('K9', 'YA_APLICADA', '');
   elsif exists (select 1 from public.gastos_indirectos where fecha = '2026-09-21' and monto = 30000) then
     perform pg_temp.res('K9', 'BLOQUEADA', 'ya existe un gasto de $30.000 el 21/09');
   else
     insert into public.gastos_indirectos (id, categoria_id, subcategoria, monto, mes, anio, fecha, detalle)
-    values ('gasto_cierre20261007_k9', 'cat_apoyo_gestion', '', 30000, 9, 2026, '2026-09-21', 'Matías Vegas · Apoyo en gestión y actualización de datos (transferencia BancoEstado 21/09/2026)');
+    values ('gasto_cierre20261007_k9', 'cat_gratificacion', 'Aguinaldo', 30000, 9, 2026, '2026-09-21', 'Aguinaldo Fiestas Patrias Matías Vegas (transferencia BancoEstado 21/09/2026)');
     perform pg_temp.reg('gastos_indirectos', 'gasto_cierre20261007_k9', '*fila_nueva*', null, '30000',
-      'K9 Matías 21/09/2026 $30.000: apoyo en gestión y actualización de datos (no comisión, no adelanto, no financiamiento)');
-    perform pg_temp.res('K9', 'APLICADA', 'gasto $30.000 apoyo en gestión');
+      'K9 Matías 21/09/2026 $30.000: aguinaldo de Fiestas Patrias (no comisión, adelanto, apoyo en gestión ni financiamiento)');
+    perform pg_temp.res('K9', 'APLICADA', 'gasto $30.000 aguinaldo Fiestas Patrias');
   end if;
 
   if pg_temp.hecho('K10') then perform pg_temp.res('K10', 'YA_APLICADA', ''); return; end if;
+  -- Categoría para pagos extra con evidencia de apoyo en gestión (no comisión, adelanto, aguinaldo ni financiamiento).
+  if not exists (select 1 from public.categorias_gasto where id = 'cat_apoyo_gestion') then
+    insert into public.categorias_gasto (id, nombre, subcategorias) values ('cat_apoyo_gestion', 'Apoyo en gestión y actualización de datos', '[]'::jsonb);
+    perform pg_temp.reg('categorias_gasto', 'cat_apoyo_gestion', '*fila_nueva*', null, 'Apoyo en gestión y actualización de datos', 'K10 Categoría nueva');
+  end if;
   select * into v from public.pagos_vendedor where id = 'pv_banagm5w8a';
   if v.vendedor_id is distinct from 'vend_matias' or v.anio <> 2026 or v.mes <> 4 or v.monto_pagado <> 350000 or v.monto_verificado is distinct from 350000
      or v.notas not like '%extra de $16.929 por apoyo en gestión%' then
