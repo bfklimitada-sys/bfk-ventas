@@ -124,3 +124,6 @@ begin
   perform pg_temp.ok('T13_ocs_reales_intactas', not exists (select 1 from _tsii_antes a join public.ordenes_compra_v2 x on x.id = a.id where md5(to_jsonb(x)::text) <> a.h));
 end $$;
 reset role;
+-- Limpieza: deja libres los nombres temporales para otras pruebas de la misma transacción.
+drop function pg_temp.ok(text, boolean, text); drop function pg_temp.error(text, text, text);
+drop function pg_temp.oc(text); drop function pg_temp.est(text); drop table _tsii_antes;
