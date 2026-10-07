@@ -7,7 +7,10 @@ begin
     if not exists (select 1 from public.ordenes_compra_v2 o where o.id = r.fila_id and o.vendedor_id = r.despues) then
       raise exception 'VEND-HIST-DESHACER: el vendedor de % cambió después; no se deshizo nada', r.fila_id;
     end if;
+    -- Vuelve exactamente al estado anterior (p. ej. la venta externa era venta propia sin vendedor): sin la regla nueva.
+    perform set_config('bfk.importacion', 'on', true);
     update public.ordenes_compra_v2 set vendedor_id = null where id = r.fila_id;
+    perform set_config('bfk.importacion', '', true);
     update public.fin_correcciones_registro set revertida_en = now() where id = r.id;
     insert into public.historial_cambios (id, oc_id, oc_numero, usuario_id, usuario_nombre, accion, campo, valor_anterior, valor_nuevo)
     select public.fin_nuevo_id('hc'), o.id, o.numero_oc, null, 'Migración vendedor/financiador', 'Vendedor completado: deshecho', 'vendedor_id', r.despues, 'Sin definir'
