@@ -4,20 +4,16 @@
 // Estas funciones NO modifican datos: solo calculan.
 // ═══════════════════════════════════════════════════════════════
 import { C, fmt } from "./theme.js";
+import { facturasVigentesDe, facturaEstaAnulada, montoTributarioVigente } from "./tributario.js";
 
-// ── Facturas vigentes (regla 4, Fase 4B) ──────────────────────
-// Una factura está ANULADA si otra factura de la misma OC la anula
-// (factura_anulada_numero = su número). Las demás son vigentes: solo
-// ellas cuentan para lo facturado, el cobro y la comisión, y el período
-// de la comisión es el de la factura vigente. Mismo criterio que la base
-// (fin_facturas_vigentes).
-const numFactura = (v) => String(v ?? "").trim();
-export const facturasVigentes = (oc) => {
-  const fs = oc?.eventos_factura || [];
-  return fs.filter((f) => !fs.some((a) => a.id !== f.id && numFactura(a.factura_anulada_numero) !== ""
-    && numFactura(a.factura_anulada_numero) === numFactura(f.numero_factura)));
-};
-export const facturaAnulada = (oc, f) => !facturasVigentes(oc).some((v) => v.id === f.id);
+// ── Facturas vigentes (regla 4, Fase 4B · modelo tributario SII) ──
+// La regla vive en lib/tributario.js (misma que la base, fin_facturas_vigentes):
+// solo facturas (no NC/ND); anulada si una NC código 1 la referencia o si otra
+// factura de la OC la reemplazó (reemisión antigua). Una NC código 2 (corrige
+// texto) NO anula ni cambia montos.
+export const facturasVigentes = (oc) => facturasVigentesDe(oc);
+export const facturaAnulada = (oc, f) => facturaEstaAnulada(oc, f);
+export { montoTributarioVigente };
 
 // ── Factura vigente ───────────────────────────────────────────
 // La vigente más reciente por fecha (para el plazo de cobro). Si hubo
