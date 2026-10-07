@@ -1,6 +1,7 @@
 // Misma regla de búsqueda de OC para Compras y para el buscador rápido del Panel.
 import { facturaVigente } from "./calculos";
 import { claveComparacion } from "./rut";
+import { pasaFiltroFinanciador, pasaFiltroVendedor } from "./asignaciones.js";
 import { esDocumentoBancario, esValeVistaPendiente } from "./mediosPago.js";
 
 const norm = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
@@ -42,8 +43,9 @@ export function coincideBusqueda(oc, texto) {
 //  vendedor: id | "__sin__"   financiador: id   proveedor: texto exacto (sin mayúsculas)
 //  producto: texto contenido  valeVista: "pendiente" | "cualquiera"
 export function cumpleCriterios(oc, c = {}) {
-  if (c.vendedor) { if (c.vendedor === "__sin__" ? !!oc.vendedor_id : oc.vendedor_id !== c.vendedor) return false; }
-  if (c.financiador && oc.financiador_id !== c.financiador) return false;
+  // Vendedor / financiador: "__sin__" = sin definir (misma regla que la marca "Falta …" del listado).
+  if (!pasaFiltroVendedor(oc, c.vendedor)) return false;
+  if (!pasaFiltroFinanciador(oc, c.financiador)) return false;
   if (c.proveedor && !proveedoresDe(oc).some((p) => norm(p) === norm(c.proveedor))) return false;
   if (c.producto && !productosDe(oc).some((p) => norm(p).includes(norm(c.producto)))) return false;
   if (c.valeVista === "pendiente" && !valeVistaPendienteDe(oc)) return false;

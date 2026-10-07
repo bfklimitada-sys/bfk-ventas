@@ -130,7 +130,7 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
 
         <Field label="Vendedor" hint="Quién trajo esta venta">
           <select style={selStyle} value={vendedorId} onChange={e => { setVendedorId(e.target.value); if (!e.target.value) setVentaPropia(false); }}>
-            <option value="">Sin vendedor asignado</option>
+            <option value="">Sin definir</option>
             {(vendedores || []).map(v => (
               <option key={v.id} value={v.id}>{v.nombre}</option>
             ))}

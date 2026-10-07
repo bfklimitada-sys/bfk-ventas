@@ -24,7 +24,7 @@ export const faltaVendedor = (oc) => aplica(oc) && !oc?.vendedor_id;
 export const faltaFinanciador = (oc) => aplica(oc) && !oc?.financiador_id;
 
 // Filtro del listado: "" = todos · "__sin" = sin definir · id = ese vendedor/financiador.
-export const SIN = "__sin";
+export const SIN = "__sin__";
 export const pasaFiltroVendedor = (oc, f) => !f || (f === SIN ? faltaVendedor(oc) : oc?.vendedor_id === f);
 export const pasaFiltroFinanciador = (oc, f) => !f || (f === SIN ? faltaFinanciador(oc) : oc?.financiador_id === f);
 

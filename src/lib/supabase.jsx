@@ -129,3 +129,7 @@ export async function rpcMarcarCorreo(t, id, estado) {
   if (!r.ok) throw new Error(cuerpo?.message || `No se pudo actualizar el correo (HTTP ${r.status})`);
   return cuerpo;
 }
+
+// Vendedor y financiador de una OC (la base valida comisiones pagadas, compras y pagos al financiador).
+export async function rpcAsignarVendedor(t, ocId, vendedorId) { return rpcSimple(t, "asignar_vendedor_oc", { p_oc_id: ocId, p_vendedor_id: vendedorId || null }); }
+export async function rpcAsignarFinanciador(t, ocId, financiadorId) { return rpcSimple(t, "asignar_financiador_oc", { p_oc_id: ocId, p_financiador_id: financiadorId || null }); }

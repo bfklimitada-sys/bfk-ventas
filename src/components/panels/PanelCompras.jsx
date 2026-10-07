@@ -24,6 +24,8 @@ import { recepcionMP } from "../../lib/mercadoPublico";
 import { FILTROS_PANEL, esFiltroPanel, esVenta, estaCobrada, estaComprada, estaEntregada, estaFacturada, etapasCompletadas, facturaVencida, fechaCompra, fechaOC, fechaOCEditable, financiamientoPagado, mensajeDuplicado, normalizarCodigoOC, tieneVendedor } from "../../lib/ocs";
 import { repartirInversion as calcularReparto } from "../../lib/productosOC";
 import { MEDIOS_PAGO, esDocumentoBancario, esCobroFueraDeBanco } from "../../lib/mediosPago";
+import { AsignacionesOC } from "../ficha/AsignacionesOC";
+import { faltaFinanciador, faltaVendedor, nombreFinanciador, nombreVendedor, primerNombre } from "../../lib/asignaciones";
 
 const SIN_CORREOS = [];
 
@@ -98,7 +100,7 @@ export function FormEditarDatosOC({ oc, onSave, entidadesCatalogo, perfil, ocs, 
     <div>
       <Field label="Vendedor" hint="Quién trajo esta venta">
         <select style={selStyle} value={vendedorId} onChange={e=>{setVendedorId(e.target.value); if(!e.target.value) setVentaPropia(false);}}>
-          <option value="">Sin vendedor asignado</option>
+          <option value="">Sin definir</option>
           {(vendedores||[]).map(v=>(
             <option key={v.id} value={v.id}>{v.nombre}</option>
           ))}
@@ -761,7 +763,7 @@ const ICONO_ESTADO={mp_cancelada:<Ic n="🔴"/>,facturada_sin_entrega:<Ic n="⚠
   falta_financiamiento:<Ic n="🏦"/>,reclamar:<Ic n="⚠"/>,vencida:<Ic n="🔴"/>,por_vencer:<Ic n="🟡"/>,facturada:<Ic n="🧾"/>,entregada:<Ic n="📦"/>,
   comprada:<Ic n="🚚"/>,mp_sin_aceptar:<Ic n="⏳"/>,sin_compra:"○"};
 
-export function FilaOC({ correosOC = SIN_CORREOS, onMarcarCorreo, difsHistoricas, onCambiarFinanciamiento, oc, perfiles, todasLasOcs, onSincronizarFecha, expanded, onToggle, contactos, onEnviarReclamo, onCorreoOC, onRegistrarRespuestaReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, onRepartirInversion, buscarDuplicadoOC, perfil, historialCambios, onAgregarComentario, onEliminarComentario, bloqueoEstado, onArchivarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa, onRegistrarNC }) {
+export function FilaOC({ correosOC = SIN_CORREOS, onMarcarCorreo, pagosVendedor, onAsignarVendedor, onAsignarFinanciador, difsHistoricas, onCambiarFinanciamiento, oc, perfiles, todasLasOcs, onSincronizarFecha, expanded, onToggle, contactos, onEnviarReclamo, onCorreoOC, onRegistrarRespuestaReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, onRepartirInversion, buscarDuplicadoOC, perfil, historialCambios, onAgregarComentario, onEliminarComentario, bloqueoEstado, onArchivarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa, onRegistrarNC }) {
   const evF=facturaVigente(oc);
   const dias=fmt.diasDesde(evF?.fecha);
   const saldo=(oc.monto_facturado||0)-(oc.monto_cobrado||0);
@@ -803,7 +805,7 @@ export function FilaOC({ correosOC = SIN_CORREOS, onMarcarCorreo, difsHistoricas
   onEliminarLink=prot(onEliminarLink); onEditarLink=prot(onEditarLink); onArchivarOC=prot(onArchivarOC);
   onEliminarFactura=prot(onEliminarFactura); onEliminarEvento=prot(onEliminarEvento); onIngresarCompra=prot(onIngresarCompra);
   onAsignarResponsable=prot(onAsignarResponsable); onGuardarPostventa=prot(onGuardarPostventa); onRepartirInversion=prot(onRepartirInversion);
-  onRegistrarNC=prot(onRegistrarNC);
+  onRegistrarNC=prot(onRegistrarNC); onAsignarVendedor=prot(onAsignarVendedor); onAsignarFinanciador=prot(onAsignarFinanciador);
 
   const completadas=etapasCompletadas(oc);
   const difsOC=diferenciasPendientes(difsHistoricas,"oc",oc.id);
@@ -903,11 +905,21 @@ export function FilaOC({ correosOC = SIN_CORREOS, onMarcarCorreo, difsHistoricas
           </span>
           <span style={{fontSize:12,color:C.inkFaint,flexShrink:0,whiteSpace:"nowrap",lineHeight:1.35,padding:"3px 0",marginLeft:"auto"}}>
             {estancada&&<span style={{color:C.warnText,fontWeight:700}}><Ic n="⏸"/> {diasEstancada}d · </span>}
-            {oc.vendedores?.nombre&&<>{oc.vendedores.nombre.split(" ")[0]} · </>}
-            {esVenta(oc)&&!tieneVendedor(oc)&&<span data-aviso="sin-vendedor" style={{color:C.warnText,fontWeight:700}}><Ic n="⚠"/> Sin vendedor · </span>}
             {completadas}/5
           </span>
         </div>
+
+        {/* Línea 4 — vendedor y financiador (compacto). Faltantes marcados. */}
+        {(oc.tipo_registro||"venta")!=="aporte_socio"&&(
+          <div data-asignaciones-fila style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:7,fontSize:12}}>
+            {faltaVendedor(oc)
+              ? <span data-aviso="sin-vendedor" style={{background:C.warnLight,color:C.warnText,fontWeight:800,padding:"2px 8px",borderRadius:999}}><Ic n="⚠"/> Falta vendedor</span>
+              : <span data-chip-vendedor style={{background:C.paper,border:`1px solid ${C.border}`,color:C.ink,fontWeight:700,padding:"2px 8px",borderRadius:999}}>V: {primerNombre(nombreVendedor(oc,vendedores))}</span>}
+            {faltaFinanciador(oc)
+              ? <span data-aviso="sin-financiador" style={{background:C.warnLight,color:C.warnText,fontWeight:800,padding:"2px 8px",borderRadius:999}}><Ic n="⚠"/> Falta financiador</span>
+              : <span data-chip-financiador style={{background:C.paper,border:`1px solid ${C.border}`,color:C.ink,fontWeight:700,padding:"2px 8px",borderRadius:999}}>F: {primerNombre(nombreFinanciador(oc,financiadores))}</span>}
+          </div>
+        )}
       </div>
 
       {expanded&&(()=>{
@@ -931,7 +943,8 @@ export function FilaOC({ correosOC = SIN_CORREOS, onMarcarCorreo, difsHistoricas
           porCobrar>0&&`Por cobrar ${fmt.money(porCobrar)}${puedeReclamar?" · factura vencida":""}`,
           incAbiertos>0&&`${incAbiertos} incidente${incAbiertos>1?"s":""} de post-venta abierto${incAbiertos>1?"s":""}`,
           difsOC.length>0&&"Corrección histórica pendiente de aprobación",
-          esVenta(oc)&&!tieneVendedor(oc)&&"OC sin vendedor asignado",
+          faltaVendedor(oc)&&"Vendedor sin definir",
+          faltaFinanciador(oc)&&"Financiador sin definir",
           (oc.eventos_factura||[]).some(d=>!d.verificado_sii)&&"Documentos tributarios sin verificar contra el SII",
           nCorreosPend>0&&`${nCorreosPend} correo${nCorreosPend>1?"s":""} pendiente${nCorreosPend>1?"s":""} de gestión`,
         ].filter(Boolean);
@@ -968,7 +981,7 @@ export function FilaOC({ correosOC = SIN_CORREOS, onMarcarCorreo, difsHistoricas
                 <span style={{fontSize:12.5,color:C.inkMuted}}> · {oc.cliente||oc.entidad||"—"}</span>
               </div>
               <div style={{fontSize:12.5,color:C.inkMuted,whiteSpace:"nowrap"}}>
-                <b style={{fontFamily:MONO,color:C.ink,fontSize:13.5}}>{fmt.money(oc.monto_total)}</b> · {oc.vendedores?.nombre||"sin vendedor"}
+                <b style={{fontFamily:MONO,color:C.ink,fontSize:13.5}}>{fmt.money(oc.monto_total)}</b> · <span data-cabecera-asignaciones>V: <b style={{color:faltaVendedor(oc)?C.warnText:C.ink}}>{primerNombre(nombreVendedor(oc,vendedores))}</b> · F: <b style={{color:faltaFinanciador(oc)?C.warnText:C.ink}}>{primerNombre(nombreFinanciador(oc,financiadores))}</b></span>
               </div>
             </div>
             <div style={{display:"flex",gap:5,flexWrap:"wrap",marginTop:6,alignItems:"center"}}>
@@ -988,6 +1001,7 @@ export function FilaOC({ correosOC = SIN_CORREOS, onMarcarCorreo, difsHistoricas
           <style>{`[data-solo-lectura] button:not([data-consulta]):not([data-consulta] *){opacity:.5;cursor:not-allowed!important}
 [data-solo-lectura] input:not([data-consulta] *),[data-solo-lectura] select:not([data-consulta] *),[data-solo-lectura] textarea:not([data-consulta] *){pointer-events:none;opacity:.5}`}</style>
 
+          <AsignacionesOC oc={oc} vendedores={vendedores} financiadores={financiadores} pagosVendedor={pagosVendedor} onAsignarVendedor={onAsignarVendedor} onAsignarFinanciador={onAsignarFinanciador} />
           <div style={{marginBottom:12}}><ResumenFinanciero oc={oc} /></div>
 
           {sec("info",<>
@@ -1171,7 +1185,7 @@ export function FilaOC({ correosOC = SIN_CORREOS, onMarcarCorreo, difsHistoricas
 }
 
 
-export function PanelCompras({ correosBfk, onMarcarCorreo, onRegistrarNC, difsHistoricas, onCambiarFinanciamiento, ocs, perfiles, filtroInicial, busquedaInicial, ocFoco, onFocoUsado, onSincronizarFecha, contactos, onEnviarReclamo, onCorreoOC, onRegistrarRespuestaReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, onRepartirInversion, buscarDuplicadoOC, perfil, historialCambios, onAgregarComentario, onEliminarComentario, onArchivarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa }) {
+export function PanelCompras({ pagosVendedor, onAsignarVendedor, onAsignarFinanciador, correosBfk, onMarcarCorreo, onRegistrarNC, difsHistoricas, onCambiarFinanciamiento, ocs, perfiles, filtroInicial, busquedaInicial, ocFoco, onFocoUsado, onSincronizarFecha, contactos, onEnviarReclamo, onCorreoOC, onRegistrarRespuestaReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, onRepartirInversion, buscarDuplicadoOC, perfil, historialCambios, onAgregarComentario, onEliminarComentario, onArchivarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa }) {
   const correosPorOC=useMemo(()=>{ const m=new Map(); for(const c of (correosBfk||[])) if(c.oc_id){ if(!m.has(c.oc_id)) m.set(c.oc_id,[]); m.get(c.oc_id).push(c); } for(const [k,v] of m) m.set(k,ordenarCorreos(v)); return m; },[correosBfk]);
   const [filtros,setFiltros]=useState({}); const [busq,setBusq]=useState(""); const [expId,setExpId]=useState(null);
   const bloqueoEstado=useBloqueoOC(expId); // un solo ciclo de bloqueo para la OC expandida, venga de donde venga
@@ -1371,6 +1385,21 @@ export function PanelCompras({ correosBfk, onMarcarCorreo, onRegistrarNC, difsHi
         const totalActivos=etapasActivas+rangoActivo+comunaActiva+critActivos;
         const limpiarTodo=()=>{ setDesde(""); setHasta(""); setFiltros({}); setComunaSel(""); setCrit({vendedor:"",financiador:"",proveedor:"",producto:"",valeVista:""}); };
         return (<>
+          {/* Vendedor y financiador: siempre a la vista (un toque) */}
+          <div data-filtros-asignacion style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
+            <label style={{fontSize:12,fontWeight:700,color:C.inkFaint,minWidth:0}}>Vendedor
+              <select data-filtro="vendedor" style={{...selStyle,fontSize:12,padding:"8px 10px",marginTop:4,borderColor:crit.vendedor?C.info:undefined}} value={crit.vendedor} onChange={e=>setC("vendedor",e.target.value)}>
+                <option value="">Todos</option>
+                {(vendedores||[]).map(v=><option key={v.id} value={v.id}>{v.nombre}</option>)}
+                <option value="__sin__">Falta vendedor ({ocs.filter(faltaVendedor).length})</option>
+              </select></label>
+            <label style={{fontSize:12,fontWeight:700,color:C.inkFaint,minWidth:0}}>Financiador
+              <select data-filtro="financiador" style={{...selStyle,fontSize:12,padding:"8px 10px",marginTop:4,borderColor:crit.financiador?C.info:undefined}} value={crit.financiador} onChange={e=>setC("financiador",e.target.value)}>
+                <option value="">Todos</option>
+                {(financiadores||[]).map(f=><option key={f.id} value={f.id}>{f.nombre}</option>)}
+                <option value="__sin__">Falta financiador ({ocs.filter(faltaFinanciador).length})</option>
+              </select></label>
+          </div>
           <button onClick={()=>setMasFiltros(m=>!m)}
             style={{display:"flex",alignItems:"center",gap:7,background:"none",border:"none",
               color:totalActivos>0?C.info:C.inkFaint,fontSize:12,fontWeight:700,cursor:"pointer",
@@ -1397,17 +1426,6 @@ export function PanelCompras({ correosBfk, onMarcarCorreo, onRegistrarNC, difsHi
 
               {/* Fase 4C: quién vendió, quién financió, a quién se compró, qué producto y vale vista */}
               <div data-filtros-4c style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
-                <label style={{fontSize:12,fontWeight:700,color:C.inkFaint}}>Vendedor
-                  <select data-filtro="vendedor" style={{...selStyle,fontSize:12,padding:"8px 10px",marginTop:4}} value={crit.vendedor} onChange={e=>setC("vendedor",e.target.value)}>
-                    <option value="">Todos</option>
-                    {(vendedores||[]).map(v=><option key={v.id} value={v.id}>{v.nombre}</option>)}
-                    <option value="__sin__">Sin vendedor</option>
-                  </select></label>
-                <label style={{fontSize:12,fontWeight:700,color:C.inkFaint}}>Financiador
-                  <select data-filtro="financiador" style={{...selStyle,fontSize:12,padding:"8px 10px",marginTop:4}} value={crit.financiador} onChange={e=>setC("financiador",e.target.value)}>
-                    <option value="">Todos</option>
-                    {(financiadores||[]).map(f=><option key={f.id} value={f.id}>{f.nombre}</option>)}
-                  </select></label>
                 <label style={{fontSize:12,fontWeight:700,color:C.inkFaint}}>Proveedor
                   <select data-filtro="proveedor" style={{...selStyle,fontSize:12,padding:"8px 10px",marginTop:4}} value={crit.proveedor} onChange={e=>setC("proveedor",e.target.value)}>
                     <option value="">Todos</option>
@@ -1503,7 +1521,7 @@ export function PanelCompras({ correosBfk, onMarcarCorreo, onRegistrarNC, difsHi
               const desc=[busq.trim()&&`búsqueda "${busq.trim()}"`,filtroExacto&&FILTROS_PANEL[filtroExacto].etiqueta,vista!=="todas"&&`vista ${vista}`,
                 comunaSel&&`comuna ${comunaSel}`,(desde||hasta)&&`fechas ${desde||"…"} a ${hasta||"…"}`,
                 crit.vendedor&&`vendedor ${crit.vendedor==="__sin__"?"sin vendedor":(vendedores||[]).find(v=>v.id===crit.vendedor)?.nombre||crit.vendedor}`,
-                crit.financiador&&`financiador ${(financiadores||[]).find(f=>f.id===crit.financiador)?.nombre||crit.financiador}`,
+                crit.financiador&&`financiador ${crit.financiador==="__sin__"?"sin financiador":(financiadores||[]).find(f=>f.id===crit.financiador)?.nombre||crit.financiador}`,
                 crit.proveedor&&`proveedor ${crit.proveedor}`,crit.producto&&`producto "${crit.producto}"`,crit.valeVista&&`vale vista ${crit.valeVista}`,
                 ...FILTROS.filter(f=>filtros[f.key]).map(f=>`${f.label}: ${filtros[f.key]==="ok"?f.okLabel:f.pendLabel}`)].filter(Boolean).join(" · ");
               exportarVistaExcel(filtered,{descripcion:desc});
@@ -1522,7 +1540,7 @@ export function PanelCompras({ correosBfk, onMarcarCorreo, onRegistrarNC, difsHi
         </button>
         </span>
       </div>
-      {filtered.map(oc=><FilaOC key={oc.id} correosOC={correosPorOC.get(oc.id)||SIN_CORREOS} onMarcarCorreo={onMarcarCorreo} onRegistrarNC={onRegistrarNC} difsHistoricas={difsHistoricas} onCambiarFinanciamiento={onCambiarFinanciamiento} oc={oc} perfiles={perfiles} todasLasOcs={ocs} onSincronizarFecha={onSincronizarFecha} expanded={expId===oc.id} onToggle={()=>setExpId(expId===oc.id?null:oc.id)} contactos={contactos} onEnviarReclamo={onEnviarReclamo} onCorreoOC={onCorreoOC} onRegistrarRespuestaReclamo={onRegistrarRespuestaReclamo} onGuardarContacto={onGuardarContacto} onGuardarDatosOC={onGuardarDatosOC} onEditarEvento={onEditarEvento} financiadores={financiadores} onConfirmarEntrega={onConfirmarEntrega} onEmitirFactura={onEmitirFactura} onPagoCliente={onPagoCliente} onPagoFinanciamiento={onPagoFinanciamiento} entidadesCatalogo={entidadesCatalogo} onGuardarLink={onGuardarLink} onEliminarLink={onEliminarLink} onEditarLink={onEditarLink} onRepartirInversion={onRepartirInversion} buscarDuplicadoOC={buscarDuplicadoOC} bloqueoEstado={bloqueoEstado} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={onAgregarComentario} onEliminarComentario={onEliminarComentario} onArchivarOC={onArchivarOC} onEliminarFactura={onEliminarFactura} onEliminarEvento={onEliminarEvento} vendedores={vendedores} onIngresarCompra={onIngresarCompra} onAsignarResponsable={onAsignarResponsable} onGuardarPostventa={onGuardarPostventa} />)}
+      {filtered.map(oc=><FilaOC key={oc.id} pagosVendedor={pagosVendedor} onAsignarVendedor={onAsignarVendedor} onAsignarFinanciador={onAsignarFinanciador} correosOC={correosPorOC.get(oc.id)||SIN_CORREOS} onMarcarCorreo={onMarcarCorreo} onRegistrarNC={onRegistrarNC} difsHistoricas={difsHistoricas} onCambiarFinanciamiento={onCambiarFinanciamiento} oc={oc} perfiles={perfiles} todasLasOcs={ocs} onSincronizarFecha={onSincronizarFecha} expanded={expId===oc.id} onToggle={()=>setExpId(expId===oc.id?null:oc.id)} contactos={contactos} onEnviarReclamo={onEnviarReclamo} onCorreoOC={onCorreoOC} onRegistrarRespuestaReclamo={onRegistrarRespuestaReclamo} onGuardarContacto={onGuardarContacto} onGuardarDatosOC={onGuardarDatosOC} onEditarEvento={onEditarEvento} financiadores={financiadores} onConfirmarEntrega={onConfirmarEntrega} onEmitirFactura={onEmitirFactura} onPagoCliente={onPagoCliente} onPagoFinanciamiento={onPagoFinanciamiento} entidadesCatalogo={entidadesCatalogo} onGuardarLink={onGuardarLink} onEliminarLink={onEliminarLink} onEditarLink={onEditarLink} onRepartirInversion={onRepartirInversion} buscarDuplicadoOC={buscarDuplicadoOC} bloqueoEstado={bloqueoEstado} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={onAgregarComentario} onEliminarComentario={onEliminarComentario} onArchivarOC={onArchivarOC} onEliminarFactura={onEliminarFactura} onEliminarEvento={onEliminarEvento} vendedores={vendedores} onIngresarCompra={onIngresarCompra} onAsignarResponsable={onAsignarResponsable} onGuardarPostventa={onGuardarPostventa} />)}
       {filtered.length===0&&<div style={{textAlign:"center",padding:30,color:C.inkFaint,fontSize:13}}>No hay órdenes con estos filtros.</div>}
       <Leyenda items={[
         {muestra:"✓ Cerrada",   color:C.okText,      bg:C.okLight,      texto:"Cobrada al cliente y pagada al financiador. Ciclo terminado."},
