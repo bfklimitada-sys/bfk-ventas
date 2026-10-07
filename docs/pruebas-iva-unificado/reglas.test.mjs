@@ -1,6 +1,6 @@
 // Pruebas del registro único "IVA del mes" (lib/ivaUnificado.js).
 import { periodosIvaIncompletos, mesSugeridoIva, planGuardarIva, pagadoSiiDe } from "../../src/lib/ivaUnificado.js";
-import { calcularPagoVendedor } from "../../src/lib/calculos.js";
+import { calcularPagoVendedor, retencionesPeriodo } from "../../src/lib/calculos.js";
 import { periodoF29 } from "../../src/lib/f29.js";
 
 let ok = 0, fallas = 0;
@@ -61,6 +61,21 @@ p = planGuardarIva({ data: { anio: 2026, mes: 8, ivaVentas: 609830, ivaCompras: 
 const despues = calcularPagoVendedor({ vendedorId: "v1", ocs: [oc], anio: 2026, mes: 8, ivaMensual: [...ivaMensual, { id: "nuevo", ...p.iva.fila }], pagosVendedor: [] });
 eq("comisión agosto con IVA neto 609.830: $395.788", [despues.pagoCalculado, despues.ivaRegistrado], [395788, true]);
 eq("F29 agosto: determinado 609.830, pagado 609.830, pendiente 0", periodoF29([{ id: "n", ...p.iva.fila }], gastos, 2026, 8), { anio: 2026, mes: 8, det: 609830, pag: 609830, pend: 0 });
+
+// ── Regla 2026-10-06: se descuenta el total del F29 (IVA + retenciones) desde agosto 2026 ──
+// F29 real de agosto: débito 1.552.920, crédito 983.956, IVA a pagar 568.964, PPM 40.866, total 609.830.
+p = planGuardarIva({ data: { anio: 2026, mes: 8, ventasNetas: 8173269, ivaVentas: 1552920, comprasNetas: 5178704, ivaCompras: 983956, pagadoSii: 609830, fechaPago: "2026-09-17" }, gastos, ivaMensual });
+eq("F29 agosto: iva_pagado guarda el total pagado", p.iva.fila.iva_pagado, 609830);
+eq("F29 agosto: retenciones = 40.866 (PPM)", retencionesPeriodo(p.iva.fila), 40866);
+const conRet = calcularPagoVendedor({ vendedorId: "v1", ocs: [oc], anio: 2026, mes: 8, ivaMensual: [...ivaMensual, { id: "n", ...p.iva.fila }], pagosVendedor: [] });
+eq("comisión agosto con total F29 (IVA 568.964 + PPM 40.866): $395.788", [conRet.pagoCalculado, conRet.impIva, conRet.retenciones, conRet.descuentoF29], [395788, 568964, 40866, 609830]);
+eq("F29 agosto en Panel: determinado sigue siendo el IVA (568.964), pagado 609.830, pendiente 0", periodoF29([{ id: "n", ...p.iva.fila }], gastos, 2026, 8), { anio: 2026, mes: 8, det: 568964, pag: 609830, pend: 0 });
+eq("sin pago indicado: iva_pagado = IVA a pagar → retenciones 0", retencionesPeriodo(planGuardarIva({ data: { anio: 2026, mes: 9, ivaVentas: 1000, ivaCompras: 0, pagadoSii: 0 }, gastos: [], ivaMensual: [] }).iva.fila), 0);
+eq("pago parcial menor al IVA: retenciones 0", retencionesPeriodo({ anio: 2026, mes: 9, iva_ventas: 1000, iva_compras: 0, iva_pagado: 400 }), 0);
+eq("neto negativo con PPM: retenciones = todo lo pagado", retencionesPeriodo({ anio: 2026, mes: 9, iva_ventas: 1000, iva_compras: 5000, iva_pagado: 30000 }), 30000);
+eq("julio 2026 (antes del corte): retenciones no aplican", retencionesPeriodo({ anio: 2026, mes: 7, iva_ventas: 100, iva_compras: 0, iva_pagado: 50000 }), 0);
+eq("julio 2026: comisión no cambia aunque iva_pagado sea mayor", calcularPagoVendedor({ vendedorId: "v1", ocs: [{ ...oc, eventos_factura: [{ id: "f1", fecha: "2026-07-14", numero_factura: "100", monto: 7340493 }] }], anio: 2026, mes: 7, ivaMensual: [{ id: "i7", anio: 2026, mes: 7, iva_ventas: 649597, iva_compras: 0, iva_pagado: 900000 }], pagosVendedor: [] }).pagoCalculado, Math.round(1401405 / 2 - 649597 / 2));
+eq("diciembre 2026 aplica (corte por año)", retencionesPeriodo({ anio: 2027, mes: 1, iva_ventas: 0, iva_compras: 0, iva_pagado: 7 }), 7);
 
 console.log(`\n${ok} OK · ${fallas} fallas`);
 if (fallas) process.exit(1);

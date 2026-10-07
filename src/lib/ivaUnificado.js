@@ -68,11 +68,13 @@ export const planGuardarIva = ({ data, gastos, ivaMensual }) => {
     ventas_netas: Number(data.ventasNetas) || 0, iva_ventas: Number(data.ivaVentas) || 0,
     compras_netas: Number(data.comprasNetas) || 0, iva_compras: Number(data.ivaCompras) || 0,
   };
-  fila.iva_pagado = ivaAPagarPeriodo(fila); // mismo significado que antes (IVA a pagar del período)
+  const pagado = Math.round(Number(data.pagadoSii) || 0);
+  // iva_pagado = total pagado del F29 (IVA + retenciones); sin pago indicado, el IVA a pagar.
+  // Desde agosto 2026 la diferencia (retenciones) se descuenta en la comisión (lib/calculos.js).
+  fila.iva_pagado = pagado > 0 ? pagado : ivaAPagarPeriodo(fila);
   const existente = registroIvaDe(ivaMensual, anio, mes);
   const iva = existente ? { accion: "actualizar", id: existente.id, fila } : { accion: "insertar", fila };
 
-  const pagado = Math.round(Number(data.pagadoSii) || 0);
   const delMes = gastosImpuestoDe(gastos, anio, mes);
   let gasto = { accion: "ninguna" }, aviso = null;
   if (pagado > 0) {

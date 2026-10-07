@@ -48,15 +48,16 @@ await ir("Vendedores");
 res.vendedores_aviso = (await page.locator('[data-aviso="iva-incompleto"]').count()) === 1;
 await page.getByText(/Completar Ago\/2026/).first().click(); await page.waitForTimeout(500);
 const nums = page.locator('input[type="number"]');
-await nums.nth(2).fill("609830"); await nums.nth(4).fill("0");
+await nums.nth(2).fill("1552920"); await nums.nth(4).fill("983956");
 await page.getByText("✓ Guardar IVA del mes").click(); await page.waitForTimeout(1500);
 const ivaPost = escr.filter((e) => e.t === "iva_mensual");
-res.escribe_un_iva = ivaPost.length === 1 && ivaPost[0].m === "POST" && ivaPost[0].body.anio === 2026 && ivaPost[0].body.mes === 8 && ivaPost[0].body.iva_ventas === 609830 && ivaPost[0].body.iva_compras === 0;
+res.escribe_un_iva = ivaPost.length === 1 && ivaPost[0].m === "POST" && ivaPost[0].body.anio === 2026 && ivaPost[0].body.mes === 8 && ivaPost[0].body.iva_ventas === 1552920 && ivaPost[0].body.iva_compras === 983956 && ivaPost[0].body.iva_pagado === 609830;
 res.no_duplica_gasto = escr.filter((e) => e.t === "gastos_indirectos").length === 0;
 res.aviso_desaparece = (await page.locator('[data-aviso="iva-incompleto"]').count()) === 0;
 await page.getByText("Vendedor Uno").first().click(); await page.waitForTimeout(700);
 const b = await page.evaluate(() => document.body.innerText);
 const i = b.indexOf("Ago/2026", b.search(/comisión mes a mes/i)); const bloque = b.slice(i, b.indexOf("= Comisión del mes", i) + 40);
+res.desglose_retenciones = /Retenciones del F29 \(PPM y otras\): −\$40\.866/.test(bloque) && /IVA neto del período \(débito \$1\.552\.920 − crédito \$983\.956\): −\$568\.964/.test(bloque);
 res.comision_agosto = (bloque.match(/= Comisión del mes: (\$[\d.]+)/) || [])[1] || null;
 
 // 3) Mes nuevo desde Vendedores: crea IVA + gasto en un paso (septiembre, sugerido)
@@ -71,5 +72,5 @@ res.septiembre_iva_y_gasto = sep.some((e) => e.t === "iva_mensual" && e.body.iva
 res.errores = errs; res.escrituras = escr.map((e) => `${e.m} ${e.t}`);
 await browser.close();
 console.log(JSON.stringify(res, null, 1));
-const ok = res.gastos_marca_agosto && res.gasto_impuesto_deriva && res.form_abre_en_agosto && res.form_pagado_precargado && res.vendedores_aviso && res.escribe_un_iva && res.no_duplica_gasto && res.aviso_desaparece && res.comision_agosto === "$395.788" && res.sugiere_septiembre && res.septiembre_iva_y_gasto && errs.length === 0;
+const ok = res.gastos_marca_agosto && res.gasto_impuesto_deriva && res.form_abre_en_agosto && res.form_pagado_precargado && res.vendedores_aviso && res.escribe_un_iva && res.no_duplica_gasto && res.aviso_desaparece && res.comision_agosto === "$395.788" && res.desglose_retenciones && res.sugiere_septiembre && res.septiembre_iva_y_gasto && errs.length === 0;
 console.log(ok ? "RESUMEN e2e IVA unificado: OK" : "RESUMEN e2e IVA unificado: FALLA"); if (!ok) process.exit(1);

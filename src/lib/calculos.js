@@ -109,10 +109,23 @@ export const ivaNetoPeriodo = (registro) =>
 // IVA A PAGAR del período (F29): el neto si es positivo; si es negativo no se paga
 // nada (queda remanente de crédito). Solo para compromisos con el SII, no para comisiones.
 export const ivaAPagarPeriodo = (registro) => Math.max(0, ivaNetoPeriodo(registro));
+// RETENCIONES del F29 (PPM, honorarios, etc.) que también se descuentan en la comisión
+// desde agosto 2026 (decisión del 2026-10-06: se descuenta el total a pagar del F29,
+// IVA + retenciones). Se obtienen del total pagado del F29, guardado en iva_pagado:
+// retenciones = total pagado − IVA a pagar (nunca negativo). Antes de esa fecha
+// iva_pagado significaba "IVA a pagar" y no se usa: los meses anteriores no cambian.
+export const RETENCIONES_DESDE = { anio: 2026, mes: 8 };
+export const aplicaRetenciones = (anio, mes) =>
+  Number(anio) * 12 + Number(mes) >= RETENCIONES_DESDE.anio * 12 + RETENCIONES_DESDE.mes;
+export const retencionesPeriodo = (registro) => {
+  if (!registro || !aplicaRetenciones(registro.anio, registro.mes)) return 0;
+  return Math.max(0, Math.round((Number(registro.iva_pagado) || 0) - ivaAPagarPeriodo(registro)));
+};
 
 // Pago de un vendedor en un mes. Regla única:
 //  · La comisión es sobre la UTILIDAD (venta − costo), no sobre lo facturado.
-//  · Mitad de (utilidad − IVA neto del período). El IVA neto se usa con su signo:
+//  · Mitad de (utilidad − IVA neto del período − retenciones del F29 desde ago-2026).
+//    El IVA neto se usa con su signo:
 //    si es negativo (más crédito que débito) suma; la comisión nunca baja de $0.
 //  · Abril 2025 no descontaba IVA.
 //  · Las OC "venta propia" se pagan aparte: 100% de su utilidad menos el IVA de su factura.
@@ -147,7 +160,9 @@ export const calcularPagoVendedor = ({ vendedorId, ocs, anio, mes, ivaMensual = 
   const sinIva = anio === 2025 && mes === 4;
   const ivaMes = sinIva ? null : registroIvaDe(ivaMensual, anio, mes);
   const impIva = ivaNetoPeriodo(ivaMes); // con signo (0 si el período no tiene IVA registrado)
-  const pagoCalculadoFormula = Math.max(0, Math.round(sumaUtilidad / 2 - impIva / 2)) + pagoVentasPropias;
+  const retenciones = retencionesPeriodo(ivaMes); // desde agosto 2026: PPM y demás retenciones del F29
+  const descuentoF29 = impIva + retenciones;
+  const pagoCalculadoFormula = Math.max(0, Math.round(sumaUtilidad / 2 - descuentoF29 / 2)) + pagoVentasPropias;
   const pagosDelMes = pagosVendedor.filter((p) => p.vendedor_id === vendedorId && p.mes === mes && p.anio === anio);
   const pagado = pagosDelMes.reduce((s, p) => s + (p.monto_pagado || 0), 0);
   const verificado = pagosDelMes.find((p) => p.monto_verificado != null)?.monto_verificado;
@@ -155,7 +170,7 @@ export const calcularPagoVendedor = ({ vendedorId, ocs, anio, mes, ivaMensual = 
   const pagoCalculado = esVerificado ? verificado : pagoCalculadoFormula;
   return {
     mes, anio, label: fmt.monthYear(mes, anio), sumaFacts, sumaUtilidad, pagoVentasPropias, pagoCalculado, pagado,
-    estado: pagado >= pagoCalculado ? "pagado" : "pendiente", esVerificado, impIva, sinIva, ivaRegistrado: !!ivaMes,
+    estado: pagado >= pagoCalculado ? "pagado" : "pendiente", esVerificado, impIva, retenciones, descuentoF29, sinIva, ivaRegistrado: !!ivaMes,
     ivaVentas: ivaMes ? Number(ivaMes.iva_ventas) || 0 : 0, ivaCompras: ivaMes ? Number(ivaMes.iva_compras) || 0 : 0,
     deuda: Math.max(0, pagoCalculado - pagado),
     detalle: detalle.sort((a, b) => String(a.fechaFactura || "").localeCompare(String(b.fechaFactura || "")) || String(a.numero_oc).localeCompare(String(b.numero_oc))),

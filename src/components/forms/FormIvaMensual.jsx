@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Field } from "../ui/Basicos";
 import { C, btnP, fmt, iMono, iStyle, selStyle } from "../../lib/theme";
-import { registroIvaDe, ivaNetoPeriodo, ivaAPagarPeriodo } from "../../lib/calculos";
+import { registroIvaDe, ivaNetoPeriodo, ivaAPagarPeriodo, aplicaRetenciones } from "../../lib/calculos";
 import { mesSugeridoIva, pagadoSiiDe, gastosImpuestoDe } from "../../lib/ivaUnificado";
 
 const MESES=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
@@ -34,6 +34,8 @@ export function FormIvaMensual({ ivaMensual=[], gastos=[], periodo, onSave }) {
   const aPagar=ivaAPagarPeriodo({iva_ventas:v.iV,iva_compras:v.iC});
   // El pagado sigue al IVA a pagar mientras no se escriba a mano.
   const pagado=v.pagadoManual?v.pagado:(aPagar>0?String(aPagar):"");
+  const retenciones=Math.max(0,(Number(pagado)||0)-aPagar);
+  const conRet=aplicaRetenciones(anio,mes);
 
   const handleSave=async()=>{
     if(v.iV===""&&v.iC===""){setErr("Indica el IVA débito y el IVA crédito del F29");return;}
@@ -56,14 +58,16 @@ export function FormIvaMensual({ ivaMensual=[], gastos=[], periodo, onSave }) {
         <Field label="Compras netas ($)"><input style={iMono} type="number" inputMode="numeric" value={v.cN} onChange={e=>set("cN",e.target.value)} /></Field>
         <Field label="IVA crédito · compras (537)"><input style={iMono} type="number" inputMode="numeric" value={v.iC} onChange={e=>set("iC",e.target.value)} /></Field>
       </div>
-      <div style={{background:C.tealLight,borderRadius:9,padding:"10px 12px",fontSize:13,color:C.tealDark,fontWeight:700,marginBottom:12}}>
-        IVA neto del período (se descuenta en comisiones): {conSigno(ivaNeto)} · IVA a pagar: {fmt.money(aPagar)}
-      </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-        <Field label="Pagado al SII ($)" hint={v.pagos>1?`${v.pagos} pagos ya registrados en Gastos: no se modifican`:"Se registra como gasto Impuesto SII"}>
+        <Field label="Total pagado F29 (IVA + retenciones)" hint={v.pagos>1?`${v.pagos} pagos ya registrados en Gastos: no se modifican`:"Total a pagar del F29 · se registra como gasto Impuesto SII"}>
           <input style={iMono} type="number" inputMode="numeric" value={pagado} disabled={v.pagos>1} onChange={e=>setV(p=>({...p,pagado:e.target.value,pagadoManual:true}))} />
         </Field>
         <Field label="Fecha de pago"><input style={iStyle} type="date" value={v.fecha} disabled={v.pagos>1} onChange={e=>set("fecha",e.target.value)} /></Field>
+      </div>
+      <div data-desglose-f29 style={{background:C.tealLight,borderRadius:9,padding:"10px 12px",fontSize:13,color:C.tealDark,fontWeight:700,marginBottom:12,lineHeight:1.5}}>
+        <div>IVA neto (débito − crédito): {conSigno(ivaNeto)} · IVA a pagar: {fmt.money(aPagar)}</div>
+        <div>Retenciones (PPM y otras): {fmt.money(retenciones)}</div>
+        <div>Se descuenta en comisiones: {conSigno(ivaNeto+(conRet?retenciones:0))}{!conRet&&retenciones>0?" (antes de ago-2026 las retenciones no se descuentan)":""}</div>
       </div>
       {err&&<div style={{background:C.dangerLight,color:C.dangerText,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}
       <button onClick={handleSave} disabled={saving} style={btnP(saving?C.inkFaint:C.info)}>{saving?"Guardando…":"✓ Guardar IVA del mes"}</button>
