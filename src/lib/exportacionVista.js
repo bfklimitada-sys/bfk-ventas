@@ -4,6 +4,7 @@
 // ═══════════════════════════════════════════════════════════════
 import * as XLSX from "xlsx";
 import { facturaVigente, facturasVigentes, gananciaReal } from "./calculos.js";
+import { esFactura, esNotaCredito, nombreDocumento, estadoDocumento, ETIQUETA_ESTADO, efectoMonto } from "./tributario.js";
 import { estadoOperativo, etapasCompletadas, fechaCompra, fechaOC, valeVistasPendientes } from "./ocs.js";
 import { productosDe, proveedoresDe } from "./busqueda.js";
 import { recepcionMP } from "./mercadoPublico.js";
@@ -38,6 +39,7 @@ export function filasVista(ocs) {
       "Proveedor": proveedoresDe(oc).join(" · "),
       "Productos": productosDe(oc).join(" · "),
       "Factura vigente": facturasVigentes(oc).map((f) => f.numero_factura).join(", "),
+      "NC / ND": (oc.eventos_factura || []).filter((e) => !esFactura(e)).map((e) => `${nombreDocumento(e)} (${ETIQUETA_ESTADO[estadoDocumento(oc, e)]})`).join(", "),
       "Fecha factura": fecha10(fv?.fecha),
       "Facturado": n(oc.monto_facturado),
       "Cobrado": n(oc.monto_cobrado),
@@ -82,7 +84,6 @@ const fCL = (v) => { const s = fecha10(v); return s ? `${s.slice(8, 10)}-${s.sli
 // Contenido de la ficha como secciones de pares (etiqueta, valor) y tablas: se prueba sin generar el PDF.
 export function contenidoFicha(oc) {
   const g = gananciaReal(oc);
-  const vig = new Set(facturasVigentes(oc).map((f) => f.id));
   const rec = recepcionMP(oc.mp?.codigo_estado);
   return [
     { titulo: "Orden de compra", pares: [
@@ -111,7 +112,9 @@ export function contenidoFicha(oc) {
     { titulo: "Etapas", tabla: { cols: ["Etapa", "Fecha", "Detalle", "Monto"], filas: [
       ...(oc.eventos_compra || []).map((e) => ["Compra", fCL(e.fecha), [e.proveedor, e.fecha_entrega_estimada ? `entrega estimada ${fCL(e.fecha_entrega_estimada)}` : ""].filter(Boolean).join(" · "), pesos(e.costo_compra)]),
       ...(oc.eventos_entrega || []).map((e) => ["Entrega", fCL(e.fecha), e.persona_recibe || "", ""]),
-      ...(oc.eventos_factura || []).map((e) => ["Factura", fCL(e.fecha), `N° ${e.numero_factura}${vig.has(e.id) ? " (vigente)" : " (anulada)"}${e.nota_credito ? ` · NC ${e.nota_credito}` : ""}`, pesos(e.monto)]),
+      ...(oc.eventos_factura || []).map((e) => [esFactura(e) ? "Factura" : esNotaCredito(e) ? "Nota de crédito" : "Nota de débito", fCL(e.fecha),
+        `${nombreDocumento(e)} · ${ETIQUETA_ESTADO[estadoDocumento(oc, e)]}${e.ref_folio ? ` · ref. ${e.ref_folio} código ${e.ref_codigo}` : ""}${e.nota_credito ? ` · NC ${e.nota_credito}` : ""}${e.verificado_sii ? " · verificada SII" : ""}`,
+        pesos(efectoMonto(oc, e))]),
       ...(oc.eventos_pago_cliente || []).map((e) => ["Cobro", fCL(e.fecha), `${e.medio_pago || "transferencia"}${e.medio_pago && e.medio_pago !== "transferencia" ? (e.cobrado_en_banco ? " · cobrado en banco" : " · sin cobrar en banco") : ""}`, pesos(e.monto)]),
       ...(oc.eventos_pago_financiamiento || []).map((e) => ["Pago financiador", fCL(e.fecha), "", pesos(e.monto)]),
     ] } },

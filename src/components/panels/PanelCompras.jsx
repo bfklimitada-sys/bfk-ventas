@@ -4,7 +4,9 @@ import { FormEntregaFallida, FormFechaEntrega, FormReclamarFactura } from "../fo
 import { FormConfirmarEntrega, FormEmitirFactura, FormPagoCliente, FormPagoFinanciamiento } from "../forms/FormulariosRapidos";
 import { DiasBadge, Field, Leyenda, Modal, Trazabilidad } from "../ui/Basicos";
 import { EtapasOC, FormPostventa } from "../ui/EtapasOC";
-import { diferenciasPendientes } from "../../lib/finanzas";
+import { diferenciasPendientes, tipoFinanciamiento, TIPOS_FINANCIAMIENTO } from "../../lib/finanzas";
+import { useEscritorio, useTopeFijo, SeccionFicha, IndiceFicha, ResumenFinanciero, FacturacionSII, FormNotaCredito, CobranzaFicha, ComunicacionesFicha } from "../ficha/FichaOC";
+import { montoTributarioVigente } from "../../lib/tributario";
 import { BloqueoEstado, ComentariosOC, HistorialCambiosOC } from "../ui/Multiusuario";
 import { bloqueoOC, useBloqueoOC } from "../../lib/bloqueoOCUso";
 import { mensajeVerificacion } from "../../lib/bloqueoOC";
@@ -240,7 +242,7 @@ export function FormEditarEvento({ item, onSave, onCancel }) {
 }
 
 // ─── Detalle completo de la OC, plegable ───────────────────
-function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, onRepartirInversion }) {
+export function DetalleOC({ oc, perfil, parte, onEditarLink, onEliminarLink, onGuardarLink, onRepartirInversion }) {
   const [abierto,setAbierto]=useState(false);
   const [editando,setEditando]=useState(null);   // id del link en edición
   const [dNom,setDNom]=useState(""); const [dCant,setDCant]=useState("");
@@ -307,23 +309,26 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
     </div>
   ) : null;
 
+  // Ficha de OC: «productos» (Mercado Público + productos + ganancia) o «info» (datos y fechas), sin desplegable propio.
+  const ver=(p)=>!parte||parte===p;
+  const visible=abierto||!!parte;
   return (
-    <div style={{marginBottom:10}}>
-      <button data-consulta="1" onClick={()=>setAbierto(v=>!v)}
+    <div style={{marginBottom:parte?0:10}}>
+      {!parte&&<button data-consulta="1" onClick={()=>setAbierto(v=>!v)}
         style={{width:"100%",background:C.card,border:`1px solid ${C.border}`,borderRadius:10,
           padding:"9px 12px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         <span style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4}}>
           Productos y números{vendidos.length>0&&<span style={{color:C.tealDark}}> · {vendidos.length} producto{vendidos.length>1?"s":""}</span>}
         </span>
         <span style={{color:C.inkFaint,fontSize:12}}>{abierto?"▲":"▼"}</span>
-      </button>
+      </button>}
 
-      {abierto&&(
-        <div style={{background:C.card,border:`1px solid ${C.border}`,borderTop:"none",
+      {visible&&(
+        <div style={parte?{}:{background:C.card,border:`1px solid ${C.border}`,borderTop:"none",
           borderRadius:"0 0 10px 10px",padding:"10px 12px",marginTop:-1}}>
 
           {/* Fase 4C: datos de Mercado Público (caché de la última consulta): neto/IVA, aceptación, recepción e ítems */}
-          {oc.mp&&(()=>{
+          {ver("productos")&&oc.mp&&(()=>{
             const mp=oc.mp; const rec=recepcionMP(mp.codigo_estado);
             return (
               <div data-mp-detalle style={{background:C.paper,border:`1px solid ${C.border}`,borderRadius:9,padding:"8px 10px",marginBottom:12}}>
@@ -356,7 +361,8 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
           })()}
 
           {/* Productos: cantidad y precio separados del nombre */}
-          {links.length>0&&(
+          {ver("productos")&&links.length===0&&parte&&<div style={{fontSize:12,color:C.inkFaint}}>Sin productos registrados.</div>}
+          {ver("productos")&&links.length>0&&(
             <div style={{marginBottom:12}}>
               <div style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Productos</div>
               {/* ═══ LO QUE VENDEMOS — viene de la OC de Mercado Público ═══ */}
@@ -577,6 +583,7 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
             </div>
           )}
 
+          {ver("info")&&<>
           {/* Datos comerciales */}
           <div style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:4}}>Datos</div>
           <Dato k="Cliente"      v={oc.cliente} />
@@ -591,13 +598,15 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
           <Dato k="Vendedor"     v={oc.vendedores?.nombre} />
           <Dato k="Financiador"  v={oc.financiadores?.nombre} />
 
-          {/* Números */}
+          {/* Números (en la ficha están en el resumen financiero) */}
+          {!parte&&<>
           <div style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,margin:"10px 0 4px"}}>Números</div>
           <Dato k="Venta"     v={fmt.money(oc.monto_total)} />
           <Dato k="Costo"     v={oc.costo_total?fmt.money(oc.costo_total):null} />
           <Dato k="Utilidad"  v={oc.costo_total?`${fmt.money(margen.pesos)} (${margen.pct}%)`:null} />
           <Dato k="Facturado" v={oc.monto_facturado?fmt.money(oc.monto_facturado):null} />
           <Dato k="Cobrado"   v={oc.monto_cobrado?fmt.money(oc.monto_cobrado):null} />
+          </>}
 
           {/* Línea de tiempo */}
           <div style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,margin:"10px 0 4px"}}>Fechas</div>
@@ -607,8 +616,8 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
           <Dato k="Compra (fecha real)" v={fechaCompra(oc)?fmt.date(String(fechaCompra(oc)).slice(0,10)):(evC?"Compra sin fecha registrada":null)} />
           <Dato k="Entrega estimada" v={evC?.fecha_entrega_estimada?fmt.date(String(evC.fecha_entrega_estimada).slice(0,10)):null} />
           <Dato k="Entrega real"     v={evE?.fecha?fmt.date(String(evE.fecha).slice(0,10)):null} />
-          <Dato k="Factura"          v={evF?.fecha?`N°${evF.numero_factura} · ${fmt.date(String(evF.fecha).slice(0,10))}`:null} />
-          {evF?.numero_factura&&(
+          {!parte&&<Dato k="Factura"          v={evF?.fecha?`N°${evF.numero_factura} · ${fmt.date(String(evF.fecha).slice(0,10))}`:null} />}
+          {!parte&&evF?.numero_factura&&(
             <div style={{background:C.infoLight,border:`1px solid ${C.info}33`,borderRadius:9,padding:"10px 11px",margin:"8px 0"}}>
               <div style={{fontSize:12,fontWeight:800,color:C.info,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Verificar en el SII</div>
               <div style={{fontSize:12,color:C.inkMuted,lineHeight:1.7,marginBottom:9}}>
@@ -631,6 +640,7 @@ function DetalleOC({ oc, perfil, onEditarLink, onEliminarLink, onGuardarLink, on
           )}
           <Dato k="Factura pagada"  v={evP?.fecha?fmt.date(String(evP.fecha).slice(0,10)):null} />
           <Dato k="Proveedor"        v={evC?.proveedor} />
+          </>}
         </div>
       )}
     </div>
@@ -749,7 +759,7 @@ const ICONO_ESTADO={mp_cancelada:<Ic n="🔴"/>,facturada_sin_entrega:<Ic n="⚠
   falta_financiamiento:<Ic n="🏦"/>,reclamar:<Ic n="⚠"/>,vencida:<Ic n="🔴"/>,por_vencer:<Ic n="🟡"/>,facturada:<Ic n="🧾"/>,entregada:<Ic n="📦"/>,
   comprada:<Ic n="🚚"/>,mp_sin_aceptar:<Ic n="⏳"/>,sin_compra:"○"};
 
-export function FilaOC({ difsHistoricas, onCambiarFinanciamiento, oc, perfiles, todasLasOcs, onSincronizarFecha, expanded, onToggle, contactos, onEnviarReclamo, onCorreoOC, onRegistrarRespuestaReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, onRepartirInversion, buscarDuplicadoOC, perfil, historialCambios, onAgregarComentario, onEliminarComentario, bloqueoEstado, onArchivarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa }) {
+export function FilaOC({ difsHistoricas, onCambiarFinanciamiento, oc, perfiles, todasLasOcs, onSincronizarFecha, expanded, onToggle, contactos, onEnviarReclamo, onCorreoOC, onRegistrarRespuestaReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, onRepartirInversion, buscarDuplicadoOC, perfil, historialCambios, onAgregarComentario, onEliminarComentario, bloqueoEstado, onArchivarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa, onRegistrarNC }) {
   const evF=facturaVigente(oc);
   const dias=fmt.diasDesde(evF?.fecha);
   const saldo=(oc.monto_facturado||0)-(oc.monto_cobrado||0);
@@ -761,6 +771,10 @@ export function FilaOC({ difsHistoricas, onCambiarFinanciamiento, oc, perfiles, 
   const [correoFallida,setCorreoFallida]=useState(false);
   const [correoFecha,setCorreoFecha]=useState(false);
   const [sincronizandoMP,setSincronizandoMP]=useState(false);
+  const [registrandoNC,setRegistrandoNC]=useState(false);
+  const escritorio=useEscritorio();
+  const topeFijo=useTopeFijo();
+  const [abiertas,setAbiertas]=useState(null);   // secciones abiertas de la ficha (null = según pantalla y etapa)
   const plazoOC = plazoPago(oc);
   const puedeReclamar = oc.estado_pago_cliente!=="pagado" && evF && dias!==null && dias>=plazoOC;
 
@@ -787,6 +801,7 @@ export function FilaOC({ difsHistoricas, onCambiarFinanciamiento, oc, perfiles, 
   onEliminarLink=prot(onEliminarLink); onEditarLink=prot(onEditarLink); onArchivarOC=prot(onArchivarOC);
   onEliminarFactura=prot(onEliminarFactura); onEliminarEvento=prot(onEliminarEvento); onIngresarCompra=prot(onIngresarCompra);
   onAsignarResponsable=prot(onAsignarResponsable); onGuardarPostventa=prot(onGuardarPostventa); onRepartirInversion=prot(onRepartirInversion);
+  onRegistrarNC=prot(onRegistrarNC);
 
   const completadas=etapasCompletadas(oc);
   const difsOC=diferenciasPendientes(difsHistoricas,"oc",oc.id);
@@ -842,7 +857,7 @@ export function FilaOC({ difsHistoricas, onCambiarFinanciamiento, oc, perfiles, 
   const handleToggle=()=>{ onToggle(); }; // el bloqueo se gestiona de forma central (useBloqueoOC) según la OC expandida
 
   return (
-    <div data-oc={oc.numero_oc} style={{background:C.card,border:`1px solid ${C.border}`,borderLeft:`4px solid ${estadoOC.color}`,borderRadius:13,marginBottom:8,overflow:"hidden"}}>
+    <div data-oc={oc.numero_oc} style={{background:C.card,border:`1px solid ${C.border}`,borderLeft:`4px solid ${estadoOC.color}`,borderRadius:13,marginBottom:8,overflow:expanded?"visible":"hidden"}}>
       <div onClick={handleToggle} style={{padding:"13px 14px",cursor:"pointer"}}>
         {/* Línea 1 — dos bloques pareados: código+fecha a la izquierda, monto+ganancia a la derecha */}
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10}}>
@@ -893,90 +908,168 @@ export function FilaOC({ difsHistoricas, onCambiarFinanciamiento, oc, perfiles, 
         </div>
       </div>
 
-      {expanded&&(
-        <div style={{borderTop:`1px solid ${C.border}`,padding:"12px 14px",background:C.paper}}>
+      {expanded&&(()=>{
+        // ═══ Ficha de OC (expediente): cabecera fija · resumen financiero · índice · secciones plegables ═══
+        const bloqueadoDom=(d)=>difsOC.some(x=>(x.bloquea||[]).includes(d));
+        const tipoFin=tipoFinanciamiento(oc,financiadores);
+        const seccionDeEtapa={compra:"compra",entrega:"entrega",factura:"facturacion",pago_cliente:"cobranza",pago_financ:"compra"};
+        const porDefecto=escritorio
+          ? {info:true,productos:true,compra:true,facturacion:true,entrega:true,cobranza:true,comunicaciones:true,historial:false}
+          : {[proxima?seccionDeEtapa[proxima.key]:"facturacion"]:true};
+        const abiertasAct=abiertas||porDefecto;
+        const alternar=(id)=>setAbiertas({...abiertasAct,[id]:!abiertasAct[id]});
+        const ir=(id)=>{ setAbiertas({...abiertasAct,[id]:true}); setTimeout(()=>{ const el=document.getElementById(`${id}-${oc.id}`); if(el) el.scrollIntoView({behavior:"smooth",block:"start"}); },30); };
+        const facturadoVig=Number(oc.monto_facturado)||0, porCobrar=Math.max(0,facturadoVig-(Number(oc.monto_cobrado)||0));
+        const nDocs=(oc.eventos_factura||[]).length;
+        const vendidos=(oc.oc_productos_link||[]).filter(l=>(l.origen||"venta")==="venta").length;
+        const incAbiertos=(oc.eventos_postventa||[]).filter(e=>e.estado!=="resuelto").length;
+        const pendientes=[
+          proxima&&`Siguiente paso: ${proxima.label.toLowerCase()}`,
+          porCobrar>0&&`Por cobrar ${fmt.money(porCobrar)}${puedeReclamar?" · factura vencida":""}`,
+          incAbiertos>0&&`${incAbiertos} incidente${incAbiertos>1?"s":""} de post-venta abierto${incAbiertos>1?"s":""}`,
+          difsOC.length>0&&"Corrección histórica pendiente de aprobación",
+          esVenta(oc)&&!tieneVendedor(oc)&&"OC sin vendedor asignado",
+          (oc.eventos_factura||[]).some(d=>!d.verificado_sii)&&"Documentos tributarios sin verificar contra el SII",
+        ].filter(Boolean);
+        const secciones=[
+          {id:"info",icono:"📋",titulo:"Información OC",resumen:[oc.rut_cliente,oc.comuna].filter(Boolean).join(" · ")},
+          {id:"productos",icono:"📦",titulo:"Productos",resumen:vendidos?`${vendidos} producto${vendidos>1?"s":""}`:"sin productos"},
+          {id:"compra",icono:"🏦",titulo:"Compra y financiamiento",resumen:Number(oc.costo_total)?`${fmt.money(oc.costo_total)} · ${TIPOS_FINANCIAMIENTO[tipoFin]?.etiqueta||""}`:"sin compra"},
+          {id:"facturacion",icono:"🧾",titulo:"Facturación SII",resumen:nDocs?`${fmt.money(montoTributarioVigente(oc))} vigente · ${nDocs} doc.`:"sin documentos",aviso:bloqueadoDom("facturacion")},
+          {id:"entrega",icono:"🚚",titulo:"Entrega",resumen:estaEntregada(oc)?"entregada":"pendiente"},
+          {id:"cobranza",icono:"💰",titulo:"Cobranza",resumen:porCobrar>0?`por cobrar ${fmt.money(porCobrar)}`:estaCobrada(oc)?"cobrada":"—",aviso:puedeReclamar},
+          {id:"comunicaciones",icono:"📧",titulo:"Comunicaciones y pendientes",resumen:pendientes.length?`${pendientes.length} pendiente${pendientes.length>1?"s":""}`:"al día"},
+          {id:"historial",icono:"💬",titulo:"Historial",resumen:`${(oc.oc_comentarios||[]).length} nota(s)`},
+        ];
+        const sec=(id,children)=>{ const d=secciones.find(x=>x.id===id); return (
+          <SeccionFicha id={`${id}-${oc.id}`} icono={<Ic n={d.icono}/>} titulo={d.titulo} resumen={d.resumen} aviso={d.aviso}
+            abierta={!!abiertasAct[id]} onToggle={()=>alternar(id)}>{children}</SeccionFicha>); };
+        const etapaProps={oc,perfil,perfiles,financiadores,difsOC,
+          onCambiarFinanciamiento:onCambiarFinanciamiento?prot((d)=>onCambiarFinanciamiento(oc,d)):undefined,
+          onAsignarResponsable,onEditarEvento:setEditandoEvento,onEliminarFactura,onEliminarEvento,
+          onAccion:(key)=>setAccionRapida(key),
+          onPostventa:(ev,modo)=>setPvForm({evento:ev,cerrar:modo==="cerrar"}),
+          onReabrirPostventa:(ev)=>onGuardarPostventa({id:ev.id,ocId:oc.id,tipo:ev.tipo,fecha:ev.fecha,descripcion:ev.descripcion,estado:"abierto",solucion:ev.solucion||null,fecha_resolucion:null,costo_extra:ev.costo_extra||0,detalle_costo:ev.detalle_costo||null}),
+          onCorreoFallida:()=>setCorreoFallida(true),onCorreoFecha:()=>setCorreoFecha(true),
+          onGuardarLink,onEliminarLink,onEditarLink};
+        const sub=(t)=><div style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,margin:"4px 0 6px"}}>{t}</div>;
+        const estadoChip=(ok,t)=><span style={{fontSize:11.5,fontWeight:700,padding:"2px 7px",borderRadius:999,background:ok?C.okLight:C.paper,color:ok?C.okText:C.inkFaint,border:`1px solid ${ok?C.okLight:C.border}`,whiteSpace:"nowrap"}}>{ok?"✓ ":""}{t}</span>;
+        return (
+        <div data-ficha-oc={oc.numero_oc} style={{borderTop:`1px solid ${C.border}`,background:C.paper}}>
+          {/* Cabecera fija: OC · cliente · monto · vendedor · estados principales + índice */}
+          <div data-ficha-cabecera style={{position:"sticky",top:topeFijo,zIndex:6,background:C.paper,padding:"9px 14px 6px",borderBottom:`1px solid ${C.border}`,boxShadow:"0 2px 6px rgba(15,23,42,0.05)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"baseline",flexWrap:"wrap"}}>
+              <div style={{minWidth:0,flex:"1 1 200px"}}>
+                <span style={{fontFamily:MONO,fontWeight:800,fontSize:13.5,color:C.ink}}>{oc.numero_oc}</span>
+                <span style={{fontSize:12.5,color:C.inkMuted}}> · {oc.cliente||oc.entidad||"—"}</span>
+              </div>
+              <div style={{fontSize:12.5,color:C.inkMuted,whiteSpace:"nowrap"}}>
+                <b style={{fontFamily:MONO,color:C.ink,fontSize:13.5}}>{fmt.money(oc.monto_total)}</b> · {oc.vendedores?.nombre||"sin vendedor"}
+              </div>
+            </div>
+            <div style={{display:"flex",gap:5,flexWrap:"wrap",marginTop:6,alignItems:"center"}}>
+              <span style={{background:estadoOC.bg,color:estadoOC.color,padding:"2px 8px",borderRadius:999,fontSize:11.5,fontWeight:800}}>{estadoOC.icono} {estadoOC.texto}</span>
+              {estadoChip(estaComprada(oc),"Compra")}{estadoChip(estaEntregada(oc),"Entrega")}{estadoChip(estaFacturada(oc),"Factura")}
+              {estadoChip(estaCobrada(oc),"Cobro")}{estadoChip(financiamientoPagado(oc),"Financ.")}
+            </div>
+            <IndiceFicha items={secciones} onIr={ir} />
+          </div>
+
+          <div style={{padding:"12px 14px"}}>
           <BloqueoEstado estado={expanded?bloqueoEstado:null} onReintentar={()=>bloqueoOC.reintentar()} />
 
-          {/* 1–3 · Solo lectura: se bloquean únicamente las acciones que escriben o modifican (botones sin data-consulta).
-              PDF, enlaces, desplegables de detalle y demás consultas siguen disponibles. La barrera real es prot() + el servidor. */}
+          {/* Solo lectura: se bloquean únicamente las acciones que escriben o modifican (botones sin data-consulta).
+              PDF, enlaces, desplegables y demás consultas siguen disponibles. La barrera real es prot() + el servidor. */}
           <div data-testid="oc-campos" data-solo-lectura={soloLectura?"1":undefined} onClickCapture={bloquearEscritura}>
           <style>{`[data-solo-lectura] button:not([data-consulta]):not([data-consulta] *){opacity:.5;cursor:not-allowed!important}
 [data-solo-lectura] input:not([data-consulta] *),[data-solo-lectura] select:not([data-consulta] *),[data-solo-lectura] textarea:not([data-consulta] *){pointer-events:none;opacity:.5}`}</style>
-          {/* 1 · Encabezado de la OC: datos, dirección y edición */}
-          <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:10,marginBottom:12}}>
-            <div style={{fontSize:12,color:C.inkMuted,lineHeight:1.6,minWidth:0,flex:1}}>
-              {[oc.entidad,oc.contacto].filter(Boolean).join(" · ")}
-              {(oc.entidad||oc.contacto)&&<br/>}
-              {saldo>0&&oc.monto_facturado>0&&<>Por cobrar <b style={{color:C.dangerText}}>{fmt.money(saldo)}</b> · </>}
-              {(()=>{
-                const f=fechaOC(oc); const fc=fechaCompra(oc);
-                const creador=perfiles?.find(p=>p.id===oc.creado_por)?.nombre;
-                return <>
-                  {f.origen==="emision"&&<>Emitida {fmt.date(String(f.valor).slice(0,10))}</>}
-                  {fc&&<>{f.origen==="emision"?" · ":""}Comprada {fmt.date(String(fc).slice(0,10))}</>}
-                  {creador&&<> · Creada por {creador}</>}
-                </>;
-              })()}
+
+          <div style={{marginBottom:12}}><ResumenFinanciero oc={oc} /></div>
+
+          {sec("info",<>
+            <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:10,marginBottom:10}}>
+              <div style={{fontSize:12,color:C.inkMuted,lineHeight:1.6,minWidth:0,flex:1}}>
+                {[oc.entidad,oc.contacto].filter(Boolean).join(" · ")}
+                {(oc.entidad||oc.contacto)&&<br/>}
+                {(()=>{
+                  const f=fechaOC(oc); const fc=fechaCompra(oc);
+                  const creador=perfiles?.find(p=>p.id===oc.creado_por)?.nombre;
+                  return <>
+                    {f.origen==="emision"&&<>Emitida {fmt.date(String(f.valor).slice(0,10))}</>}
+                    {fc&&<>{f.origen==="emision"?" · ":""}Comprada {fmt.date(String(fc).slice(0,10))}</>}
+                    {creador&&<> · Creada por {creador}</>}
+                  </>;
+                })()}
+              </div>
+              <div style={{display:"flex",flexDirection:escritorio?"row":"column",gap:6,flexShrink:0}}>
+                <button onClick={()=>setEditandoDatos(true)} style={{...btnG,flexShrink:0,fontSize:12,minHeight:36,padding:"6px 10px"}}><Ic n="✏️"/> Editar datos</button>
+                <button data-consulta="1" data-ficha-pdf onClick={async()=>{ try{ await generarFichaPDF(oc); }catch(e){ window.alert(`No se pudo generar la ficha: ${e.message}`); } }}
+                  style={{...btnG,flexShrink:0,fontSize:12,minHeight:36,padding:"6px 10px"}}><Ic n="📄"/> Ficha PDF</button>
+              </div>
             </div>
-            <div style={{display:"flex",flexDirection:"column",gap:6,flexShrink:0}}>
-              <button onClick={()=>setEditandoDatos(true)}
-                style={{...btnG,flexShrink:0,fontSize:12,minHeight:36,padding:"6px 10px"}}><Ic n="✏️"/> Editar datos</button>
-              {/* Fase 4C: ficha PDF de la OC (solo lectura: disponible también en modo consulta) */}
-              <button data-consulta="1" data-ficha-pdf onClick={async()=>{ try{ await generarFichaPDF(oc); }catch(e){ window.alert(`No se pudo generar la ficha: ${e.message}`); } }}
-                style={{...btnG,flexShrink:0,fontSize:12,minHeight:36,padding:"6px 10px"}}><Ic n="📄"/> Ficha PDF</button>
+            {oc.direccion_entrega&&(
+              <div style={{background:C.infoLight,border:`1px solid ${C.info}33`,borderRadius:9,padding:"9px 11px",marginBottom:10}}>
+                <div style={{fontSize:12,fontWeight:800,color:C.info,textTransform:"uppercase",letterSpacing:0.4,marginBottom:3}}>Dirección de despacho</div>
+                <div style={{fontSize:12,color:C.ink,lineHeight:1.45}}>{oc.direccion_entrega}</div>
+              </div>
+            )}
+            {difsOC.length>0&&(
+              <div data-diferencias-historicas={difsOC.length} style={{background:C.warnLight,border:`1px solid ${C.warn}55`,borderRadius:9,padding:"9px 11px",marginBottom:10}}>
+                <div style={{fontSize:12,fontWeight:800,color:C.warnText,textTransform:"uppercase",letterSpacing:0.4,marginBottom:3}}><Ic n="⚠"/> Corrección histórica pendiente de aprobación</div>
+                {difsOC.map(d=>(
+                  <div key={d.id} style={{fontSize:12,color:C.ink,lineHeight:1.45}}>
+                    <b>{({costo_total:"Costo",monto_pagado_fin:"Pagado al financiador",estado_pago_financiamiento:"Estado de financiamiento",monto_facturado:"Facturado",monto_cobrado:"Cobrado",estado_compra:"Estado de compra",estado_factura_propia:"Estado de factura",estado_pago_cliente:"Estado de cobro"})[d.campo]||d.campo}:</b>{" "}
+                    se conserva {d.diferencia!=null?fmt.money(Number(d.valor_registrado)):d.valor_registrado} (los eventos dan {d.diferencia!=null?fmt.money(Number(d.valor_eventos)):d.valor_eventos}). {d.causa}.
+                  </div>
+                ))}
+              </div>
+            )}
+            <DetalleOC oc={oc} perfil={perfil} parte="info" />
+          </>)}
+
+          {sec("productos",<DetalleOC oc={oc} perfil={perfil} parte="productos" onEditarLink={onEditarLink} onEliminarLink={onEliminarLink} onGuardarLink={onGuardarLink} onRepartirInversion={onRepartirInversion} />)}
+
+          {sec("compra",<>
+            <div data-financiamiento-resumen style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(110px,1fr))",gap:6,marginBottom:10}}>
+              {[["Financiador",tipoFin==="venta_propia"?"No aplica":oc.financiadores?.nombre||"—"],
+                ["Tipo",TIPOS_FINANCIAMIENTO[tipoFin]?.etiqueta||"—"],
+                ["Costo financiado",tipoFin==="externo"?fmt.money(oc.costo_total):"No aplica"],
+                ["Pagado",tipoFin==="externo"?fmt.money(oc.monto_pagado_fin):"No aplica"],
+                ["Pendiente",tipoFin==="externo"?fmt.money(Math.max(0,(Number(oc.costo_total)||0)-(Number(oc.monto_pagado_fin)||0))):"No aplica"]].map(([k,v])=>(
+                <div key={k} style={{background:C.paper,borderRadius:9,padding:"6px 9px"}}>
+                  <div style={{fontSize:11,color:C.inkFaint,fontWeight:700,textTransform:"uppercase"}}>{k}</div>
+                  <div style={{fontSize:13,fontWeight:800,color:C.ink}}>{v}</div>
+                </div>))}
             </div>
+            {tipoFin!=="externo"&&<div style={{fontSize:12,color:C.inkMuted,marginBottom:8}}>{TIPOS_FINANCIAMIENTO[tipoFin]?.detalle}</div>}
+            {sub("Compra")}<EtapasOC {...etapaProps} soloEtapa="compra" />
+            {sub("Pagos al financiador")}<EtapasOC {...etapaProps} soloEtapa="financ" />
+          </>)}
+
+          {sec("facturacion",<FacturacionSII oc={oc} perfil={perfil} bloqueado={bloqueadoDom("facturacion")}
+            onEmitir={()=>setAccionRapida("factura")} onRegistrarNC={()=>setRegistrandoNC(true)}
+            onEditar={setEditandoEvento} onEliminar={onEliminarFactura} />)}
+
+          {sec("entrega",<>
+            <EtapasOC {...etapaProps} soloEtapa="entrega" />
+            {sub("Post-venta")}<EtapasOC {...etapaProps} soloEtapa="postventa" />
+          </>)}
+
+          {sec("cobranza",<>
+            <CobranzaFicha oc={oc} />
+            {sub("Cobros registrados")}
+            <EtapasOC {...etapaProps} soloEtapa="cobro" extra={{cobro:bloqueCobranza}} />
+          </>)}
+
+          {sec("comunicaciones",<ComunicacionesFicha oc={oc} pendientes={pendientes} />)}
           </div>
 
-          {oc.direccion_entrega&&(
-            <div style={{background:C.infoLight,border:`1px solid ${C.info}33`,borderRadius:9,
-              padding:"9px 11px",marginBottom:12}}>
-              <div style={{fontSize:12,fontWeight:800,color:C.info,textTransform:"uppercase",letterSpacing:0.4,marginBottom:3}}>Dirección de despacho</div>
-              <div style={{fontSize:12,color:C.ink,lineHeight:1.45}}>{oc.direccion_entrega}</div>
-            </div>
-          )}
+          {sec("historial",<>
+            <ComentariosOC plano oc={oc} perfil={perfil} onAgregar={onAgregarComentario} onEliminar={onEliminarComentario} />
+            <HistorialCambiosOC ocId={oc.id} historialCambios={historialCambios} />
+          </>)}
 
-          {/* Fase 4B: diferencias históricas pendientes de aprobación (solo informativo; las operaciones del dominio quedan bloqueadas) */}
-          {difsOC.length>0&&(
-            <div data-diferencias-historicas={difsOC.length} style={{background:C.warnLight,border:`1px solid ${C.warn}55`,borderRadius:9,padding:"9px 11px",marginBottom:12}}>
-              <div style={{fontSize:12,fontWeight:800,color:C.warnText,textTransform:"uppercase",letterSpacing:0.4,marginBottom:3}}><Ic n="⚠"/> Corrección histórica pendiente de aprobación</div>
-              {difsOC.map(d=>(
-                <div key={d.id} style={{fontSize:12,color:C.ink,lineHeight:1.45}}>
-                  <b>{({costo_total:"Costo",monto_pagado_fin:"Pagado al financiador",estado_pago_financiamiento:"Estado de financiamiento",monto_facturado:"Facturado",monto_cobrado:"Cobrado",estado_compra:"Estado de compra",estado_factura_propia:"Estado de factura",estado_pago_cliente:"Estado de cobro"})[d.campo]||d.campo}:</b>{" "}
-                  se conserva {d.diferencia!=null?fmt.money(Number(d.valor_registrado)):d.valor_registrado} (los eventos dan {d.diferencia!=null?fmt.money(Number(d.valor_eventos)):d.valor_eventos}). {d.causa}.
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* 2 · Ciclo de la OC: la etapa que toca es la acción principal */}
-          <div style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Ciclo de la OC</div>
-          <EtapasOC oc={oc} perfil={perfil} perfiles={perfiles} financiadores={financiadores} difsOC={difsOC}
-            onCambiarFinanciamiento={onCambiarFinanciamiento?prot((d)=>onCambiarFinanciamiento(oc,d)):undefined}
-            activa={etapaActiva}
-            extra={{cobro:bloqueCobranza}}
-            onAsignarResponsable={onAsignarResponsable}
-            onEditarEvento={setEditandoEvento}
-            onEliminarFactura={onEliminarFactura}
-            onEliminarEvento={onEliminarEvento}
-            onAccion={(key)=>setAccionRapida(key)}
-            onPostventa={(ev,modo)=>setPvForm({evento:ev,cerrar:modo==="cerrar"})}
-            onReabrirPostventa={(ev)=>onGuardarPostventa({id:ev.id,ocId:oc.id,tipo:ev.tipo,fecha:ev.fecha,descripcion:ev.descripcion,estado:"abierto",solucion:ev.solucion||null,fecha_resolucion:null,costo_extra:ev.costo_extra||0,detalle_costo:ev.detalle_costo||null})}
-            onCorreoFallida={()=>setCorreoFallida(true)}
-            onCorreoFecha={()=>setCorreoFecha(true)}
-            onGuardarLink={onGuardarLink}
-            onEliminarLink={onEliminarLink}
-            onEditarLink={onEditarLink}
-          />
-
-          {/* 3 · Productos y números */}
-          <DetalleOC oc={oc} perfil={perfil} onEditarLink={onEditarLink} onEliminarLink={onEliminarLink} onGuardarLink={onGuardarLink} onRepartirInversion={onRepartirInversion} />
-
-          </div>
-
-          {/* 4 · Notas e historial */}
-          <NotasEHistorial oc={oc} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={onAgregarComentario} onEliminarComentario={onEliminarComentario} />
-
-          {/* 5 · Zona administrativa (solo administradores) */}
+          {/* Zona administrativa (solo administradores) */}
           {perfil?.rol==="admin"&&(
             <div data-solo-lectura={soloLectura?"1":undefined} onClickCapture={bloquearEscritura} style={{borderTop:`1px dashed ${C.border}`,paddingTop:10,marginTop:4}}>
               <div style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Zona administrativa</div>
@@ -996,7 +1089,14 @@ export function FilaOC({ difsHistoricas, onCambiarFinanciamiento, oc, perfiles, 
               </button>
             </div>
           )}
+          </div>
         </div>
+        );
+      })()}
+      {registrandoNC&&(
+        <Modal title="Registrar nota de crédito" onClose={()=>setRegistrandoNC(false)}>
+          <FormNotaCredito oc={oc} onSave={async(d)=>{ await onRegistrarNC(d); setRegistrandoNC(false); }} />
+        </Modal>
       )}
       {reclamando&&(
         <Modal title="Reclamar pago de factura" onClose={()=>setReclamando(false)}>
@@ -1067,7 +1167,7 @@ export function FilaOC({ difsHistoricas, onCambiarFinanciamiento, oc, perfiles, 
 }
 
 
-export function PanelCompras({ difsHistoricas, onCambiarFinanciamiento, ocs, perfiles, filtroInicial, busquedaInicial, ocFoco, onFocoUsado, onSincronizarFecha, contactos, onEnviarReclamo, onCorreoOC, onRegistrarRespuestaReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, onRepartirInversion, buscarDuplicadoOC, perfil, historialCambios, onAgregarComentario, onEliminarComentario, onArchivarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa }) {
+export function PanelCompras({ onRegistrarNC, difsHistoricas, onCambiarFinanciamiento, ocs, perfiles, filtroInicial, busquedaInicial, ocFoco, onFocoUsado, onSincronizarFecha, contactos, onEnviarReclamo, onCorreoOC, onRegistrarRespuestaReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, onRepartirInversion, buscarDuplicadoOC, perfil, historialCambios, onAgregarComentario, onEliminarComentario, onArchivarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa }) {
   const [filtros,setFiltros]=useState({}); const [busq,setBusq]=useState(""); const [expId,setExpId]=useState(null);
   const bloqueoEstado=useBloqueoOC(expId); // un solo ciclo de bloqueo para la OC expandida, venga de donde venga
   const [reclamandoBanner,setReclamandoBanner]=useState(null); const [comunaSel,setComunaSel]=useState("");
@@ -1417,7 +1517,7 @@ export function PanelCompras({ difsHistoricas, onCambiarFinanciamiento, ocs, per
         </button>
         </span>
       </div>
-      {filtered.map(oc=><FilaOC key={oc.id} difsHistoricas={difsHistoricas} onCambiarFinanciamiento={onCambiarFinanciamiento} oc={oc} perfiles={perfiles} todasLasOcs={ocs} onSincronizarFecha={onSincronizarFecha} expanded={expId===oc.id} onToggle={()=>setExpId(expId===oc.id?null:oc.id)} contactos={contactos} onEnviarReclamo={onEnviarReclamo} onCorreoOC={onCorreoOC} onRegistrarRespuestaReclamo={onRegistrarRespuestaReclamo} onGuardarContacto={onGuardarContacto} onGuardarDatosOC={onGuardarDatosOC} onEditarEvento={onEditarEvento} financiadores={financiadores} onConfirmarEntrega={onConfirmarEntrega} onEmitirFactura={onEmitirFactura} onPagoCliente={onPagoCliente} onPagoFinanciamiento={onPagoFinanciamiento} entidadesCatalogo={entidadesCatalogo} onGuardarLink={onGuardarLink} onEliminarLink={onEliminarLink} onEditarLink={onEditarLink} onRepartirInversion={onRepartirInversion} buscarDuplicadoOC={buscarDuplicadoOC} bloqueoEstado={bloqueoEstado} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={onAgregarComentario} onEliminarComentario={onEliminarComentario} onArchivarOC={onArchivarOC} onEliminarFactura={onEliminarFactura} onEliminarEvento={onEliminarEvento} vendedores={vendedores} onIngresarCompra={onIngresarCompra} onAsignarResponsable={onAsignarResponsable} onGuardarPostventa={onGuardarPostventa} />)}
+      {filtered.map(oc=><FilaOC key={oc.id} onRegistrarNC={onRegistrarNC} difsHistoricas={difsHistoricas} onCambiarFinanciamiento={onCambiarFinanciamiento} oc={oc} perfiles={perfiles} todasLasOcs={ocs} onSincronizarFecha={onSincronizarFecha} expanded={expId===oc.id} onToggle={()=>setExpId(expId===oc.id?null:oc.id)} contactos={contactos} onEnviarReclamo={onEnviarReclamo} onCorreoOC={onCorreoOC} onRegistrarRespuestaReclamo={onRegistrarRespuestaReclamo} onGuardarContacto={onGuardarContacto} onGuardarDatosOC={onGuardarDatosOC} onEditarEvento={onEditarEvento} financiadores={financiadores} onConfirmarEntrega={onConfirmarEntrega} onEmitirFactura={onEmitirFactura} onPagoCliente={onPagoCliente} onPagoFinanciamiento={onPagoFinanciamiento} entidadesCatalogo={entidadesCatalogo} onGuardarLink={onGuardarLink} onEliminarLink={onEliminarLink} onEditarLink={onEditarLink} onRepartirInversion={onRepartirInversion} buscarDuplicadoOC={buscarDuplicadoOC} bloqueoEstado={bloqueoEstado} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={onAgregarComentario} onEliminarComentario={onEliminarComentario} onArchivarOC={onArchivarOC} onEliminarFactura={onEliminarFactura} onEliminarEvento={onEliminarEvento} vendedores={vendedores} onIngresarCompra={onIngresarCompra} onAsignarResponsable={onAsignarResponsable} onGuardarPostventa={onGuardarPostventa} />)}
       {filtered.length===0&&<div style={{textAlign:"center",padding:30,color:C.inkFaint,fontSize:13}}>No hay órdenes con estos filtros.</div>}
       <Leyenda items={[
         {muestra:"✓ Cerrada",   color:C.okText,      bg:C.okLight,      texto:"Cobrada al cliente y pagada al financiador. Ciclo terminado."},

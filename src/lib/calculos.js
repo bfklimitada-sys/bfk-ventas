@@ -4,7 +4,7 @@
 // Estas funciones NO modifican datos: solo calculan.
 // ═══════════════════════════════════════════════════════════════
 import { C, fmt } from "./theme.js";
-import { facturasVigentesDe, facturaEstaAnulada, montoTributarioVigente } from "./tributario.js";
+import { facturasVigentesDe, montoTributarioVigente } from "./tributario.js";
 
 // ── Facturas vigentes (regla 4, Fase 4B · modelo tributario SII) ──
 // La regla vive en lib/tributario.js (misma que la base, fin_facturas_vigentes):
@@ -12,7 +12,8 @@ import { facturasVigentesDe, facturaEstaAnulada, montoTributarioVigente } from "
 // factura de la OC la reemplazó (reemisión antigua). Una NC código 2 (corrige
 // texto) NO anula ni cambia montos.
 export const facturasVigentes = (oc) => facturasVigentesDe(oc);
-export const facturaAnulada = (oc, f) => facturaEstaAnulada(oc, f);
+// Una factura de la OC (por id) que ya no está vigente.
+export const facturaAnulada = (oc, f) => !facturasVigentesDe(oc).some((v) => v.id === f?.id);
 export { montoTributarioVigente };
 
 // ── Factura vigente ───────────────────────────────────────────

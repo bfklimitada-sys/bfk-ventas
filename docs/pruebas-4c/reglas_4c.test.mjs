@@ -155,7 +155,7 @@ eq("Excel: montos como números y factura vigente", [fila["Venta (monto OC)"], f
 eq("Excel: una fila por OC filtrada", libroVista([ocX, ocsCom[1]]).filas.length, 2);
 const ficha = contenidoFicha(ocX);
 eq("ficha: secciones", ficha.map((s) => s.titulo), ["Orden de compra", "Montos", "Mercado Público", "Productos", "Etapas"]);
-eq("ficha: factura anulada y vigente marcadas", ficha.find((s) => s.titulo === "Etapas").tabla.filas.filter((r) => r[0] === "Factura").map((r) => r[2]), ["N° 10 (anulada)", "N° 20 (vigente)"]);
+eq("ficha: factura anulada y vigente marcadas", ficha.find((s) => s.titulo === "Etapas").tabla.filas.filter((r) => r[0] === "Factura").map((r) => r[2]), ["Factura 10 · Anulada", "Factura 20 · Vigente"]);   // Fase SII: cada documento con su estado tributario
 
 // ── 10. /api/oc devuelve unidad, cancelación y última modificación ──
 process.env.MP_TICKET = "ticket-de-prueba";

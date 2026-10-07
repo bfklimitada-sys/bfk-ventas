@@ -85,7 +85,7 @@ export const numeroIncidente=(lista,ev)=>{
   const i=cron.findIndex(e=>e.id===ev?.id); return i<0?cron.length+1:i+1;
 };
 
-export function EtapasOC({ oc, perfil, perfiles, activa, extra, onEditarEvento, onEliminarFactura, onEliminarEvento, onAccion, onCorreoFallida, onCorreoFecha, onPostventa, onReabrirPostventa, onGuardarLink, onEliminarLink, onEditarLink, onAsignarResponsable, financiadores, difsOC, onCambiarFinanciamiento }) {
+export function EtapasOC({ oc, perfil, perfiles, activa, soloEtapa, extra, onEditarEvento, onEliminarFactura, onEliminarEvento, onAccion, onCorreoFallida, onCorreoFecha, onPostventa, onReabrirPostventa, onGuardarLink, onEliminarLink, onEditarLink, onAsignarResponsable, financiadores, difsOC, onCambiarFinanciamiento }) {
   // Fase 4B: diferencias históricas pendientes bloquean las operaciones de su dominio hasta que se apruebe la corrección.
   const bloqueado=(dominio)=>(difsOC||[]).some(d=>(d.bloquea||[]).includes(dominio));
   const [cambiandoFin,setCambiandoFin]=useState(false);
@@ -312,6 +312,12 @@ export function EtapasOC({ oc, perfil, perfiles, activa, extra, onEditarEvento, 
       </div>
     );
   };
+
+  // Ficha de OC (expediente): una sola etapa, siempre abierta, dentro de su sección.
+  if(soloEtapa){
+    const e=etapas.find(x=>x.key===soloEtapa);
+    return e?<div data-etapa-seccion={soloEtapa}>{renderDetalle(e)}</div>:null;
+  }
 
   return (
     <div style={{marginBottom:12}}>
