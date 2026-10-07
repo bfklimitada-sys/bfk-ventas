@@ -109,7 +109,7 @@ begin
   insert into public.eventos_factura (id, oc_id, fecha, numero_factura, monto, tipo_dte) values ('tsii_f5', 'tsii_5', current_date, '90008', 100000, 33);
   insert into public.eventos_factura (id, oc_id, fecha, numero_factura, monto, tipo_dte, ref_folio, ref_codigo)
     values ('tsii_nd5', 'tsii_5', current_date, '90601', 19000, 56, '90008', 3);
-  perform pg_temp.ok('T09_nota_debito_suma', pg_temp.oc('tsii_5').monto_facturado = 119000);
+  perform pg_temp.ok('T09_nota_debito_suma', (pg_temp.oc('tsii_5')).monto_facturado = 119000);
 
   -- Restricciones
   perform pg_temp.error('T10_nc_sin_referencia_rechazada',
@@ -118,7 +118,7 @@ begin
     $q$insert into public.eventos_factura (id, oc_id, fecha, numero_factura, monto, tipo_dte, ref_folio, ref_codigo) values ('tsii_y', 'tsii_5', current_date, '90510', 1, 61, '90008', 4)$q$, 'ref_codigo_chk');
   -- Borrar la NC código 1 devuelve la factura a vigente
   delete from public.eventos_factura where id = 'tsii_nc2';
-  perform pg_temp.ok('T12_borrar_nc_restaura', pg_temp.oc('tsii_2').monto_facturado = 238000 and pg_temp.est('tsii_f2') = 'vigente');
+  perform pg_temp.ok('T12_borrar_nc_restaura', (pg_temp.oc('tsii_2')).monto_facturado = 238000 and pg_temp.est('tsii_f2') = 'vigente');
   -- Las OCs reales no cambiaron
   perform pg_temp.ok('T13_ocs_reales_intactas', not exists (select 1 from _t_antes a join public.ordenes_compra_v2 o on o.id = a.id where md5(to_jsonb(o)::text) <> a.h));
 end $$;
