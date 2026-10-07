@@ -6,6 +6,7 @@
 // ═══════════════════════════════════════════════════════════════
 import { estadoVencimiento, facturaVigente, plazoPago } from "./calculos.js";
 import { fmt } from "./theme.js";
+import { cobroEnCaja, cobroSaldaCliente, esValeVistaPendiente } from "./mediosPago.js";
 
 // ── Código de la OC ───────────────────────────────────────────
 // Código con forma de Mercado Público: 1234-567-AG26 (acepta "Nº" delante).
@@ -82,7 +83,7 @@ export const etapasCompletadas = (oc) =>
 
 // Vale vista o cheque que el cliente entregó y que aún no se cobra en el banco.
 export const valeVistasPendientes = (oc) =>
-  (oc?.eventos_pago_cliente || []).filter((ev) => ev.medio_pago && ev.medio_pago !== "transferencia" && !ev.cobrado_en_banco);
+  (oc?.eventos_pago_cliente || []).filter(esValeVistaPendiente);
 
 // Vencimiento de la factura vigente (null si no hay factura o no tiene fecha).
 export const vencimientoFactura = (oc) => {
@@ -171,10 +172,13 @@ export function estadoOperativo(oc) {
 }
 
 // ── Fase 4C: plata real vs. plata por llegar (Panel) ──
-// Cobrado que ya está en el banco: un vale vista o cheque entregado y no cobrado todavía no es caja.
+// Cobrado que ya está en el banco: un vale vista o cheque entregado y no cobrado todavía no es caja,
+// y un cobro fuera de banco (retención del cliente, cobro directo del vendedor) nunca lo es.
 export const cobradoEnBanco = (oc) =>
-  (oc?.eventos_pago_cliente || []).filter((e) => !(e.medio_pago && e.medio_pago !== "transferencia" && !e.cobrado_en_banco))
-    .reduce((s, e) => s + (Number(e.monto) || 0), 0);
+  (oc?.eventos_pago_cliente || []).filter(cobroEnCaja).reduce((s, e) => s + (Number(e.monto) || 0), 0);
+// Cobrado que salda lo que el cliente debe (incluye retenciones y cobros fuera de banco).
+export const cobradoDelCliente = (oc) =>
+  (oc?.eventos_pago_cliente || []).filter(cobroSaldaCliente).reduce((s, e) => s + (Number(e.monto) || 0), 0);
 // Lo que falta que entre a la cuenta por una venta: contra la factura vigente si ya se facturó
 // (es el documento que se cobra), o contra el monto adjudicado si todavía no. Los cobros parciales
 // se descuentan una sola vez y un vale vista sin cobrar se cuenta aquí (aún no es caja).
@@ -182,6 +186,6 @@ export const ingresoPendienteOC = (oc) => {
   if (!esVenta(oc)) return 0;
   const facturado = Number(oc?.monto_facturado) || 0;
   const base = facturado > 0 ? facturado : (Number(oc?.monto_total) || 0);
-  return Math.max(0, base - cobradoEnBanco(oc));
+  return Math.max(0, base - cobradoDelCliente(oc));
 };
 

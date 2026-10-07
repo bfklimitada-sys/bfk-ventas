@@ -8,6 +8,7 @@ import { esFactura, esNotaCredito, nombreDocumento, estadoDocumento, ETIQUETA_ES
 import { estadoOperativo, etapasCompletadas, fechaCompra, fechaOC, valeVistasPendientes } from "./ocs.js";
 import { productosDe, proveedoresDe } from "./busqueda.js";
 import { recepcionMP } from "./mercadoPublico.js";
+import { esDocumentoBancario, etiquetaMedio } from "./mediosPago.js";
 
 const fecha10 = (v) => (v ? String(v).slice(0, 10) : "");
 const n = (v) => Number(v) || 0;
@@ -115,7 +116,7 @@ export function contenidoFicha(oc) {
       ...(oc.eventos_factura || []).map((e) => [esFactura(e) ? "Factura" : esNotaCredito(e) ? "Nota de crédito" : "Nota de débito", fCL(e.fecha),
         `${nombreDocumento(e)} · ${ETIQUETA_ESTADO[estadoDocumento(oc, e)]}${e.ref_folio ? ` · ref. ${e.ref_folio} código ${e.ref_codigo}` : ""}${e.nota_credito ? ` · NC ${e.nota_credito}` : ""}${e.verificado_sii ? " · verificada SII" : ""}`,
         pesos(efectoMonto(oc, e))]),
-      ...(oc.eventos_pago_cliente || []).map((e) => ["Cobro", fCL(e.fecha), `${e.medio_pago || "transferencia"}${e.medio_pago && e.medio_pago !== "transferencia" ? (e.cobrado_en_banco ? " · cobrado en banco" : " · sin cobrar en banco") : ""}`, pesos(e.monto)]),
+      ...(oc.eventos_pago_cliente || []).map((e) => ["Cobro", fCL(e.fecha), `${etiquetaMedio(e)}${esDocumentoBancario(e) ? (e.cobrado_en_banco ? " · cobrado en banco" : " · sin cobrar en banco") : ""}`, pesos(e.monto)]),
       ...(oc.eventos_pago_financiamiento || []).map((e) => ["Pago financiador", fCL(e.fecha), "", pesos(e.monto)]),
     ] } },
   ];

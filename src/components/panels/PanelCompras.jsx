@@ -23,6 +23,7 @@ import { cumpleCriterios, listaProveedores } from "../../lib/busqueda";
 import { recepcionMP } from "../../lib/mercadoPublico";
 import { FILTROS_PANEL, esFiltroPanel, esVenta, estaCobrada, estaComprada, estaEntregada, estaFacturada, etapasCompletadas, facturaVencida, fechaCompra, fechaOC, fechaOCEditable, financiamientoPagado, mensajeDuplicado, normalizarCodigoOC, tieneVendedor } from "../../lib/ocs";
 import { repartirInversion as calcularReparto } from "../../lib/productosOC";
+import { MEDIOS_PAGO, esDocumentoBancario, esCobroFueraDeBanco } from "../../lib/mediosPago";
 
 const SIN_CORREOS = [];
 
@@ -182,7 +183,7 @@ export function FormEditarEvento({ item, onSave, onCancel }) {
       if(tabla==="eventos_entrega") cambios={...cambios, persona_recibe:personaRecibe};
       if(tabla==="eventos_factura") cambios={...cambios, numero_factura:numeroFactura, monto:Number(monto)};
       if(tabla==="eventos_pago_financiamiento") cambios={...cambios, monto:Number(monto)};
-      if(tabla==="eventos_pago_cliente") cambios={...cambios, monto:Number(monto), medio_pago:medioPago, institucion:medioPago!=="transferencia"?(institucion.trim()||null):null, cobrado_en_banco:medioPago==="transferencia"?true:cobradoEnBanco};
+      if(tabla==="eventos_pago_cliente") cambios={...cambios, monto:Number(monto), medio_pago:medioPago, institucion:esDocumentoBancario({medio_pago:medioPago})?(institucion.trim()||null):null, cobrado_en_banco:medioPago==="transferencia"?true:esCobroFueraDeBanco({medio_pago:medioPago})?false:cobradoEnBanco};
       await onSave(tabla, e, cambios);
     } catch(err){ setErr(err.message); } finally{ setSaving(false); }
   };
@@ -212,12 +213,10 @@ export function FormEditarEvento({ item, onSave, onCancel }) {
               const val=ev.target.value; setMedioPago(val);
               if(val==="transferencia") setCobradoEnBanco(true);
             }}>
-            <option value="transferencia">Transferencia</option>
-            <option value="vale_vista">Vale Vista</option>
-            <option value="cheque">Cheque</option>
+            {MEDIOS_PAGO.map(m=><option key={m.id} value={m.id}>{m.etiqueta}</option>)}
           </select>
         </Field>
-        {medioPago!=="transferencia"&&(<>
+        {esDocumentoBancario({medio_pago:medioPago})&&(<>
           <Field label="Institución (banco)" hint="Dónde hay que ir a cobrarlo">
             <input style={iStyle} value={institucion} onChange={ev=>setInstitucion(ev.target.value)} placeholder="ej: BancoEstado, Banco de Chile…" />
           </Field>

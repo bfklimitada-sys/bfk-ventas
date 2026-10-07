@@ -8,6 +8,7 @@
 // La propuesta solo viene marcada cuando no hay ambigüedad; lo demás lo confirma la persona.
 // ═══════════════════════════════════════════════════════════════
 import { facturaVigente } from "./calculos.js";
+import { esValeVistaPendiente } from "./mediosPago.js";
 
 export const soloDigitosRut = (s) => String(s || "").replace(/[^0-9kK]/g, "").toUpperCase();
 export const rutsEnTexto = (desc) => {
@@ -76,7 +77,7 @@ export function repartirAbono(monto, items) {
 
 // Vale vista o cheque registrado y todavía no cobrado en el banco.
 export const valeVistasSinCobrar = (ocs) => (ocs || []).flatMap((o) =>
-  (o.eventos_pago_cliente || []).filter((e) => e.medio_pago && e.medio_pago !== "transferencia" && !e.cobrado_en_banco)
+  (o.eventos_pago_cliente || []).filter(esValeVistaPendiente)
     .map((e) => ({ evento: e, oc: o })));
 
 // Un abono que ya está registrado (mismo monto cerca de esa fecha, o fragmentos de cobro del mismo día que suman el total).

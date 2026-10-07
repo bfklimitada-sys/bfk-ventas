@@ -3,6 +3,7 @@ import { Field, Modal, Trazabilidad } from "../ui/Basicos";
 import { C, MONO, btnP, fmt, iMono, iStyle } from "../../lib/theme";
 import { Ic, I } from "../ui/Iconos";
 import { Seccion, Tarjeta, Badge, Monto } from "../ui/Sistema";
+import { MEDIO_APORTE_SIN_BANCO } from "../../lib/mediosPago";
 
 function FormAporte({ aporte, socios, onSave, onEliminar }) {
   const [socio,setSocio]=useState(aporte?.socio&&aporte.socio!=="Por asignar"?aporte.socio:"");
@@ -37,7 +38,7 @@ function FormAporte({ aporte, socios, onSave, onEliminar }) {
       </Field>
       <Field label="Monto ($)" required><input style={iMono} type="number" value={monto} onChange={e=>setMonto(e.target.value)} /></Field>
       <Field label="Fecha" required><input style={iStyle} type="date" value={fecha} onChange={e=>setFecha(e.target.value)} /></Field>
-      <Field label="Medio" hint="Opcional"><input style={iStyle} value={medio} onChange={e=>setMedio(e.target.value)} placeholder="transferencia, efectivo…" /></Field>
+      <Field label="Medio" hint={`Opcional. "${MEDIO_APORTE_SIN_BANCO}": aporte histórico que no se suma a la caja BancoEstado.`}><input style={iStyle} list="medios-aporte" value={medio} onChange={e=>setMedio(e.target.value)} placeholder="transferencia, efectivo…" /><datalist id="medios-aporte"><option value="Transferencia" /><option value="Efectivo" /><option value={MEDIO_APORTE_SIN_BANCO} /></datalist></Field>
       <Field label="Notas" hint="Opcional"><input style={iStyle} value={notas} onChange={e=>setNotas(e.target.value)} /></Field>
       {err&&<div style={{background:C.dangerLight,color:C.dangerText,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}
       <button onClick={guardar} disabled={saving} style={btnP(saving?C.inkFaint:tipo==="retiro"?C.danger:C.ok)}>

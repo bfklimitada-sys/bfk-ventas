@@ -13,11 +13,11 @@
 import { calcularPagoVendedor, facturasVigentes, mesesConFactura, registroIvaDe } from "./calculos.js";
 import { F29_DESDE, calcularF29 } from "./f29.js";
 import { ingresoPendienteOC, valeVistasPendientes } from "./ocs.js";
+import { aporteEnCaja, cobroEnCaja, gastoEnCaja } from "./mediosPago.js";
 
 const n = (v) => Number(v) || 0;
 const f10 = (v) => (v ? String(v).slice(0, 10) : "");
 const tipo = (oc) => oc?.tipo_registro || "venta";
-const esCobroPendienteBanco = (e) => !!(e?.medio_pago && e.medio_pago !== "transferencia" && !e.cobrado_en_banco);
 // OCs cuyo dinero pasa por la cuenta de BFK: ventas y ventas externas (estas últimas con su pasivo aparte).
 const enCuenta = (oc) => !oc?.archivada && (tipo(oc) === "venta" || tipo(oc) === "externa" || tipo(oc) === "aporte_socio");
 
@@ -27,16 +27,17 @@ export function movimientosCaja({ ocs, financiadores, gastos, pagosVendedor, pag
   const m = [];
   for (const oc of ocs || []) {
     if (!enCuenta(oc)) continue;
-    for (const e of oc.eventos_pago_cliente || []) if (!esCobroPendienteBanco(e)) m.push({ fecha: f10(e.fecha), tipo: tipo(oc) === "externa" ? "cobro_externo" : "cobro", monto: n(e.monto), ref: oc.numero_oc });
+    // Solo lo que entró a la cuenta: sin vale vistas por cobrar ni cobros fuera de banco (retención, cobro directo del vendedor).
+    for (const e of oc.eventos_pago_cliente || []) if (cobroEnCaja(e)) m.push({ fecha: f10(e.fecha), tipo: tipo(oc) === "externa" ? "cobro_externo" : "cobro", monto: n(e.monto), ref: oc.numero_oc });
     for (const e of oc.eventos_pago_financiamiento || []) m.push({ fecha: f10(e.fecha), tipo: tipo(oc) === "externa" ? "pago_externo" : "pago_financiador", monto: -n(e.monto), ref: oc.numero_oc });
     // Fondos propios (Cuenta BFK): la compra la pagó la cuenta de BFK.
     if (propio.has(oc.financiador_id) && !oc.es_venta_propia)
       for (const e of oc.eventos_compra || []) m.push({ fecha: f10(e.fecha), tipo: "compra_fondos_propios", monto: -n(e.costo_compra), ref: oc.numero_oc });
   }
   for (const e of pagoFinSueltos || []) m.push({ fecha: f10(e.fecha), tipo: "pago_financiador", monto: -n(e.monto), ref: e.financiador_id });
-  for (const g of gastos || []) m.push({ fecha: f10(g.fecha), tipo: "gasto", monto: -n(g.monto), ref: g.categoria_id });
+  for (const g of gastos || []) if (gastoEnCaja(g)) m.push({ fecha: f10(g.fecha), tipo: "gasto", monto: -n(g.monto), ref: g.categoria_id });
   for (const p of pagosVendedor || []) m.push({ fecha: f10(p.fecha), tipo: "pago_vendedor", monto: -n(p.monto_pagado), ref: p.vendedor_id });
-  for (const a of aportes || []) m.push({ fecha: f10(a.fecha), tipo: a.tipo === "retiro" ? "retiro" : "aporte", monto: (a.tipo === "retiro" ? -1 : 1) * n(a.monto), ref: a.socio });
+  for (const a of aportes || []) if (aporteEnCaja(a)) m.push({ fecha: f10(a.fecha), tipo: a.tipo === "retiro" ? "retiro" : "aporte", monto: (a.tipo === "retiro" ? -1 : 1) * n(a.monto), ref: a.socio });
   return m;
 }
 

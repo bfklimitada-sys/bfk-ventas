@@ -7,6 +7,7 @@ import { Ic } from "../ui/Iconos";
 import { coincideBusqueda } from "../../lib/busqueda";
 import { calcularF29 } from "../../lib/f29";
 import { resumenCaja } from "../../lib/caja";
+import { aporteEnCaja, cobroEnCaja, gastoEnCaja } from "../../lib/mediosPago";
 import { Seccion, Tarjeta, Badge, Monto, Enlace } from "../ui/Sistema";
 import { FILTROS_PANEL, cobradoEnBanco, estaCerrada, etapasCompletadas, filtrarPanel, financiamientoPagado, ingresoPendienteOC, valeVistasPendientes } from "../../lib/ocs";
 
@@ -107,7 +108,10 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
     // Antes no restaba gastosVendedores (pagos a vendedores como Matías) —
     // esa plata sí sale de la cuenta real, y no descontarla infla el
     // saldo calculado bien por encima de lo que hay en el banco.
-    const saldoCtaCte = cobrado + totalAportes - creditoPagadoTotal - gastosTotal - costoBFK - gastosVendedores;
+    // Conciliación bancaria 2026-10: aportes y gastos sin movimiento BancoEstado no entran a la cuenta corriente.
+    const aportesEnCaja=(aportesLista||[]).filter(aporteEnCaja).reduce((s,a)=>s+(a.tipo==="retiro"?-(Number(a.monto)||0):(Number(a.monto)||0)),0);
+    const gastosEnCaja=gastos.filter(gastoEnCaja).reduce((s,g)=>s+(g.monto||0),0);
+    const saldoCtaCte = cobrado + aportesEnCaja - creditoPagadoTotal - gastosEnCaja - costoBFK - gastosVendedores;
 
     // Y se compara con el saldo real del banco: la diferencia es
     // lo que se movió en la cuenta y no está registrado acá.
@@ -120,18 +124,18 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
     if(corte){
       for(const oc of ocs){
         for(const e of (oc.eventos_pago_cliente||[]))
-          if(String(e.fecha||"").slice(0,10) > corte && !(e.medio_pago&&e.medio_pago!=="transferencia"&&!e.cobrado_en_banco)) movDesdeCorte += Number(e.monto)||0;
+          if(String(e.fecha||"").slice(0,10) > corte && cobroEnCaja(e)) movDesdeCorte += Number(e.monto)||0;
         for(const e of (oc.eventos_pago_financiamiento||[]))
           if(String(e.fecha||"").slice(0,10) > corte) movDesdeCorte -= Number(e.monto)||0;
       }
       for(const e of (pagoFinSueltos||[]))
         if(String(e.fecha||"").slice(0,10) > corte) movDesdeCorte -= Number(e.monto)||0;
       for(const g of gastos)
-        if(String(g.fecha||"").slice(0,10) > corte) movDesdeCorte -= Number(g.monto)||0;
+        if(String(g.fecha||"").slice(0,10) > corte && gastoEnCaja(g)) movDesdeCorte -= Number(g.monto)||0;
       for(const p of pagosVendedor)
         if(String(p.fecha||"").slice(0,10) > corte) movDesdeCorte -= Number(p.monto_pagado)||0;
       for(const a of (aportesLista||[]))
-        if(String(a.fecha||"").slice(0,10) > corte)
+        if(String(a.fecha||"").slice(0,10) > corte && aporteEnCaja(a))
           movDesdeCorte += (a.tipo==="retiro"?-1:1)*(Number(a.monto)||0);
     }
     const saldoEsperado = saldoReal!==null ? saldoReal + movDesdeCorte : null;

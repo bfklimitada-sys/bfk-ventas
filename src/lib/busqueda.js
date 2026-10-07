@@ -1,6 +1,7 @@
 // Misma regla de búsqueda de OC para Compras y para el buscador rápido del Panel.
 import { facturaVigente } from "./calculos";
 import { claveComparacion } from "./rut";
+import { esDocumentoBancario, esValeVistaPendiente } from "./mediosPago.js";
 
 const norm = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 
@@ -10,8 +11,8 @@ export const proveedoresDe = (oc) => [...new Set([
   ...(oc?.eventos_compra || []).map((e) => e.proveedor),
   ...(oc?.oc_productos_link || []).map((l) => l.proveedor),
 ].map((p) => String(p || "").trim()).filter(Boolean))];
-export const tieneValeVista = (oc) => (oc?.eventos_pago_cliente || []).some((e) => e.medio_pago && e.medio_pago !== "transferencia");
-export const valeVistaPendienteDe = (oc) => (oc?.eventos_pago_cliente || []).some((e) => e.medio_pago && e.medio_pago !== "transferencia" && !e.cobrado_en_banco);
+export const tieneValeVista = (oc) => (oc?.eventos_pago_cliente || []).some(esDocumentoBancario);
+export const valeVistaPendienteDe = (oc) => (oc?.eventos_pago_cliente || []).some(esValeVistaPendiente);
 
 export function coincideBusqueda(oc, texto) {
   const q = norm(String(texto || "").trim());

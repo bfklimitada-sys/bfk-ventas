@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { BuscadorOC, Field } from "../ui/Basicos";
 import { C, MONO, btnP, fmt, iMono, iStyle, selStyle } from "../../lib/theme";
 import { Ic } from "../ui/Iconos";
+import { MEDIOS_PAGO, esDocumentoBancario } from "../../lib/mediosPago";
 
 export function FormConfirmarEntrega({ ocs, onSave, ocPreseleccionada }) {
   const [ocId,setOcId]=useState(ocPreseleccionada||null); const [fecha,setFecha]=useState(new Date().toISOString().slice(0,10));
@@ -136,18 +137,16 @@ export function FormPagoCliente({ ocs, onSave, ocPreseleccionada }) {
             const val=e.target.value; setMedioPago(val);
             setCobradoEnBanco(val==="transferencia");
           }}>
-          <option value="transferencia">Transferencia</option>
-          <option value="vale_vista">Vale Vista</option>
-          <option value="cheque">Cheque</option>
+          {MEDIOS_PAGO.map(m=><option key={m.id} value={m.id}>{m.etiqueta}</option>)}
         </select>
       </Field>
-      {medioPago!=="transferencia"&&(
+      {esDocumentoBancario({medio_pago:medioPago})&&(
         <Field label="Institución (banco)" hint="Dónde hay que ir a cobrarlo">
           <input style={iStyle} value={institucion} onChange={e=>setInstitucion(e.target.value)}
             placeholder="ej: BancoEstado, Banco de Chile…" />
         </Field>
       )}
-      {medioPago!=="transferencia"&&(
+      {esDocumentoBancario({medio_pago:medioPago})&&(
         <label style={{display:"flex",alignItems:"flex-start",gap:9,marginBottom:14,cursor:"pointer",
           background:cobradoEnBanco?C.okLight:C.warnLight,borderRadius:10,padding:"10px 12px"}}>
           <input type="checkbox" checked={cobradoEnBanco} onChange={e=>setCobradoEnBanco(e.target.checked)}
