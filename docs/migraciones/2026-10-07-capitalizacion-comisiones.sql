@@ -150,12 +150,12 @@ begin
   end loop;
 
   -- Garantías: ningún monto, estado financiero, financiador ni saldo cambió; base consistente.
-  select count(*) into v_n from _cap_antes a join public.ordenes_compra_v2 o on o.id = a.id
+  select count(*) into v_n from _cap_antes a join public.ordenes_compra_v2 x on x.id = a.id
    where (a.financiador_id, a.costo_total, a.estado_compra, a.monto_pagado_fin, a.estado_pago_financiamiento, a.monto_facturado,
           a.estado_factura_propia, a.monto_cobrado, a.estado_pago_cliente, a.es_venta_propia, a.tipo_registro, a.monto_total)
          is distinct from
-         (o.financiador_id, o.costo_total, o.estado_compra, o.monto_pagado_fin, o.estado_pago_financiamiento, o.monto_facturado,
-          o.estado_factura_propia, o.monto_cobrado, o.estado_pago_cliente, o.es_venta_propia, o.tipo_registro, o.monto_total);
+         (x.financiador_id, x.costo_total, x.estado_compra, x.monto_pagado_fin, x.estado_pago_financiamiento, x.monto_facturado,
+          x.estado_factura_propia, x.monto_cobrado, x.estado_pago_cliente, x.es_venta_propia, x.tipo_registro, x.monto_total);
   if v_n <> 0 then raise exception 'CAP: % OCs cambiaron montos o estados; no se aplica nada', v_n; end if;
   if exists (select 1 from _cap_fin a join public.financiadores f on f.id = a.id where f.saldo_deuda is distinct from a.saldo_deuda) then
     raise exception 'CAP: cambió un saldo de financiador; no se aplica nada';
