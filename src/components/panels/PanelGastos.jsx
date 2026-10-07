@@ -3,12 +3,17 @@ import { Field, Modal } from "../ui/Basicos";
 import { C, btnP, fmt, iMono, iStyle, selStyle } from "../../lib/theme";
 import { Ic } from "../ui/Iconos";
 import { Seccion, Tarjeta, Badge, Monto } from "../ui/Sistema";
+import { FormIvaMensual } from "../forms/FormIvaMensual";
+import { CATEGORIA_IMPUESTO, periodosIvaIncompletos } from "../../lib/ivaUnificado";
 
 // Los pagos a vendedores hoy se administran en Vendedores; la categoria historica solo se consulta.
 const esHistoricaVendedor=(c)=>/vendedor/i.test(c?.nombre||"");
 
-export function PanelGastos({ gastos, categorias, onNuevoGasto }) {
+export function PanelGastos({ gastos, categorias, ivaMensual=[], onNuevoGasto, onGuardarIva }) {
   const [showForm,setShowForm]=useState(false);
+  const [ivaPeriodo,setIvaPeriodo]=useState(undefined); // undefined = cerrado · null = mes sugerido · {anio,mes}
+  const incompletos=useMemo(()=>periodosIvaIncompletos({gastos,ivaMensual}),[gastos,ivaMensual]);
+  const esIncompleto=(g)=>g.categoria_id===CATEGORIA_IMPUESTO&&incompletos.some(p=>p.anio===Number(g.anio)&&p.mes===Number(g.mes));
   const [tipoForm,setTipoForm]=useState("gasto");
   const [abierta,setAbierta]=useState(null);
 
@@ -53,6 +58,12 @@ export function PanelGastos({ gastos, categorias, onNuevoGasto }) {
                   <Monto tam="sm" tono={historica?"suave":"neutro"}>{fmt.money(g.monto)}</Monto>
                 </div>
                 {(g.detalle||g.subcategoria)&&<div style={{fontSize:12,color:C.inkMuted,marginTop:1}}>{g.subcategoria||g.detalle}</div>}
+                {esIncompleto(g)&&onGuardarIva&&(
+                  <button data-iva-incompleto onClick={()=>setIvaPeriodo({anio:Number(g.anio),mes:Number(g.mes)})}
+                    style={{background:"none",border:"none",color:C.warnText,fontSize:12,fontWeight:700,cursor:"pointer",textDecoration:"underline",padding:"4px 0 0"}}>
+                    ⚠ Falta débito/crédito: la comisión de este mes va sin IVA · Completar
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -80,14 +91,20 @@ export function PanelGastos({ gastos, categorias, onNuevoGasto }) {
 
       {showForm&&tipoForm==="gasto"&&(
         <Modal title="Registrar gasto" onClose={()=>setShowForm(false)}>
-          <FormNuevoGasto categorias={actuales} onSave={async(d)=>{await onNuevoGasto(d);setShowForm(false);}} />
+          <FormNuevoGasto categorias={actuales} onSave={async(d)=>{await onNuevoGasto(d);setShowForm(false);}}
+            onIva={onGuardarIva?()=>{setShowForm(false);setIvaPeriodo(null);}:null} />
+        </Modal>
+      )}
+      {ivaPeriodo!==undefined&&onGuardarIva&&(
+        <Modal title="IVA del mes" onClose={()=>setIvaPeriodo(undefined)}>
+          <FormIvaMensual ivaMensual={ivaMensual} gastos={gastos} periodo={ivaPeriodo} onSave={async(d)=>{await onGuardarIva(d);setIvaPeriodo(undefined);}} />
         </Modal>
       )}
     </div>
   );
 }
 
-export function FormNuevoGasto({ categorias, onSave }) {
+export function FormNuevoGasto({ categorias, onSave, onIva }) {
   const [catId,setCatId]=useState(categorias[0]?.id||""); const [sub,setSub]=useState(""); const [monto,setMonto]=useState("");
   const [mes,setMes]=useState(new Date().getMonth()+1); const [anio,setAnio]=useState(new Date().getFullYear());
   const [fecha,setFecha]=useState(new Date().toISOString().slice(0,10)); const [detalle,setDetalle]=useState("");
@@ -101,10 +118,19 @@ export function FormNuevoGasto({ categorias, onSave }) {
     catch(e){setErr(e.message);}finally{setSaving(false);};
   };
   const MESES=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+  // IVA mensual va por el formulario único; otro impuesto (subcategoría sin "IVA") sigue como gasto normal.
+  const esImpuesto=catId===CATEGORIA_IMPUESTO&&!!onIva&&!(sub&&!/iva/i.test(sub));
   return (
     <div>
       <Field label="Categoría" required><select style={selStyle} value={catId} onChange={e=>{setCatId(e.target.value);setSub("");}}>{categorias.map(c=><option key={c.id} value={c.id}>{c.nombre}</option>)}</select></Field>
       {subs.length>0&&<Field label="Subcategoría"><select style={selStyle} value={sub} onChange={e=>handleSubChange(e.target.value)}><option value="">Selecciona…</option>{subs.map(s=><option key={s.nombre} value={s.nombre}>{s.nombre}{s.monto_sugerido?` (${fmt.money(s.monto_sugerido)})`:"" }</option>)}</select></Field>}
+      {esImpuesto&&(
+        <div style={{background:C.tealLight,borderRadius:9,padding:"10px 12px",fontSize:13,color:C.tealDark,marginBottom:12}}>
+          El impuesto del mes se registra junto con su débito y crédito, en un solo paso: así queda en caja y en la comisión.
+          <button onClick={onIva} style={{...btnP(C.info),marginTop:10}}>Registrar IVA del mes</button>
+        </div>
+      )}
+      {!esImpuesto&&<>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
         <Field label="Mes" required><select style={selStyle} value={mes} onChange={e=>setMes(e.target.value)}>{MESES.map((m,i)=><option key={i} value={i+1}>{m}</option>)}</select></Field>
         <Field label="Año" required><input style={iMono} type="number" value={anio} onChange={e=>setAnio(e.target.value)} /></Field>
@@ -114,6 +140,7 @@ export function FormNuevoGasto({ categorias, onSave }) {
       <Field label="Detalle"><input style={iStyle} value={detalle} onChange={e=>setDetalle(e.target.value)} /></Field>
       {err&&<div style={{background:C.dangerLight,color:C.dangerText,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}
       <button onClick={handleSave} disabled={saving} style={btnP(saving?C.inkFaint:C.warn)}>{saving?"Guardando…":"✓ Registrar gasto"}</button>
+      </>}
     </div>
   );
 }

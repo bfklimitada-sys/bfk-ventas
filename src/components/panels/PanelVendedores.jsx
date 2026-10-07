@@ -7,11 +7,13 @@ import { Seccion, Tarjeta, Badge, Monto, IndiceSecciones } from "../ui/Sistema";
 import { evaluarPagoVendedor } from "../../lib/pagosVendedor";
 import { calcularPagoVendedor, mesesConFactura, registroIvaDe, ivaNetoPeriodo, ivaAPagarPeriodo } from "../../lib/calculos";
 import { estaFacturada, filtrarPanel } from "../../lib/ocs";
+import { FormIvaMensual } from "../forms/FormIvaMensual";
+import { periodosIvaIncompletos } from "../../lib/ivaUnificado";
 
 // Monto con signo explícito (el IVA neto puede ser negativo).
 const conSigno=(n)=>(n<0?"−":"")+fmt.money(Math.abs(n));
 
-export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, onGuardarIva, onPagoVendedor, onVerOCs, onAbrirOC }) {
+export function PanelVendedores({ vendedores, ocs, ivaMensual, gastos=[], pagosVendedor, onGuardarIva, onPagoVendedor, onVerOCs, onAbrirOC }) {
   const [detalleMes,setDetalleMes]=useState(null); // "vendedor|anio|mes" con las OCs del cálculo desplegadas (Fase 4C)
   // Fase 4A: OCs sin vendedor no entran en ninguna comisión; se advierte para que no pase inadvertido.
   const sinVendedor=useMemo(()=>filtrarPanel(ocs,"sin_vendedor"),[ocs]);
@@ -29,7 +31,8 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
 
   const [verHistorialIva,setVerHistorialIva]=useState(false);
   const ivaOrdenado=useMemo(()=>ivaMensual.slice().sort((a,b)=>`${b.anio}-${String(b.mes).padStart(2,"0")}`.localeCompare(`${a.anio}-${String(a.mes).padStart(2,"0")}`)),[ivaMensual]);
-  const [editandoIvaExistente,setEditandoIvaExistente]=useState(null); // null = nuevo mes actual, o el registro a editar
+  const [editandoIvaExistente,setEditandoIvaExistente]=useState(null); // null = mes sugerido, o {anio,mes} del período a editar/completar
+  const ivaIncompletos=useMemo(()=>periodosIvaIncompletos({gastos,ivaMensual}),[gastos,ivaMensual]);
 
   return (
     <div>
@@ -107,7 +110,7 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
                             ? <div style={{color:C.inkFaint}}>Sin descuento de IVA (regla especial de ese mes)</div>
                             : d.ivaRegistrado
                               ? <div>IVA neto del período (débito {fmt.money(d.ivaVentas)} − crédito {fmt.money(d.ivaCompras)}): <b style={{color:d.impIva>0?C.dangerText:C.okText}}>{d.impIva>0?"−":d.impIva<0?"+":""}{fmt.money(Math.abs(d.impIva))}</b>{d.impIva<0&&<span style={{color:C.inkFaint}}> (crédito mayor que débito: suma)</span>}</div>
-                              : <div style={{color:C.warnText}}><Ic n="⚠"/> IVA de este mes sin registrar todavía — se está calculando sin IVA neto; cambiará cuando lo cargues</div>
+                              : <div style={{color:C.warnText}}><Ic n="⚠"/> IVA de este mes sin registrar todavía — se está calculando sin IVA neto; cambiará cuando lo cargues{" "}<button onClick={()=>{setEditandoIvaExistente({anio:d.anio,mes:d.mes});setEditIva(true);}} style={{background:"none",border:"none",color:C.info,fontSize:12.5,fontWeight:700,cursor:"pointer",textDecoration:"underline",padding:0}}>Registrar IVA de {fmt.monthYear(d.mes,d.anio)}</button></div>
                           }
                           <div>Mitad de (utilidad − IVA neto): <b style={{color:C.ink}}>{conSigno(Math.round((d.sumaUtilidad-(d.sinIva?0:d.impIva))/2))}</b>{(d.sumaUtilidad-(d.sinIva?0:d.impIva))<0&&<span style={{color:C.inkFaint}}> (negativo: cuenta como $0)</span>}</div>
                           {d.pagoVentasPropias>0&&<div>+ Ventas propias (100% de esa utilidad, sin repartir): <b style={{color:C.ink}}>+{fmt.money(d.pagoVentasPropias)}</b></div>}
@@ -168,6 +171,16 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
       </Seccion>
 
       <Seccion id="ven-iva" titulo="IVA mensual" nota="Impuesto de la empresa. Su IVA neto (débito − crédito) se descuenta en las comisiones del período; no es un pago a vendedores.">
+      {ivaIncompletos.length>0&&(
+        <div data-aviso="iva-incompleto" style={{background:C.warnLight,border:`1px solid ${C.warn}55`,borderRadius:12,padding:"10px 12px",marginBottom:10}}>
+          <div style={{fontSize:13,fontWeight:700,color:C.warnText,marginBottom:6}}>Pago al SII registrado sin débito/crédito: la comisión de estos meses se calcula sin IVA.</div>
+          {ivaIncompletos.map(p=>(
+            <button key={`${p.anio}-${p.mes}`} onClick={()=>{setEditandoIvaExistente({anio:p.anio,mes:p.mes});setEditIva(true);}} style={{...btnG,minHeight:40,fontSize:12.5,marginRight:6,marginTop:4,padding:"6px 12px"}}>
+              Completar {fmt.monthYear(p.mes,p.anio)} · pagado {fmt.money(p.pagado)}
+            </button>
+          ))}
+        </div>
+      )}
       <Tarjeta padding="14px 16px">
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
           <div style={{fontWeight:800,fontSize:14,color:C.ink}}>IVA del mes ({fmt.monthYear(mesActual,anioActual)})</div>
@@ -205,45 +218,15 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, pagosVendedor, on
       )}
       {editIva&&(
         <Modal title="IVA mensual" onClose={()=>setEditIva(false)}>
-          <FormIvaMensual ivaExistente={editandoIvaExistente} onSave={async(d)=>{await onGuardarIva(d);setEditIva(false);}} />
+          <FormIvaMensual ivaMensual={ivaMensual} gastos={gastos} periodo={editandoIvaExistente?{anio:editandoIvaExistente.anio,mes:editandoIvaExistente.mes}:null} onSave={async(d)=>{await onGuardarIva(d);setEditIva(false);}} />
         </Modal>
       )}
     </div>
   );
 }
 
-export function FormIvaMensual({ ivaExistente, onSave }) {
-  const hoy=new Date();
-  const [mes,setMes]=useState(ivaExistente?.mes||hoy.getMonth()+1);
-  const [anio,setAnio]=useState(ivaExistente?.anio||hoy.getFullYear());
-  const [vN,setVN]=useState(ivaExistente?.ventas_netas||""); const [iV,setIV]=useState(ivaExistente?.iva_ventas||"");
-  const [cN,setCN]=useState(ivaExistente?.compras_netas||""); const [iC,setIC]=useState(ivaExistente?.iva_compras||"");
-  const [err,setErr]=useState(""); const [saving,setSaving]=useState(false);
-  const regForm={iva_ventas:iV,iva_compras:iC};
-  const ivaNeto=ivaNetoPeriodo(regForm);
-  const ivaPagado=ivaAPagarPeriodo(regForm); // se sigue guardando en iva_pagado (mismo significado que antes)
-  const MESES=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
-  const handleSave=async()=>{
-    setErr(""); setSaving(true);
-    try{await onSave({mes:Number(mes),anio:Number(anio),ventasNetas:Number(vN)||0,ivaVentas:Number(iV)||0,comprasNetas:Number(cN)||0,ivaCompras:Number(iC)||0,ivaPagado});}
-    catch(e){setErr(e.message);}finally{setSaving(false);};
-  };
-  return (
-    <div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-        <Field label="Mes"><select style={selStyle} value={mes} onChange={e=>setMes(e.target.value)}>{MESES.map((m,i)=><option key={i} value={i+1}>{m}</option>)}</select></Field>
-        <Field label="Año"><input style={iMono} type="number" value={anio} onChange={e=>setAnio(e.target.value)} /></Field>
-        <Field label="Ventas netas ($)"><input style={iMono} type="number" value={vN} onChange={e=>setVN(e.target.value)} /></Field>
-        <Field label="IVA ventas ($)"><input style={iMono} type="number" value={iV} onChange={e=>setIV(e.target.value)} /></Field>
-        <Field label="Compras netas ($)"><input style={iMono} type="number" value={cN} onChange={e=>setCN(e.target.value)} /></Field>
-        <Field label="IVA compras ($)"><input style={iMono} type="number" value={iC} onChange={e=>setIC(e.target.value)} /></Field>
-      </div>
-      <div style={{background:C.tealLight,borderRadius:9,padding:"10px 12px",fontSize:13,color:C.tealDark,fontWeight:700,marginBottom:14}}>IVA neto del período (usado en comisiones): {conSigno(ivaNeto)} · IVA a pagar: {fmt.money(ivaPagado)}</div>
-      {err&&<div style={{background:C.dangerLight,color:C.dangerText,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}
-      <button onClick={handleSave} disabled={saving} style={btnP(saving?C.inkFaint:C.info)}>{saving?"Guardando…":"✓ Guardar IVA"}</button>
-    </div>
-  );
-}
+// El formulario de IVA es único (Vendedores y Gastos): components/forms/FormIvaMensual.jsx
+export { FormIvaMensual };
 
 export function FormPagoVendedorSimple({ vendedores, ocs, ivaMensual, pagosVendedor, onSave, inicial }) {
   const [vendedorId,setVendedorId]=useState(inicial?.vendedorId||vendedores[0]?.id||"");

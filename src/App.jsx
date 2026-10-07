@@ -19,6 +19,7 @@ import { bloqueoOC, fijarProveedorToken } from "./lib/bloqueoOCUso";
 import { PanelDashboard } from "./components/panels/PanelDashboard";
 import { PanelFinanciamiento } from "./components/panels/PanelFinanciamiento";
 import { PanelGastos } from "./components/panels/PanelGastos";
+import { planGuardarIva } from "./lib/ivaUnificado";
 import { PanelUsuarios } from "./components/panels/PanelUsuarios";
 import { PanelVendedores } from "./components/panels/PanelVendedores";
 import { Modal, Toast } from "./components/ui/Basicos";
@@ -1062,11 +1063,17 @@ export default function App() {
       ocs,ivaMensual,pagosVendedor});
     showToast(r.completo?`Pago registrado · período saldado${r.ocIds.length?` · ${r.ocIds.length} OC marcadas como pagadas`:""}`:`Pago parcial registrado · pendiente ${fmt.money(r.pendiente)}`); await cargarTodo();
   };
+  // IVA del mes — registro único (lib/ivaUnificado.js): guarda débito/crédito en
+  // iva_mensual (comisión) y el pago al SII como gasto "Impuesto SII" (caja).
   const handleGuardarIva=async(data)=>{
-    const t=session.access_token; const existe=ivaMensual.find(i=>i.mes===data.mes&&i.anio===data.anio);
-    const row={anio:data.anio,mes:data.mes,ventas_netas:data.ventasNetas,iva_ventas:data.ivaVentas,compras_netas:data.comprasNetas,iva_compras:data.ivaCompras,iva_pagado:data.ivaPagado};
-    if(existe) await upd("iva_mensual",t,existe.id,row); else await ins("iva_mensual",t,{id:genId("iva"),...row});
-    showToast("IVA guardado"); await cargarTodo();
+    const t=session.access_token;
+    const plan=planGuardarIva({data,gastos,ivaMensual});
+    if(plan.iva.accion==="actualizar") await upd("iva_mensual",t,plan.iva.id,plan.iva.fila);
+    else await ins("iva_mensual",t,{id:genId("iva"),...plan.iva.fila});
+    if(plan.gasto.accion==="insertar") await ins("gastos_indirectos",t,{id:genId("gas"),...plan.gasto.fila,creado_por:session.user.id});
+    else if(plan.gasto.accion==="actualizar") await upd("gastos_indirectos",t,plan.gasto.id,plan.gasto.fila);
+    showToast(plan.aviso?`IVA guardado · ${plan.aviso}`:plan.gasto.accion==="ninguna"?"IVA guardado":"IVA guardado · pago al SII registrado en Gastos");
+    await cargarTodo();
   };
   const handleChangeRol=async(uid,rol)=>{ await updRol(session.access_token,uid,rol); showToast("Rol actualizado"); await cargarTodo(); };
   const handleGuardarLink=async(ocId,{descripcion,url,orden,direccion_entrega,cantidad,precio_compra,precio_venta,origen},oc)=>{
@@ -1569,8 +1576,8 @@ export default function App() {
       {(tab==="notif"||todo)&&hoja("notif",<PanelNotificaciones notificaciones={notificaciones} ocs={ocs} onMarcarLeidas={handleMarcarNotificacionesLeidas} filtroAlertas={filtroAlertas} onFiltroAlertas={setFiltroAlertas} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setVolverA(ocId?"notif":null);setTab(t);}} />)}
       {(tab==="agenda"||todo)&&hoja("agenda",<PanelCalendario ocs={ocs} onMarcarFecha={handleMarcarFecha} onVerAlertas={(f)=>{setFiltroCompras(null);setOcFoco(null);setVolverA(null);setFiltroAlertas({nivel:(f&&f.nivel)||"todas",etapa:(f&&f.etapa)||null});setTab("notif");}} />)}
       {(tab==="financiamiento"||todo)&&hoja("financiamiento",<PanelFinanciamiento difsHistoricas={difsHistoricas} financiadores={financiadores} ocs={ocs} ajustes={ajustesSaldo} perfiles={perfiles} onAjustar={handleAjusteSaldo} aportes={aportes} onGuardarAporte={handleGuardarAporte} onEliminarAporte={perfil?.rol==="admin"?handleEliminarAporte:undefined} onAbonar={(finId)=>{setAbonoFinId(typeof finId==="string"||typeof finId==="number"?finId:null);setAccion("abono_fin");}} pagoFinSueltos={pagoFinSueltos} />)}
-      {(tab==="gastos"||todo)&&hoja("gastos",<PanelGastos gastos={gastos} categorias={categoriasGasto} onNuevoGasto={handleNuevoGasto} />)}
-      {(tab==="vendedores"||todo)&&hoja("vendedores",<PanelVendedores vendedores={vendedores} ocs={ocs} ivaMensual={ivaMensual} pagosVendedor={pagosVendedor} onGuardarIva={handleGuardarIva} onPagoVendedor={handlePagoVendedorSimple} onVerOCs={(filtro)=>{setFiltroCompras(filtro);setOcFoco(null);setVolverA(null);setTab("compras");}} onAbrirOC={(ocId)=>{setFiltroCompras(null);setOcFoco(ocId);setVolverA(null);setTab("compras");}} />)}
+      {(tab==="gastos"||todo)&&hoja("gastos",<PanelGastos gastos={gastos} categorias={categoriasGasto} ivaMensual={ivaMensual} onNuevoGasto={handleNuevoGasto} onGuardarIva={handleGuardarIva} />)}
+      {(tab==="vendedores"||todo)&&hoja("vendedores",<PanelVendedores vendedores={vendedores} ocs={ocs} ivaMensual={ivaMensual} gastos={gastos} pagosVendedor={pagosVendedor} onGuardarIva={handleGuardarIva} onPagoVendedor={handlePagoVendedorSimple} onVerOCs={(filtro)=>{setFiltroCompras(filtro);setOcFoco(null);setVolverA(null);setTab("compras");}} onAbrirOC={(ocId)=>{setFiltroCompras(null);setOcFoco(ocId);setVolverA(null);setTab("compras");}} />)}
       {(tab==="usuarios"||todo)&&perfil?.rol==="admin"&&hoja("usuarios",<PanelUsuarios difsHistoricas={difsHistoricas} perfiles={perfiles} ocs={ocs} ocsArchivadas={ocsArchivadas} onRestaurarOC={handleRestaurarOC} onChangeRol={handleChangeRol} session={session} showToast={showToast} entidadesCatalogo={entidadesCatalogo} onEntidadesImportadas={handleEntidadesImportadas} usoMP={usoMP} sincronizando={sincronizando} validandoTodo={validandoTodo} exportando={exportando} onCorregirFechas={corregirFechasTodas} onValidarTodo={validarTodoContraMP} onExportarTodo={handleExportarTodo} />)}
     </>
   );
