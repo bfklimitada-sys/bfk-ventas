@@ -1,6 +1,8 @@
 import { abrirCorreo } from "./lib/correos.js";
 import { useState, useEffect, useRef } from "react";
 import { LoginScreen } from "./components/auth/LoginScreen";
+import { RestablecerContrasena } from "./components/auth/RestablecerContrasena";
+import { RETORNO_RECUPERACION } from "./lib/retornoAuth";
 import { FormIngresarCompra } from "./components/forms/FormIngresarCompra";
 import { NuevaOCRapida } from "./components/forms/NuevaOCRapida";
 import { FormCompraRapida } from "./components/forms/FormCompraRapida";
@@ -47,6 +49,9 @@ export default function App() {
   const [session,setSession]=useState(null); const [perfil,setPerfil]=useState(null);
   const sesionRef=useRef(null); sesionRef.current=session; fijarProveedorToken(()=>sesionRef.current?.access_token||null); // token vigente para el ciclo de bloqueo de OC
   const [loadingApp,setLoadingApp]=useState(true);
+  // Recuperación de contraseña: si la app se abrió desde el enlace del correo, se muestra primero esa pantalla.
+  const [retornoRecuperacion,setRetornoRecuperacion]=useState(RETORNO_RECUPERACION);
+  const [avisoLogin,setAvisoLogin]=useState(null); // {email, aviso} al volver al inicio de sesión
   // La pantalla inicial sale de la dirección (#/compras…) para que recargar o abrir un enlace mantenga la pantalla.
   const [tab,setTab]=useState(()=>pantallaDesdeHash(typeof window!=="undefined"?window.location.hash:"")||PANTALLA_INICIAL); const [filtroCompras,setFiltroCompras]=useState(null); const [ocFoco,setOcFoco]=useState(null); const [filtroAlertas,setFiltroAlertas]=useState({nivel:"todas",etapa:null}); const [volverA,setVolverA]=useState(null);
   // OCs ya consultadas a la API en esta sesión (para no reintentar en bucle)
@@ -1544,8 +1549,13 @@ export default function App() {
   };
 
   // ─── RENDER ───────────────────────────────────
+  if(retornoRecuperacion) return <RestablecerContrasena retorno={retornoRecuperacion} onSalir={({email,aviso,usuarioId,cambiada})=>{
+    // Tras cambiar la contraseña se cerraron todas las sesiones de esa cuenta: si la guardada era suya, se descarta.
+    if(cambiada&&(!session||!usuarioId||session.user?.id===usuarioId)){ setSession(null); setPerfil(null); storageSet(SESSION_KEY,""); }
+    setAvisoLogin({email:email||"",aviso:aviso||""}); setRetornoRecuperacion(null);
+  }} />;
   if(loadingApp) return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",color:C.inkMuted,fontFamily:SANS}}>Cargando…</div>;
-  if(!session) return <LoginScreen onLogin={handleLogin} />;
+  if(!session) return <LoginScreen onLogin={handleLogin} emailInicial={avisoLogin?.email||""} avisoInicial={avisoLogin?.aviso||""} />;
   const alertasUrgentes=calcularAlertas(ocs).filter(a=>a.nivel==="alto").length;
 
   // Todo lo que ya está registrado, para que la cartola no lo duplique

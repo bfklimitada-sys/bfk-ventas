@@ -102,9 +102,12 @@ for(const [modo,ancho,alto,movil] of [["movil",390,844,true],["escritorio",1440,
     // Dirección desconocida
     await p.goto(URL_APP+"#/no-existe",{waitUntil:"load"}); await espera(p,1800);
     ok(`${tag}_direccion_desconocida_a_panel`, (await hash(p))==="#/panel");
-    // Dirección con datos de autenticación (correo de Supabase): no se borra al abrir
+    // Enlace de recuperación (correo de Supabase): abre "Nueva contraseña", borra los tokens de la dirección
+    // y, al cancelar, vuelve a la app con la sesión que ya existía (ver docs/pruebas-recuperacion).
     await p.goto("about:blank"); await p.goto(URL_APP+"#access_token=prueba&type=recovery",{waitUntil:"load"}); await espera(p,1800);
-    ok(`${tag}_hash_con_datos_intacto`, (await hash(p))==="#access_token=prueba&type=recovery" && /Buen/.test(await titulo(p)));
+    const enRecuperacion=(await p.locator("text=Guardar nueva contraseña").count())>0 && !/access_token/.test(await p.evaluate(()=>location.href));
+    await p.locator("text=Cancelar y volver a iniciar sesión").click(); await espera(p,900);
+    ok(`${tag}_hash_con_datos_intacto`, enRecuperacion && (await hash(p))==="#/panel" && /Buen/.test(await titulo(p)));
     // Título de la pestaña
     await ir(p,"compras",esc); ok(`${tag}_titulo_pestana`, (await p.title())==="Compras · BFK Ltda");
     // Cerrar sesión desde el menú / barra lateral

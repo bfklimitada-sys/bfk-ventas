@@ -1,4 +1,5 @@
 import { HOJAS_RESPALDO } from "./hojasRespaldo.js";
+import { URL_RETORNO_RECUPERACION, mensajeErrorAuth } from "./recuperacion.js";
 
 export const SUPABASE_URL = "https://gypywxaugwuxbgmcqntp.supabase.co";
 
@@ -18,10 +19,39 @@ export async function supaSignUp(email, password, nombre) {
 
 export async function supaSignOut(token) { try { await fetch(`${SUPABASE_URL}/auth/v1/logout`, {method:"POST", headers:{apikey:SUPABASE_ANON_KEY, Authorization:`Bearer ${token}`}}); } catch {} }
 
+// Recuperación de contraseña: el enlace del correo vuelve SIEMPRE a la dirección de producción
+// (redirect_to), nunca a localhost. Supabase responde igual exista o no el correo.
 export async function supaResetPassword(email) {
-  const r = await fetch(`${SUPABASE_URL}/auth/v1/recover`, { method:"POST", headers:{"Content-Type":"application/json", apikey:SUPABASE_ANON_KEY}, body:JSON.stringify({email}) });
-  if(!r.ok) { const d=await r.json().catch(()=>({})); throw new Error(d.error_description||"Error al enviar correo de recuperación"); }
+  const r = await fetch(`${SUPABASE_URL}/auth/v1/recover?redirect_to=${encodeURIComponent(URL_RETORNO_RECUPERACION)}`, { method:"POST", headers:{"Content-Type":"application/json", apikey:SUPABASE_ANON_KEY}, body:JSON.stringify({email}) });
+  if(!r.ok) { const d=await r.json().catch(()=>({})); throw new Error(mensajeErrorAuth(r.status,d,"No se pudo enviar el correo de recuperación. Intenta nuevamente.")); }
 }
+
+// Usuario dueño de un token (valida que la sesión de recuperación siga vigente).
+export async function supaGetUser(token) {
+  const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, { headers:{apikey:SUPABASE_ANON_KEY, Authorization:`Bearer ${token}`} });
+  const d = await r.json().catch(()=>({}));
+  if(!r.ok) throw Object.assign(new Error(mensajeErrorAuth(r.status,d,"No se pudo validar el enlace de recuperación.")),{status:r.status});
+  return d;
+}
+
+// Fija la nueva contraseña con la sesión de recuperación.
+export async function supaUpdatePassword(token, password) {
+  const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, { method:"PUT", headers:{"Content-Type":"application/json", apikey:SUPABASE_ANON_KEY, Authorization:`Bearer ${token}`}, body:JSON.stringify({password}) });
+  const d = await r.json().catch(()=>({}));
+  if(!r.ok) throw Object.assign(new Error(mensajeErrorAuth(r.status,d,"No se pudo actualizar la contraseña. Intenta nuevamente.")),{status:r.status});
+  return d;
+}
+
+// Enlace con token_hash (plantilla de correo alternativa): se canjea por una sesión de recuperación.
+export async function supaVerifyRecoveryHash(tokenHash) {
+  const r = await fetch(`${SUPABASE_URL}/auth/v1/verify`, { method:"POST", headers:{"Content-Type":"application/json", apikey:SUPABASE_ANON_KEY}, body:JSON.stringify({type:"recovery", token_hash:tokenHash}) });
+  const d = await r.json().catch(()=>({}));
+  if(!r.ok||!d.access_token) throw Object.assign(new Error(mensajeErrorAuth(r.status||401,d,"El enlace de recuperación no es válido o expiró.")),{status:r.status});
+  return d;
+}
+
+// Cierra todas las sesiones del usuario (todos los dispositivos). Se usa tras cambiar la contraseña.
+export async function supaSignOutGlobal(token) { try { await fetch(`${SUPABASE_URL}/auth/v1/logout?scope=global`, {method:"POST", headers:{apikey:SUPABASE_ANON_KEY, Authorization:`Bearer ${token}`}}); } catch {} }
 
 export async function supaRefresh(rt) {
   const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, { method:"POST", headers:{"Content-Type":"application/json", apikey:SUPABASE_ANON_KEY}, body:JSON.stringify({refresh_token:rt}) });

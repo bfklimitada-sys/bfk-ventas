@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { Field } from "../ui/Basicos";
 import { supaResetPassword, supaSignIn, supaSignUp } from "../../lib/supabase";
+import { correoValido } from "../../lib/recuperacion";
 import { C, MONO, SANS, btnP, iStyle } from "../../lib/theme";
 
-export function LoginScreen({ onLogin }) {
+export function LoginScreen({ onLogin, emailInicial="", avisoInicial="" }) {
   const [mode,setMode]=useState("login");
-  const [email,setEmail]=useState(""); const [pass,setPass]=useState(""); const [nombre,setNombre]=useState("");
-  const [err,setErr]=useState(""); const [info,setInfo]=useState(""); const [loading,setLoading]=useState(false);
+  const [email,setEmail]=useState(emailInicial); const [pass,setPass]=useState(""); const [nombre,setNombre]=useState("");
+  const [err,setErr]=useState(""); const [info,setInfo]=useState(avisoInicial); const [loading,setLoading]=useState(false);
   const submit = async () => {
     setErr(""); setInfo(""); setLoading(true);
     try {
@@ -21,20 +22,15 @@ export function LoginScreen({ onLogin }) {
         else { setInfo("Cuenta creada. Confirma tu correo, luego inicia sesión."); setMode("login"); }
       } else if(mode==="recover") {
         if(!email.trim()){setErr("Indica tu correo");return;}
+        if(!correoValido(email)){setErr("Revisa el correo: no tiene un formato válido");return;}
         await supaResetPassword(email.trim());
-        setInfo("Te enviamos un correo con instrucciones para recuperar tu contraseña.");
+        setInfo(TEXTO_CORREO_ENVIADO);
       }
     } catch(e){setErr(e.message);}
     finally{setLoading(false);}
   };
   return (
-    <div style={{minHeight:"100vh",background:`linear-gradient(165deg,${C.night} 0%,#1A2540 60%,${C.tealDark} 130%)`,display:"flex",alignItems:"center",justifyContent:"center",padding:16,fontFamily:SANS}}>
-      <div style={{background:C.card,borderRadius:20,padding:"38px 30px",width:"100%",maxWidth:380,boxShadow:"0 30px 70px rgba(0,0,0,0.35)"}}>
-        <div style={{textAlign:"center",marginBottom:26}}>
-          <div style={{width:50,height:50,background:C.night,borderRadius:12,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px",fontFamily:MONO,color:C.teal,fontWeight:800,fontSize:18}}>BFK</div>
-          <div style={{fontWeight:800,fontSize:19,color:C.ink,letterSpacing:-0.3}}>Torre de Control</div>
-          <div style={{fontSize:12.5,color:C.inkMuted,marginTop:3}}>BFK Ltda · Ventas Mercado Público</div>
-        </div>
+    <MarcoAuth>
         {mode!=="recover"&&(
           <div style={{display:"flex",borderRadius:10,background:C.paper,padding:3,marginBottom:22}}>
             {["login","signup"].map(m=>(
@@ -54,6 +50,23 @@ export function LoginScreen({ onLogin }) {
         {mode==="login"&&<div style={{textAlign:"center",marginTop:14}}><button onClick={()=>{setMode("recover");setErr("");setInfo("");}} style={{background:"none",border:"none",color:C.tealDark,fontSize:12,fontWeight:700,cursor:"pointer"}}>¿Olvidaste tu contraseña?</button></div>}
         {mode==="recover"&&<div style={{textAlign:"center",marginTop:14}}><button onClick={()=>{setMode("login");setErr("");setInfo("");}} style={{background:"none",border:"none",color:C.tealDark,fontSize:12,fontWeight:700,cursor:"pointer"}}>← Volver a iniciar sesión</button></div>}
         <div style={{textAlign:"center",fontSize:12,color:C.inkFaint,marginTop:16}}>{mode==="login"?'¿Sin cuenta? Usa "Crear cuenta"':mode==="signup"?"El primer usuario será administrador.":""}</div>
+    </MarcoAuth>
+  );
+}
+
+export const TEXTO_CORREO_ENVIADO="Si el correo está registrado, recibirás un enlace para crear una nueva contraseña. Revisa también la carpeta de spam. El enlace es de un solo uso y tiene vigencia limitada.";
+
+// Marco visual común de las pantallas de acceso (inicio de sesión y nueva contraseña).
+export function MarcoAuth({ children }) {
+  return (
+    <div style={{minHeight:"100vh",background:`linear-gradient(165deg,${C.night} 0%,#1A2540 60%,${C.tealDark} 130%)`,display:"flex",alignItems:"center",justifyContent:"center",padding:16,fontFamily:SANS}}>
+      <div style={{background:C.card,borderRadius:20,padding:"38px 30px",width:"100%",maxWidth:380,boxShadow:"0 30px 70px rgba(0,0,0,0.35)"}}>
+        <div style={{textAlign:"center",marginBottom:26}}>
+          <div style={{width:50,height:50,background:C.night,borderRadius:12,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px",fontFamily:MONO,color:C.teal,fontWeight:800,fontSize:18}}>BFK</div>
+          <div style={{fontWeight:800,fontSize:19,color:C.ink,letterSpacing:-0.3}}>Torre de Control</div>
+          <div style={{fontSize:12.5,color:C.inkMuted,marginTop:3}}>BFK Ltda · Ventas Mercado Público</div>
+        </div>
+        {children}
       </div>
     </div>
   );
