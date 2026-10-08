@@ -52,7 +52,7 @@ export function SeccionFicha({ id, icono, titulo: t, resumen, abierta, onToggle,
       <button type="button" data-consulta="1" aria-expanded={abierta} onClick={onToggle}
         style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", minHeight: 48, background: "none", border: "none", cursor: "pointer", textAlign: "left" }}>
         <span style={{ fontSize: 15, flexShrink: 0 }}>{icono}</span>
-        <span style={{ fontWeight: 800, fontSize: 14, color: C.ink, flexShrink: 0 }}>{t}</span>
+        <span style={{ fontWeight: 800, fontSize: 14, color: C.ink, flexShrink: 1, minWidth: 0 }}>{t}</span>
         <span style={{ flex: 1, minWidth: 0, fontSize: 12, color: C.inkMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textAlign: "right" }}>{resumen}</span>
         <span style={{ color: C.inkFaint, fontSize: 12, flexShrink: 0 }}>{abierta ? "▲" : "▼"}</span>
       </button>
@@ -62,9 +62,10 @@ export function SeccionFicha({ id, icono, titulo: t, resumen, abierta, onToggle,
 }
 
 // ── Índice de secciones ────────────────────────────────────────
-export function IndiceFicha({ items, onIr }) {
+export function IndiceFicha({ items, onIr, envolver = false }) {
+  // En móvil (envolver) las pestañas pasan a varias filas para que ninguna quede cortada a la derecha.
   return (
-    <nav data-consulta="1" data-indice-ficha aria-label="Secciones de la OC" style={{ display: "flex", gap: 6, overflowX: "auto", padding: "8px 0 2px", WebkitOverflowScrolling: "touch" }}>
+    <nav data-consulta="1" data-indice-ficha aria-label="Secciones de la OC" style={{ display: "flex", gap: 6, flexWrap: envolver ? "wrap" : "nowrap", overflowX: envolver ? "visible" : "auto", padding: "8px 0 2px", WebkitOverflowScrolling: "touch" }}>
       {items.map((it) => (
         <button key={it.id} type="button" data-consulta="1" onClick={() => onIr(it.id)}
           style={{ flexShrink: 0, border: `1px solid ${it.aviso ? C.warn : C.border}`, background: C.card, borderRadius: 999, padding: "6px 12px", fontSize: 12, fontWeight: 700, color: it.aviso ? C.warnText : C.inkMuted, minHeight: 34, cursor: "pointer", whiteSpace: "nowrap" }}>

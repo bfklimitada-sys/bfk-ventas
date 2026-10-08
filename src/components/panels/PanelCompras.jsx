@@ -975,8 +975,10 @@ export function FilaOC({ correosOC = SIN_CORREOS, onMarcarCorreo, pagosVendedor,
         const estadoChip=(ok,t)=><span style={{fontSize:11.5,fontWeight:700,padding:"2px 7px",borderRadius:999,background:ok?C.okLight:C.paper,color:ok?C.okText:C.inkFaint,border:`1px solid ${ok?C.okLight:C.border}`,whiteSpace:"nowrap"}}>{ok?"✓ ":""}{t}</span>;
         return (
         <div data-ficha-oc={oc.numero_oc} style={{borderTop:`1px solid ${C.border}`,background:C.paper}}>
-          {/* Cabecera fija: OC · cliente · monto · vendedor · estados principales + índice */}
-          <div data-ficha-cabecera style={{position:"sticky",top:topeFijo,zIndex:6,background:C.paper,padding:"9px 14px 6px",borderBottom:`1px solid ${C.border}`,boxShadow:"0 2px 6px rgba(15,23,42,0.05)"}}>
+          {/* Cabecera fija: OC · cliente · monto · vendedor · estados principales + índice.
+              En móvil solo queda el índice: el resumen ya está en la tarjeta principal. */}
+          <div data-ficha-cabecera style={{position:"sticky",top:topeFijo,zIndex:6,background:C.paper,padding:escritorio?"9px 14px 6px":"4px 14px 6px",borderBottom:`1px solid ${C.border}`,boxShadow:"0 2px 6px rgba(15,23,42,0.05)"}}>
+            {escritorio&&<>
             <div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"baseline",flexWrap:"wrap"}}>
               <div style={{minWidth:0,flex:"1 1 200px"}}>
                 <span style={{fontFamily:MONO,fontWeight:800,fontSize:13.5,color:C.ink}}>{oc.numero_oc}</span>
@@ -991,7 +993,8 @@ export function FilaOC({ correosOC = SIN_CORREOS, onMarcarCorreo, pagosVendedor,
               {estadoChip(estaComprada(oc),"Compra")}{estadoChip(estaEntregada(oc),"Entrega")}{estadoChip(estaFacturada(oc),"Factura")}
               {estadoChip(estaCobrada(oc),"Cobro")}{estadoChip(financiamientoPagado(oc),"Financ.")}
             </div>
-            <IndiceFicha items={secciones} onIr={ir} />
+            </>}
+            <IndiceFicha items={secciones} onIr={ir} envolver={!escritorio} />
           </div>
 
           <div style={{padding:"12px 14px"}}>
