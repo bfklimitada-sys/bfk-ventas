@@ -125,6 +125,15 @@ export const retencionesPeriodo = (registro) => {
   return Math.max(0, Math.round((Number(registro.iva_pagado) || 0) - ivaAPagarPeriodo(registro)));
 };
 
+// ── Pagos a vendedores: una transferencia, dos componentes (08/10/2026) ──
+//  monto_pagado ........ parte aplicada a la COMISIÓN del período (único monto que cuenta para la comisión).
+//  monto_extra_gestion . excedente sobre la comisión pendiente: extra por gestión del mismo período (no es comisión).
+//  monto_transferido ... total de la transferencia (= comisión + extra). Pagos históricos: null → total = monto_pagado.
+//  anulado_en .......... pago anulado: se conserva, pero no cuenta en comisión ni en caja.
+export const pagoVigente = (p) => !p?.anulado_en;
+export const totalTransferido = (p) => (p?.monto_transferido != null ? Number(p.monto_transferido) || 0 : Number(p?.monto_pagado) || 0);
+export const extraGestion = (p) => Number(p?.monto_extra_gestion) || 0;
+
 // Pago de un vendedor en un mes. Regla única:
 //  · La comisión es sobre la UTILIDAD (venta − costo), no sobre lo facturado.
 //  · Mitad de (utilidad − IVA neto del período − retenciones del F29 desde ago-2026).
@@ -166,8 +175,10 @@ export const calcularPagoVendedor = ({ vendedorId, ocs, anio, mes, ivaMensual = 
   const retenciones = retencionesPeriodo(ivaMes); // desde agosto 2026: PPM y demás retenciones del F29
   const descuentoF29 = impIva + retenciones;
   const pagoCalculadoFormula = Math.max(0, Math.round(sumaUtilidad / 2 - descuentoF29 / 2)) + pagoVentasPropias;
-  const pagosDelMes = pagosVendedor.filter((p) => p.vendedor_id === vendedorId && p.mes === mes && p.anio === anio);
-  const pagado = pagosDelMes.reduce((s, p) => s + (p.monto_pagado || 0), 0);
+  const pagosDelMes = pagosVendedor.filter((p) => pagoVigente(p) && p.vendedor_id === vendedorId && Number(p.mes) === mes && Number(p.anio) === anio);
+  const pagado = pagosDelMes.reduce((s, p) => s + (Number(p.monto_pagado) || 0), 0);
+  const extra = pagosDelMes.reduce((s, p) => s + extraGestion(p), 0);
+  const transferido = pagosDelMes.reduce((s, p) => s + totalTransferido(p), 0);
   const verificado = pagosDelMes.find((p) => p.monto_verificado != null)?.monto_verificado;
   const esVerificado = verificado != null;
   const pagoCalculado = esVerificado ? verificado : pagoCalculadoFormula;
@@ -176,6 +187,10 @@ export const calcularPagoVendedor = ({ vendedorId, ocs, anio, mes, ivaMensual = 
     estado: pagado >= pagoCalculado ? "pagado" : "pendiente", esVerificado, impIva, retenciones, descuentoF29, sinIva, ivaRegistrado: !!ivaMes,
     ivaVentas: ivaMes ? Number(ivaMes.iva_ventas) || 0 : 0, ivaCompras: ivaMes ? Number(ivaMes.iva_compras) || 0 : 0,
     deuda: Math.max(0, pagoCalculado - pagado),
+    // Extra por gestión del período (aparte de la comisión) y total transferido; si la comisión bajó después de pagarla
+    // (p. ej. al registrar el IVA), la diferencia queda como saldo por regularizar: no se reclasifica ningún pago.
+    extraGestion: extra, transferido, pagos: pagosDelMes,
+    porRegularizar: esVerificado ? 0 : Math.max(0, pagado - pagoCalculado),
     detalle: detalle.sort((a, b) => String(a.fechaFactura || "").localeCompare(String(b.fechaFactura || "")) || String(a.numero_oc).localeCompare(String(b.numero_oc))),
   };
 };

@@ -4,8 +4,8 @@ import { del } from "../../lib/supabase";
 import { C, MONO, btnG, btnP, fmt, iMono, iStyle, selStyle } from "../../lib/theme";
 import { Ic } from "../ui/Iconos";
 import { Seccion, Tarjeta, Badge, Monto, IndiceSecciones } from "../ui/Sistema";
-import { evaluarPagoVendedor } from "../../lib/pagosVendedor";
-import { calcularPagoVendedor, mesesConFactura, registroIvaDe, ivaNetoPeriodo, ivaAPagarPeriodo } from "../../lib/calculos";
+import { evaluarPagoVendedor, pagoParecido } from "../../lib/pagosVendedor";
+import { calcularPagoVendedor, mesesConFactura, registroIvaDe, ivaNetoPeriodo, ivaAPagarPeriodo, totalTransferido, extraGestion } from "../../lib/calculos";
 import { estaFacturada, filtrarPanel } from "../../lib/ocs";
 import { FormIvaMensual } from "../forms/FormIvaMensual";
 import { periodosIvaIncompletos } from "../../lib/ivaUnificado";
@@ -13,7 +13,8 @@ import { periodosIvaIncompletos } from "../../lib/ivaUnificado";
 // Monto con signo explícito (el IVA neto puede ser negativo).
 const conSigno=(n)=>(n<0?"−":"")+fmt.money(Math.abs(n));
 
-export function PanelVendedores({ vendedores, ocs, ivaMensual, gastos=[], pagosVendedor, onGuardarIva, onPagoVendedor, onVerOCs, onAbrirOC }) {
+export function PanelVendedores({ vendedores, ocs, ivaMensual, gastos=[], pagosVendedor, onGuardarIva, onPagoVendedor, onAnularPago, esAdmin, onVerOCs, onAbrirOC }) {
+  const [anulando,setAnulando]=useState(null); // pago a anular (solo administrador)
   const [detalleMes,setDetalleMes]=useState(null); // "vendedor|anio|mes" con las OCs del cálculo desplegadas (Fase 4C)
   // Fase 4A: OCs sin vendedor no entran en ninguna comisión; se advierte para que no pase inadvertido.
   const sinVendedor=useMemo(()=>filtrarPanel(ocs,"sin_vendedor"),[ocs]);
@@ -150,14 +151,34 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, gastos=[], pagosV
                       )}
                     </>); })()}
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
-                      <span style={{fontSize:12,color:C.inkMuted}}>Ya se le pagó: {fmt.money(d.pagado)}</span>
+                      <span style={{fontSize:12,color:C.inkMuted}}>Comisión pagada: {fmt.money(d.pagado)}</span>
                       {d.deuda>0&&<span style={{fontSize:12,fontWeight:700,color:C.dangerText}}>Falta pagarle: {fmt.money(d.deuda)}</span>}
                     </div>
+                    {d.extraGestion>0&&<div data-extra-gestion style={{fontSize:12,color:C.inkMuted}}>Extra por gestión (aparte de la comisión): <b style={{color:C.ink}}>{fmt.money(d.extraGestion)}</b> · total transferido {fmt.money(d.transferido)}</div>}
+                    {d.porRegularizar>0&&d.pagos.some(p=>p.monto_transferido!=null)&&(
+                      <div data-por-regularizar style={{fontSize:12,color:C.warnText,marginTop:3,lineHeight:1.4}}>
+                        <Ic n="⚠"/> Saldo por regularizar: se pagaron {fmt.money(d.porRegularizar)} de comisión por sobre la comisión actual (cambió después del pago, p. ej. al registrar el IVA). Los pagos no se reclasifican solos.
+                      </div>
+                    )}
+                    {d.pagos.length>0&&(
+                      <div data-pagos-mes style={{marginTop:4}}>
+                        {d.pagos.map(p=>(
+                          <div key={p.id} data-pago={p.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,fontSize:12,color:C.inkFaint,padding:"3px 0"}}>
+                            <span style={{minWidth:0}}>
+                              {p.fecha?fmt.date(String(p.fecha).slice(0,10)):"—"} · transferido {fmt.money(totalTransferido(p))}
+                              {p.monto_transferido!=null&&<> (comisión {fmt.money(Number(p.monto_pagado)||0)}{extraGestion(p)>0?` + gestión ${fmt.money(extraGestion(p))}`:""})</>}
+                              {p.referencia_bancaria?` · ref. ${p.referencia_bancaria}`:""}
+                            </span>
+                            {esAdmin&&onAnularPago&&<button data-anular-pago={p.id} onClick={()=>setAnulando(p)} style={{flexShrink:0,background:"none",border:"none",color:C.dangerText,fontWeight:700,fontSize:12,cursor:"pointer",minHeight:32}}>Anular</button>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     {d.deuda>0&&(
                       <button onClick={()=>{setPagoInicial({vendedorId:v.id,mes:d.mes,anio:d.anio,monto:Math.round(d.deuda)});setPagando(true);}}
                         style={{...btnG,minHeight:40,fontSize:12.5,marginTop:6,padding:"6px 12px"}}>Pagar este mes · {fmt.money(d.deuda)}{!d.esVerificado&&!d.sinIva&&!d.ivaRegistrado?" (provisorio)":""}</button>
                     )}
-                    {!d.esVerificado&&d.pagado>d.pagoCalculado+1000&&(
+                    {!d.esVerificado&&d.pagado>d.pagoCalculado+1000&&!d.pagos.some(p=>p.monto_transferido!=null)&&(
                       <div style={{fontSize:12,color:C.warnText,marginTop:3,lineHeight:1.4}}>
                         <Ic n="⚠"/> Se pagó {fmt.money(d.pagado-d.pagoCalculado)} más de lo que calcula la fórmula automática — probablemente venta propia o extra no marcado en el sistema. Revisa la nota del pago para el detalle.
                       </div>
@@ -217,6 +238,11 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, gastos=[], pagosV
           <FormPagoVendedorSimple vendedores={vendedores} ocs={ocs} ivaMensual={ivaMensual} pagosVendedor={pagosVendedor} inicial={pagoInicial} onSave={async(d)=>{await onPagoVendedor(d);setPagando(false);setPagoInicial(null);}} />
         </Modal>
       )}
+      {anulando&&(
+        <Modal title="Anular pago a vendedor" onClose={()=>setAnulando(null)}>
+          <FormAnularPago pago={anulando} vendedor={vendedores.find(v=>v.id===anulando.vendedor_id)} onAnular={async(motivo)=>{await onAnularPago(anulando,motivo);setAnulando(null);}} />
+        </Modal>
+      )}
       {editIva&&(
         <Modal title="IVA mensual" onClose={()=>setEditIva(false)}>
           <FormIvaMensual ivaMensual={ivaMensual} gastos={gastos} periodo={editandoIvaExistente?{anio:editandoIvaExistente.anio,mes:editandoIvaExistente.mes}:null} onSave={async(d)=>{await onGuardarIva(d);setEditIva(false);}} />
@@ -229,41 +255,100 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, gastos=[], pagosV
 // El formulario de IVA es único (Vendedores y Gastos): components/forms/FormIvaMensual.jsx
 export { FormIvaMensual };
 
+// Pago a vendedor (08/10/2026): se ingresa el TOTAL realmente transferido y el sistema lo reparte en
+// pago de comisión (hasta la comisión pendiente del período) y extra por gestión (el excedente, del mismo período).
+const nuevoIdPago=()=>"pv_"+Date.now().toString(36)+Math.random().toString(36).slice(2,8);
 export function FormPagoVendedorSimple({ vendedores, ocs, ivaMensual, pagosVendedor, onSave, inicial }) {
   const [vendedorId,setVendedorId]=useState(inicial?.vendedorId||vendedores[0]?.id||"");
-  const [monto,setMonto]=useState(inicial?.monto?String(inicial.monto):""); const [fecha,setFecha]=useState(new Date().toISOString().slice(0,10));
-  const [mes,setMes]=useState(inicial?.mes||new Date().getMonth()+1); const [anio,setAnio]=useState(inicial?.anio||new Date().getFullYear());
+  const [mes,setMes]=useState(Number(inicial?.mes)||new Date().getMonth()+1); const [anio,setAnio]=useState(Number(inicial?.anio)||new Date().getFullYear());
+  const evInicial=evaluarPagoVendedor({vendedorId,mes,anio,monto:0,ocs,ivaMensual,pagosVendedor});
+  const [monto,setMonto]=useState(String(inicial?.monto??evInicial.pendienteAntes??""));
+  const [fecha,setFecha]=useState(new Date().toLocaleDateString("sv-SE"));
+  const [referencia,setReferencia]=useState(""); const [observacion,setObservacion]=useState("");
+  const [revisar,setRevisar]=useState(false);
   const [err,setErr]=useState(""); const [saving,setSaving]=useState(false);
-  const vend=vendedores.find(v=>v.id===vendedorId);
+  const [idPago]=useState(nuevoIdPago);   // fijo mientras el formulario está abierto: un doble envío no crea dos pagos
   const MESES=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
-  const labelMes=`Ventas de ${MESES[mes-1]}/${anio}`;
+  const vend=vendedores.find(v=>v.id===vendedorId);
+  const labelMes=`${MESES[mes-1]}/${anio}`;
   const ev=evaluarPagoVendedor({vendedorId,mes,anio,monto:Number(monto)||0,ocs,ivaMensual,pagosVendedor});
-  const handleSave=async()=>{
-    if(!monto||Number(monto)<=0){setErr("Indica el monto");return;}
-    setErr(""); setSaving(true);
-    try{await onSave({vendedorId,monto:Number(monto),fecha,mes:Number(mes),anio:Number(anio),label:labelMes});}
-    catch(e){setErr(e.message);}finally{setSaving(false);};
+  const parecido=pagoParecido({pagosVendedor,vendedorId,mes,anio,fecha,monto});
+  const cambiarPeriodo=(v,m,a)=>{ setRevisar(false); const e=evaluarPagoVendedor({vendedorId:v,mes:Number(m),anio:Number(a),monto:0,ocs,ivaMensual,pagosVendedor}); setMonto(String(e.pendienteAntes)); };
+  const pedirRevision=()=>{
+    if(!(Number(monto)>0)){setErr("Indica el monto total transferido");return;}
+    if(!fecha){setErr("Indica la fecha de la transferencia");return;}
+    setErr(""); setRevisar(true);
   };
+  const handleSave=async()=>{
+    setErr(""); setSaving(true);
+    try{await onSave({id:idPago,vendedorId,monto:Math.round(Number(monto)),fecha,mes:Number(mes),anio:Number(anio),referencia,observacion,label:`Ventas de ${labelMes}`});}
+    catch(e){setErr(e.message);}finally{setSaving(false);}
+  };
+  const Linea=({k,v,fuerte,tono,dato})=>(
+    <div style={{display:"flex",justifyContent:"space-between",gap:8,padding:"3px 0"}}>
+      <span>{k}</span><span data-desglose={dato} style={{fontFamily:MONO,fontWeight:fuerte?800:600,color:tono||C.ink}}>{fmt.money(v)}</span>
+    </div>
+  );
+  return (
+    <div data-form-pago-vendedor>
+      <Field label="Vendedor" required><select style={selStyle} value={vendedorId} disabled={revisar} onChange={e=>{setVendedorId(e.target.value);cambiarPeriodo(e.target.value,mes,anio);}}>{vendedores.map(v=><option key={v.id} value={v.id}>{v.nombre}</option>)}</select></Field>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+        <Field label="Mes de la comisión" required><select style={selStyle} value={mes} disabled={revisar} onChange={e=>{setMes(Number(e.target.value));cambiarPeriodo(vendedorId,e.target.value,anio);}}>{MESES.map((m,i)=><option key={i} value={i+1}>{m}</option>)}</select></Field>
+        <Field label="Año" required><input style={iMono} type="number" value={anio} disabled={revisar} onChange={e=>{setAnio(Number(e.target.value));cambiarPeriodo(vendedorId,mes,e.target.value);}} /></Field>
+      </div>
+      <div style={{background:C.paper,borderRadius:9,padding:"10px 12px",marginBottom:12,fontSize:12.5,color:C.inkMuted,lineHeight:1.5}}>
+        <Linea k={`Comisión calculada · ${labelMes}`} v={ev.comision} dato="comision" />
+        <Linea k="Comisión ya pagada" v={ev.pagadoAntes} dato="pagada" />
+        <Linea k="Saldo pendiente" v={ev.pendienteAntes} fuerte dato="pendiente" />
+        {ev.provisoria&&<div data-aviso-provisoria style={{color:C.warnText,fontWeight:700,marginTop:4}}><Ic n="⚠"/> Comisión provisoria: el IVA de {labelMes} no está registrado. Puede cambiar al registrarlo; si baja, la diferencia quedará como saldo por regularizar (el pago no se reclasifica solo).</div>}
+      </div>
+      <Field label="Monto total transferido ($)" required hint="Lo que salió realmente de la cuenta. Puede ser menor, igual o mayor que el saldo pendiente.">
+        <input data-monto-transferido style={iMono} type="number" inputMode="numeric" min="0" value={monto} disabled={revisar} onChange={e=>setMonto(e.target.value)} />
+      </Field>
+      <div data-desglose-pago style={{background:C.tealLight,borderRadius:9,padding:"10px 12px",marginBottom:12,fontSize:12.5,color:C.tealDark,lineHeight:1.5}}>
+        <Linea k="Pago de comisión" v={ev.pagoComision} fuerte tono={C.tealDark} dato="pago_comision" />
+        <Linea k="Extra por gestión" v={ev.extraGestion} fuerte tono={C.tealDark} dato="extra_gestion" />
+        <div style={{fontSize:12,marginTop:2}}>Saldo de comisión de {labelMes} después de este pago: <b data-desglose="pendiente_despues">{fmt.money(ev.pendiente)}</b>{ev.extraGestion>0?" · el extra es gestión de este mes: no aumenta la comisión ni pasa a otro mes":""}</div>
+      </div>
+      <Field label="Fecha efectiva de la transferencia" required><input style={iStyle} type="date" value={fecha} disabled={revisar} onChange={e=>setFecha(e.target.value)} /></Field>
+      <Field label="Referencia o comprobante bancario"><input style={iStyle} value={referencia} disabled={revisar} onChange={e=>setReferencia(e.target.value)} placeholder="Opcional" /></Field>
+      <Field label="Observación"><input style={iStyle} value={observacion} disabled={revisar} onChange={e=>setObservacion(e.target.value)} placeholder="Opcional" /></Field>
+      {err&&<div style={{background:C.dangerLight,color:C.dangerText,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}
+      {!revisar?(
+        <button data-revisar-pago onClick={pedirRevision} style={btnP(C.teal)}>Revisar pago</button>
+      ):(
+        <div data-vista-previa style={{border:`1.5px solid ${C.teal}`,borderRadius:12,padding:"12px 14px"}}>
+          <div style={{fontSize:13,fontWeight:800,color:C.ink,marginBottom:6}}>Vista previa · una sola transferencia</div>
+          <div style={{fontSize:12.5,color:C.inkMuted,lineHeight:1.6,marginBottom:8}}>
+            {vend?.nombre} · {labelMes} · {fecha?`${fecha.slice(8,10)}-${fecha.slice(5,7)}-${fecha.slice(0,4)}`:""}{referencia.trim()?` · ref. ${referencia.trim()}`:""}<br/>
+            Total transferido <b style={{color:C.ink}}>{fmt.money(ev.total)}</b> = comisión <b style={{color:C.ink}}>{fmt.money(ev.pagoComision)}</b> + extra por gestión <b style={{color:C.ink}}>{fmt.money(ev.extraGestion)}</b><br/>
+            Comisión de {labelMes}: pendiente {fmt.money(ev.pendienteAntes)} → {fmt.money(ev.pendiente)}{ev.completo&&ev.ocIds.length?` · ${ev.ocIds.length} OC quedan con comisión pagada`:""}
+          </div>
+          {ev.provisoria&&<div style={{fontSize:12,color:C.warnText,fontWeight:700,marginBottom:8}}><Ic n="⚠"/> Pago sobre una comisión PROVISORIA (IVA sin registrar): podría cambiar cuando se registre el IVA.</div>}
+          {parecido&&<div data-aviso-duplicado style={{fontSize:12,color:C.dangerText,fontWeight:700,marginBottom:8}}><Ic n="⚠"/> Ya hay un pago de {fmt.money(totalTransferido(parecido))} a {vend?.nombre} para {labelMes} con esta misma fecha. Confirma solo si es una transferencia distinta.</div>}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+            <button onClick={()=>setRevisar(false)} disabled={saving} style={btnG}>Corregir</button>
+            <button data-confirmar-pago onClick={handleSave} disabled={saving} style={btnP(saving?C.inkFaint:C.teal)}>{saving?"Guardando…":"✓ Confirmar pago"}</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Anulación controlada (solo administrador): el pago se conserva con fecha, usuario y motivo, y deja de contar.
+export function FormAnularPago({ pago, vendedor, onAnular }) {
+  const [motivo,setMotivo]=useState(""); const [err,setErr]=useState(""); const [saving,setSaving]=useState(false);
   return (
     <div>
-      <Field label="Vendedor" required><select style={selStyle} value={vendedorId} onChange={e=>setVendedorId(e.target.value)}>{vendedores.map(v=><option key={v.id} value={v.id}>{v.nombre}</option>)}</select></Field>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-        <Field label="Mes" required><select style={selStyle} value={mes} onChange={e=>setMes(e.target.value)}>{MESES.map((m,i)=><option key={i} value={i+1}>{m}</option>)}</select></Field>
-        <Field label="Año" required><input style={iMono} type="number" value={anio} onChange={e=>setAnio(e.target.value)} /></Field>
+      <div style={{background:C.paper,borderRadius:9,padding:"10px 12px",marginBottom:12,fontSize:12.5,color:C.inkMuted,lineHeight:1.6}}>
+        {vendedor?.nombre} · {String(pago.mes).padStart(2,"0")}/{pago.anio} · {pago.fecha?fmt.date(String(pago.fecha).slice(0,10)):"—"}<br/>
+        Transferido {fmt.money(totalTransferido(pago))}{pago.monto_transferido!=null?` (comisión ${fmt.money(Number(pago.monto_pagado)||0)} + gestión ${fmt.money(extraGestion(pago))})`:""}<br/>
+        El pago queda guardado como anulado y deja de contar en la comisión y en la caja.
       </div>
-      <div style={{background:C.tealLight,borderRadius:9,padding:"10px 12px",fontSize:12.5,color:C.tealDark,fontWeight:700,marginBottom:12}}>{labelMes}</div>
-      <Field label="Fecha de pago" required><input style={iStyle} type="date" value={fecha} onChange={e=>setFecha(e.target.value)} /></Field>
-      <Field label="Monto pagado ($)" required><input style={iMono} type="number" value={monto} onChange={e=>setMonto(e.target.value)} /></Field>
-      <div style={{background:C.paper,borderRadius:9,padding:"10px 12px",marginBottom:12,fontSize:12,color:C.inkMuted,lineHeight:1.6}}>
-        <div>Comisión del período: <b>{fmt.money(ev.comision)}</b> · Ya pagado: <b>{fmt.money(ev.pagadoAntes)}</b></div>
-        <div>Pendiente antes de este pago: <b>{fmt.money(ev.pendienteAntes)}</b></div>
-        {Number(monto)>0&&<div style={{color:ev.completo?C.tealDark:C.warnText||C.inkMuted,fontWeight:700}}>
-          Pendiente después: {fmt.money(ev.pendiente)}{ev.excedente>0?` · excedente ${fmt.money(ev.excedente)} (no se traslada a otro mes)`:""}
-        </div>}
-        <div>Las OC del período se marcan como pagadas solo cuando el pago acumulado cubre la comisión{Number(monto)>0&&ev.completo?` (se marcarán ${ev.ocIds.length})`:""}.</div>
-      </div>
+      <Field label="Motivo de la anulación" required><input data-motivo-anulacion style={iStyle} value={motivo} onChange={e=>setMotivo(e.target.value)} /></Field>
       {err&&<div style={{background:C.dangerLight,color:C.dangerText,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}
-      <button onClick={handleSave} disabled={saving} style={btnP(saving?C.inkFaint:C.teal)}>{saving?"Guardando…":"✓ Registrar pago"}</button>
+      <button data-confirmar-anulacion disabled={saving} onClick={async()=>{ if(!motivo.trim()){setErr("Indica el motivo");return;} setSaving(true); try{await onAnular(motivo.trim());}catch(e){setErr(e.message);}finally{setSaving(false);} }} style={btnP(saving?C.inkFaint:C.danger)}>{saving?"Anulando…":"Anular pago"}</button>
     </div>
   );
 }

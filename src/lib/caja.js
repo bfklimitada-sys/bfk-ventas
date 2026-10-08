@@ -17,7 +17,7 @@
 // Compromisos: todos los pendientes, sin importar el mes en que nacieron. Lo que depende de un IVA
 // todavía no registrado (F29 y comisiones de esos meses) se marca como PROVISORIO, nunca como definitivo.
 // ═══════════════════════════════════════════════════════════════
-import { calcularPagoVendedor, facturasVigentes, mesesConFactura, registroIvaDe } from "./calculos.js";
+import { calcularPagoVendedor, facturasVigentes, mesesConFactura, pagoVigente, registroIvaDe, totalTransferido, extraGestion } from "./calculos.js";
 import { F29_DESDE, calcularF29 } from "./f29.js";
 import { ingresoPendienteOC, valeVistasPendientes } from "./ocs.js";
 import { aporteEnCaja, cobroEnCaja, gastoEnCaja } from "./mediosPago.js";
@@ -43,7 +43,8 @@ export function movimientosCaja({ ocs, financiadores, gastos, pagosVendedor, pag
   }
   for (const e of pagoFinSueltos || []) m.push({ fecha: f10(e.fecha), tipo: "pago_financiador", monto: -n(e.monto), ref: e.financiador_id });
   for (const g of gastos || []) if (gastoEnCaja(g)) m.push({ fecha: f10(g.fecha), tipo: "gasto", monto: -n(g.monto), ref: g.categoria_id });
-  for (const p of pagosVendedor || []) m.push({ fecha: f10(p.fecha), tipo: "pago_vendedor", monto: -n(p.monto_pagado), ref: p.vendedor_id });
+  // Una transferencia = un solo movimiento por su total (comisión + extra por gestión); los anulados no son caja.
+  for (const p of pagosVendedor || []) if (pagoVigente(p)) m.push({ fecha: f10(p.fecha), tipo: "pago_vendedor", monto: -totalTransferido(p), extraGestion: extraGestion(p), ref: p.vendedor_id });
   for (const a of aportes || []) if (aporteEnCaja(a)) m.push({ fecha: f10(a.fecha), tipo: a.tipo === "retiro" ? "retiro" : "aporte", monto: (a.tipo === "retiro" ? -1 : 1) * n(a.monto), ref: a.socio });
   return m;
 }

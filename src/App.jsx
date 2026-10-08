@@ -11,7 +11,7 @@ import { registrarPagoFinanciador } from "./lib/pagosFinanciador";
 import { cambiarFinanciamientoOC, deudaOC, editarCompraOC, editarPagoFinanciador, eliminarCompraOC, eliminarPagoFinanciador, esFondosPropios, registrarCompraOC } from "./lib/finanzas";
 import { anioMesDe } from "./lib/calculos";
 import { exportarExcelRespaldo } from "./lib/exportacion";
-import { registrarPagoVendedor } from "./lib/pagosVendedor";
+import { anularPagoVendedor, esPagoDuplicado, registrarPagoVendedor } from "./lib/pagosVendedor";
 import { ImportarCartola } from "./components/forms/ImportarCartola";
 import { FormSaldoBanco } from "./components/forms/FormSaldoBanco";
 import { FormConfirmarEntrega, FormEmitirFactura, FormPagoCliente } from "./components/forms/FormulariosRapidos";
@@ -1084,10 +1084,23 @@ export default function App() {
     showToast("Gasto registrado"); await cargarTodo();
   };
   const handlePagoVendedorSimple=async(data)=>{
-    const r=await registrarPagoVendedor({ins,upd,token:session.access_token,userId:session.user.id,id:genId("pv"),
-      vendedorId:data.vendedorId,monto:data.monto,fecha:data.fecha,mes:data.mes,anio:data.anio,notas:data.label,
-      ocs,ivaMensual,pagosVendedor});
-    showToast(r.completo?`Pago registrado · período saldado${r.ocIds.length?` · ${r.ocIds.length} OC marcadas como pagadas`:""}`:`Pago parcial registrado · pendiente ${fmt.money(r.pendiente)}`); await cargarTodo();
+    // Una transferencia, dos componentes: comisión (hasta lo pendiente) + extra por gestión (el excedente del mismo período).
+    let r;
+    try{
+      r=await registrarPagoVendedor({ins,upd,token:session.access_token,userId:session.user.id,id:data.id||genId("pv"),
+        vendedorId:data.vendedorId,monto:data.monto,fecha:data.fecha,mes:data.mes,anio:data.anio,
+        notas:data.observacion?.trim()?`${data.label} · ${data.observacion.trim()}`:data.label,referencia:data.referencia,
+        ocs,ivaMensual,pagosVendedor});
+    }catch(e){
+      if(esPagoDuplicado(e)){ showToast("Este pago ya estaba registrado: no se guardó dos veces"); await cargarTodo(); return; }
+      throw e;
+    }
+    const extra=r.extraGestion>0?` · extra por gestión ${fmt.money(r.extraGestion)}`:"";
+    showToast(r.completo?`Pago registrado · comisión ${fmt.money(r.pagoComision)}${extra} · período saldado${r.ocIds.length?` · ${r.ocIds.length} OC marcadas como pagadas`:""}`:`Pago parcial registrado · comisión ${fmt.money(r.pagoComision)} · pendiente ${fmt.money(r.pendiente)}`); await cargarTodo();
+  };
+  const handleAnularPagoVendedor=async(pago,motivo)=>{
+    const r=await anularPagoVendedor({upd,token:session.access_token,pago,motivo,ocs,ivaMensual,pagosVendedor});
+    showToast(`Pago anulado · queda guardado con su motivo${r.desmarcadas?` · ${r.desmarcadas} OC vuelven a comisión pendiente`:""}`); await cargarTodo();
   };
   // IVA del mes — registro único (lib/ivaUnificado.js): guarda débito/crédito en
   // iva_mensual (comisión) y el pago al SII como gasto "Impuesto SII" (caja).
@@ -1565,7 +1578,7 @@ export default function App() {
     ...ocs.flatMap(o=>(o.eventos_pago_financiamiento||[]).map(e=>({fecha:e.fecha,monto:e.monto,destino:`fin_${e.financiador_id||o.financiador_id}`}))),
     ...(pagoFinSueltos||[]).map(e=>({fecha:e.fecha,monto:e.monto,destino:`fin_${e.financiador_id}`})),
     ...(gastos||[]).map(g=>({fecha:g.fecha,monto:g.monto,destino:`gas_${g.categoria_id}`})),
-    ...(pagosVendedor||[]).map(p=>({fecha:p.fecha,monto:p.monto_pagado,destino:`ven_${p.vendedor_id}`})),
+    ...(pagosVendedor||[]).filter(p=>!p.anulado_en).map(p=>({fecha:p.fecha,monto:p.monto_transferido!=null?Number(p.monto_transferido):p.monto_pagado,destino:`ven_${p.vendedor_id}`})),
     ...(aportes||[]).map(a=>({fecha:a.fecha,monto:a.monto,destino:`ap_${a.socio}`})),
   ].filter(m=>m.fecha&&m.monto);
 
@@ -1625,7 +1638,7 @@ export default function App() {
       {(tab==="agenda"||todo)&&hoja("agenda",<PanelCalendario ocs={ocs} onMarcarFecha={handleMarcarFecha} onVerAlertas={(f)=>{setFiltroCompras(null);setOcFoco(null);setVolverA(null);setFiltroAlertas({nivel:(f&&f.nivel)||"todas",etapa:(f&&f.etapa)||null});setTab("notif");}} />)}
       {(tab==="financiamiento"||todo)&&hoja("financiamiento",<PanelFinanciamiento difsHistoricas={difsHistoricas} financiadores={financiadores} ocs={ocs} ajustes={ajustesSaldo} perfiles={perfiles} onAjustar={handleAjusteSaldo} aportes={aportes} onGuardarAporte={handleGuardarAporte} onEliminarAporte={perfil?.rol==="admin"?handleEliminarAporte:undefined} onAbonar={(finId)=>{setAbonoFinId(typeof finId==="string"||typeof finId==="number"?finId:null);setAccion("abono_fin");}} pagoFinSueltos={pagoFinSueltos} />)}
       {(tab==="gastos"||todo)&&hoja("gastos",<PanelGastos gastos={gastos} categorias={categoriasGasto} ivaMensual={ivaMensual} onNuevoGasto={handleNuevoGasto} onGuardarIva={handleGuardarIva} />)}
-      {(tab==="vendedores"||todo)&&hoja("vendedores",<PanelVendedores vendedores={vendedores} ocs={ocs} ivaMensual={ivaMensual} gastos={gastos} pagosVendedor={pagosVendedor} onGuardarIva={handleGuardarIva} onPagoVendedor={handlePagoVendedorSimple} onVerOCs={(filtro)=>{setFiltroCompras(filtro);setOcFoco(null);setVolverA(null);setTab("compras");}} onAbrirOC={(ocId)=>{setFiltroCompras(null);setOcFoco(ocId);setVolverA(null);setTab("compras");}} />)}
+      {(tab==="vendedores"||todo)&&hoja("vendedores",<PanelVendedores vendedores={vendedores} ocs={ocs} ivaMensual={ivaMensual} gastos={gastos} pagosVendedor={pagosVendedor} onGuardarIva={handleGuardarIva} onPagoVendedor={handlePagoVendedorSimple} onAnularPago={handleAnularPagoVendedor} esAdmin={perfil?.rol==="admin"} onVerOCs={(filtro)=>{setFiltroCompras(filtro);setOcFoco(null);setVolverA(null);setTab("compras");}} onAbrirOC={(ocId)=>{setFiltroCompras(null);setOcFoco(ocId);setVolverA(null);setTab("compras");}} />)}
       {(tab==="usuarios"||todo)&&perfil?.rol==="admin"&&hoja("usuarios",<PanelUsuarios difsHistoricas={difsHistoricas} perfiles={perfiles} ocs={ocs} ocsArchivadas={ocsArchivadas} onRestaurarOC={handleRestaurarOC} onChangeRol={handleChangeRol} session={session} showToast={showToast} entidadesCatalogo={entidadesCatalogo} onEntidadesImportadas={handleEntidadesImportadas} usoMP={usoMP} sincronizando={sincronizando} validandoTodo={validandoTodo} exportando={exportando} onCorregirFechas={corregirFechasTodas} onValidarTodo={validarTodoContraMP} onExportarTodo={handleExportarTodo} />)}
     </>
   );

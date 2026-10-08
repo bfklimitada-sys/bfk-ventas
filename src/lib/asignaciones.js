@@ -50,7 +50,7 @@ export const pasaFiltroFinanciador = (oc, f) => !f || (f === SIN ? faltaFinancia
 // La comisión de un mes ya pagado a un vendedor incluye esta OC: quitársela alteraría ese pago.
 // El pago al vendedor nunca se borra ni se mueve; por eso el cambio se bloquea (lo mismo hace la base).
 const pagosDelPeriodo = (pagosVendedor, vendedorId, p) =>
-  (pagosVendedor || []).filter((x) => p && x.vendedor_id === vendedorId && Number(x.anio) === p.anio && Number(x.mes) === p.mes);
+  (pagosVendedor || []).filter((x) => p && !x.anulado_en && x.vendedor_id === vendedorId && Number(x.anio) === p.anio && Number(x.mes) === p.mes);
 export function evaluarCambioVendedor(oc, nuevoId, pagosVendedor) {
   const actual = valorVendedor(oc) || null, nuevo = nuevoId || null;
   if (actual === nuevo) return { sinCambios: true };
