@@ -13,6 +13,7 @@ import { estadoComision, nombreFinanciador, nombreVendedor } from "./asignacione
 
 const fecha10 = (v) => (v ? String(v).slice(0, 10) : "");
 const n = (v) => Number(v) || 0;
+const esVentaBFK = (o) => (o?.tipo_registro || "venta") === "venta";
 
 // Una fila por OC, con los montos como números (para poder sumar en Excel).
 export function filasVista(ocs) {
@@ -70,8 +71,10 @@ export function exportarVistaExcel(ocs, { descripcion = "" } = {}) {
     { Dato: "Generado", Valor: new Date().toLocaleString("es-CL") },
     { Dato: "Filtros", Valor: descripcion || "sin filtros" },
     { Dato: "Órdenes", Valor: filas.length },
-    { Dato: "Venta total", Valor: filas.reduce((s, f) => s + f["Venta (monto OC)"], 0) },
-    { Dato: "Ganancia total", Valor: filas.reduce((s, f) => s + f["Ganancia"], 0) },
+    // Cuadratura 2026-10: totales solo de ventas de BFK; las ventas externas se informan aparte.
+    { Dato: "Venta total BFK", Valor: (ocs || []).filter(esVentaBFK).reduce((s, o) => s + n(o.monto_total), 0) },
+    { Dato: "Ganancia total BFK", Valor: (ocs || []).filter(esVentaBFK).reduce((s, o) => s + gananciaReal(o).pesos, 0) },
+    { Dato: "Ventas externas (no son de BFK)", Valor: (ocs || []).filter((o) => o.tipo_registro === "externa").reduce((s, o) => s + n(o.monto_total), 0) },
     { Dato: "Por cobrar", Valor: filas.reduce((s, f) => s + f["Por cobrar"], 0) },
   ]);
   XLSX.utils.book_append_sheet(wb, resumen, "_Resumen");

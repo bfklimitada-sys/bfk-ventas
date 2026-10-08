@@ -27,6 +27,7 @@ console.log(`PANEL_PROYECTADO:${$(r.saldoProyectado)} provisorio=${r.provisorio}
 console.log(c.hayCorte
   ? `PANEL_CONCILIACION:corte=${c.corte} banco=${$(c.saldoBancoCorte)} posteriores=${$(c.movPosteriores)}(${c.nPosteriores}) esperado=${$(c.esperado)} caja=${$(c.caja)} pendiente=${$(c.pendienteConciliacion)} sin_fecha=${c.sinFecha}`
   : "PANEL_CONCILIACION:sin saldo de banco");
-const cuadra = $(r.caja) + $(r.porCobrar) + $(r.valeVista) - $(r.deudaFinanciadores) - $(r.comisiones.total) - $(r.f29Pendiente) - $(r.fondosExternos);
+console.log(`PANEL_BASE:${r.baseEsBanco ? "banco" : "caja"}=${$(r.baseProyeccion)} diferencia_banco_caja=${$(r.diferenciaBancoCaja)} facturas=${$(r.facturasPorCobrar)} sin_facturar=${$(r.ventasPorFacturar)}`);
+const cuadra = $(r.baseProyeccion) + $(r.porCobrar) + $(r.valeVista) - $(r.deudaFinanciadores) - $(r.comisiones.total) - $(r.f29Pendiente) - $(r.fondosExternos);
 console.log(`PANEL_ECUACION:${Math.abs(cuadra - $(r.saldoProyectado)) <= 1 ? "OK" : "FALLA " + cuadra}`);
 console.log(`PANEL_IGUAL_UNIVERSO:${c.hayCorte && $(c.caja) === $(r.caja) && $(c.esperado + c.pendienteConciliacion) === $(r.caja) ? "OK" : "FALLA"}`);

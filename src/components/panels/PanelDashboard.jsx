@@ -1,15 +1,11 @@
 import { useState, useMemo } from "react";
-import { DiasBadge } from "../ui/Basicos";
 import { del } from "../../lib/supabase";
-import { calcularPagoVendedor, costoPostventa, estadoVencimiento, facturaVigente, gananciaReal, plazoPago } from "../../lib/calculos";
-import { C, MONO, SANS, btnP, fmt } from "../../lib/theme";
+import { C, MONO, SANS, fmt } from "../../lib/theme";
 import { Ic } from "../ui/Iconos";
 import { coincideBusqueda } from "../../lib/busqueda";
-import { calcularF29 } from "../../lib/f29";
 import { resumenCaja } from "../../lib/caja";
-import { aporteEnCaja, cobroEnCaja, gastoEnCaja } from "../../lib/mediosPago";
-import { Seccion, Tarjeta, Badge, Monto, Enlace } from "../ui/Sistema";
-import { FILTROS_PANEL, cobradoEnBanco, estaCerrada, etapasCompletadas, filtrarPanel, financiamientoPagado, ingresoPendienteOC, valeVistasPendientes } from "../../lib/ocs";
+import { Seccion, Tarjeta, Badge, Monto } from "../ui/Sistema";
+import { FILTROS_PANEL, estaCerrada, filtrarPanel, utilidadPorMes, valeVistasPendientes } from "../../lib/ocs";
 
 // Tarjeta base para los avisos ligados a Mercado Público: encabezado con
 // icono + botón de refresco, y cuerpo blanco para el contenido/lista.
@@ -66,172 +62,33 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
   // Carga masiva de OCs aceptadas (Fase 4A): el vendedor es obligatorio y se puede indicar venta propia.
   const [masiva,setMasiva]=useState(null); // null | {vendedorId, ventaPropia}
 
-  const kpis=useMemo(()=>{
-    const hoy=new Date(); hoy.setHours(0,0,0,0);
-    const mesActual=hoy.getMonth()+1; const anioActual=hoy.getFullYear();
-
-    // Separar por tipo: solo 'venta' cuenta como venta y utilidad.
-    // 'aporte_socio' entra a caja pero no es venta. 'externa' queda fuera de todo.
-    const esVenta =(o)=>(o.tipo_registro||"venta")==="venta";
-    const esAporte=(o)=>o.tipo_registro==="aporte_socio";
-    const enCaja  =(o)=>esVenta(o)||esAporte(o);
-
-    // Aportes de socios: vienen de su propia tabla
-    const totalAportes=(aportesLista||[]).reduce((s,a)=>
-      s+(a.tipo==="retiro"?-(Number(a.monto)||0):(Number(a.monto)||0)),0);
-
-    let cobrado=0, ingresos=0, costos=0;
-    let creditoPendienteTotal=0;
-    let creditoPagadoTotal=0;
-    let costoBFK=0;
-
-    for(const oc of ocs){
-      if(!enCaja(oc)) continue;                    // externa: fuera de todo
-      cobrado+=cobradoEnBanco(oc);                 // caja: ventas + aportes (Fase 4C: un vale vista o cheque sin cobrar en el banco aún no es caja)
-      if(esAporte(oc)) continue;   // los aportes viven en aportes_socios
-      ingresos+=oc.monto_total||0;                 // solo ventas reales
-      costos+=(Number(oc.costo_total)||0)+costoPostventa(oc);
-      if(!financiamientoPagado(oc)) creditoPendienteTotal+=oc.costo_total||0;   // "no aplica" (venta propia / fondos propios) no es crédito pendiente
-      creditoPagadoTotal+=(oc.eventos_pago_financiamiento||[]).reduce((s,e)=>s+(e.monto||0),0);
-      const finNombre=oc.financiadores?.nombre||"";
-      // Fondos propios (regla 2): por tipo de financiador, ya no por el nombre.
-      if((financiadores||[]).some(f=>f.id===oc.financiador_id&&f.tipo==="propio")||(!financiadores?.some(f=>f.tipo)&&(finNombre.toLowerCase().includes("bfk")))) costoBFK+=oc.costo_total||0;
-    }
-    creditoPagadoTotal+=(pagoFinSueltos||[]).reduce((s,e)=>s+(e.monto||0),0);
-
-    const gastosTotal=gastos.reduce((s,g)=>s+(g.monto||0),0);
-    const gastoContador=gastos.filter(g=>g.categoria_id==="cat_contador").reduce((s,g)=>s+(g.monto||0),0);
-    const gastoImpuesto=gastos.filter(g=>g.categoria_id==="cat_impuesto").reduce((s,g)=>s+(g.monto||0),0);
-    const gastosVendedores=pagosVendedor.reduce((s,p)=>s+(p.monto_pagado||0),0);
-
-        // La app calcula su propio saldo con lo registrado.
-    // Antes no restaba gastosVendedores (pagos a vendedores como Matías) —
-    // esa plata sí sale de la cuenta real, y no descontarla infla el
-    // saldo calculado bien por encima de lo que hay en el banco.
-    // Conciliación bancaria 2026-10: aportes y gastos sin movimiento BancoEstado no entran a la cuenta corriente.
-    const aportesEnCaja=(aportesLista||[]).filter(aporteEnCaja).reduce((s,a)=>s+(a.tipo==="retiro"?-(Number(a.monto)||0):(Number(a.monto)||0)),0);
-    const gastosEnCaja=gastos.filter(gastoEnCaja).reduce((s,g)=>s+(g.monto||0),0);
-    const saldoCtaCte = cobrado + aportesEnCaja - creditoPagadoTotal - gastosEnCaja - costoBFK - gastosVendedores;
-
-    // Y se compara con el saldo real del banco: la diferencia es
-    // lo que se movió en la cuenta y no está registrado acá.
-    const corte = saldoBanco?.fecha_corte ? String(saldoBanco.fecha_corte).slice(0,10) : null;
-    const saldoReal = saldoBanco ? Number(saldoBanco.saldo)||0 : null;
-
-    // Movimientos registrados después del corte: se suman al saldo real
-    // para poder comparar ambos en el mismo momento.
-    let movDesdeCorte=0;
-    if(corte){
-      for(const oc of ocs){
-        for(const e of (oc.eventos_pago_cliente||[]))
-          if(String(e.fecha||"").slice(0,10) > corte && cobroEnCaja(e)) movDesdeCorte += Number(e.monto)||0;
-        for(const e of (oc.eventos_pago_financiamiento||[]))
-          if(String(e.fecha||"").slice(0,10) > corte) movDesdeCorte -= Number(e.monto)||0;
-      }
-      for(const e of (pagoFinSueltos||[]))
-        if(String(e.fecha||"").slice(0,10) > corte) movDesdeCorte -= Number(e.monto)||0;
-      for(const g of gastos)
-        if(String(g.fecha||"").slice(0,10) > corte && gastoEnCaja(g)) movDesdeCorte -= Number(g.monto)||0;
-      for(const p of pagosVendedor)
-        if(String(p.fecha||"").slice(0,10) > corte) movDesdeCorte -= Number(p.monto_pagado)||0;
-      for(const a of (aportesLista||[]))
-        if(String(a.fecha||"").slice(0,10) > corte && aporteEnCaja(a))
-          movDesdeCorte += (a.tipo==="retiro"?-1:1)*(Number(a.monto)||0);
-    }
-    const saldoEsperado = saldoReal!==null ? saldoReal + movDesdeCorte : null;
-    const brecha = saldoEsperado!==null ? saldoCtaCte - saldoEsperado : null;
-
-    // Fase 4C: lo que falta que entre a la cuenta, OC por OC (lib/ocs.js, ingresoPendienteOC): contra la factura
-    // vigente si ya se facturó, o contra el monto de la OC si no; los abonos parciales se descuentan una vez
-    // y un vale vista o cheque sin cobrar en el banco se cuenta aquí (no en la caja).
-    let ingresosPendientes=0, valeVistaPorCobrar=0;
-    for(const oc of ocs){
-      if(!esVenta(oc)) continue;
-      ingresosPendientes+=ingresoPendienteOC(oc);
-      valeVistaPorCobrar+=valeVistasPendientes(oc).reduce((s,e)=>s+(Number(e.monto)||0),0);
-    }
-
-    const deudaFin=financiadores.reduce((s,f)=>s+(Number(f.saldo_deuda)||0),0);
-    // Misma regla que el panel Vendedores (lib/calculos.js).
-    const deudaVendedoresMes=vendedores?.reduce((sv,v)=>
-      sv+(calcularPagoVendedor({vendedorId:v.id,ocs,anio:anioActual,mes:mesActual,ivaMensual,pagosVendedor})?.deuda||0),0)||0;
-    // F29 por período (reglas y fecha de corte F29_DESDE en lib/f29.js)
-    const f29Calc=calcularF29({ivaMensual,gastos,anioActual,mesActual});
-    const f29Periodos=f29Calc.mostrados;
-    const f29Anterior=f29Calc.anterior; // pendiente de períodos más antiguos (desde F29_DESDE)
-    const f29=f29Calc.total;            // deuda total F29 (todos los períodos desde F29_DESDE)
-    const f29Visible=f29Calc.visible;
-    const deudaContadorMes=0;
-    const deudaTotal=deudaFin+deudaVendedoresMes+f29+deudaContadorMes;
-
-    const saldoProyectado=saldoCtaCte+ingresosPendientes-deudaTotal;
-
-    let porCobrar=0;
-    for(const oc of ocs){
-      if(!esVenta(oc)) continue;
-      if(oc.estado_factura_propia==="emitida") porCobrar+=(oc.monto_facturado||0)-(oc.monto_cobrado||0);
-    }
-
-    const ocsDelMes=ocs.filter(o=>{ if(!esVenta(o)) return false; const evC=(o.eventos_compra||[])[0]; if(!evC) return false; const f=new Date(evC.fecha); return f.getMonth()+1===mesActual&&f.getFullYear()===anioActual; });
-    const margenPromPct=ocsDelMes.length>0?Math.round(ocsDelMes.reduce((s,o)=>{ const v=o.monto_total||0; if(v<=0) return s; return s+((v-(o.costo_total||0))/v)*100; },0)/ocsDelMes.length):0;
-    const gananciaMes=ocsDelMes.reduce((s,o)=>s+gananciaReal(o).pesos,0);
-    const ventaMes=ocsDelMes.reduce((s,o)=>s+(Number(o.monto_total)||0),0);
-
-    const ocsAbiertas=ocs.filter(o=>esVenta(o)&&etapasCompletadas(o)<5).length;
-
-    const utilidad=ingresos-costos;
-    return {saldoReal,saldoEsperado,brecha,corteBanco:corte,movDesdeCorte,gananciaMes,ventaMes,aportes:totalAportes,cobrado,porCobrar,deudaFin,utilidad,saldoProyectado,saldoCtaCte,ingresosPendientes,valeVistaPorCobrar,deudaTotal,gastoContador,gastosVendedores,gastoImpuesto,f29,f29Periodos,f29Anterior,f29Visible,margenPromPct,deudaVendedoresMes,ocsAbiertas,creditoPagadoTotal,gastosTotal,costoBFK};
-  },[ocs,financiadores,gastos,pagosVendedor,ivaMensual,vendedores,pagoFinSueltos,aportesLista,saldoBanco]);
 
   // Cierre financiero: caja, compromisos y conciliación con un solo universo de movimientos (lib/caja.js).
   const resumen=useMemo(()=>resumenCaja({ocs,financiadores,gastos,pagosVendedor,ivaMensual,vendedores,pagoFinSueltos,aportes:aportesLista,saldoBanco}),
     [ocs,financiadores,gastos,pagosVendedor,ivaMensual,vendedores,pagoFinSueltos,aportesLista,saldoBanco]);
 
-  // ── Proyección del mes: promedio histórico completo, para tener ──
-  // algo que mostrar desde el día 1, antes de que existan ventas reales.
-  const proyeccionMes=useMemo(()=>{
-    const historicas=ocs.filter(o=>{
-      if((o.tipo_registro||"venta")!=="venta") return false;
-      const evC=(o.eventos_compra||[])[0];
-      return !!evC;
-    });
-    if(!historicas.length) return {ventaProm:0,utilProm:0,pct:0,meses:0};
-    // Meses distintos con al menos una venta, para promediar por mes real
-    // y no solo dividir por una cantidad fija de períodos.
-    const clavesMes=new Set(historicas.map(o=>String((o.eventos_compra||[])[0].fecha).slice(0,7)));
-    const meses=Math.max(1,clavesMes.size);
-    const venta=historicas.reduce((s,o)=>s+(Number(o.monto_total)||0),0);
-    const costo=historicas.reduce((s,o)=>s+(Number(o.costo_total)||0),0);
-    const ventaProm=Math.round(venta/meses), costoProm=Math.round(costo/meses);
-    const utilProm=ventaProm-costoProm;
-    const pct=ventaProm>0?Math.round(utilProm/ventaProm*100):0;
-    return {ventaProm,utilProm,pct,meses};
-  },[ocs]);
 
   // ── OCs de MP sin datos de cliente (antes se recalculaba en cada render) ──
   const sinDatosMP=useMemo(()=>
     ocs.filter(o=>esCodigoMP&&esCodigoMP(o.numero_oc)&&!o.no_en_mp&&(o.sync_pendiente||!o.rut_cliente||!o.fecha_emision_mp||!o.fecha_hora_emision_mp||String(o.cliente||"").toUpperCase().includes("POR COMPLETAR"))).length
   ,[ocs,esCodigoMP]);
 
-  // ── Resultado del mes cerrado (antes se recalculaba en cada render) ──
-  const mesCerrado=useMemo(()=>{
-    const h=new Date();
-    const mAnt=h.getMonth()===0?12:h.getMonth();
-    const aAnt=h.getMonth()===0?h.getFullYear()-1:h.getFullYear();
-    const delMes=ocs.filter(o=>{
-      if((o.tipo_registro||"venta")!=="venta") return false;
-      const f=o.fecha_emision_mp||(o.eventos_compra||[])[0]?.fecha;
-      if(!f) return false;
-      const d=new Date(String(f).slice(0,10)+"T00:00:00");
-      return d.getMonth()+1===mAnt&&d.getFullYear()===aAnt;
-    });
-    if(!delMes.length) return null;
-    const venta=delMes.reduce((s,o)=>s+(Number(o.monto_total)||0),0);
-    const costo=delMes.reduce((s,o)=>s+(Number(o.costo_total)||0),0);
-    const util=venta-costo, pct=venta>0?Math.round(util/venta*100):0;
-    const col=pct>=20?C.ok:pct>=10?C.warn:C.danger;
-    const nombreMes=new Date(aAnt,mAnt-1,1).toLocaleDateString("es-CL",{month:"long"});
-    return {cantidad:delMes.length,venta,costo,util,pct,col,nombreMes};
+  // ── Utilidad del mes (cuadratura 2026-10): las tres barras con UN criterio (lib/ocs.js, utilidadPorMes):
+  // fecha de la OC, ganancia con postventa y margen agregado del período. Antes cada barra usaba una regla distinta.
+  const utilidad=useMemo(()=>{
+    const porMes=utilidadPorMes(ocs);
+    const h=new Date(); const clave=(a,m)=>`${a}-${String(m).padStart(2,"0")}`;
+    const kActual=clave(h.getFullYear(),h.getMonth()+1);
+    const aAnt=h.getMonth()===0?h.getFullYear()-1:h.getFullYear(), mAnt=h.getMonth()===0?12:h.getMonth();
+    const kAnt=clave(aAnt,mAnt);
+    const hasta=Object.keys(porMes).filter(k=>k<=kActual);
+    const venta=hasta.reduce((s,k)=>s+porMes[k].venta,0), util=hasta.reduce((s,k)=>s+porMes[k].util,0);
+    const meses=Math.max(1,hasta.length);
+    return {
+      historico:{v:Math.round(util/meses),pct:venta>0?Math.round(util/venta*100):0},
+      anterior:{v:porMes[kAnt]?.util||0,pct:porMes[kAnt]?.pct||0,nombre:new Date(aAnt,mAnt-1,1).toLocaleDateString("es-CL",{month:"long"})},
+      actual:{v:porMes[kActual]?.util||0,pct:porMes[kActual]?.pct||0},
+    };
   },[ocs]);
 
   // ── Prioridades de hoy (reales, derivadas de las OCs) ──
@@ -407,8 +264,11 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
         const ivaPend=r.ivaSinRegistrar.map(p=>`${MES[p.mes-1]}-${p.anio}`).join(", ");
         return (<>
           <div data-resumen-caja style={{background:`linear-gradient(135deg,${C.night},${C.nightSoft})`,borderRadius:16,padding:"16px 18px",marginBottom:8,border:"1px solid rgba(45,212,191,0.25)"}}>
-            <Fila dato="caja" k="Caja" v={r.caja} nota="Calculada con los movimientos registrados (cobros en el banco, aportes, pagos, gastos y comisiones pagadas)" />
-            <Fila dato="por_cobrar" signo="+" k="Por cobrar" v={r.porCobrar} nota="Facturas vigentes y OCs sin facturar, descontados los abonos parciales" onClick={()=>onNavigate&&onNavigate("compras","cobro")} />
+            {r.baseEsBanco
+              ?<Fila dato="banco" k={r.conciliacion.nPosteriores?"Saldo esperado BancoEstado":"Saldo BancoEstado"} v={r.saldoBancario} nota={`Dinero en la cuenta: saldo informado al ${fmt.date(r.conciliacion.corte)}${r.conciliacion.nPosteriores?` más ${r.conciliacion.nPosteriores} movimiento${r.conciliacion.nPosteriores>1?"s":""} registrado${r.conciliacion.nPosteriores>1?"s":""} después (por confirmar con la cartola)`:""}`} />
+              :<Fila dato="caja" k="Caja registrada BFK" v={r.caja} tono="#FBBF24" nota="Sin saldo de BancoEstado registrado: la proyección parte de los movimientos registrados en BFK. Registre el saldo de la cuenta." />}
+            <Fila dato="por_cobrar" signo="+" k="Facturas por cobrar" v={r.facturasPorCobrar} nota="Facturas vigentes, descontados los abonos parciales y los vale vista pendientes" onClick={()=>onNavigate&&onNavigate("compras","cobro")} />
+            <Fila dato="por_facturar" signo="+" k="Ventas compradas sin facturar" v={r.ventasPorFacturar} nota="Monto de la OC aún sin factura: no es cuenta por cobrar hasta facturarla" />
             <Fila dato="vale_vista" signo="+" k="Vale vista / cheques pendientes" v={r.valeVista} tono="#FBBF24" nota={r.nValeVista?`${r.nValeVista} documento${r.nValeVista>1?"s":""} entregado${r.nValeVista>1?"s":""} y aún sin depositar en el banco`:"Ninguno pendiente"} onClick={r.nValeVista?()=>onNavigate&&onNavigate("compras","vale_vista"):undefined} />
             <Fila dato="deuda_fin" signo="−" k="Deuda con financiadores" v={r.deudaFinanciadores} tono="#F87171"
               nota={r.porFinanciador.map(f=>`${f.nombre.split(" ")[0]} ${f.saldo<0?"a favor de BFK ":""}${fmt.money(Math.abs(f.saldo))}`).join(" · ")} onClick={()=>onNavigate&&onNavigate("financiamiento",null)} />
@@ -422,6 +282,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:8,paddingTop:10}}>
               <span>
                 <span style={{display:"block",fontSize:13,color:"#E2E8F0",fontWeight:800,textTransform:"uppercase",letterSpacing:0.6}}>= Saldo proyectado</span>
+                <span data-proyectado-nota style={{display:"block",fontSize:11.5,color:"#94A3B8",marginTop:2}}>Proyección al cobrar y pagar todo lo pendiente: no es dinero disponible hoy</span>
                 {r.provisorio&&<span data-proyectado-provisorio style={{display:"block",fontSize:11.5,color:"#FBBF24",fontWeight:700,marginTop:2}}>PROVISORIO: falta registrar IVA/F29 de {ivaPend||"algún período"}{r.comisiones.provisorias>0?" y hay comisiones provisorias":""}</span>}
               </span>
               <span data-monto="proyectado" style={{fontFamily:MONO,fontWeight:800,fontSize:28,color:r.saldoProyectado>=0?"#2DD4BF":"#F87171",letterSpacing:-1}}>{fmt.money(r.saldoProyectado)}</span>
@@ -436,15 +297,15 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
                 <div style={{display:"flex",justifyContent:"space-between",color:C.inkMuted}}><span>Saldo informado del banco al {fmt.date(r.conciliacion.corte)}</span><Monto tam="sm">{fmt.money(r.conciliacion.saldoBancoCorte)}</Monto></div>
                 <div style={{display:"flex",justifyContent:"space-between",color:C.inkMuted}}><span>+ Movimientos registrados después de esa fecha ({r.conciliacion.nPosteriores})</span><Monto tam="sm">{fmt.money(r.conciliacion.movPosteriores)}</Monto></div>
                 <div style={{display:"flex",justifyContent:"space-between",fontWeight:700}}><span>= Saldo esperado en el banco</span><Monto tam="sm">{fmt.money(r.conciliacion.esperado)}</Monto></div>
-                <div style={{display:"flex",justifyContent:"space-between",fontWeight:700}}><span>Caja calculada</span><Monto tam="sm">{fmt.money(r.caja)}</Monto></div>
-                <div data-pendiente-conciliacion style={{display:"flex",justifyContent:"space-between",fontWeight:800,color:Math.abs(r.conciliacion.pendienteConciliacion)>0.5?C.warnText:C.okText,marginTop:4,paddingTop:4,borderTop:`1px solid ${C.border}`}}>
-                  <span>{Math.abs(r.conciliacion.pendienteConciliacion)>0.5?"Pendiente de conciliación bancaria":"Conciliado"}</span><Monto tam="sm">{fmt.money(r.conciliacion.pendienteConciliacion)}</Monto>
+                <div style={{display:"flex",justifyContent:"space-between",fontWeight:700}}><span>Caja registrada BFK</span><Monto tam="sm">{fmt.money(r.caja)}</Monto></div>
+                <div data-pendiente-conciliacion style={{display:"flex",justifyContent:"space-between",fontWeight:800,color:Math.abs(r.diferenciaBancoCaja)>0.5?C.warnText:C.okText,marginTop:4,paddingTop:4,borderTop:`1px solid ${C.border}`}}>
+                  <span>{Math.abs(r.diferenciaBancoCaja)>0.5?"Diferencia banco − caja registrada":"Conciliado"}</span><Monto tam="sm">{fmt.money(r.diferenciaBancoCaja)}</Monto>
                 </div>
-                {Math.abs(r.conciliacion.pendienteConciliacion)>0.5&&<div style={{fontSize:12,color:C.inkMuted,marginTop:4,lineHeight:1.45}}>Diferencia entre lo registrado hasta el {fmt.date(r.conciliacion.corte)} y el saldo del banco a esa fecha. No es pérdida ni ganancia: se aclara con las cartolas del banco. No entra en el saldo proyectado.</div>}
+                {Math.abs(r.diferenciaBancoCaja)>0.5&&<div style={{fontSize:12,color:C.inkMuted,marginTop:4,lineHeight:1.45}}>La caja registrada incluye operaciones que no pasaron por BancoEstado (compras anteriores a la apertura o pagadas por un socio, pagos compensados fuera del banco) y movimientos del banco sin registro en BFK. No es pérdida ni ganancia ni dinero adicional: se explica con el expediente de conciliación. El saldo proyectado parte del saldo del banco.</div>}
               </>):<div style={{fontSize:12,color:C.inkMuted}}>Sin saldo del banco registrado: no se puede conciliar.</div>}
               <button onClick={onEditarSaldo}
                 style={{marginTop:10,width:"100%",minHeight:44,background:C.paper,border:`1px solid ${C.border}`,borderRadius:10,padding:"8px 12px",color:C.ink,fontSize:14,fontWeight:700,cursor:"pointer",textAlign:"left",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <span>{kpis.saldoReal!==null?"Actualizar saldo de la cuenta":"Registrar saldo de la cuenta"}</span><Ic n="chevR"/>
+                <span>{saldoBanco?"Actualizar saldo de la cuenta":"Registrar saldo de la cuenta"}</span><Ic n="chevR"/>
               </button>
             </div>
           </Tarjeta>
@@ -657,9 +518,9 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
       {/* Utilidad: promedio histórico, mes pasado cerrado, y este mes en curso — un solo gráfico, sin vueltas */}
       {(()=>{
         const barras=[
-          {label:"Promedio histórico",v:proyeccionMes.utilProm,pct:proyeccionMes.pct},
-          {label:mesCerrado?mesCerrado.nombreMes:"Mes pasado",v:mesCerrado?mesCerrado.util:0,pct:mesCerrado?mesCerrado.pct:0},
-          {label:"Este mes",v:kpis.gananciaMes||0,pct:kpis.margenPromPct||0},
+          {label:"Promedio histórico",v:utilidad.historico.v,pct:utilidad.historico.pct},
+          {label:utilidad.anterior.nombre,v:utilidad.anterior.v,pct:utilidad.anterior.pct},
+          {label:"Este mes",v:utilidad.actual.v,pct:utilidad.actual.pct},
         ];
         const max=Math.max(1,...barras.map(b=>Math.abs(b.v)));
         return (

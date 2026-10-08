@@ -4,7 +4,7 @@
 // así un contador siempre abre exactamente las OCs que cuenta.
 // Solo leen la OC: no escriben datos ni cambian reglas comerciales.
 // ═══════════════════════════════════════════════════════════════
-import { estadoVencimiento, facturaVigente, plazoPago } from "./calculos.js";
+import { estadoVencimiento, facturaVigente, gananciaReal, plazoPago } from "./calculos.js";
 import { fmt } from "./theme.js";
 import { cobroEnCaja, cobroSaldaCliente, esValeVistaPendiente } from "./mediosPago.js";
 
@@ -120,6 +120,22 @@ export const fechaOC = (oc) => {
   if (oc?.creadoEn) return { valor: String(oc.creadoEn), origen: "registro" };
   return { valor: "", origen: "ninguna" };
 };
+// Utilidad por mes (cuadratura 2026-10): un solo criterio para las barras del Panel. Solo ventas de BFK
+// (sin ventas externas ni aportes), agrupadas por la fecha de la OC (la misma de Compras), con
+// ganancia = venta − costo − postventa (gananciaReal) y margen = utilidad / venta del mes.
+export function utilidadPorMes(ocs) {
+  const meses = {};
+  for (const oc of ocs || []) {
+    if (oc?.archivada || !esVenta(oc)) continue;
+    const k = String(fechaOC(oc).valor || "").slice(0, 7);
+    if (!k) continue;
+    const g = gananciaReal(oc);
+    const m = (meses[k] = meses[k] || { venta: 0, costo: 0, util: 0, n: 0 });
+    m.venta += g.venta; m.costo += g.costo; m.util += g.pesos; m.n++;
+  }
+  for (const m of Object.values(meses)) m.pct = m.venta > 0 ? Math.round((m.util / m.venta) * 100) : 0;
+  return meses;
+}
 // Fecha real en que BFK compró al proveedor (evento de compra). Nunca la escribe Mercado Público.
 export const fechaCompra = (oc) => (oc?.eventos_compra || [])[0]?.fecha || null;
 // La fecha de la OC se edita a mano solo si no viene de Mercado Público.

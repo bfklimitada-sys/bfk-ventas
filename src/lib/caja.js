@@ -3,10 +3,17 @@
 // Funciones puras: solo leen lo cargado, no escriben.
 //
 // UN SOLO universo de movimientos de dinero (movimientosCaja). Con él se calculan:
-//  · Caja calculada        = suma de todos los movimientos;
-//  · Saldo esperado banco  = saldo informado a la fecha de corte + movimientos posteriores al corte;
-//  · Pendiente de conciliación bancaria = caja − saldo esperado
-//    (= movimientos hasta el corte − saldo del banco). No es pérdida ni ganancia.
+//  · Caja registrada BFK   = suma de todos los movimientos registrados en BFK, incluidos los que nunca
+//                            pasaron por BancoEstado (compras anteriores a la apertura, compras pagadas
+//                            por un socio, pagos compensados fuera del banco). Es un control, no dinero disponible.
+//  · Saldo bancario        = saldo informado de BancoEstado a la fecha de corte + movimientos registrados
+//                            después del corte (saldo esperado hoy). Es el único dinero disponible.
+//  · Diferencia banco − caja registrada: se explica con el expediente de conciliación (operaciones fuera
+//    del banco, compensaciones, partidas pendientes de prueba). No es pérdida ni ganancia.
+// Saldo proyectado (cuadratura 2026-10): parte del SALDO BANCARIO, no de la caja registrada. Las
+// operaciones fuera del banco ya ocurrieron (no vuelven a mover la cuenta) y las deudas que dejaron
+// pendientes ya están en el saldo de cada financiador; partir de la caja registrada las descontaba dos veces.
+// Sin saldo bancario registrado, la proyección parte de la caja registrada y se indica.
 // Compromisos: todos los pendientes, sin importar el mes en que nacieron. Lo que depende de un IVA
 // todavía no registrado (F29 y comisiones de esos meses) se marca como PROVISORIO, nunca como definitivo.
 // ═══════════════════════════════════════════════════════════════
@@ -93,14 +100,17 @@ export function resumenCaja({ ocs, financiadores, gastos, pagosVendedor, ivaMens
   const movs = movimientosCaja({ ocs: activas, financiadores, gastos, pagosVendedor, pagoFinSueltos, aportes });
   const conc = conciliacionBancaria(movs, saldoBanco);
 
-  let porCobrar = 0, valeVista = 0, nValeVista = 0;
+  // Por cobrar = facturas vigentes por cobrar + ventas ya compradas que aún no se facturan (sin vale vista pendiente).
+  let porCobrar = 0, facturasPorCobrar = 0, ventasPorFacturar = 0, valeVista = 0, nValeVista = 0;
   for (const oc of activas) {
     if (tipo(oc) !== "venta") continue;
     const vv = valeVistasPendientes(oc).reduce((s, e) => s + n(e.monto), 0);
     nValeVista += valeVistasPendientes(oc).length;
     const pend = ingresoPendienteOC(oc);
     valeVista += Math.min(vv, pend);
-    porCobrar += Math.max(0, pend - vv);
+    const neto = Math.max(0, pend - vv);
+    porCobrar += neto;
+    if (n(oc.monto_facturado) > 0) facturasPorCobrar += neto; else ventasPorFacturar += neto;
   }
   const porFinanciador = (financiadores || []).filter((f) => f.tipo !== "propio" && n(f.saldo_deuda) !== 0).map((f) => ({ id: f.id, nombre: f.nombre, saldo: n(f.saldo_deuda) }));
   const deudaFinanciadores = porFinanciador.reduce((s, f) => s + f.saldo, 0);
@@ -110,10 +120,15 @@ export function resumenCaja({ ocs, financiadores, gastos, pagosVendedor, ivaMens
   // Dinero de ventas externas que entró a la cuenta y aún no se liquida a quien corresponde.
   const fondosExternos = movs.filter((x) => x.tipo === "cobro_externo" || x.tipo === "pago_externo").reduce((s, x) => s + x.monto, 0);
 
-  const saldoProyectado = conc.caja + porCobrar + valeVista - deudaFinanciadores - comisiones.total - f29.total - Math.max(0, fondosExternos);
+  // Base de la proyección: el saldo bancario esperado hoy; solo sin saldo de banco registrado, la caja registrada.
+  const saldoBancario = conc.hayCorte ? conc.esperado : null;
+  const baseProyeccion = conc.hayCorte ? conc.esperado : conc.caja;
+  const diferenciaBancoCaja = conc.hayCorte ? conc.esperado - conc.caja : null;
+  const saldoProyectado = baseProyeccion + porCobrar + valeVista - deudaFinanciadores - comisiones.total - f29.total - Math.max(0, fondosExternos);
   const provisorio = ivaSinRegistrar.length > 0 || comisiones.provisorias > 0;
   return {
-    caja: conc.caja, conciliacion: conc, porCobrar, valeVista, nValeVista,
+    caja: conc.caja, conciliacion: conc, saldoBancario, baseProyeccion, baseEsBanco: conc.hayCorte, diferenciaBancoCaja,
+    porCobrar, facturasPorCobrar, ventasPorFacturar, valeVista, nValeVista,
     deudaFinanciadores, porFinanciador, comisiones, f29Pendiente: f29.total, f29, ivaSinRegistrar,
     fondosExternos: Math.max(0, fondosExternos), saldoProyectado, provisorio, movimientos: movs.length,
   };

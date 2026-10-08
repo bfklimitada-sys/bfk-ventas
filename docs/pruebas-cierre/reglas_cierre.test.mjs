@@ -55,11 +55,22 @@ eq("comisiones: todos los meses impagos, con provisorias marcadas", cm.detalle.m
 eq("comisiones: total = definitivas + provisorias", cm.total, cm.definitivas + cm.provisorias);
 eq("IVA: meses con movimiento y sin registro quedan 'pendientes de registrar' (sin estimar)", periodosIvaSinRegistrar({ ocs, ivaMensual, anioActual: 2026, mesActual: 10 }), [{ anio: 2026, mes: 8 }]);
 eq("F29 pendiente solo de lo registrado (jul: 60 − 30 pagado)", r.f29Pendiente, 30);
-eq("saldo proyectado = caja + por cobrar + vale vista − deudas − comisiones − F29 − fondos externos",
-  r.saldoProyectado, r.caja + r.porCobrar + r.valeVista - r.deudaFinanciadores - r.comisiones.total - r.f29Pendiente - r.fondosExternos);
+// Cuadratura 2026-10: la proyección parte del saldo bancario esperado (no de la caja registrada).
+eq("saldo proyectado = saldo bancario esperado + por cobrar + vale vista − deudas − comisiones − F29 − fondos externos",
+  r.saldoProyectado, r.conciliacion.esperado + r.porCobrar + r.valeVista - r.deudaFinanciadores - r.comisiones.total - r.f29Pendiente - r.fondosExternos);
+eq("base de la proyección = saldo bancario esperado", [r.baseEsBanco, r.baseProyeccion, r.saldoBancario], [true, r.conciliacion.esperado, r.conciliacion.esperado]);
+eq("diferencia banco − caja registrada = esperado − caja (= −pendiente de conciliación)", r.diferenciaBancoCaja, r.conciliacion.esperado - r.caja);
+eq("por cobrar = facturas por cobrar + ventas sin facturar", [r.facturasPorCobrar, r.ventasPorFacturar, r.porCobrar], [500, 300, 800]);
 eq("saldo proyectado provisorio mientras falte IVA", r.provisorio, true);
 eq("sin IVA pendiente ni comisiones provisorias → definitivo", resumenCaja({ ...base, ivaMensual: [...ivaMensual, { anio: 2026, mes: 8, iva_ventas: 10, iva_compras: 0 }] }).provisorio, false);
-eq("la diferencia con el banco no entra al proyectado", resumenCaja({ ...base, saldoBanco: { saldo: 999999, fecha_corte: "2026-08-03" } }).saldoProyectado, r.saldoProyectado);
+const r2 = resumenCaja({ ...base, saldoBanco: { saldo: 999999, fecha_corte: "2026-08-03" } });
+eq("la caja registrada no cambia la proyección: solo cambia si cambia el saldo del banco", r2.saldoProyectado - r.saldoProyectado, 999999 - 1000);
+const r3 = resumenCaja({ ...base, saldoBanco: null });
+eq("sin saldo de banco: la proyección parte de la caja registrada y se indica", [r3.baseEsBanco, r3.saldoBancario, r3.saldoProyectado], [false, null, r3.caja + r3.porCobrar + r3.valeVista - r3.deudaFinanciadores - r3.comisiones.total - r3.f29Pendiente - r3.fondosExternos]);
+// Una compra pagada fuera del banco (registrada en BFK, sin cargo bancario) baja la caja registrada, pero no la proyección.
+const fuera = { ...base, ocs: [...ocs, oc("P", { financiador_id: "bfk", monto_total: 0, costo_total: 70, estado_factura_propia: "pendiente", eventos_compra: [{ fecha: "2026-06-20", costo_compra: 70 }] })] };
+const r4 = resumenCaja(fuera);
+eq("operación fuera del banco: caja registrada −70, proyección igual", [r4.caja - r.caja, r4.saldoProyectado - r.saldoProyectado], [-70, 0]);
 eq("sin saldo de banco: no hay conciliación", conciliacionBancaria(movs, null).hayCorte, false);
 
 console.log(`\nRESUMEN pruebas cierre financiero (unitarias): ${ok} OK, ${fallas} FALLA(S)`);

@@ -1506,12 +1506,17 @@ export function PanelCompras({ pagosVendedor, onAsignarVendedor, onAsignarFinanc
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:10}}>
         <span style={{fontSize:12,color:C.inkFaint,minWidth:0,lineHeight:1.5}}>
           {(()=>{
-            const gan=filtered.reduce((s,o)=>s+gananciaReal(o).pesos,0);
-            const ven=filtered.reduce((s,o)=>s+(Number(o.monto_total)||0),0);
+            // Cuadratura 2026-10: venta y ganancia solo de ventas de BFK; las ventas externas (de un vendedor) se informan aparte.
+            const deBFK=filtered.filter(o=>(o.tipo_registro||"venta")==="venta");
+            const externas=filtered.filter(o=>o.tipo_registro==="externa");
+            const gan=deBFK.reduce((s,o)=>s+gananciaReal(o).pesos,0);
+            const ven=deBFK.reduce((s,o)=>s+(Number(o.monto_total)||0),0);
+            const venExt=externas.reduce((s,o)=>s+(Number(o.monto_total)||0),0);
             return (
               <>
                 <span style={{display:"block"}}>{filtered.length} órdenes · {fmt.money(ven)}</span>
                 {gan>0&&<span style={{display:"block",color:C.okText,fontWeight:700}}>deja {fmt.money(gan)}</span>}
+                {externas.length>0&&<span data-ventas-externas style={{display:"block"}}>+ {externas.length} venta{externas.length>1?"s":""} externa{externas.length>1?"s":""} {fmt.money(venExt)} (no es venta de BFK)</span>}
               </>
             );
           })()}
