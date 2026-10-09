@@ -54,7 +54,11 @@ Reglas de la conciliación:
 - **Qué se puede registrar:** solo los movimientos **pendientes posteriores al cierre** (`CIERRE_CONCILIACION = 2026-10-07`), uno a la vez.
 - **Sin selección previa:** el destino se elige a mano y nada viene marcado.
 - **Confirmación:** se exige confirmación explícita, con el resumen de lo que se escribirá.
-- **Verificación final:** antes de escribir se vuelve a conciliar. Si el movimiento ya tiene registro, no se registra.
+- **Verificación final:** antes de escribir se vuelven a leer los registros **actuales de la base** (no los de pantalla) y se concilia de nuevo. Si el movimiento ya tiene registro, o lleva la marca de cartola de otra sesión, no se registra (`src/lib/registroCartola.js`).
+- **Concurrencia (09/10/2026):**
+  - Bloqueo inmediato contra doble clic.
+  - El registro lleva un id derivado del movimiento (fecha, cargo, abono, saldo y ocurrencia): si dos sesiones registran el mismo movimiento en la misma tabla, la clave primaria rechaza la segunda escritura.
+  - **Límite conocido:** dos sesiones que registran el mismo movimiento como **tipos distintos** en el mismo instante, o un pago a financiador (función de la base con ids propios), solo quedan protegidas por la verificación final. Cerrar esa ventana requiere un cambio en la base, no aplicado.
 - **Retiro de capital:** se registra en `aportes_socios` como retiro, nunca como gasto.
 - **N° de operación:** queda en la nota del registro, o en `referencia_bancaria` en los pagos a vendedor.
 - **Control inverso:** avisa de registros BFK posteriores al cierre que no tienen movimiento bancario (posible doble registro).
@@ -90,7 +94,8 @@ Reglas de la conciliación:
 - **Interfaz** (Supabase simulado; nada sale a la red):
   1. Construir con `vite build`.
   2. Servir con `vite preview --port 4179`.
-  3. Ejecutar `node docs/pruebas-conciliacion-bancaria/e2e_cartola.mjs http://127.0.0.1:4179/`.
+  3. Ejecutar `node docs/pruebas-conciliacion-bancaria/e2e_cartola.mjs http://127.0.0.1:4179/` y `node docs/pruebas-conciliacion-bancaria/e2e_concurrencia.mjs http://127.0.0.1:4179/` (dos sesiones, doble clic y reimportación).
+  - La simulación de Supabase (`pruebas-oc/mock_estado.mjs`) rechaza ids repetidos, igual que la clave primaria.
 - **Pruebas existentes ajustadas por cambio de regla autorizado:**
 
   | Archivo | Ajuste |

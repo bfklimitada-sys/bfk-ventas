@@ -718,7 +718,7 @@ export default function App() {
     const t=session.access_token;
     if(cobros.length){
       // El cobrado y su estado los recalcula la base desde los cobros registrados (Fase 4B).
-      await ins("eventos_pago_cliente",t,cobros.map(c=>({id:genId("evp"),oc_id:c.ocId,fecha:c.fecha,monto:c.monto,
+      await ins("eventos_pago_cliente",t,cobros.map(c=>({id:c.id||genId("evp"),oc_id:c.ocId,fecha:c.fecha,monto:c.monto,
         notas:`Desde cartola: ${String(c.descripcion||"").slice(0,120)}`,creado_por:session.user.id})));
       for(const c of cobros){
         const oc=ocs.find(o=>o.id===c.ocId);
@@ -946,7 +946,7 @@ export default function App() {
       if(e.tipo==="vendedor"){
         // Misma función y misma regla de saldo que el pago desde Vendedores.
         // Los pagos ya hechos en este mismo lote se acumulan (el estado de pantalla aún no se recarga).
-        const r=await registrarPagoVendedor({ins,upd,token:t,userId:session.user.id,id:genId("pv"),vendedorId:e.destinoId,
+        const r=await registrarPagoVendedor({ins,upd,token:t,userId:session.user.id,id:e.id||genId("pv"),vendedorId:e.destinoId,
           monto:e.monto,fecha:e.fecha,mes:e.mesCom,anio:e.anioCom,notas:`Desde cartola: ${e.descripcion}`,referencia:e.operacion||"",
           ocs,ivaMensual,pagosVendedor:[...pagosVendedor,...pagosEnLote]});
         pagosEnLote.push(r.fila);
@@ -955,7 +955,7 @@ export default function App() {
 
       if(e.tipo==="gasto"){
         const {anio:aG,mes:mG}=anioMesDe(e.fecha);   // sin Date: el día 1 no cae en el mes anterior
-        await ins("gastos_indirectos",t,{id:genId("gas"),categoria_id:e.categoriaId,
+        await ins("gastos_indirectos",t,{id:e.id||genId("gas"),categoria_id:e.categoriaId,
           subcategoria:null,monto:e.monto,mes:mG,anio:aG,
           fecha:e.fecha,detalle:`Desde cartola: ${e.descripcion}`,creado_por:session.user.id});
         nGas++;
@@ -972,9 +972,23 @@ export default function App() {
   };
 
   // Retiro de capital desde la cartola (Etapa 2): es patrimonio, nunca gasto. Medio bancario (pasa por la caja).
-  const handleRetiroDesdeCartola=async({socio,monto,fecha,notas})=>{
-    await handleGuardarAporte({socio,tipo:"retiro",monto,fecha,medio:"Transferencia BancoEstado",notas});
-    setAccion(null);
+  // Inserta siempre (nunca actualiza) con el id derivado del movimiento: un segundo registro del mismo
+  // movimiento desde otra sesión lo rechaza la clave primaria (lib/registroCartola.js).
+  const handleRetiroDesdeCartola=async({id,socio,monto,fecha,notas})=>{
+    await ins("aportes_socios",session.access_token,{id:id||genId("ap"),socio,tipo:"retiro",monto,fecha,medio:"Transferencia BancoEstado",notas:notas||null,creado_por:session.user.id});
+    showToast("Retiro registrado");
+    setAccion(null); await cargarTodo();
+  };
+
+  // Registros actuales de la base para la verificación final de la cartola (no usa el estado de pantalla).
+  // Si una lectura falla, lanza el error y NO se registra nada.
+  const leerDatosConciliacion=async()=>{
+    const t=session.access_token;
+    const [ocsD,finD,vendD,gastD,pagVD,pagoFinSueltosD,aporD]=await Promise.all([
+      selOCs(t), sel("financiadores",t), sel("vendedores",t), sel("gastos_indirectos",t),
+      sel("pagos_vendedor",t), sel("eventos_pago_financiamiento",t,"&oc_id=is.null"), sel("aportes_socios",t),
+    ]);
+    return {ocs:ocsD,financiadores:finD,vendedores:vendD,gastos:gastD,pagosVendedor:pagVD,pagoFinSueltos:pagoFinSueltosD,aportes:aporD};
   };
 
   // ─── ABONO A FINANCIADOR con reparto FIFO ────────────────────
@@ -1663,7 +1677,7 @@ export default function App() {
           <FormSaldoBanco actual={saldoBanco} onSave={handleGuardarSaldoBanco} />
         </Modal>
       )}
-      {accion==="cartola"&&<Modal title="Cartola del banco: conciliar" onClose={()=>setAccion(null)}><ImportarCartola ocs={ocs} financiadores={financiadores} vendedores={vendedores} categorias={categoriasGasto} gastos={gastos} pagosVendedor={pagosVendedor} pagoFinSueltos={pagoFinSueltos} aportes={aportes} onRegistrar={handleCobrosDesdeCartola} onRegistrarEgresos={handleEgresosDesdeCartola} onRegistrarRetiro={handleRetiroDesdeCartola} /></Modal>}
+      {accion==="cartola"&&<Modal title="Cartola del banco: conciliar" onClose={()=>setAccion(null)}><ImportarCartola ocs={ocs} financiadores={financiadores} vendedores={vendedores} categorias={categoriasGasto} gastos={gastos} pagosVendedor={pagosVendedor} pagoFinSueltos={pagoFinSueltos} aportes={aportes} onRegistrar={handleCobrosDesdeCartola} onRegistrarEgresos={handleEgresosDesdeCartola} onRegistrarRetiro={handleRetiroDesdeCartola} onLeerDatosFrescos={leerDatosConciliacion} onRecargar={cargarTodo} /></Modal>}
       {accion==="abono_fin"&&<Modal title="Abonar a financiador" onClose={()=>setAccion(null)}><FormAbonoFinanciador ocs={ocs} financiadores={financiadores} financiadorInicial={abonoFinId} onSave={handleAbonoFinanciador} difsHistoricas={difsHistoricas} /></Modal>}
       {accion==="pago_cliente"&&<Modal title="Ingresar pago" onClose={()=>setAccion(null)}><FormPagoCliente ocs={ocs} onSave={handlePagoCliente} /></Modal>}
       {accion==="compra_manual"&&<Modal title="Nueva OC — manual" onClose={()=>setAccion(null)}><FormIngresarCompra perfil={perfil} ocs={ocs} financiadores={financiadores} vendedores={vendedores} entidadesCatalogo={entidadesCatalogo} buscarDuplicado={buscarDuplicadoOC} onSave={handleIngresarCompra} /></Modal>}

@@ -9,6 +9,7 @@ import { calcularPagoVendedor } from "../../src/lib/calculos.js";
 import { comisionesPorPagar, movimientosCaja, resumenCaja } from "../../src/lib/caja.js";
 import { repartirFIFO, ocsPendientesFinanciador } from "../../src/components/forms/FormAbonoFinanciador.jsx";
 import { cartolaEnLinea, cartolaHistorica, idaYVuelta } from "./cartolas_sinteticas.mjs";
+import { esConflictoDuplicado, idRegistroCartola, marcaMovimiento, verificarRegistro } from "../../src/lib/registroCartola.js";
 
 let ok = 0, fallas = 0;
 const eq = (nombre, real, esperado) => {
@@ -178,6 +179,28 @@ const ocCom = oc("oc_com", "OC-COM", { vendedor_id: "v_luis", monto_total: 30000
 const cSep = calcularPagoVendedor({ vendedorId: "v_luis", ocs: [ocCom], anio: 2026, mes: 9, ivaMensual: ivaM, pagosVendedor: [] });
 eq("comisión de septiembre con IVA pero sin total F29 → provisoria", [cSep.f29Incompleto, comisionesPorPagar({ vendedores: datos.vendedores, ocs: [ocCom], ivaMensual: ivaM, pagosVendedor: [] }).detalle.map((d) => d.provisoria)], [true, [true]]);
 eq("misma comisión con el total del F29 registrado → definitiva", comisionesPorPagar({ vendedores: datos.vendedores, ocs: [ocCom], ivaMensual: [{ anio: 2026, mes: 9, iva_ventas: 100000, iva_compras: 40000, iva_pagado: 75000 }], pagosVendedor: [] }).detalle.map((d) => d.provisoria), [false]);
+
+// ════════════════ 7. Registro desde la cartola: protección contra duplicados (concurrencia) ════════════════
+const um = unirCartolas([cart]).movs;
+const iPago = um.findIndex((m) => m.fecha === "2026-10-12");
+eq("verificación con datos frescos: pendiente posterior al cierre → se puede registrar", verificarRegistro(um, iPago, datos).ok, true);
+const idA = idRegistroCartola("vendedor", um, iPago, []), idB = idRegistroCartola("vendedor", unirCartolas([cart, cart]).movs, iPago, []);
+eq("dos sesiones (o reimportación) calculan el MISMO id para el mismo movimiento", [idA, idA === idB], ["pv_cart_20261012_480000_0_" + um[iPago].saldo + "_1", true]);
+eq("tablas distintas → prefijos distintos (gasto, retiro, cobro)", ["gasto", "retiro", "cobro"].map((t) => idRegistroCartola(t, um, iPago, []).split("_cart_")[0]), ["gas", "ap", "evp"]);
+const vaivenes = unirCartolas([leer(cartolaHistorica([{ fecha: "2026-10-14", op: "", desc: "GIRO FICTICIO", cargo: 100 }, { fecha: "2026-10-14", op: "7000050", desc: "TEF DE FICTICIO", abono: 100 },
+  { fecha: "2026-10-14", op: "", desc: "GIRO FICTICIO", cargo: 100 }], { saldoInicial: 1000 }))]).movs;
+eq("dos movimientos reales con la misma clave → marcas distintas (ocurrencia)", [vaivenes.length, vaivenes[0].clave === vaivenes[2].clave, marcaMovimiento(vaivenes, 0) !== marcaMovimiento(vaivenes, 2)], [3, true, true]);
+const frescoConPago = { ...datos, pagosVendedor: [{ id: idA, vendedor_id: "v_luis", anio: 2026, mes: 8, fecha: "2026-10-12", monto_pagado: 461250, monto_extra_gestion: 18750, monto_transferido: 480000 }] };
+eq("otra sesión ya lo registró (datos frescos) → bloqueado antes de escribir", [verificarRegistro(um, iPago, frescoConPago).ok, /otra sesión|ya tiene/.test(verificarRegistro(um, iPago, frescoConPago).motivo)], [false, true]);
+const frescoOtroTipo = { ...datos, gastos: [...datos.gastos, { id: idRegistroCartola("gasto", um, iPago, []), fecha: "2026-11-30", monto: 1, categoria_id: "cat_otros", anio: 2026, mes: 11, detalle: "registro de otra sesión" }] };
+eq("otra sesión lo registró como OTRO tipo (su marca está en otra tabla) → bloqueado", verificarRegistro(um, iPago, frescoOtroTipo).ok, false);
+const anulado = { ...datos, pagosVendedor: [{ ...frescoConPago.pagosVendedor[0], anulado_en: "2026-10-12T15:00:00Z" }] };
+const vAn = verificarRegistro(um, iPago, anulado);
+eq("pago anulado: se puede volver a registrar con un id nuevo, igual para dos sesiones", [vAn.ok, idRegistroCartola("vendedor", um, iPago, vAn.existentes)], [true, idA + "_r2"]);
+eq("sin datos frescos (lectura fallida) → no se registra", verificarRegistro(um, iPago, null).ok, false);
+eq("anterior al cierre → no se registra", verificarRegistro(um, um.findIndex((m) => m.fecha === "2026-09-26"), datos).ok, false);
+eq("rechazo por clave primaria reconocido", [esConflictoDuplicado(new Error('duplicate key value violates unique constraint "pagos_vendedor_pkey"')), esConflictoDuplicado(new Error("Error de red"))], [true, false]);
+eq("la verificación no modifica los datos", huella(datos), crudo);
 
 // ════════════════ 6. Invariantes: consultar o importar no cambia nada ════════════════
 const foto = (d) => {

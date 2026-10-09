@@ -120,6 +120,10 @@ export function crearBase(inicial, { mp = {}, borrado = {} } = {}) {
     }
     if (metodo === "POST") {
       const filas = (Array.isArray(cuerpo) ? cuerpo : [cuerpo]).map((f) => proteger({ creadoEn: new Date().toISOString(), ...f }));
+      // Clave primaria «id», como en PostgreSQL: un id repetido rechaza TODA la inserción (409 / 23505).
+      const ids = filas.map((f) => f.id).filter((x) => x != null).map(String);
+      if (new Set(ids).size !== ids.length || db[tabla].some((f) => ids.includes(String(f.id))))
+        return { status: 409, json: { code: "23505", message: `duplicate key value violates unique constraint "${tabla}_pkey"` } };
       db[tabla].push(...clon(filas)); recalcular(); return { status: 201, json: clon(db[tabla].filter((f) => filas.some((x) => x.id === f.id))) };
     }
     if (metodo === "PATCH") {

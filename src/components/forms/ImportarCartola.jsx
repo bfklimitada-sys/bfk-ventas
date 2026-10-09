@@ -1,18 +1,21 @@
 import { anioMesDe } from "../../lib/calculos";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { C, MONO, SANS, btnP, btnG, fmt } from "../../lib/theme";
 import { Ic, I } from "../ui/Iconos";
 import { leerCartolaBancoEstado, totalesPorMes, unirCartolas } from "../../lib/cartolas";
 import { CIERRE_CONCILIACION, ESTADOS, conciliarMovimientos, opcionesAbono } from "../../lib/conciliacion";
+import { esConflictoDuplicado, idRegistroCartola, verificarRegistro } from "../../lib/registroCartola";
 
 // ═══════════════════════════════════════════════════════════════
 // Cartola BancoEstado · conciliación (2026-10)
 //  Etapa 1 (consulta): lee y valida ambos formatos, deduplica entre archivos, avisa cartolas faltantes y muestra
 //    TODOS los movimientos con su estado (Conciliado · Posible registrado · Pendiente · Neutro). No preselecciona nada.
 //  Etapa 2 (registro seguro): solo movimientos PENDIENTES posteriores al cierre (07/10/2026), uno a la vez, con
-//    destino elegido a mano y confirmación explícita. Antes de escribir se vuelve a conciliar: si el movimiento ya
-//    tiene un registro, no se registra. Lo anterior al cierre es solo consulta (ya está en saldos y FIFO históricos).
+//    destino elegido a mano y confirmación explícita. Antes de escribir se vuelve a conciliar con los registros
+//    RECIÉN leídos de la base (no los de pantalla) y el registro lleva un id derivado del movimiento, para que la
+//    clave primaria rechace un segundo registro hecho desde otra sesión (lib/registroCartola.js). Un bloqueo
+//    inmediato evita el doble envío. Lo anterior al cierre es solo consulta (ya está en saldos y FIFO históricos).
 // ═══════════════════════════════════════════════════════════════
 
 // ── Clasificación sugerida de un cargo (solo como SUGERENCIA, nunca se aplica sola) ──
@@ -60,7 +63,7 @@ const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "
 const caja = (extra) => ({ width: "100%", padding: "7px 9px", borderRadius: 8, fontSize: 12.5, border: `1px solid ${C.border}`, background: C.card, color: C.ink, fontFamily: SANS, ...extra });
 
 export function ImportarCartola({ ocs, financiadores, vendedores, categorias, gastos = [], pagosVendedor = [], pagoFinSueltos = [], aportes = [],
-  onRegistrar, onRegistrarEgresos, onRegistrarRetiro, cierre = CIERRE_CONCILIACION }) {
+  onRegistrar, onRegistrarEgresos, onRegistrarRetiro, onLeerDatosFrescos, onRecargar, cierre = CIERRE_CONCILIACION }) {
   const [cartolas, setCartolas] = useState([]);
   const [leyendo, setLeyendo] = useState(false);
   const [err, setErr] = useState("");
@@ -71,6 +74,7 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, ga
   const [confirmo, setConfirmo] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [confirmaTotales, setConfirmaTotales] = useState(false);
+  const enCurso = useRef(false);                     // bloqueo inmediato contra doble envío (no espera al re-render)
 
   const datos = useMemo(() => ({ ocs, financiadores, vendedores, gastos, pagosVendedor, pagoFinSueltos, aportes }),
     [ocs, financiadores, vendedores, gastos, pagosVendedor, pagoFinSueltos, aportes]);
@@ -124,32 +128,41 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, ga
 
   // Registro de UN movimiento, con confirmación explícita y verificación final contra duplicados.
   const registrar = async (x) => {
+    if (enCurso.current) return;                     // un segundo clic mientras se guarda no hace nada
     const p = problemaBorrador(x);
     if (p) { setErr(p); return; }
     if (!confirmo) { setErr("Marca la confirmación antes de registrar"); return; }
-    // Verificación final: se vuelve a conciliar con los datos actuales. Si ya no está pendiente, NO se registra.
-    const actual = conciliarMovimientos(union.movs, datos, { cierre }).movimientos.find((y) => y.m.clave === x.m.clave);
-    if (!actual || !actual.registrable) { setErr("Este movimiento ya tiene un registro en BFK o es anterior al cierre: no se registra de nuevo."); return; }
-    const m = x.m, ref = m.operacion ? ` (op. ${m.operacion})` : "";
-    setErr(""); setGuardando(true);
+    enCurso.current = true; setErr(""); setGuardando(true);
     try {
+      // Verificación final con los registros ACTUALES de la base (otra sesión pudo registrar este movimiento).
+      if (!onLeerDatosFrescos) throw new Error("No se puede verificar contra la base: no se registra.");
+      const frescos = await onLeerDatosFrescos();
+      const v = verificarRegistro(union.movs, x.i, frescos, { cierre });
+      if (!v.ok) { setErr(v.motivo); onRecargar?.(); return; }
+      const m = x.m, ref = m.operacion ? ` (op. ${m.operacion})` : "";
       if (x.dir === "entra") {
-        const op = opcionesAbono(m, ocs).find((o) => o.id === borrador.opcionId);
+        const op = opcionesAbono(m, frescos.ocs || ocs).find((o) => o.id === borrador.opcionId);
         if (!op) throw new Error("La opción elegida ya no está disponible");
-        const cobros = (op.asignaciones || []).map((a) => ({ ocId: a.ocId, numeroOc: a.numeroOc, monto: a.monto, parcial: a.parcial, tipo: op.tipo,
+        const id = idRegistroCartola("cobro", union.movs, x.i, v.existentes);
+        const cobros = (op.asignaciones || []).map((a, k) => ({ id: `${id}-${k + 1}`, ocId: a.ocId, numeroOc: a.numeroOc, monto: a.monto, parcial: a.parcial, tipo: op.tipo,
           fecha: m.fecha, descripcion: `${m.descripcion}${ref}` }));
         const valeVistas = op.valeVista ? [{ ...op.valeVista, fecha: m.fecha, monto: m.abono, descripcion: m.descripcion }] : [];
         await onRegistrar(cobros, resumenCartola(), valeVistas);
       } else if (borrador.tipo === "retiro") {
         if (!onRegistrarRetiro) throw new Error("El registro de retiros de capital no está disponible");
-        await onRegistrarRetiro({ socio: String(borrador.socio).trim(), monto: m.cargo, fecha: m.fecha, notas: `Desde cartola${ref}: ${m.descripcion}` });
+        await onRegistrarRetiro({ id: idRegistroCartola("retiro", union.movs, x.i, v.existentes), socio: String(borrador.socio).trim(), monto: m.cargo, fecha: m.fecha,
+          notas: `Desde cartola${ref}: ${m.descripcion}` });
       } else {
-        await onRegistrarEgresos([{ tipo: borrador.tipo, destinoId: borrador.destinoId, categoriaId: borrador.categoriaId, monto: m.cargo, fecha: m.fecha,
+        // Pago a financiador: lo registra una función de la base que genera sus propios ids (sin id determinista).
+        const id = borrador.tipo === "vendedor" || borrador.tipo === "gasto" ? idRegistroCartola(borrador.tipo, union.movs, x.i, v.existentes) : undefined;
+        await onRegistrarEgresos([{ id, tipo: borrador.tipo, destinoId: borrador.destinoId, categoriaId: borrador.categoriaId, monto: m.cargo, fecha: m.fecha,
           descripcion: `${m.descripcion}${ref}`, operacion: m.operacion || "", mesCom: Number(borrador.mesCom), anioCom: Number(borrador.anioCom) }], resumenCartola());
       }
       cerrar();
-    } catch (e) { setErr(e.message || String(e)); }
-    finally { setGuardando(false); }
+    } catch (e) {
+      if (esConflictoDuplicado(e)) { setErr("Otra sesión registró este movimiento en este mismo momento: no se guardó de nuevo."); onRecargar?.(); }
+      else setErr(e.message || String(e));
+    } finally { enCurso.current = false; setGuardando(false); }
   };
 
   // ── Pantalla inicial ──
