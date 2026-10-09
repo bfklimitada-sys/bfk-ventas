@@ -69,7 +69,7 @@ export function comisionesPorPagar({ vendedores, ocs, ivaMensual, pagosVendedor 
     for (const { anio, mes } of mesesConFactura(v.id, ocs || [])) {
       const r = calcularPagoVendedor({ vendedorId: v.id, ocs, anio, mes, ivaMensual, pagosVendedor });
       if (!r || !(r.deuda > 0)) continue;
-      const provisoria = !r.esVerificado && !r.sinIva && !r.ivaRegistrado;
+      const provisoria = !r.esVerificado && !r.sinIva && (!r.ivaRegistrado || r.f29Incompleto);
       detalle.push({ vendedorId: v.id, vendedor: v.nombre, anio, mes, deuda: r.deuda, provisoria });
     }
   }
@@ -126,7 +126,7 @@ export function resumenCaja({ ocs, financiadores, gastos, pagosVendedor, ivaMens
   const baseProyeccion = conc.hayCorte ? conc.esperado : conc.caja;
   const diferenciaBancoCaja = conc.hayCorte ? conc.esperado - conc.caja : null;
   const saldoProyectado = baseProyeccion + porCobrar + valeVista - deudaFinanciadores - comisiones.total - f29.total - Math.max(0, fondosExternos);
-  const provisorio = ivaSinRegistrar.length > 0 || comisiones.provisorias > 0;
+  const provisorio = ivaSinRegistrar.length > 0 || comisiones.provisorias > 0 || (f29.faltaTotal || []).length > 0;
   return {
     caja: conc.caja, conciliacion: conc, saldoBancario, baseProyeccion, baseEsBanco: conc.hayCorte, diferenciaBancoCaja,
     porCobrar, facturasPorCobrar, ventasPorFacturar, valeVista, nValeVista,

@@ -62,7 +62,9 @@ eq("base de la proyección = saldo bancario esperado", [r.baseEsBanco, r.basePro
 eq("diferencia banco − caja registrada = esperado − caja (= −pendiente de conciliación)", r.diferenciaBancoCaja, r.conciliacion.esperado - r.caja);
 eq("por cobrar = facturas por cobrar + ventas sin facturar", [r.facturasPorCobrar, r.ventasPorFacturar, r.porCobrar], [500, 300, 800]);
 eq("saldo proyectado provisorio mientras falte IVA", r.provisorio, true);
-eq("sin IVA pendiente ni comisiones provisorias → definitivo", resumenCaja({ ...base, ivaMensual: [...ivaMensual, { anio: 2026, mes: 8, iva_ventas: 10, iva_compras: 0 }] }).provisorio, false);
+// Etapa 3 (autorizada 09/10/2026): desde agosto 2026 el período es definitivo solo con el total del F29 (IVA + PPM) registrado.
+eq("sin IVA pendiente ni comisiones provisorias → definitivo", resumenCaja({ ...base, ivaMensual: [...ivaMensual, { anio: 2026, mes: 8, iva_ventas: 10, iva_compras: 0, iva_pagado: 10 }] }).provisorio, false);
+eq("agosto 2026 con IVA pero sin total del F29 (PPM desconocido) → provisorio", resumenCaja({ ...base, ivaMensual: [...ivaMensual, { anio: 2026, mes: 8, iva_ventas: 10, iva_compras: 0 }] }).provisorio, true);
 const r2 = resumenCaja({ ...base, saldoBanco: { saldo: 999999, fecha_corte: "2026-08-03" } });
 eq("la caja registrada no cambia la proyección: solo cambia si cambia el saldo del banco", r2.saldoProyectado - r.saldoProyectado, 999999 - 1000);
 const r3 = resumenCaja({ ...base, saldoBanco: null });

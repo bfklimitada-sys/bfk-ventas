@@ -5,11 +5,14 @@ import { Ic } from "../ui/Iconos";
 import { Seccion, Tarjeta, Badge, Monto } from "../ui/Sistema";
 import { FormIvaMensual } from "../forms/FormIvaMensual";
 import { CATEGORIA_IMPUESTO, periodosIvaIncompletos } from "../../lib/ivaUnificado";
+import { apoyoEnGestion } from "../../lib/informes";
 
 // Los pagos a vendedores hoy se administran en Vendedores; la categoria historica solo se consulta.
 const esHistoricaVendedor=(c)=>/vendedor/i.test(c?.nombre||"");
 
-export function PanelGastos({ gastos, categorias, ivaMensual=[], onNuevoGasto, onGuardarIva }) {
+export function PanelGastos({ gastos, categorias, ivaMensual=[], pagosVendedor=[], vendedores=[], onNuevoGasto, onGuardarIva }) {
+  // Etapa 3: apoyo en gestión en UNA línea (gasto + extra incluido en pagos a vendedores), cada monto una vez.
+  const apoyo=useMemo(()=>apoyoEnGestion({gastos,pagosVendedor}),[gastos,pagosVendedor]);
   const [showForm,setShowForm]=useState(false);
   const [ivaPeriodo,setIvaPeriodo]=useState(undefined); // undefined = cerrado · null = mes sugerido · {anio,mes}
   const incompletos=useMemo(()=>periodosIvaIncompletos({gastos,ivaMensual}),[gastos,ivaMensual]);
@@ -81,6 +84,19 @@ export function PanelGastos({ gastos, categorias, ivaMensual=[], onNuevoGasto, o
 
       <Seccion titulo="Gastos por categoría" nota="Se muestra el último pago de cada categoría. Toca una para ver su historial.">
         {actuales.map(c=>tarjetaCategoria(c,false))}
+      </Seccion>
+
+      <Seccion titulo="Apoyo en gestión" nota="Incluye el gasto «Apoyo en gestión» y el extra por gestión que va dentro de un pago a vendedor. Cada monto aparece una vez: la salida bancaria es el gasto o el pago, nunca ambos.">
+        <Tarjeta padding="12px 16px">
+          <div data-apoyo-total style={{display:"flex",justifyContent:"space-between",fontWeight:800,fontSize:13,marginBottom:6}}><span>Total</span><Monto>{fmt.money(apoyo.total)}</Monto></div>
+          {apoyo.items.map(it=>(
+            <div key={it.origen+it.id} data-apoyo={it.origen} style={{display:"flex",justifyContent:"space-between",gap:8,fontSize:12,padding:"3px 0",borderTop:`1px solid ${C.border}`}}>
+              <span style={{color:C.inkMuted,minWidth:0}}>{fmt.date(it.fecha)} · {it.origen==="gasto"?"Gasto":"Dentro del pago a "+((vendedores||[]).find(v=>v.id===it.vendedorId)?.nombre||"vendedor")} · período {fmt.monthYear(it.mes,it.anio)}</span>
+              <span style={{fontFamily:"inherit",fontWeight:700,flexShrink:0}}>{fmt.money(it.monto)}</span>
+            </div>
+          ))}
+          {!apoyo.items.length&&<div style={{fontSize:12,color:C.inkFaint}}>Sin registros</div>}
+        </Tarjeta>
       </Seccion>
 
       {historicas.length>0&&(

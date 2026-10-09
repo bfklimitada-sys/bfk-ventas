@@ -69,7 +69,8 @@ eq("F29 agosto: iva_pagado guarda el total pagado", p.iva.fila.iva_pagado, 60983
 eq("F29 agosto: retenciones = 40.866 (PPM)", retencionesPeriodo(p.iva.fila), 40866);
 const conRet = calcularPagoVendedor({ vendedorId: "v1", ocs: [oc], anio: 2026, mes: 8, ivaMensual: [...ivaMensual, { id: "n", ...p.iva.fila }], pagosVendedor: [] });
 eq("comisión agosto con total F29 (IVA 568.964 + PPM 40.866): $395.788", [conRet.pagoCalculado, conRet.impIva, conRet.retenciones, conRet.descuentoF29], [395788, 568964, 40866, 609830]);
-eq("F29 agosto en Panel: determinado sigue siendo el IVA (568.964), pagado 609.830, pendiente 0", periodoF29([{ id: "n", ...p.iva.fila }], gastos, 2026, 8), { anio: 2026, mes: 8, det: 568964, pag: 609830, pend: 0 });
+// Etapa 3 (autorizada 09/10/2026): desde agosto 2026 el F29 del Panel incluye IVA + PPM (antes solo IVA, 568.964).
+eq("F29 agosto en Panel: determinado = IVA 568.964 + PPM 40.866 = 609.830, pagado 609.830, pendiente 0", periodoF29([{ id: "n", ...p.iva.fila }], gastos, 2026, 8), { anio: 2026, mes: 8, det: 609830, pag: 609830, pend: 0 });
 eq("sin pago indicado: iva_pagado = IVA a pagar → retenciones 0", retencionesPeriodo(planGuardarIva({ data: { anio: 2026, mes: 9, ivaVentas: 1000, ivaCompras: 0, pagadoSii: 0 }, gastos: [], ivaMensual: [] }).iva.fila), 0);
 eq("pago parcial menor al IVA: retenciones 0", retencionesPeriodo({ anio: 2026, mes: 9, iva_ventas: 1000, iva_compras: 0, iva_pagado: 400 }), 0);
 eq("neto negativo con PPM: retenciones = todo lo pagado", retencionesPeriodo({ anio: 2026, mes: 9, iva_ventas: 1000, iva_compras: 5000, iva_pagado: 30000 }), 30000);

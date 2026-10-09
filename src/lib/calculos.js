@@ -185,6 +185,8 @@ export const calcularPagoVendedor = ({ vendedorId, ocs, anio, mes, ivaMensual = 
   return {
     mes, anio, label: fmt.monthYear(mes, anio), sumaFacts, sumaUtilidad, pagoVentasPropias, pagoCalculado, pagado,
     estado: pagado >= pagoCalculado ? "pagado" : "pendiente", esVerificado, impIva, retenciones, descuentoF29, sinIva, ivaRegistrado: !!ivaMes,
+    // Desde agosto 2026 la comisión descuenta el PPM del F29: sin el total del F29 registrado aún no es definitiva.
+    f29Incompleto: !sinIva && !!ivaMes && aplicaRetenciones(anio, mes) && !(Number(ivaMes.iva_pagado) > 0),
     ivaVentas: ivaMes ? Number(ivaMes.iva_ventas) || 0 : 0, ivaCompras: ivaMes ? Number(ivaMes.iva_compras) || 0 : 0,
     deuda: Math.max(0, pagoCalculado - pagado),
     // Extra por gestión del período (aparte de la comisión) y total transferido; si la comisión bajó después de pagarla

@@ -1,10 +1,13 @@
-import { registroIvaDe, ivaAPagarPeriodo } from "./calculos.js";
+import { registroIvaDe, ivaAPagarPeriodo, retencionesPeriodo, aplicaRetenciones } from "./calculos.js";
 
 // ═══════════════════════════════════════════════════════════════
 // F29 / IVA por período — solo para mostrar el Panel.
 // NO modifica datos ni interviene en el cálculo de comisiones.
 //
 //  · IVA determinado = IVA a pagar del período = max(0, IVA neto) (lib/calculos.js)
+//  · PPM y retenciones del F29 (desde agosto 2026, regla 2026-10-06): total del F29 registrado (iva_pagado)
+//                      − IVA a pagar. Determinado del F29 = IVA + PPM, sin duplicar (un solo total).
+//                      Si el período ya tiene IVA pero aún no el total del F29, se marca faltaTotalF29.
 //  · Pagado          = suma de gastos "Impuesto SII" (cat_impuesto) del mismo mes/año
 //  · Pendiente       = max(0, determinado − pagado)   (cada período por separado:
 //                      un pago mayor al IVA queda en $0 y no se traslada a otro período)
@@ -18,12 +21,22 @@ export const F29_DESDE = { anio: 2026, mes: 1 };
 const clave = (anio, mes) => anio * 12 + (mes - 1);
 export const periodoVigenteF29 = (anio, mes) => clave(anio, mes) >= clave(F29_DESDE.anio, F29_DESDE.mes);
 
-export const periodoF29 = (ivaMensual, gastos, anio, mes) => {
-  const det = ivaAPagarPeriodo(registroIvaDe(ivaMensual, anio, mes));
+// Desglose del período: IVA, PPM/retenciones, determinado (IVA + PPM), pagado y pendiente.
+export const desgloseF29 = (ivaMensual, gastos, anio, mes) => {
+  const registro = registroIvaDe(ivaMensual, anio, mes);
+  const iva = ivaAPagarPeriodo(registro);
+  const ppm = retencionesPeriodo(registro);   // 0 antes de agosto 2026: los períodos antiguos no cambian
+  const det = iva + ppm;
   const pag = (gastos || [])
     .filter((g) => g.categoria_id === "cat_impuesto" && Number(g.mes) === mes && Number(g.anio) === anio)
     .reduce((s, g) => s + (Number(g.monto) || 0), 0);
-  return { anio, mes, det, pag, pend: Math.max(0, det - pag) };
+  const faltaTotalF29 = !!registro && aplicaRetenciones(anio, mes) && !(Number(registro.iva_pagado) > 0);
+  return { anio, mes, iva, ppm, det, pag, pend: Math.max(0, det - pag), faltaTotalF29 };
+};
+
+export const periodoF29 = (ivaMensual, gastos, anio, mes) => {
+  const { det, pag, pend } = desgloseF29(ivaMensual, gastos, anio, mes);
+  return { anio, mes, det, pag, pend };
 };
 
 // Todos los períodos con datos desde F29_DESDE, más el desglose del Panel
@@ -43,5 +56,6 @@ export const calcularF29 = ({ ivaMensual, gastos, anioActual, mesActual }) => {
   const mostrados = periodos.filter((x) => esMostrado(x) && (x.det > 0 || x.pag > 0));
   const anterior = periodos.filter((x) => !esMostrado(x)).reduce((s, x) => s + x.pend, 0);
   const total = periodos.reduce((s, x) => s + x.pend, 0);
-  return { periodos, mostrados, anterior, total, visible: mostrados.length > 0 || anterior > 0 };
+  const faltaTotal = periodos.filter((x) => desgloseF29(ivaMensual, gastos, x.anio, x.mes).faltaTotalF29).map((x) => ({ anio: x.anio, mes: x.mes }));
+  return { periodos, mostrados, anterior, total, faltaTotal, visible: mostrados.length > 0 || anterior > 0 };
 };

@@ -179,36 +179,49 @@ await escenario("C6", async () => {
 });
 
 // ── C7: cartola: varias facturas del mismo RUT, abono parcial y depósito de vale vista ──
+// Etapas 1-2 (autorizadas 09/10/2026): la cartola ya NO preselecciona; cada movimiento posterior al cierre se registra
+// solo, con el destino elegido a mano y confirmación explícita. Cartola en el formato real de BancoEstado (en línea).
 await escenario("C7", async () => {
   const rut2 = "69.102.000-2", rut7 = "69.107.000-7";
   const b = crearBase(datos({ extra: (d) => { d.ordenes_compra_v2.find((o) => o.id === "oc4").rut_cliente = rut2; } }), { mp: RESPUESTAS_MP });
   const { page: p, errs, ctx } = await abrir(browser, b, { url: URL_APP, ...escritorio, espera: 3000 });
   const hoy = new Date(); const f = (n) => { const d = new Date(hoy); d.setDate(d.getDate() - n); return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`; };
-  const ws = XLSX.utils.aoa_to_sheet([["Fecha", "", "", "Descripción", "Cargo", "Abono", "Saldo"],
-    [f(1), "", "", `TRANSF DE ${rut2.replace(/\./g, "")} MUNICIPALIDAD FICTICIA`, 0, 2440000, 9000000],
-    [f(1), "", "", `TRANSF DE ${rut7.replace(/\./g, "")} MUNICIPALIDAD FICTICIA 7`, 0, 100000, 9100000],
-    [f(1), "", "", `DEPOSITO VALE VISTA ${rut7}`, 0, 500000, 9600000]]);
-  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Registros");
+  const res = XLSX.utils.aoa_to_sheet([["Inicial", "", "", "", "$ 6.560.000"], ["Saldo Contable", "", "", "", "$ 9.600.000"]]);
+  const ws = XLSX.utils.aoa_to_sheet([["Fecha", "Sucursal", "N° Operación", "Descripción", "Cargos", "Abonos", "Saldo"],
+    [f(1), "STGO.PRINCIPAL ", "00007000001", `TRANSF DE ${rut2.replace(/\./g, "")} MUNICIPALIDAD FICTICIA`, "", "$ 2.440.000", "$ 9.000.000"],
+    [f(1), "STGO.PRINCIPAL ", "00007000002", `TRANSF DE ${rut7.replace(/\./g, "")} MUNICIPALIDAD FICTICIA 7`, "", "$ 100.000", "$ 9.100.000"],
+    [f(1), "STGO.PRINCIPAL ", "00004000003", `DEPOSITO VALE VISTA ${rut7}`, "", "$ 500.000", "$ 9.600.000"]]);
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, res, "Resumen"); XLSX.utils.book_append_sheet(wb, ws, "Registros");
   const ruta = path.join(os.tmpdir(), "cartola4c.xlsx"); XLSX.writeFile(wb, ruta);
-  await p.getByRole("button", { name: /^Cartola$/ }).first().click(); await espera(p, 500);
-  await p.locator('[role=dialog] input[type=file]').setInputFiles(ruta); await espera(p, 1200);
-  const sel = await p.locator("[data-abono]").evaluateAll((els) => els.map((e) => ({ v: e.value, ops: [...e.options].map((o) => o.text) })));
-  ok("C7_varias_facturas_sugerida", sel[0]?.v.startsWith("va_") && /2 facturas/.test(sel[0].ops.join("|")), sel[0]);
-  ok("C7_parcial_no_se_marca_solo", sel[1]?.v === "" && sel[1].ops.some((o) => /Abono parcial/.test(o)), sel[1]);
-  ok("C7_vale_vista_sugerido", sel[2]?.v.startsWith("vv_"), sel[2]);
-  const idParcial = await p.locator("[data-abono]").nth(1).evaluate((e) => [...e.options].find((o) => /Abono parcial/.test(o.text)).value);
-  await p.locator("[data-abono]").nth(1).selectOption(idParcial); await espera(p, 300);
-  ok("C7_detalle_parcial_muestra_saldo_restante", /queda/.test(await p.locator('[data-detalle-abono="parcial"]').innerText()));
+  const cargar = async () => { await p.locator("[role=dialog]").waitFor({ state: "detached", timeout: 15000 }).catch(() => {});
+    await p.getByRole("button", { name: /^Cartola$/ }).first().click(); await p.locator("[role=dialog] [data-cartola-archivos]").waitFor({ state: "attached", timeout: 15000 });
+    await p.locator("[role=dialog] [data-cartola-archivos]").setInputFiles(ruta); await p.locator("[data-cartola-conciliacion]").waitFor({ timeout: 15000 }); await espera(p, 400); };
+  await cargar();
+  ok("C7_tres_abonos_por_registrar", (await p.locator("[data-preparar]").count()) === 3);
+  const opciones = async (k) => { await p.locator("[data-preparar]").nth(k).click(); await espera(p, 300);
+    return p.locator("[data-opcion-abono]").evaluate((e) => ({ v: e.value, ops: [...e.options].map((o) => o.text) })); };
+  let sel = await opciones(0);
+  ok("C7_varias_facturas_ofrecida_sin_preseleccion", sel.v === "" && sel.ops.some((o) => /2 facturas/.test(o)), sel);
+  const idVarias = await p.locator("[data-opcion-abono]").evaluate((e) => [...e.options].find((o) => /2 facturas/.test(o.text)).value);
+  await p.locator("[data-opcion-abono]").selectOption(idVarias); await espera(p, 200);
+  ok("C7_sin_confirmacion_no_registra", await p.locator("[data-registrar]").isDisabled());
   const n = b.escr.length;
-  await p.locator("[role=dialog]").getByRole("button", { name: /Registrar 3 cobros/ }).click(); await espera(p, 3000);
+  await p.locator("[data-confirmo]").check(); await p.locator("[data-registrar]").click(); await espera(p, 3000);
   const w = desde(b, n);
   const posts = w.filter((x) => x.metodo === "POST" && x.tabla === "eventos_pago_cliente");
-  ok("C7_cobros_en_una_sola_solicitud", posts.length === 1 && Array.isArray(posts[0].cuerpo) && posts[0].cuerpo.length === 3, posts.map((x) => x.cuerpo));
-  ok("C7_vale_vista_marcado_cobrado_sin_duplicar", w.some((x) => x.metodo === "PATCH" && x.tabla === "eventos_pago_cliente" && x.id === "pc7" && x.cuerpo.cobrado_en_banco === true) && b.db.eventos_pago_cliente.filter((e) => e.oc_id === "oc7" && e.monto === 500000).length === 1);
+  ok("C7_cobros_en_una_sola_solicitud", posts.length === 1 && Array.isArray(posts[0].cuerpo) && posts[0].cuerpo.length === 2, posts.map((x) => x.cuerpo));
   const oc = (id) => b.db.ordenes_compra_v2.find((o) => o.id === id);
-  ok("C7_estados_recalculados", oc("oc2").estado_pago_cliente === "pagado" && oc("oc4").estado_pago_cliente === "pagado" && oc("oc7").estado_pago_cliente === "parcial" && oc("oc7").monto_cobrado === 600000,
-    ["oc2", "oc4", "oc7"].map((i) => [oc(i).estado_pago_cliente, oc(i).monto_cobrado]));
-  ok("C7_historial_abono_parcial", b.db.historial_cambios.some((h) => h.oc_id === "oc7" && /Abono parcial/.test(h.accion)));
+  ok("C7_estados_recalculados", oc("oc2").estado_pago_cliente === "pagado" && oc("oc4").estado_pago_cliente === "pagado", ["oc2", "oc4"].map((i) => [oc(i).estado_pago_cliente, oc(i).monto_cobrado]));
+  await cargar();
+  ok("C7_abono_registrado_ya_no_se_ofrece", (await p.locator("[data-preparar]").count()) === 2);
+  sel = await opciones(0);
+  ok("C7_parcial_ofrecido_sin_preseleccion", sel.v === "" && sel.ops.some((o) => /Abono parcial/.test(o)), sel);
+  await p.getByRole("button", { name: "Cancelar" }).click(); await espera(p, 200);
+  sel = await opciones(1);
+  ok("C7_vale_vista_ofrecido_sin_preseleccion", sel.v === "" && sel.ops.some((o) => /Vale vista/.test(o)), sel);
+  const idVV = await p.locator("[data-opcion-abono]").evaluate((e) => [...e.options].find((o) => /Vale vista/.test(o.text)).value);
+  await p.locator("[data-opcion-abono]").selectOption(idVV); await p.locator("[data-confirmo]").check(); await p.locator("[data-registrar]").click(); await espera(p, 3000);
+  ok("C7_vale_vista_marcado_cobrado_sin_duplicar", b.escr.some((x) => x.metodo === "PATCH" && x.tabla === "eventos_pago_cliente" && x.id === "pc7" && x.cuerpo.cobrado_en_banco === true) && b.db.eventos_pago_cliente.filter((e) => e.oc_id === "oc7" && e.monto === 500000).length === 1);
   ok("C7_sin_errores", errs.length === 0, errs);
   await ctx.close();
 });

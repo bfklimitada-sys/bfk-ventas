@@ -1,93 +1,35 @@
 import { anioMesDe } from "../../lib/calculos";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import { C, MONO, SANS, btnP, btnG, fmt } from "../../lib/theme";
 import { Ic, I } from "../ui/Iconos";
-import { calzarAbonos, validarSeleccion } from "../../lib/cobranza";
+import { leerCartolaBancoEstado, totalesPorMes, unirCartolas } from "../../lib/cartolas";
+import { CIERRE_CONCILIACION, ESTADOS, conciliarMovimientos, opcionesAbono } from "../../lib/conciliacion";
 
-const aNumero = (v) => {
-  if (v === null || v === undefined) return 0;
-  const s = String(v).replace(/\$/g, "").replace(/\./g, "").replace(/,/g, "").trim();
-  const n = Number(s);
-  return Number.isFinite(n) ? n : 0;
-};
+// ═══════════════════════════════════════════════════════════════
+// Cartola BancoEstado · conciliación (2026-10)
+//  Etapa 1 (consulta): lee y valida ambos formatos, deduplica entre archivos, avisa cartolas faltantes y muestra
+//    TODOS los movimientos con su estado (Conciliado · Posible registrado · Pendiente · Neutro). No preselecciona nada.
+//  Etapa 2 (registro seguro): solo movimientos PENDIENTES posteriores al cierre (07/10/2026), uno a la vez, con
+//    destino elegido a mano y confirmación explícita. Antes de escribir se vuelve a conciliar: si el movimiento ya
+//    tiene un registro, no se registra. Lo anterior al cierre es solo consulta (ya está en saldos y FIFO históricos).
+// ═══════════════════════════════════════════════════════════════
 
-// ── Lectura de cartolas de BancoEstado ──────────────────────
-// Vienen en dos formatos:
-//  · "Cartola en Línea"  → hoja Registros,   fecha completa (20/07/2026)
-//  · "Cartola Histórica" → hoja Movimientos, fecha sin año (15/07)
-export function leerCartola(workbook) {
-  const movimientos = [];
-
-  // ── Formato en línea ──
-  const registros = workbook.Sheets["Registros"];
-  if (registros) {
-    const filas = XLSX.utils.sheet_to_json(registros, { header: 1 });
-    for (let i = 1; i < filas.length; i++) {
-      const f = filas[i];
-      if (!f || !f[0]) continue;
-      const p = String(f[0]).split("/");
-      if (p.length < 3) continue;
-      movimientos.push({
-        fecha: `${p[2]}-${p[1].padStart(2, "0")}-${p[0].padStart(2, "0")}`,
-        descripcion: String(f[3] || "").trim(),
-        cargo: aNumero(f[4]),
-        abono: aNumero(f[5]),
-        saldo: aNumero(f[6]),
-      });
-    }
-    return movimientos;
-  }
-
-  // ── Formato histórico ──
-  const hoja = workbook.Sheets["Movimientos"];
-  if (!hoja) return movimientos;
-
-  let anioIni = null, anioFin = null, mesIni = null;
-  const resumen = workbook.Sheets["Resumen"];
-  if (resumen) {
-    for (const f of XLSX.utils.sheet_to_json(resumen, { header: 1 })) {
-      const k = String(f[0] || ""), v = String(f[4] || "");
-      if (k === "Fecha Inicio" && v.includes("/")) { const p = v.split("/"); mesIni = Number(p[1]); anioIni = Number(p[2]); }
-      if (k === "Fecha Final" && v.includes("/")) anioFin = Number(v.split("/")[2]);
-    }
-  }
-
-  for (const f of XLSX.utils.sheet_to_json(hoja, { header: 1 }).slice(1)) {
-    if (!f || !f[0]) continue;
-    const p = String(f[0]).split("/");
-    if (p.length < 2) continue;
-    const dia = Number(p[0]), mes = Number(p[1]);
-    const anio = (anioIni === anioFin || !anioFin) ? anioIni : (mes >= mesIni ? anioIni : anioFin);
-    if (!anio) continue;
-    movimientos.push({
-      fecha: `${anio}-${String(mes).padStart(2, "0")}-${String(dia).padStart(2, "0")}`,
-      descripcion: String(f[6] || "").trim(),
-      cargo: aNumero(f[7]),
-      abono: aNumero(f[8]),
-    });
-  }
-  return movimientos;
-}
-
-// ── Clasificación de un cargo (plata que sale) ──────────────
-// Compara el texto del banco con los nombres de financiadores y
-// vendedores. Exige al menos dos palabras en común para no
-// confundir, por ejemplo, a Byron Vegas con Matías Vegas.
+// ── Clasificación sugerida de un cargo (solo como SUGERENCIA, nunca se aplica sola) ──
+// Compara el texto del banco con los nombres de financiadores y vendedores. Exige al menos dos palabras en común
+// para no confundir, por ejemplo, a Byron Vegas con Matías Vegas.
 const PALABRAS_IGNORADAS = new Set(["TEF", "BANCOESTADO", "RUT", "PAGO", "PAGOS", "GIRO", "CAJERO"]);
 
 function coincidencias(nombre, descripcion) {
-  const desc = descripcion.toUpperCase();
   const palabras = String(nombre || "").toUpperCase()
-    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .normalize("NFD").replace(/[̀-ͯ]/g, "")
     .split(/[^A-Z]+/).filter(p => p.length >= 4 && !PALABRAS_IGNORADAS.has(p));
-  const descSinTilde = desc.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const descSinTilde = String(descripcion || "").toUpperCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
   return palabras.filter(p => descSinTilde.includes(p)).length;
 }
 
 export function clasificarCargo(mov, financiadores, vendedores) {
-  const desc = mov.descripcion.toUpperCase();
-
+  const desc = String(mov.descripcion || "").toUpperCase();
   let mejorFin = null, puntosFin = 0;
   // Fondos propios (Cuenta BFK) no son un financista al que se le devuelva dinero (regla 2, Fase 4B).
   for (const f of (financiadores || []).filter(x => x.tipo !== "propio")) {
@@ -99,433 +41,331 @@ export function clasificarCargo(mov, financiadores, vendedores) {
     const n = coincidencias(v.nombre, desc);
     if (n > puntosVen) { puntosVen = n; mejorVen = v; }
   }
-
-  // Si la persona figura como financista Y como vendedor, no se puede
-  // saber si el pago es devolución o comisión: queda para revisión.
-  if (puntosFin >= 2 && puntosVen >= 2)
-    return { tipo: "vendedor", destinoId: mejorVen.id, nombre: mejorVen.nombre, seguro: false };
-
-  // Dos o más palabras en común es una coincidencia confiable
-  if (puntosFin >= 2)
-    return { tipo: "financiador", destinoId: mejorFin.id, nombre: mejorFin.nombre, seguro: true };
-  if (puntosVen >= 2)
-    return { tipo: "vendedor", destinoId: mejorVen.id, nombre: mejorVen.nombre, seguro: true };
-
-  if (/COMISION|IMPUESTO|MANTENCION|CARGO POR/.test(desc))
-    return { tipo: "gasto", categoriaId: "cat_otros", nombre: "Comisión bancaria", seguro: true };
-
+  // Si la persona figura como financista Y como vendedor, no se puede saber si es devolución o comisión.
+  if (puntosFin >= 2 && puntosVen >= 2) return { tipo: "vendedor", destinoId: mejorVen.id, nombre: mejorVen.nombre, seguro: false };
+  if (puntosFin >= 2) return { tipo: "financiador", destinoId: mejorFin.id, nombre: mejorFin.nombre, seguro: true };
+  if (puntosVen >= 2) return { tipo: "vendedor", destinoId: mejorVen.id, nombre: mejorVen.nombre, seguro: true };
+  if (/COMISION|IMPUESTO|MANTENCION|CARGO POR/.test(desc)) return { tipo: "gasto", categoriaId: "cat_otros", nombre: "Comisión bancaria", seguro: true };
   return { tipo: "gasto", categoriaId: "cat_otros", nombre: "Por clasificar", seguro: false };
 }
 
-// ── Detección de movimientos ya registrados ────────────────
-// Compara fecha y monto contra lo que ya existe en la base para
-// no volver a cargar un pago que ya está. Acepta una holgura de
-// unos días, porque la fecha contable no siempre calza con la
-// del banco.
-function yaRegistrado(mov, registrados, tolerancia = 3) {
-  const monto = Number(mov.cargo || mov.abono);
-  const f = new Date(mov.fecha).getTime();
-  const cerca = (r) => Math.abs(new Date(r.fecha).getTime() - f) <= tolerancia * 86400000;
+const TONO = {
+  conciliado: { fondo: C.okLight, borde: C.ok, texto: C.okText },
+  posible: { fondo: C.infoLight, borde: C.info, texto: C.info },
+  pendiente: { fondo: C.warnLight, borde: C.warn, texto: C.warnText },
+  neutro: { fondo: C.paper, borde: C.border, texto: C.inkMuted },
+};
+const TIPO_REG = { cobro: "Cobro", pago_financiador: "Pago a financiador", pago_vendedor: "Pago a vendedor", gasto: "Gasto", retiro_capital: "Retiro de capital", aporte_capital: "Aporte de capital" };
+const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+const caja = (extra) => ({ width: "100%", padding: "7px 9px", borderRadius: 8, fontSize: 12.5, border: `1px solid ${C.border}`, background: C.card, color: C.ink, fontFamily: SANS, ...extra });
 
-  // 1) Un movimiento registrado con el mismo monto
-  const exacto = registrados.find(r => Number(r.monto) === monto && cerca(r));
-  if (exacto) return exacto;
-
-  // 2) Un abono repartido entre varias OCs no deja un evento por el
-  //    total, sino varios fragmentos. Sumamos lo registrado de ese
-  //    día por cada destino: si ya cubre el monto, está registrado.
-  const porDestino = {};
-  for (const r of registrados) {
-    if (!cerca(r)) continue;
-    const k = r.destino || "sin_destino";
-    porDestino[k] = (porDestino[k] || 0) + Number(r.monto || 0);
-  }
-  for (const [destino, total] of Object.entries(porDestino)) {
-    if (Math.abs(total - monto) <= 1) {
-      return { fecha: mov.fecha, monto, destino, agrupado: true };
-    }
-  }
-  return null;
-}
-
-// Los movimientos anteriores a esta fecha ya estaban contabilizados
-// en la planilla, así que no deben cargarse: duplicarían los saldos.
-const CORTE_EGRESOS = "2026-08-01";
-
-export function ImportarCartola({ ocs, financiadores, vendedores, categorias, registrados = [], onRegistrar, onRegistrarEgresos }) {
-  const [movs, setMovs] = useState([]);
-  const [items, setItems] = useState([]);      // un item por abono con calce posible
-  const [elegido, setElegido] = useState({});  // idx -> ocId seleccionado ("" = ninguno)
-  const [egresos, setEgresos] = useState([]);   // cargos clasificados
-  const [vista, setVista] = useState("cobros"); // cobros | egresos
+export function ImportarCartola({ ocs, financiadores, vendedores, categorias, gastos = [], pagosVendedor = [], pagoFinSueltos = [], aportes = [],
+  onRegistrar, onRegistrarEgresos, onRegistrarRetiro, cierre = CIERRE_CONCILIACION }) {
+  const [cartolas, setCartolas] = useState([]);
   const [leyendo, setLeyendo] = useState(false);
-  const [guardando, setGuardando] = useState(false);
   const [err, setErr] = useState("");
+  const [filtro, setFiltro] = useState("todos");     // todos | conciliado | posible | pendiente | neutro | registrable
+  const [sentido, setSentido] = useState("ambos");   // ambos | entra | sale
+  const [abierto, setAbierto] = useState(null);      // clave del movimiento con el registro en preparación
+  const [borrador, setBorrador] = useState({});      // datos del registro en preparación (sin preselección)
+  const [confirmo, setConfirmo] = useState(false);
+  const [guardando, setGuardando] = useState(false);
+  const [confirmaTotales, setConfirmaTotales] = useState(false);
+
+  const datos = useMemo(() => ({ ocs, financiadores, vendedores, gastos, pagosVendedor, pagoFinSueltos, aportes }),
+    [ocs, financiadores, vendedores, gastos, pagosVendedor, pagoFinSueltos, aportes]);
+  const union = useMemo(() => unirCartolas(cartolas), [cartolas]);
+  const conc = useMemo(() => conciliarMovimientos(union.movs, datos, { cierre }), [union, datos, cierre]);
 
   const procesar = async (files) => {
     if (!files?.length) return;
     setLeyendo(true); setErr("");
     try {
-      let todos = [];
+      const nuevas = [];
       for (const file of files) {
-        const wb = XLSX.read(await file.arrayBuffer(), { type: "array" });
-        todos = todos.concat(leerCartola(wb));
+        try { nuevas.push(leerCartolaBancoEstado(XLSX.read(await file.arrayBuffer(), { type: "array" }), file.name)); }
+        catch (e) { nuevas.push({ nombre: file.name, movs: [], errores: ["No se pudo abrir el archivo: " + e.message] }); }
       }
-      const vistos = new Set();
-      const unicos = todos.filter(m => {
-        const k = `${m.fecha}|${m.descripcion}|${m.abono}|${m.cargo}`;
-        if (vistos.has(k)) return false;
-        vistos.add(k); return true;
-      }).sort((a, b) => a.fecha.localeCompare(b.fecha));
-      setMovs(unicos);
-      calzar(unicos);
-      setEgresos(unicos.filter(m => m.cargo > 0).map(m => {
-        const c = clasificarCargo(m, financiadores, vendedores);
-        const dup = yaRegistrado(m, registrados);
-        const antiguo = m.fecha < CORTE_EGRESOS;
-        const am = anioMesDe(m.fecha);
-        return { mov: m, ...c, mesCom: am.mes, anioCom: am.anio, duplicado: dup || null, antiguo,
-                 incluir: (dup || antiguo) ? false : c.seguro };
-      }));
-    } catch (e) {
-      setErr("No se pudo leer el archivo: " + e.message);
+      setCartolas((prev) => [...prev, ...nuevas]);
     } finally { setLeyendo(false); }
   };
 
-  // Fase 4C: un abono puede pagar una factura exacta, varias del mismo RUT, ser un abono parcial
-  // o el depósito de un vale vista ya registrado (lib/cobranza.js). Solo se marca lo inequívoco.
-  const calzar = (movimientos) => {
-    const resultado = calzarAbonos(movimientos, ocs, registrados);
-    setItems(resultado);
-    setElegido(Object.fromEntries(resultado.map((r, i) => [i, r.sugerida])));
-  };
+  const movs = union.movs;
+  const lista = conc.movimientos.filter((x) => (sentido === "ambos" || x.dir === sentido)
+    && (filtro === "todos" || (filtro === "registrable" ? x.registrable : x.estado === filtro)));
+  const cuenta = (e, dir) => conc.movimientos.filter((x) => x.estado === e && (!dir || x.dir === dir)).length;
+  const nRegistrables = conc.movimientos.filter((x) => x.registrable).length;
 
-  const opcionDe = (i) => items[i]?.opciones.find((o) => o.id === elegido[i]) || null;
-
-  const registrar = async () => {
-    const cobros = [], valeVistas = [];
-    items.forEach((it, i) => {
-      const op = opcionDe(i);
-      if (!op) return;
-      if (op.valeVista) valeVistas.push({ ...op.valeVista, fecha: it.mov.fecha, monto: it.mov.abono, descripcion: it.mov.descripcion });
-      for (const a of op.asignaciones)
-        cobros.push({ ocId: a.ocId, numeroOc: a.numeroOc, monto: a.monto, parcial: a.parcial, tipo: op.tipo,
-                      fecha: it.mov.fecha, descripcion: it.mov.descripcion });
-    });
-    if (!cobros.length && !valeVistas.length) { setErr("No hay ningún cobro seleccionado"); return; }
-    const problema = validarSeleccion(items, elegido);
-    if (problema) { setErr(problema); return; }
-    setErr(""); setGuardando(true);
-    try { await onRegistrar(cobros, resumenCartola(), valeVistas); }
-    catch (e) { setErr(e.message); setGuardando(false); }
-  };
-
-  const registrarEgresos = async () => {
-    const sel = egresos.filter(e => e.incluir);
-    if (!sel.length) { setErr("No hay ningún egreso marcado"); return; }
-    if (sel.some(e => e.tipo !== "gasto" && !e.destinoId)) {
-      setErr("Falta elegir el destino en alguno de los egresos"); return;
-    }
-    if (sel.some(e => e.tipo === "vendedor" && (!(Number(e.mesCom) >= 1 && Number(e.mesCom) <= 12) || !(Number(e.anioCom) >= 2020)))) {
-      setErr("Indica el mes y el año de la comisión en los pagos a vendedor"); return;
-    }
-    setErr(""); setGuardando(true);
-    try {
-      await onRegistrarEgresos(sel.map(e => ({
-        tipo: e.tipo, destinoId: e.destinoId, categoriaId: e.categoriaId || "cat_otros",
-        monto: e.mov.cargo, fecha: e.mov.fecha, descripcion: e.mov.descripcion,
-        mesCom: Number(e.mesCom), anioCom: Number(e.anioCom),
-      })), resumenCartola());
-    } catch (er) { setErr(er.message); setGuardando(false); }
-  };
-
-  // Totales por mes: la base de la conciliación
-  const totalesPorMes = () => {
-    const meses = {};
-    for (const m of movs) {
-      const k = String(m.fecha).slice(0, 7);   // AAAA-MM
-      if (!meses[k]) meses[k] = { entro: 0, salio: 0, saldo: null };
-      meses[k].entro += m.abono || 0;
-      meses[k].salio += m.cargo || 0;
-      if (m.saldo != null) meses[k].saldo = m.saldo;   // el último del mes
-    }
-    return Object.entries(meses).map(([k, v]) => ({
-      id: k, anio: Number(k.slice(0, 4)), mes: Number(k.slice(5, 7)),
-      entro: v.entro, salio: v.salio, saldo_cierre: v.saldo,
-    }));
-  };
-
-  // Datos de la cartola para dejar registro de qué se subió
   const resumenCartola = () => {
     if (!movs.length) return null;
     const ultimo = movs[movs.length - 1];
-    return {
-      desde: movs[0].fecha,
-      hasta: ultimo.fecha,
-      movimientos: movs.length,
-      saldoFinal: ultimo.saldo ?? null,
-      meses: totalesPorMes(),
-    };
+    return { desde: movs[0].fecha, hasta: ultimo.fecha, movimientos: movs.length, saldoFinal: ultimo.saldo ?? null, meses: totalesPorMes(movs) };
   };
 
-  const nSel = Object.values(elegido).filter(Boolean).length;
-  const totalSel = items.reduce((s, it, i) => {
-    const op = it.opciones.find((o) => o.id === elegido[i]);
-    return s + (op ? it.mov.abono : 0);
-  }, 0);
+  const abrir = (x) => {
+    setErr(""); setConfirmo(false); setAbierto(x.m.clave);
+    setBorrador(x.dir === "entra" ? { opcionId: "" } : { tipo: "", destinoId: "", categoriaId: "", mesCom: "", anioCom: "", socio: "" });
+  };
+  const cerrar = () => { setAbierto(null); setBorrador({}); setConfirmo(false); };
 
-  if (!movs.length) {
+  // Validación del borrador: todo elegido a mano, sin valores por defecto.
+  const problemaBorrador = (x) => {
+    if (x.dir === "entra") return borrador.opcionId ? null : "Elige a qué corresponde el abono";
+    if (!borrador.tipo) return "Elige qué tipo de egreso es";
+    if (borrador.tipo === "financiador" && !borrador.destinoId) return "Elige el financiador";
+    if (borrador.tipo === "vendedor") {
+      if (!borrador.destinoId) return "Elige el vendedor";
+      if (!(Number(borrador.mesCom) >= 1 && Number(borrador.mesCom) <= 12) || !(Number(borrador.anioCom) >= 2020)) return "Indica el mes y el año de la comisión";
+    }
+    if (borrador.tipo === "gasto" && !borrador.categoriaId) return "Elige la categoría del gasto";
+    if (borrador.tipo === "retiro" && !String(borrador.socio || "").trim()) return "Indica el socio";
+    return null;
+  };
+
+  // Registro de UN movimiento, con confirmación explícita y verificación final contra duplicados.
+  const registrar = async (x) => {
+    const p = problemaBorrador(x);
+    if (p) { setErr(p); return; }
+    if (!confirmo) { setErr("Marca la confirmación antes de registrar"); return; }
+    // Verificación final: se vuelve a conciliar con los datos actuales. Si ya no está pendiente, NO se registra.
+    const actual = conciliarMovimientos(union.movs, datos, { cierre }).movimientos.find((y) => y.m.clave === x.m.clave);
+    if (!actual || !actual.registrable) { setErr("Este movimiento ya tiene un registro en BFK o es anterior al cierre: no se registra de nuevo."); return; }
+    const m = x.m, ref = m.operacion ? ` (op. ${m.operacion})` : "";
+    setErr(""); setGuardando(true);
+    try {
+      if (x.dir === "entra") {
+        const op = opcionesAbono(m, ocs).find((o) => o.id === borrador.opcionId);
+        if (!op) throw new Error("La opción elegida ya no está disponible");
+        const cobros = (op.asignaciones || []).map((a) => ({ ocId: a.ocId, numeroOc: a.numeroOc, monto: a.monto, parcial: a.parcial, tipo: op.tipo,
+          fecha: m.fecha, descripcion: `${m.descripcion}${ref}` }));
+        const valeVistas = op.valeVista ? [{ ...op.valeVista, fecha: m.fecha, monto: m.abono, descripcion: m.descripcion }] : [];
+        await onRegistrar(cobros, resumenCartola(), valeVistas);
+      } else if (borrador.tipo === "retiro") {
+        if (!onRegistrarRetiro) throw new Error("El registro de retiros de capital no está disponible");
+        await onRegistrarRetiro({ socio: String(borrador.socio).trim(), monto: m.cargo, fecha: m.fecha, notas: `Desde cartola${ref}: ${m.descripcion}` });
+      } else {
+        await onRegistrarEgresos([{ tipo: borrador.tipo, destinoId: borrador.destinoId, categoriaId: borrador.categoriaId, monto: m.cargo, fecha: m.fecha,
+          descripcion: `${m.descripcion}${ref}`, operacion: m.operacion || "", mesCom: Number(borrador.mesCom), anioCom: Number(borrador.anioCom) }], resumenCartola());
+      }
+      cerrar();
+    } catch (e) { setErr(e.message || String(e)); }
+    finally { setGuardando(false); }
+  };
+
+  // ── Pantalla inicial ──
+  if (!cartolas.length) {
     return (
       <div style={{ fontFamily: SANS }}>
         <div style={{ background: C.tealLight, borderRadius: 10, padding: "12px 14px", marginBottom: 16 }}>
           <div style={{ fontSize: 12.5, fontWeight: 700, color: C.tealDark, marginBottom: 5 }}>Cómo obtener la cartola</div>
           <div style={{ fontSize: 12, color: C.inkMuted, lineHeight: 1.55 }}>
-            En BancoEstado Empresas descarga la Cartola en Línea o la Histórica de
-            Chequera Electrónica. Lee ambos formatos y puedes subir varias a la vez.
+            En BancoEstado Empresas descarga la Cartola en Línea o las Históricas de Chequera Electrónica. Se leen ambos formatos;
+            puedes subir varias a la vez (un archivo repetido no duplica nada).
           </div>
         </div>
         <label style={{ ...btnG, display: "block", textAlign: "center", cursor: "pointer", padding: "16px" }}>
-          {leyendo ? "Leyendo…" : <I t={"📄 Elegir cartola(s)"}/>}
-          <input type="file" accept=".xlsx,.xls" multiple disabled={leyendo}
+          {leyendo ? "Leyendo…" : <I t={"📄 Elegir cartola(s)"} />}
+          <input data-cartola-archivos type="file" accept=".xlsx,.xls" multiple disabled={leyendo}
             onChange={e => procesar(Array.from(e.target.files || []))} style={{ display: "none" }} />
         </label>
-        {err && <div style={{ background: C.dangerLight, color:C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 12.5, marginTop: 12, fontWeight: 600 }}>{err}</div>}
+        {err && <div style={{ background: C.dangerLight, color: C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 12.5, marginTop: 12, fontWeight: 600 }}>{err}</div>}
         <div style={{ fontSize: 12, color: C.inkFaint, marginTop: 14, lineHeight: 1.5 }}>
-          Los abonos se cruzan por monto. Con el RUT del pagador también se reconocen
-          pagos de varias facturas juntas y abonos parciales; los depósitos de vale vista
-          ya registrados se marcan como cobrados en el banco.
+          Primero es solo consulta: cada movimiento muestra si ya está registrado en BFK. Nada se registra sin tu confirmación,
+          y lo anterior al {fmt.date(cierre)} no se puede registrar desde aquí.
         </div>
       </div>
     );
   }
 
   return (
-    <div style={{ fontFamily: SANS }}>
-      <div style={{ background: C.paper, borderRadius: 10, padding: "10px 13px", marginBottom: 12 }}>
-        <div style={{ fontSize: 12, color: C.inkMuted }}>
-          {movs.length} movimientos · {fmt.date(movs[0].fecha)} a {fmt.date(movs[movs.length-1].fecha)}
-        </div>
-        {movs[movs.length-1].saldo != null && (
-          <div style={{ fontSize: 12.5, color: C.ink, fontWeight: 700, marginTop: 3 }}>
-            Saldo al cierre: <span style={{ fontFamily: MONO }}>{fmt.money(movs[movs.length-1].saldo)}</span>
+    <div data-cartola-conciliacion style={{ fontFamily: SANS }}>
+      {/* Archivos leídos y validaciones */}
+      <div style={{ background: C.paper, borderRadius: 10, padding: "10px 13px", marginBottom: 10 }}>
+        {cartolas.map((c, k) => (
+          <div key={k} data-archivo={c.errores.length ? "rechazado" : "ok"} style={{ fontSize: 12, color: c.errores.length ? C.dangerText : C.inkMuted, marginBottom: 3 }}>
+            {c.errores.length ? <><Ic n="⚠" /> {c.nombre}: rechazado — {c.errores.slice(0, 2).join(" · ")}</>
+              : <>{c.formato === "linea" ? "En línea" : `Histórica N° ${c.numero || "—"}`} · {fmt.date(c.desde)} a {fmt.date(c.hasta)} · {c.movs.length} mov. · saldo {fmt.money(c.saldoInicial)} → {fmt.money(c.saldoFinal)}</>}
+          </div>
+        ))}
+        {movs.length > 0 && (
+          <div data-cartola-resumen style={{ fontSize: 12.5, color: C.ink, fontWeight: 700, marginTop: 6 }}>
+            {movs.length} movimientos únicos · {fmt.date(movs[0].fecha)} a {fmt.date(movs[movs.length - 1].fecha)} · saldo al cierre <span style={{ fontFamily: MONO }}>{fmt.money(movs[movs.length - 1].saldo)}</span>
+            {union.duplicadosQuitados > 0 && <span data-duplicados style={{ display: "block", fontWeight: 600, color: C.inkMuted }}>{union.duplicadosQuitados} línea(s) repetida(s) entre archivos no se cuentan dos veces{union.archivosRepetidos ? ` (${union.archivosRepetidos} archivo(s) repetido(s))` : ""}.</span>}
           </div>
         )}
       </div>
+      {union.faltantes.length > 0 && (
+        <div data-cartolas-faltantes style={{ background: C.dangerLight, border: `1px solid ${C.danger}`, borderRadius: 9, padding: "9px 12px", marginBottom: 10, fontSize: 12, color: C.dangerText, fontWeight: 600, lineHeight: 1.45 }}>
+          Falta(n) cartola(s): {union.faltantes.map((g) => `entre el ${fmt.date(g.despuesDe)} y el ${fmt.date(g.antesDe)} (el saldo pasa de ${fmt.money(g.saldoEsperado)} a ${fmt.money(g.saldoEncontrado)})`).join("; ")}. Los movimientos de ese tramo no se ven.
+        </div>
+      )}
 
-      <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
-        {[
-          { k: "cobros", t: `Entra · ${items.length}`, c: C.ok },
-          { k: "egresos", t: `Sale · ${egresos.length}`, c: C.danger },
-        ].map(b => (
-          <button key={b.k} onClick={() => setVista(b.k)}
-            style={{ flex: 1, padding: "8px", borderRadius: 9, cursor: "pointer", fontSize: 12, fontWeight: 700,
-              border: `1.5px solid ${vista === b.k ? b.c : C.border}`,
-              background: vista === b.k ? C.paper : C.card, color: vista === b.k ? b.c : C.inkMuted }}>
-            {b.t}
+      {/* Estados */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6, marginBottom: 8 }}>
+        {Object.keys(ESTADOS).map((e) => (
+          <button key={e} data-filtro={e} onClick={() => setFiltro(filtro === e ? "todos" : e)}
+            style={{ padding: "7px 4px", borderRadius: 9, cursor: "pointer", border: `1.5px solid ${filtro === e ? TONO[e].borde : C.border}`, background: filtro === e ? TONO[e].fondo : C.card, color: TONO[e].texto, fontSize: 11.5, fontWeight: 700, lineHeight: 1.3 }}>
+            {ESTADOS[e]}<br /><span data-cuenta={e} style={{ fontFamily: MONO, fontSize: 13 }}>{cuenta(e)}</span>
           </button>
         ))}
       </div>
+      <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+        {[["ambos", `Todo · ${conc.movimientos.length}`], ["entra", `Entra · ${conc.movimientos.filter(x => x.dir === "entra").length}`], ["sale", `Sale · ${conc.movimientos.filter(x => x.dir === "sale").length}`]].map(([k, t]) => (
+          <button key={k} data-sentido={k} onClick={() => setSentido(k)} style={{ flex: 1, padding: "7px", borderRadius: 9, cursor: "pointer", fontSize: 12, fontWeight: 700, border: `1.5px solid ${sentido === k ? C.tealDark : C.border}`, background: sentido === k ? C.paper : C.card, color: sentido === k ? C.tealDark : C.inkMuted }}>{t}</button>
+        ))}
+        <button data-filtro="registrable" onClick={() => setFiltro(filtro === "registrable" ? "todos" : "registrable")} style={{ flex: 1, padding: "7px", borderRadius: 9, cursor: "pointer", fontSize: 12, fontWeight: 700, border: `1.5px solid ${filtro === "registrable" ? C.warn : C.border}`, background: filtro === "registrable" ? C.warnLight : C.card, color: C.warnText }}>Por registrar · {nRegistrables}</button>
+      </div>
+      <div style={{ fontSize: 12, color: C.inkFaint, marginBottom: 10, lineHeight: 1.5 }}>
+        Consulta: nada viene marcado ni se registra solo. Lo anterior al {fmt.date(cierre)} ya está en los saldos y en el FIFO histórico y no se registra desde aquí.
+        {conc.sinLinea.length > 0 && <span data-control-inverso style={{ display: "block", color: C.dangerText, fontWeight: 700 }}>Hay {conc.sinLinea.length} registro(s) BFK posterior(es) al cierre sin movimiento bancario: revisa si están duplicados ({conc.sinLinea.slice(0, 3).map((r) => `${TIPO_REG[r.tipo] || r.tipo} ${fmt.date(r.fecha)} ${fmt.money(r.monto)}`).join("; ")}).</span>}
+      </div>
 
-      {vista === "cobros" && (<>
-      {items.length === 0 ? (
-        <div style={{ textAlign: "center", padding: "24px 0", color: C.inkFaint, fontSize: 13 }}>
-          Ningún abono calza con una factura pendiente ni con un vale vista por cobrar
-        </div>
-      ) : (
-        <>
-          {items.map((it, i) => {
-            const sel = elegido[i];
-            return (
-              <div key={i} style={{
-                background: sel ? C.okLight : C.card,
-                border: `1px solid ${sel ? C.ok : it.claro ? C.border : C.warn}`,
-                borderRadius: 10, padding: "10px 12px", marginBottom: 7,
-              }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
-                  <span style={{ fontSize: 12, color: C.inkMuted, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {fmt.date(it.mov.fecha)} · {it.mov.descripcion}
-                  </span>
-                  <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: 12.5, color:C.okText, flexShrink: 0 }}>
-                    {fmt.money(it.mov.abono)}
-                  </span>
-                </div>
+      {err && <div data-error style={{ background: C.dangerLight, color: C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 12.5, margin: "0 0 10px", fontWeight: 600 }}>{err}</div>}
 
-                {!it.claro && (
-                  <div style={{ fontSize: 12, color:C.warnText, fontWeight: 700, margin: "5px 0 3px" }}>
-                    <Ic n="⚠"/> {it.opciones.length > 1 ? `${it.opciones.length} posibilidades — elige cuál corresponde` : "Revisa antes de registrar"}
-                  </div>
-                )}
-
-                <select data-abono={i} value={sel || ""} onChange={e => setElegido(m => ({ ...m, [i]: e.target.value }))}
-                  style={{ width: "100%", marginTop: 6, padding: "7px 9px", borderRadius: 8, fontSize: 12,
-                    border: `1px solid ${C.border}`, background: C.card, color: C.ink, fontFamily: SANS }}>
-                  <option value="">— No registrar este abono —</option>
-                  {it.opciones.map(o => (
-                    <option key={o.id} value={o.id}>
-                      {({ exacto: "Factura", varias: "Varias facturas", parcial: "Abono parcial", vale_vista: "Vale vista" })[o.tipo]} · {o.etiqueta}
-                    </option>
-                  ))}
-                </select>
-                {(() => {
-                  const op = it.opciones.find(o => o.id === sel);
-                  if (!op || op.tipo === "exacto") return null;
-                  return (
-                    <div data-detalle-abono={op.tipo} style={{ fontSize: 12, color: C.inkMuted, marginTop: 6, lineHeight: 1.5 }}>
-                      {op.tipo === "vale_vista"
-                        ? <>Se marcará como cobrado en el banco (no se registra un cobro nuevo: ya estaba registrado).</>
-                        : op.asignaciones.map(a => (
-                            <div key={a.ocId}>{a.numeroOc}: <b style={{ color: C.ink }}>{fmt.money(a.monto)}</b>{a.parcial ? <> de {fmt.money(a.saldoAntes)} · queda {fmt.money(a.saldoAntes - a.monto)}</> : " (completa)"}</div>
-                          ))}
-                    </div>
-                  );
-                })()}
-              </div>
-            );
-          })}
-
-          {err && <div style={{ background: C.dangerLight, color:C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 12.5, margin: "10px 0", fontWeight: 600 }}>{err}</div>}
-
-          <button onClick={registrar} disabled={guardando || !nSel} style={{ ...btnP(guardando || !nSel ? C.inkFaint : C.ok), marginTop: 8 }}>
-            {guardando ? "Registrando…" : `✓ Registrar ${nSel} cobro${nSel !== 1 ? "s" : ""} · ${fmt.money(totalSel)}`}
-          </button>
-        </>
-      )}
-      </>)}
-
-      {vista === "egresos" && (
-        egresos.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "24px 0", color: C.inkFaint, fontSize: 13 }}>
-            No hay cargos en estas cartolas
-          </div>
-        ) : (
-          <>
-            {egresos.filter(e => e.antiguo).length > 0 && (
-              <div style={{ background: C.warnLight, border: `1px solid ${C.warn}`, borderRadius: 9, padding: "10px 12px", marginBottom: 10, fontSize: 12, color:C.warnText, fontWeight: 600, lineHeight: 1.45 }}>
-                {egresos.filter(e => e.antiguo).length} movimiento(s) anteriores al {fmt.date(CORTE_EGRESOS)} vienen desmarcados.
-                Los saldos de los financistas ya los incluyen — cargarlos los descuadraría.
-              </div>
-            )}
-            {egresos.filter(e => e.duplicado).length > 0 && (
-              <div style={{ background: C.infoLight, borderRadius: 9, padding: "9px 12px", marginBottom: 10, fontSize: 12, color: C.info, fontWeight: 600 }}>
-                {egresos.filter(e => e.duplicado).length} movimiento(s) ya estaban registrados — vienen desmarcados
-              </div>
-            )}
-            <div style={{ fontSize: 12, color: C.inkFaint, marginBottom: 10, lineHeight: 1.5 }}>
-              Plata que salió de la cuenta. Las devoluciones a financistas se reparten
-              entre sus OCs pendientes; el resto queda como gasto.
+      {/* Movimientos */}
+      {lista.length === 0 && <div style={{ textAlign: "center", padding: "20px 0", color: C.inkFaint, fontSize: 13 }}>Sin movimientos con este filtro</div>}
+      {lista.map((x) => {
+        const m = x.m, t = TONO[x.estado], esAbierto = abierto === m.clave;
+        return (
+          <div key={m.clave + "|" + x.i} data-mov={m.clave} data-estado={x.estado} style={{ background: C.card, border: `1px solid ${esAbierto ? C.tealDark : C.border}`, borderLeft: `4px solid ${t.borde}`, borderRadius: 10, padding: "9px 12px", marginBottom: 6 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+              <span style={{ fontSize: 12, color: C.inkMuted, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {fmt.date(m.fecha)}{m.operacion ? ` · op. ${m.operacion}` : ""} · {m.descripcion}
+              </span>
+              <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: 12.5, color: x.dir === "entra" ? C.okText : C.dangerText, flexShrink: 0 }}>
+                {x.dir === "entra" ? "+" : "−"}{fmt.money(x.monto)}
+              </span>
             </div>
-
-            {egresos.map((e, i) => (
-              <div key={i} style={{
-                background: e.incluir ? C.card : C.paper,
-                border: `1px solid ${e.incluir ? (e.seguro ? C.border : C.warn) : C.border}`,
-                borderRadius: 10, padding: "10px 12px", marginBottom: 7, opacity: e.incluir ? 1 : 0.6,
-              }}>
-                <label style={{ display: "flex", alignItems: "flex-start", gap: 8, cursor: "pointer" }}>
-                  <input type="checkbox" checked={e.incluir} style={{ marginTop: 3 }}
-                    onChange={ev => setEgresos(l => l.map((x, ix) => ix === i ? { ...x, incluir: ev.target.checked } : x))} />
-                  <span style={{ flex: 1, minWidth: 0 }}>
-                    <span style={{ display: "block", fontSize: 12, color: C.inkMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {fmt.date(e.mov.fecha)} · {e.mov.descripcion}
-                    </span>
-                    {e.antiguo ? (
-                      <span style={{ display: "block", fontSize: 12, color: C.inkFaint, fontWeight: 600, marginTop: 2 }}>
-                        Anterior al {fmt.date(CORTE_EGRESOS)} — ya está en los saldos históricos
-                      </span>
-                    ) : e.duplicado ? (
-                      <span style={{ display: "block", fontSize: 12, color: C.info, fontWeight: 700, marginTop: 2 }}>
-                        {e.duplicado.agrupado
-                          ? "Ya registrado (repartido entre varias OCs) — no se volverá a cargar"
-                          : `Ya registrado el ${fmt.date(String(e.duplicado.fecha).slice(0, 10))} — no se volverá a cargar`}
-                      </span>
-                    ) : !e.seguro && (
-                      <span style={{ display: "block", fontSize: 12, color:C.warnText, fontWeight: 700, marginTop: 2 }}>
-                        <Ic n="⚠"/> No se pudo identificar — revisa el destino
-                      </span>
-                    )}
-                  </span>
-                  <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: 12.5, color:C.dangerText, flexShrink: 0 }}>
-                    −{fmt.money(e.mov.cargo)}
-                  </span>
-                </label>
-
-                {e.incluir && (
-                  <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-                    <select value={e.tipo}
-                      onChange={ev => setEgresos(l => l.map((x, ix) => ix === i ? { ...x, tipo: ev.target.value, destinoId: "" } : x))}
-                      style={{ flex: 1, padding: "6px 8px", borderRadius: 8, fontSize: 12, border: `1px solid ${C.border}`, background: C.card, color: C.ink, fontFamily: SANS }}>
-                      <option value="financiador">Devolución a financista</option>
-                      <option value="vendedor">Pago a vendedor</option>
-                      <option value="gasto">Gasto</option>
-                    </select>
-
-                    {e.tipo === "gasto" ? (
-                      <select value={e.categoriaId || "cat_otros"}
-                        onChange={ev => setEgresos(l => l.map((x, ix) => ix === i ? { ...x, categoriaId: ev.target.value } : x))}
-                        style={{ flex: 1, padding: "6px 8px", borderRadius: 8, fontSize: 12, border: `1px solid ${C.border}`, background: C.card, color: C.ink, fontFamily: SANS }}>
-                        {(categorias || []).map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-                      </select>
-                    ) : (
-                      <select value={e.destinoId || ""}
-                        onChange={ev => setEgresos(l => l.map((x, ix) => ix === i ? { ...x, destinoId: ev.target.value } : x))}
-                        style={{ flex: 1, padding: "6px 8px", borderRadius: 8, fontSize: 12, border: `1px solid ${C.border}`, background: C.card, color: C.ink, fontFamily: SANS }}>
-                        <option value="">Elige…</option>
-                        {(e.tipo === "financiador" ? (financiadores || []).filter(x => x.tipo !== "propio") : (vendedores || []))
-                          .map(x => <option key={x.id} value={x.id}>{x.nombre}</option>)}
-                      </select>
-                    )}
-                  </div>
-                )}
-
-                {e.incluir && e.tipo === "vendedor" && e.destinoId && (() => {
-                  const set = (patch) => setEgresos(l => l.map((x, ix) => ix === i ? { ...x, ...patch } : x));
-                  const MESES_C = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
-                  return (
-                    <div style={{ marginTop: 8 }}>
-                      <div style={{ fontSize: 11, color: C.inkMuted, marginBottom: 4 }}>Comisión que se paga (mes de las ventas):</div>
-                      <div style={{ display: "flex", gap: 6 }}>
-                        <select value={e.mesCom} onChange={ev => set({ mesCom: Number(ev.target.value) })}
-                          style={{ flex: 1, padding: "6px 8px", borderRadius: 8, fontSize: 12, border: `1px solid ${C.border}`, background: C.card, color: C.ink, fontFamily: SANS }}>
-                          {MESES_C.map((n, k) => <option key={k} value={k + 1}>{n}</option>)}
-                        </select>
-                        <input type="number" value={e.anioCom} onChange={ev => set({ anioCom: Number(ev.target.value) })}
-                          style={{ width: 80, padding: "6px 8px", borderRadius: 8, fontSize: 12, border: `1px solid ${C.border}`, background: C.card, color: C.ink, fontFamily: MONO }} />
-                      </div>
-                      <div style={{ marginTop: 6, fontSize: 11.5, color: C.inkMuted }}>
-                        Las OC de ese mes se marcan como pagadas solo si los pagos acumulados cubren la comisión.
-                      </div>
-                    </div>
-                  );
-                })()}
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginTop: 3, fontSize: 11.5 }}>
+              <span style={{ color: t.texto, fontWeight: 700 }}>{ESTADOS[x.estado]}{x.evidencia.length ? ` · ${x.evidencia.join(", ")}` : ""}</span>
+              <span style={{ color: C.inkFaint, fontFamily: MONO, flexShrink: 0 }}>saldo {fmt.money(m.saldo)}</span>
+            </div>
+            {x.registros.length > 0 && (
+              <div style={{ fontSize: 11.5, color: C.inkMuted, marginTop: 3 }}>
+                {x.registros.slice(0, 4).map((r) => `${TIPO_REG[r.tipo] || r.tipo}${r.oc ? " " + r.oc : ""} ${fmt.date(r.fecha)} ${fmt.money(r.monto)}`).join(" · ")}{x.registros.length > 4 ? ` · y ${x.registros.length - 4} más` : ""}
               </div>
-            ))}
+            )}
+            {x.estado !== "conciliado" && x.nota && <div style={{ fontSize: 11.5, color: C.inkFaint, marginTop: 2 }}>{x.nota}</div>}
+            {x.anteriorCierre && x.estado === "pendiente" && <div style={{ fontSize: 11.5, color: C.inkFaint, marginTop: 2 }}>Anterior al cierre: queda visible como pendiente; no se registra desde la cartola.</div>}
+            {x.registrable && !esAbierto && (
+              <button data-preparar={m.clave} onClick={() => abrir(x)} style={{ ...btnG, width: "100%", marginTop: 7, fontSize: 12, padding: "7px" }}>Preparar registro…</button>
+            )}
+            {x.registrable && esAbierto && (
+              <PrepararRegistro x={x} ocs={ocs} financiadores={financiadores} vendedores={vendedores} categorias={categorias}
+                borrador={borrador} setBorrador={(p) => { setBorrador((b) => ({ ...b, ...p })); setConfirmo(false); }}
+                confirmo={confirmo} setConfirmo={setConfirmo} problema={problemaBorrador(x)} guardando={guardando}
+                onCancelar={cerrar} onRegistrar={() => registrar(x)} />
+            )}
+          </div>
+        );
+      })}
 
-            <button onClick={registrarEgresos} disabled={guardando}
-              style={{ ...btnP(guardando ? C.inkFaint : C.danger), marginTop: 8 }}>
-              {guardando ? "Registrando…" :
-                `✓ Registrar ${egresos.filter(e => e.incluir).length} egreso(s) · ${fmt.money(egresos.filter(e => e.incluir).reduce((s, e) => s + e.mov.cargo, 0))}`}
-            </button>
-          </>
-        )
+      {/* Totales del banco: también requieren confirmación (escriben banco_mensual y el registro de la cartola) */}
+      {movs.length > 0 && onRegistrar && (
+        <div style={{ background: C.paper, borderRadius: 10, padding: "10px 12px", marginTop: 12 }}>
+          <label style={{ display: "flex", gap: 8, fontSize: 12, color: C.inkMuted, alignItems: "flex-start", cursor: "pointer" }}>
+            <input data-confirmar-totales type="checkbox" checked={confirmaTotales} onChange={(e) => setConfirmaTotales(e.target.checked)} style={{ marginTop: 2 }} />
+            <span>Confirmo guardar los totales mensuales del banco de este período (no registra cobros, pagos ni gastos).</span>
+          </label>
+          <button data-guardar-totales disabled={guardando || !confirmaTotales} onClick={async () => {
+              setGuardando(true); setErr("");
+              try { await onRegistrar([], resumenCartola()); setConfirmaTotales(false); } catch (e) { setErr(e.message); } finally { setGuardando(false); }
+            }}
+            style={{ ...btnG, width: "100%", marginTop: 8, fontSize: 12, borderColor: C.info, color: C.info, opacity: confirmaTotales ? 1 : 0.5 }}>
+            Guardar solo los totales del banco
+          </button>
+        </div>
       )}
 
-      {err && <div style={{ background: C.dangerLight, color:C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 12.5, marginTop: 10, fontWeight: 600 }}>{err}</div>}
-
-      <button onClick={async () => {
-          setGuardando(true);
-          try { await onRegistrar([], resumenCartola()); }
-          catch (e) { setErr(e.message); }
-          finally { setGuardando(false); }
-        }}
-        disabled={guardando}
-        style={{ ...btnG, width: "100%", marginTop: 12, fontSize: 12, borderColor: C.info, color: C.info }}>
-        Guardar solo los totales del banco
+      <label style={{ ...btnG, display: "block", textAlign: "center", cursor: "pointer", marginTop: 12, fontSize: 12 }}>
+        {leyendo ? "Leyendo…" : "Agregar otra cartola"}
+        <input type="file" accept=".xlsx,.xls" multiple disabled={leyendo} onChange={e => procesar(Array.from(e.target.files || []))} style={{ display: "none" }} />
+      </label>
+      <button onClick={() => { setCartolas([]); cerrar(); setFiltro("todos"); setSentido("ambos"); setErr(""); }} style={{ ...btnG, width: "100%", marginTop: 8, fontSize: 12 }}>
+        Empezar de nuevo
       </button>
+    </div>
+  );
+}
 
-      <button onClick={() => { setMovs([]); setItems([]); setElegido({}); setEgresos([]); setVista("cobros"); setErr(""); }}
-        style={{ ...btnG, width: "100%", marginTop: 12, fontSize: 12 }}>
-        Subir otra cartola
-      </button>
+// Preparación del registro de UN movimiento pendiente posterior al cierre. Nada viene elegido por defecto.
+function PrepararRegistro({ x, ocs, financiadores, vendedores, categorias, borrador, setBorrador, confirmo, setConfirmo, problema, guardando, onCancelar, onRegistrar }) {
+  const m = x.m;
+  const opciones = x.dir === "entra" ? opcionesAbono(m, ocs) : [];
+  const sugerencia = x.dir === "sale" ? clasificarCargo(m, financiadores, vendedores) : null;
+  const am = anioMesDe(m.fecha);
+  const resumen = (() => {
+    if (problema) return null;
+    if (x.dir === "entra") { const op = opciones.find((o) => o.id === borrador.opcionId); return op ? `Cobro de ${fmt.money(m.abono)} · ${op.etiqueta}` : null; }
+    const nombre = (l, id) => (l || []).find((y) => y.id === id)?.nombre || id;
+    if (borrador.tipo === "financiador") return `Devolución a ${nombre(financiadores, borrador.destinoId)} por ${fmt.money(m.cargo)} (se reparte por FIFO entre sus OC pendientes)`;
+    if (borrador.tipo === "vendedor") return `Pago a ${nombre(vendedores, borrador.destinoId)} por ${fmt.money(m.cargo)} · comisión de ${MESES[Number(borrador.mesCom) - 1]} ${borrador.anioCom} (el excedente sobre la comisión pendiente queda como apoyo en gestión)`;
+    if (borrador.tipo === "gasto") return `Gasto «${nombre(categorias, borrador.categoriaId)}» por ${fmt.money(m.cargo)}`;
+    if (borrador.tipo === "retiro") return `Retiro de capital de ${borrador.socio} por ${fmt.money(m.cargo)} (patrimonio, no es gasto)`;
+    return null;
+  })();
+  return (
+    <div data-preparacion style={{ marginTop: 8, borderTop: `1px solid ${C.border}`, paddingTop: 8 }}>
+      {x.dir === "entra" ? (
+        opciones.length === 0
+          ? <div style={{ fontSize: 12, color: C.warnText, fontWeight: 600 }}>No hay facturas pendientes compatibles (con factura anterior al abono). Queda pendiente: regístralo desde la OC cuando se identifique.</div>
+          : <select data-opcion-abono value={borrador.opcionId} onChange={(e) => setBorrador({ opcionId: e.target.value })} style={caja()}>
+              <option value="">— Elige a qué corresponde (nada viene elegido) —</option>
+              {opciones.map((o) => <option key={o.id} value={o.id}>{({ exacto: "Factura", varias: "Varias facturas", parcial: "Abono parcial", vale_vista: "Vale vista" })[o.tipo]} · {o.etiqueta}</option>)}
+            </select>
+      ) : (<>
+        {sugerencia && <div style={{ fontSize: 11.5, color: C.inkFaint, marginBottom: 5 }}>Sugerencia (no se aplica sola): {sugerencia.nombre}</div>}
+        <select data-tipo-egreso value={borrador.tipo} onChange={(e) => setBorrador({ tipo: e.target.value, destinoId: "", categoriaId: "", socio: "", mesCom: e.target.value === "vendedor" ? am.mes : "", anioCom: e.target.value === "vendedor" ? am.anio : "" })} style={caja()}>
+          <option value="">— Elige qué es este egreso —</option>
+          <option value="financiador">Devolución a financiador</option>
+          <option value="vendedor">Pago a vendedor (comisión)</option>
+          <option value="gasto">Gasto</option>
+          <option value="retiro">Retiro de capital de un socio (no es gasto)</option>
+        </select>
+        {(borrador.tipo === "financiador" || borrador.tipo === "vendedor") && (
+          <select data-destino value={borrador.destinoId} onChange={(e) => setBorrador({ destinoId: e.target.value })} style={caja({ marginTop: 6 })}>
+            <option value="">Elige…</option>
+            {(borrador.tipo === "financiador" ? (financiadores || []).filter((f) => f.tipo !== "propio") : (vendedores || [])).map((y) => <option key={y.id} value={y.id}>{y.nombre}</option>)}
+          </select>
+        )}
+        {borrador.tipo === "vendedor" && borrador.destinoId && (
+          <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+            <select data-mes-comision value={borrador.mesCom} onChange={(e) => setBorrador({ mesCom: Number(e.target.value) })} style={caja({ flex: 1 })}>
+              <option value="">Mes de las ventas…</option>
+              {MESES.map((n, k) => <option key={k} value={k + 1}>{n}</option>)}
+            </select>
+            <input data-anio-comision type="number" value={borrador.anioCom} onChange={(e) => setBorrador({ anioCom: Number(e.target.value) })} style={caja({ width: 84, fontFamily: MONO })} />
+          </div>
+        )}
+        {borrador.tipo === "gasto" && (
+          <select data-categoria value={borrador.categoriaId} onChange={(e) => setBorrador({ categoriaId: e.target.value })} style={caja({ marginTop: 6 })}>
+            <option value="">Categoría…</option>
+            {(categorias || []).map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+          </select>
+        )}
+        {borrador.tipo === "retiro" && (
+          <input data-socio list="socios-cartola" placeholder="Socio (ej.: Kevin Vergara)" value={borrador.socio} onChange={(e) => setBorrador({ socio: e.target.value })} style={caja({ marginTop: 6 })} />
+        )}
+        <datalist id="socios-cartola">{(financiadores || []).filter((f) => f.tipo !== "propio").map((f) => <option key={f.id} value={f.nombre} />)}</datalist>
+      </>)}
+      {resumen && (
+        <div data-confirmacion style={{ background: C.warnLight, border: `1px solid ${C.warn}`, borderRadius: 9, padding: "9px 11px", marginTop: 8, fontSize: 12, color: C.ink, lineHeight: 1.45 }}>
+          <div style={{ fontWeight: 700, marginBottom: 4 }}>Se registrará en BFK:</div>
+          <div>{resumen}</div>
+          <div style={{ color: C.inkMuted, marginTop: 3 }}>Fecha {fmt.date(m.fecha)}{m.operacion ? ` · operación ${m.operacion}` : ""} · movimiento bancario (no fuera del banco).</div>
+          <label style={{ display: "flex", gap: 8, marginTop: 7, alignItems: "flex-start", cursor: "pointer" }}>
+            <input data-confirmo type="checkbox" checked={confirmo} onChange={(e) => setConfirmo(e.target.checked)} style={{ marginTop: 2 }} />
+            <span>Confirmo que este movimiento no está registrado en BFK y quiero registrarlo.</span>
+          </label>
+        </div>
+      )}
+      <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+        <button onClick={onCancelar} disabled={guardando} style={{ ...btnG, flex: 1, fontSize: 12, padding: "8px" }}>Cancelar</button>
+        <button data-registrar disabled={guardando || !!problema || !confirmo} onClick={onRegistrar}
+          style={{ ...btnP(guardando || problema || !confirmo ? C.inkFaint : C.ok), flex: 2, fontSize: 12.5, padding: "8px" }}>
+          {guardando ? "Registrando…" : "Registrar este movimiento"}
+        </button>
+      </div>
     </div>
   );
 }

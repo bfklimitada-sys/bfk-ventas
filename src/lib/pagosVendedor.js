@@ -52,7 +52,7 @@ export const evaluarPagoVendedor = ({ vendedorId, mes, anio, monto, ocs, ivaMens
     total: r.total, pagoComision: r.comision, extraGestion: r.extra,
     pendiente: Math.max(0, comision - pagadoDespues),
     excedente: r.extra,
-    provisoria: !!calc && !calc.esVerificado && !calc.sinIva && !calc.ivaRegistrado,
+    provisoria: !!calc && !calc.esVerificado && !calc.sinIva && (!calc.ivaRegistrado || calc.f29Incompleto),
     ocIds: completo && r.total > 0 ? ocsPagablesDelMes(ocs, vendedorId, mes, anio).map((o) => o.id) : [],
   };
 };

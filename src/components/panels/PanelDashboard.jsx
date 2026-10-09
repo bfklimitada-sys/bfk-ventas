@@ -6,6 +6,7 @@ import { coincideBusqueda } from "../../lib/busqueda";
 import { resumenCaja } from "../../lib/caja";
 import { Seccion, Tarjeta, Badge, Monto } from "../ui/Sistema";
 import { FILTROS_PANEL, estaCerrada, filtrarPanel, utilidadPorMes, valeVistasPendientes } from "../../lib/ocs";
+import { InformeFinanciero } from "./InformeFinanciero";
 
 // Tarjeta base para los avisos ligados a Mercado Público: encabezado con
 // icono + botón de refresco, y cuerpo blanco para el contenido/lista.
@@ -55,7 +56,7 @@ function VerMasAvisoMP({n}){
   return <div style={{fontSize:12,color:C.inkFaint,marginTop:6,textAlign:"center"}}>y {n} más</div>;
 }
 
-export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, aportes: aportesLista, perfil, onExportarTodo, exportando, onNavigate, onAccion, onSincronizar, onCorregirFechas, sincronizando, porAceptar, onActualizarPorAceptar, verificandoPorAceptar, aceptadasSinCargar, onCargarOC, onCargarTodasAceptadas, cargandoAceptadas, onActualizarAceptadas, verificandoAceptadas, canceladasEnMP, onArchivarCancelada, onActualizarCanceladas, verificandoCanceladas, onValidarTodo, validandoTodo, usoMP, actMP, esCodigoMP, ultimaCartola, saldoBanco, bancoMensual, onEditarSaldo, onBuscarCompras }) {
+export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, aportes: aportesLista, ajustes = [], categorias = [], perfil, onExportarTodo, exportando, onNavigate, onAccion, onSincronizar, onCorregirFechas, sincronizando, porAceptar, onActualizarPorAceptar, verificandoPorAceptar, aceptadasSinCargar, onCargarOC, onCargarTodasAceptadas, cargandoAceptadas, onActualizarAceptadas, verificandoAceptadas, canceladasEnMP, onArchivarCancelada, onActualizarCanceladas, verificandoCanceladas, onValidarTodo, validandoTodo, usoMP, actMP, esCodigoMP, ultimaCartola, saldoBanco, bancoMensual, onEditarSaldo, onBuscarCompras }) {
   const [busq,setBusq]=useState("");
   const esAdmin=perfil?.rol==="admin";
   const [verMP,setVerMP]=useState(false);
@@ -273,11 +274,12 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
             <Fila dato="deuda_fin" signo="−" k="Deuda con financiadores" v={r.deudaFinanciadores} tono="#F87171"
               nota={r.porFinanciador.map(f=>`${f.nombre.split(" ")[0]} ${f.saldo<0?"a favor de BFK ":""}${fmt.money(Math.abs(f.saldo))}`).join(" · ")} onClick={()=>onNavigate&&onNavigate("financiamiento",null)} />
             <Fila dato="comisiones" signo="−" k="Comisiones por pagar" v={r.comisiones.total} tono="#F87171"
-              nota={r.comisiones.detalle.length?<>{r.comisiones.detalle.map(d=>`${d.vendedor.split(" ")[0]} ${MES[d.mes-1]}-${d.anio} ${fmt.money(d.deuda)}${d.provisoria?" (provisoria)":""}`).join(" · ")}{r.comisiones.provisorias>0&&<span style={{display:"block",color:"#FBBF24"}}>Provisorias {fmt.money(r.comisiones.provisorias)}: calculadas sin el IVA del mes (no registrado). No son definitivas.</span>}</>:"Ninguna pendiente"}
+              nota={r.comisiones.detalle.length?<>{r.comisiones.detalle.map(d=>`${d.vendedor.split(" ")[0]} ${MES[d.mes-1]}-${d.anio} ${fmt.money(d.deuda)}${d.provisoria?" (provisoria)":""}`).join(" · ")}{r.comisiones.provisorias>0&&<span style={{display:"block",color:"#FBBF24"}}>Provisorias {fmt.money(r.comisiones.provisorias)}: calculadas sin el IVA del mes o sin el total del F29 (PPM). No son definitivas.</span>}</>:"Ninguna pendiente"}
               onClick={()=>onNavigate&&onNavigate("vendedores",null)} />
-            <Fila dato="f29" signo="−" k="IVA / F29 pendiente" v={r.f29Pendiente} tono="#F87171"
+            <Fila dato="f29" signo="−" k="F29 pendiente (IVA + PPM)" v={r.f29Pendiente} tono="#F87171"
               nota={<>{r.f29.periodos.filter(x=>x.pend>0).map(x=>`${MES[x.mes-1]}-${x.anio} ${fmt.money(x.pend)}`).join(" · ")||"Sin saldo pendiente en los períodos registrados"}
-                {ivaPend&&<span data-iva-sin-registrar style={{display:"block",color:"#FBBF24"}}>Pendiente de registrar: {ivaPend}. Sin el F29 real no se estima ningún monto.</span>}</>} />
+                {ivaPend&&<span data-iva-sin-registrar style={{display:"block",color:"#FBBF24"}}>Pendiente de registrar: {ivaPend}. Sin el F29 real no se estima ningún monto.</span>}
+                {(r.f29.faltaTotal||[]).length>0&&<span data-f29-sin-total style={{display:"block",color:"#FBBF24"}}>Falta el total del F29 (IVA + PPM) de {r.f29.faltaTotal.map(p=>`${MES[p.mes-1]}-${p.anio}`).join(", ")}: el pendiente puede ser mayor.</span>}</>} />
             {r.fondosExternos>0&&<Fila dato="externos" signo="−" k="Fondos de ventas externas por liquidar" v={r.fondosExternos} tono="#F87171" nota="Dinero de ventas externas que entró a la cuenta: está en la caja, pero no es de BFK hasta liquidarlo" />}
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:8,paddingTop:10}}>
               <span>
@@ -514,8 +516,11 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
 
       </Seccion>
 
-      <Seccion titulo="Utilidad del mes">
-      {/* Utilidad: promedio histórico, mes pasado cerrado, y este mes en curso — un solo gráfico, sin vueltas */}
+      <InformeFinanciero ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores}
+        pagoFinSueltos={pagoFinSueltos} aportes={aportesLista} ajustes={ajustes} categorias={categorias} />
+
+      <Seccion titulo="Margen comercial del mes" nota="Venta − costo − postventa, por fecha de la OC. No descuenta comisiones ni gastos: ver «Resultado del mes» en el informe financiero.">
+      {/* Margen comercial: promedio histórico, mes pasado cerrado, y este mes en curso — un solo gráfico, sin vueltas */}
       {(()=>{
         const barras=[
           {label:"Promedio histórico",v:utilidad.historico.v,pct:utilidad.historico.pct},
