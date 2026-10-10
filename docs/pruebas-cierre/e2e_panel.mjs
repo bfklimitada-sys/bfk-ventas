@@ -18,7 +18,7 @@ const { page: p, errs } = await abrir(browser, b, { url: URL_APP, ancho: 1440, a
 const n0 = b.escr.length;
 await p.waitForSelector("[data-resumen-caja]", { timeout: 8000 }).catch(() => {});
 const lineas = await p.$$eval("[data-resumen-caja] [data-linea]", (xs) => xs.map((x) => x.getAttribute("data-linea")));
-ok("orden_de_conceptos", JSON.stringify(lineas) === JSON.stringify(["banco", "por_cobrar", "por_facturar", "vale_vista", "deuda_fin", "comisiones", "f29"]), lineas);
+ok("orden_de_conceptos", JSON.stringify(lineas) === JSON.stringify(["banco", "por_cobrar", "por_facturar", "vale_vista", "deuda_fin", "comisiones", "comisiones_por_liquidar", "comisiones_en_curso", "f29"]), lineas);
 const monto = async (k) => pesos(await p.locator(`[data-monto="${k}"]`).first().innerText());
 // Cuadratura 2026-10: la proyección parte del saldo bancario esperado (800.000), no de la caja registrada (230.000).
 ok("saldo_bancario_800000", (await monto("banco")) === 800000, await monto("banco"));
@@ -30,7 +30,7 @@ ok("conciliacion_diferencia_no_perdida", /Diferencia banco − caja registrada/.
 ok("conciliacion_mismo_universo", /1\.000\.000/.test(conc) && /800\.000/.test(conc) && /230\.000/.test(conc) && /570\.000/.test(conc), conc);
 ok("iva_pendiente_de_registrar_sin_monto", (await p.locator("[data-iva-sin-registrar]").count()) === 1 && /Sin el F29 real no se estima/.test(await p.locator("[data-iva-sin-registrar]").innerText()));
 ok("proyectado_marcado_provisorio", (await p.locator("[data-proyectado-provisorio]").count()) === 1);
-const proy = await monto("proyectado"), pc = await monto("por_cobrar"), pf = await monto("por_facturar"), com = await monto("comisiones"), f29 = await monto("f29");
+const proy = await monto("proyectado"), pc = await monto("por_cobrar"), pf = await monto("por_facturar"), com = (await monto("comisiones")) + (await monto("comisiones_por_liquidar")) + (await monto("comisiones_en_curso")), f29 = await monto("f29");
 ok("proyectado_cuadra", proy === 800000 + pc + pf + 500000 - 2500000 - com - f29, { proy, pc, pf, com, f29 });
 ok("panel_no_escribe", b.escr.slice(n0).filter((w) => !["mp_cache_avisos", "mp_uso_diario"].includes(w.tabla)).length === 0, b.escr.slice(n0));
 ok("sin_errores", errs.length === 0, errs);

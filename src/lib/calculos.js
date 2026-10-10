@@ -196,3 +196,24 @@ export const calcularPagoVendedor = ({ vendedorId, ocs, anio, mes, ivaMensual = 
     detalle: detalle.sort((a, b) => String(a.fechaFactura || "").localeCompare(String(b.fechaFactura || "")) || String(a.numero_oc).localeCompare(String(b.numero_oc))),
   };
 };
+
+// ── Estado de la comisión de un mes (regla única: Vendedores, Panel, informes y pagos; 09/10/2026) ──
+// Solo presentación: NO cambia el cálculo, los pagos ni las marcas de las OC.
+//  · pagada ........ la comisión pagada del mes cubre la comisión calculada (deuda $0).
+//  · en_curso ...... mes actual (o posterior): sigue acumulando ventas; no es deuda exigible.
+//  · por_liquidar .. mes cerrado con comisión provisoria: falta el IVA del mes o, desde agosto 2026, el total del
+//                    F29 (IVA + PPM). El monto puede cambiar; no es deuda exigible.
+//  · pendiente ..... comisión definitiva (IVA y F29 registrados, o monto verificado) aún no pagada: deuda exigible.
+export const ESTADOS_COMISION = { pagada: "Comisión pagada", en_curso: "En curso", por_liquidar: "Por liquidar (provisoria)", pendiente: "Pendiente de pago" };
+// Provisoria = el monto aún puede cambiar (misma regla en todas las pantallas).
+export const comisionProvisoria = (c) => !!c && !c.esVerificado && !c.sinIva && (!c.ivaRegistrado || !!c.f29Incompleto);
+// Mes actual o posterior según la fecha de hoy (hora local del navegador).
+export const esMesEnCurso = (anio, mes, hoy = new Date()) => Number(anio) * 12 + Number(mes) >= hoy.getFullYear() * 12 + hoy.getMonth() + 1;
+export const estadoComisionMes = (c, hoy = new Date()) => {
+  if (!c) return null;
+  if (!(c.deuda > 0)) return "pagada";
+  if (esMesEnCurso(c.anio, c.mes, hoy)) return "en_curso";
+  return comisionProvisoria(c) ? "por_liquidar" : "pendiente";
+};
+// Motivo legible de una comisión provisoria.
+export const motivoProvisoria = (c) => (!c?.ivaRegistrado ? "IVA sin registrar" : c?.f29Incompleto ? "falta el total del F29 (IVA + PPM)" : "");

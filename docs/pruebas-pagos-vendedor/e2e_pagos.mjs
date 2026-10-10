@@ -16,7 +16,9 @@ d.ordenes_compra_v2.push({ id: "ocm", numero_oc: "9001-1-AG26", cliente: "Munici
   fecha_emision_mp: "2026-08-01", creadoEn: "2026-08-01T10:00:00Z" });
 d.eventos_compra.push({ id: "evcm", oc_id: "ocm", fecha: "2026-08-02", costo_compra: 944266, financiador_id: "f1" });
 d.eventos_factura.push({ id: "fam", oc_id: "ocm", fecha: "2026-08-10", numero_factura: "9300", tipo_documento: "factura", monto: 2000000 });
-d.iva_mensual.push({ id: "iva8", anio: 2026, mes: 8, iva_ventas: 0, iva_compras: 0, iva_pagado: 0 });
+// IVA y total del F29 de agosto registrados ($1 cada uno): comisión DEFINITIVA, pagable desde la tarjeta (09/10/2026: una
+// comisión provisoria o del mes en curso ya no se paga desde ese botón). (1.055.734 − 1) / 2 = 527.866,5 → 527.867.
+d.iva_mensual.push({ id: "iva8", anio: 2026, mes: 8, iva_ventas: 1, iva_compras: 0, iva_pagado: 1 });
 const b = crearBase(d);
 // Llave primaria simulada: un segundo POST con el mismo id se rechaza como lo haría la base.
 const escribirOrig = b.escribir;

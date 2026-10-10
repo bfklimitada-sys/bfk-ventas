@@ -1,4 +1,4 @@
-import { anioMesDe, calcularPagoVendedor, facturaVigente, pagoVigente } from "./calculos.js";
+import { anioMesDe, calcularPagoVendedor, comisionProvisoria, esMesEnCurso, facturaVigente, pagoVigente } from "./calculos.js";
 
 // OC del vendedor con factura propia emitida, aún no marcadas como pagadas,
 // cuya factura vigente cae en el mes/año de la comisión.
@@ -36,7 +36,7 @@ export const repartirTransferencia = (monto, pendiente) => {
 //   pendiente = max(0, comisión calculada del período − comisión ya pagada del período)
 // Solo cuentan los pagos vigentes (no anulados) y solo su parte de comisión (monto_pagado).
 // Las OC del período se marcan como pagadas cuando la comisión pagada (incluido este pago) la cubre.
-export const evaluarPagoVendedor = ({ vendedorId, mes, anio, monto, ocs, ivaMensual, pagosVendedor }) => {
+export const evaluarPagoVendedor = ({ vendedorId, mes, anio, monto, ocs, ivaMensual, pagosVendedor, hoy = new Date() }) => {
   mes = Number(mes); anio = Number(anio);
   const calc = calcularPagoVendedor({ vendedorId, ocs: ocs || [], anio, mes, ivaMensual: ivaMensual || [], pagosVendedor: pagosVendedor || [] });
   const comision = calc ? Math.round(calc.pagoCalculado) : 0;
@@ -52,7 +52,9 @@ export const evaluarPagoVendedor = ({ vendedorId, mes, anio, monto, ocs, ivaMens
     total: r.total, pagoComision: r.comision, extraGestion: r.extra,
     pendiente: Math.max(0, comision - pagadoDespues),
     excedente: r.extra,
-    provisoria: !!calc && !calc.esVerificado && !calc.sinIva && (!calc.ivaRegistrado || calc.f29Incompleto),
+    provisoria: comisionProvisoria(calc),
+    enCurso: esMesEnCurso(anio, mes, hoy),
+    sinIvaRegistrado: !!calc && !calc.ivaRegistrado, f29Incompleto: !!calc?.f29Incompleto,
     ocIds: completo && r.total > 0 ? ocsPagablesDelMes(ocs, vendedorId, mes, anio).map((o) => o.id) : [],
   };
 };

@@ -1,4 +1,4 @@
-import { calcularPagoVendedor, extraGestion, pagoVigente, totalTransferido } from "./calculos.js";
+import { calcularPagoVendedor, comisionProvisoria, extraGestion, pagoVigente, totalTransferido } from "./calculos.js";
 import { utilidadPorMes } from "./ocs.js";
 import { movimientosCaja } from "./caja.js";
 import { aporteEnCaja, esCobroFueraDeBanco, esValeVistaPendiente, gastoEnCaja } from "./mediosPago.js";
@@ -67,7 +67,7 @@ export function resultadoMes({ ocs, gastos, pagosVendedor, ivaMensual, vendedore
     const c = calcularPagoVendedor({ vendedorId: v.id, ocs: activas, anio, mes, ivaMensual: ivaMensual || [], pagosVendedor: pagosVendedor || [] });
     if (!c) continue;
     comisiones += n(c.pagoCalculado);
-    if (!c.esVerificado && !c.sinIva && (!c.ivaRegistrado || c.f29Incompleto)) provisoria = true;
+    if (comisionProvisoria(c)) provisoria = true;
   }
   const delMes = (gastos || []).filter((g) => n(g.anio) === anio && n(g.mes) === mes);
   const apoyo = apoyoEnGestion({ gastos: delMes, pagosVendedor: (pagosVendedor || []).filter((p) => n(p.anio) === anio && n(p.mes) === mes) }).total;

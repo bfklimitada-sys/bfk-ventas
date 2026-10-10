@@ -5,7 +5,7 @@ import { C, MONO, btnG, btnP, fmt, iMono, iStyle, selStyle } from "../../lib/the
 import { Ic } from "../ui/Iconos";
 import { Seccion, Tarjeta, Badge, Monto, IndiceSecciones } from "../ui/Sistema";
 import { evaluarPagoVendedor, pagoParecido } from "../../lib/pagosVendedor";
-import { calcularPagoVendedor, mesesConFactura, registroIvaDe, ivaNetoPeriodo, ivaAPagarPeriodo, totalTransferido, extraGestion } from "../../lib/calculos";
+import { calcularPagoVendedor, mesesConFactura, registroIvaDe, ivaNetoPeriodo, ivaAPagarPeriodo, totalTransferido, extraGestion, comisionProvisoria, estadoComisionMes, motivoProvisoria, ESTADOS_COMISION } from "../../lib/calculos";
 import { estaFacturada, filtrarPanel } from "../../lib/ocs";
 import { FormIvaMensual } from "../forms/FormIvaMensual";
 import { periodosIvaIncompletos } from "../../lib/ivaUnificado";
@@ -27,8 +27,15 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, gastos=[], pagosV
   const MESES=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 
   // La regla de comisión vive en lib/calculos.js (una sola para toda la app).
-  const datosVendedor=(v)=>mesesConFactura(v.id,ocs).map(({anio,mes})=>
-    calcularPagoVendedor({vendedorId:v.id,ocs,anio,mes,ivaMensual,pagosVendedor}));
+  // Estado de cada mes (regla única, lib/calculos.js): solo «pendiente» es deuda exigible.
+  const datosVendedor=(v)=>mesesConFactura(v.id,ocs).map(({anio,mes})=>{
+    const c=calcularPagoVendedor({vendedorId:v.id,ocs,anio,mes,ivaMensual,pagosVendedor});
+    return {...c,estadoComision:estadoComisionMes(c,hoy),provisoria:comisionProvisoria(c)};
+  });
+  // Por qué no se puede pagar todavía un mes no exigible (botón deshabilitado).
+  const motivoNoPagable=(d)=>d.estadoComision==="en_curso"
+    ?`Mes en curso: se paga después del cierre y de registrar el IVA y el F29 de ${d.label}.`
+    :`Comisión provisoria (${motivoProvisoria(d)}): se podrá pagar al registrar el IVA y el total del F29 de ${d.label}.`;
 
   const [verHistorialIva,setVerHistorialIva]=useState(false);
   const ivaOrdenado=useMemo(()=>ivaMensual.slice().sort((a,b)=>`${b.anio}-${String(b.mes).padStart(2,"0")}`.localeCompare(`${a.anio}-${String(a.mes).padStart(2,"0")}`)),[ivaMensual]);
@@ -51,9 +58,11 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, gastos=[], pagosV
       {vendedores.map(v=>{
         const datos=datosVendedor(v);
         const ultimoPagado=datos.find(d=>d.estado==="pagado");
-        const deudaTotal=datos.reduce((s,d)=>s+d.deuda,0);
+        const suma=(e)=>datos.filter(d=>d.estadoComision===e).reduce((s,d)=>s+d.deuda,0);
+        const deudaTotal=suma("pendiente");          // «Falta pagarle»: solo comisiones definitivas impagas
+        const porLiquidar=suma("por_liquidar"), enCurso=suma("en_curso");
         const meses=datos.filter(d=>(d.pagoCalculado||0)>0||d.pagado>0).length;
-        const mesesPend=datos.filter(d=>d.deuda>0).length;
+        const mesesPend=datos.filter(d=>d.estadoComision==="pendiente").length;
         const estaAbierto=abierto===v.id;
         return (
           <Tarjeta key={v.id} padding="0" style={{overflow:"hidden",marginBottom:8}}>
@@ -64,25 +73,30 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, gastos=[], pagosV
                 <div style={{fontWeight:800,fontSize:15,color:C.ink,lineHeight:1.25}}>{v.nombre}</div>
                 <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:6}}>
                   {deudaTotal>0
-                    ? <Badge tono="warn">{mesesPend} mes{mesesPend!==1?"es":""} pendiente{mesesPend!==1?"s":""}</Badge>
+                    ? <Badge tono="warn">{mesesPend} mes{mesesPend!==1?"es":""} pendiente{mesesPend!==1?"s":""} de pago</Badge>
                     : meses>0
                       ? <Badge tono="ok">✓ Al día{ultimoPagado?` · último pago ${ultimoPagado.label}`:""}</Badge>
                       : <Badge tono="neutro">Sin ventas registradas</Badge>}
+                  {porLiquidar>0&&<span data-vendedor-por-liquidar={v.id}><Badge tono="warn">Por liquidar (provisoria) {fmt.money(porLiquidar)}</Badge></span>}
+                  {enCurso>0&&<span data-vendedor-en-curso={v.id}><Badge tono="neutro">En curso {fmt.money(enCurso)}</Badge></span>}
                   {meses>0&&<Badge tono="neutro">{meses} mes{meses>1?"es":""} con ventas</Badge>}
                 </div>
               </div>
               <div style={{textAlign:"right",flexShrink:0}}>
-                {deudaTotal>0&&<><div style={{fontSize:12,color:C.inkMuted,marginBottom:2}}>Falta pagarle</div><Monto tam="md" tono="warn">{fmt.money(deudaTotal)}</Monto></>}
+                {deudaTotal>0&&<span data-vendedor-exigible={v.id}><div style={{fontSize:12,color:C.inkMuted,marginBottom:2}}>Falta pagarle</div><Monto tam="md" tono="warn">{fmt.money(deudaTotal)}</Monto></span>}
               </div>
               <Ic n={estaAbierto?"chevD":"chevR"}/>
             </button>
 
-            {deudaTotal>0&&(()=>{
-              const pend=datos.filter(d=>d.deuda>0); const d=pend[pend.length-1]; // el mes pendiente más antiguo
+            {datos.some(d=>d.deuda>0)&&(()=>{
+              // Mes más antiguo pendiente de pago; si no hay ninguno exigible, el más antiguo por liquidar o en curso (botón deshabilitado).
+              const pend=datos.filter(d=>d.estadoComision==="pendiente"), resto=datos.filter(d=>d.deuda>0&&d.estadoComision!=="pendiente");
+              const d=(pend.length?pend:resto)[(pend.length?pend:resto).length-1]; const pagable=d.estadoComision==="pendiente";
               return (
                 <div style={{padding:"0 14px 12px"}}>
-                  <button onClick={()=>{setPagoInicial({vendedorId:v.id,mes:d.mes,anio:d.anio,monto:Math.round(d.deuda)});setPagando(true);}}
-                    style={{...btnP(C.tealDark),minHeight:44,fontSize:14}}>Pagar {d.label} · {fmt.money(d.deuda)}</button>
+                  <button data-pagar-vendedor={v.id} disabled={!pagable} onClick={pagable?()=>{setPagoInicial({vendedorId:v.id,mes:d.mes,anio:d.anio,monto:Math.round(d.deuda)});setPagando(true);}:undefined}
+                    style={{...btnP(pagable?C.tealDark:C.inkFaint),minHeight:44,fontSize:14,cursor:pagable?"pointer":"not-allowed",opacity:pagable?1:0.75}}>Pagar {d.label} · {fmt.money(d.deuda)}{pagable?"":` · ${d.estadoComision==="en_curso"?"en curso":"por liquidar"}`}</button>
+                  {!pagable&&<div data-motivo-no-pagable={v.id} style={{fontSize:12,color:C.inkMuted,marginTop:4,lineHeight:1.4}}>{motivoNoPagable(d)}</div>}
                 </div>
               );
             })()}
@@ -96,9 +110,9 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, gastos=[], pagosV
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:3}}>
                       <span style={{fontSize:12.5,fontWeight:700,color:C.ink}}>{d.label}</span>
                       <span style={{display:"flex",gap:4,flexWrap:"wrap",justifyContent:"flex-end"}}>
-                        {/* Cierre financiero: sin IVA registrado del mes el cálculo no es definitivo */}
-                        {!d.esVerificado&&!d.sinIva&&!d.ivaRegistrado&&<span data-comision-provisoria><Badge tono="warn">Provisoria · IVA sin registrar</Badge></span>}
-                        <Badge tono={d.estado==="pagado"?"ok":"warn"}>{d.estado==="pagado"?"✓ Comisión pagada":"Comisión pendiente"}</Badge>
+                        {/* Cierre financiero: sin IVA o sin total del F29 el cálculo no es definitivo (misma regla que el Panel) */}
+                        {d.provisoria&&d.estadoComision!=="en_curso"&&<span data-comision-provisoria><Badge tono="warn">Provisoria · {motivoProvisoria(d)}</Badge></span>}
+                        <span data-estado-comision={d.estadoComision}><Badge tono={d.estadoComision==="pagada"?"ok":d.estadoComision==="pendiente"?"warn":"neutro"}>{d.estadoComision==="pagada"?"✓ ":""}{ESTADOS_COMISION[d.estadoComision]}</Badge></span>
                       </span>
                     </div>
                     <div style={{fontSize:12,color:C.inkFaint,marginBottom:5,lineHeight:1.7}}>
@@ -152,7 +166,9 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, gastos=[], pagosV
                     </>); })()}
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
                       <span style={{fontSize:12,color:C.inkMuted}}>Comisión pagada: {fmt.money(d.pagado)}</span>
-                      {d.deuda>0&&<span style={{fontSize:12,fontWeight:700,color:C.dangerText}}>Falta pagarle: {fmt.money(d.deuda)}</span>}
+                      {d.deuda>0&&(d.estadoComision==="pendiente"
+                        ?<span style={{fontSize:12,fontWeight:700,color:C.dangerText}}>Falta pagarle: {fmt.money(d.deuda)}</span>
+                        :<span style={{fontSize:12,fontWeight:700,color:C.warnText}}>{d.estadoComision==="en_curso"?"En curso (acumulado)":"Por liquidar"}: {fmt.money(d.deuda)}</span>)}
                     </div>
                     {d.extraGestion>0&&<div data-extra-gestion style={{fontSize:12,color:C.inkMuted}}>Extra por gestión (aparte de la comisión): <b style={{color:C.ink}}>{fmt.money(d.extraGestion)}</b> · total transferido {fmt.money(d.transferido)}</div>}
                     {d.porRegularizar>0&&d.pagos.some(p=>p.monto_transferido!=null)&&(
@@ -174,10 +190,13 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, gastos=[], pagosV
                         ))}
                       </div>
                     )}
-                    {d.deuda>0&&(
-                      <button onClick={()=>{setPagoInicial({vendedorId:v.id,mes:d.mes,anio:d.anio,monto:Math.round(d.deuda)});setPagando(true);}}
-                        style={{...btnG,minHeight:40,fontSize:12.5,marginTop:6,padding:"6px 12px"}}>Pagar este mes · {fmt.money(d.deuda)}{!d.esVerificado&&!d.sinIva&&!d.ivaRegistrado?" (provisorio)":""}</button>
-                    )}
+                    {d.deuda>0&&(d.estadoComision==="pendiente"
+                      ?<button data-pagar-mes={`${v.id}|${d.anio}|${d.mes}`} onClick={()=>{setPagoInicial({vendedorId:v.id,mes:d.mes,anio:d.anio,monto:Math.round(d.deuda)});setPagando(true);}}
+                        style={{...btnG,minHeight:40,fontSize:12.5,marginTop:6,padding:"6px 12px"}}>Pagar este mes · {fmt.money(d.deuda)}</button>
+                      :<div>
+                        <button data-pagar-mes={`${v.id}|${d.anio}|${d.mes}`} disabled style={{...btnG,minHeight:40,fontSize:12.5,marginTop:6,padding:"6px 12px",cursor:"not-allowed",opacity:0.6}}>Pagar este mes · {d.estadoComision==="en_curso"?"en curso":"por liquidar"}</button>
+                        <div style={{fontSize:12,color:C.inkMuted,marginTop:3,lineHeight:1.4}}>{motivoNoPagable(d)}</div>
+                      </div>)}
                     {!d.esVerificado&&d.pagado>d.pagoCalculado+1000&&!d.pagos.some(p=>p.monto_transferido!=null)&&(
                       <div style={{fontSize:12,color:C.warnText,marginTop:3,lineHeight:1.4}}>
                         <Ic n="⚠"/> Se pagó {fmt.money(d.pagado-d.pagoCalculado)} más de lo que calcula la fórmula automática — probablemente venta propia o extra no marcado en el sistema. Revisa la nota del pago para el detalle.
@@ -300,7 +319,8 @@ export function FormPagoVendedorSimple({ vendedores, ocs, ivaMensual, pagosVende
         <Linea k={`Comisión calculada · ${labelMes}`} v={ev.comision} dato="comision" />
         <Linea k="Comisión ya pagada" v={ev.pagadoAntes} dato="pagada" />
         <Linea k="Saldo pendiente" v={ev.pendienteAntes} fuerte dato="pendiente" />
-        {ev.provisoria&&<div data-aviso-provisoria style={{color:C.warnText,fontWeight:700,marginTop:4}}><Ic n="⚠"/> Comisión provisoria: el IVA de {labelMes} no está registrado. Puede cambiar al registrarlo; si baja, la diferencia quedará como saldo por regularizar (el pago no se reclasifica solo).</div>}
+        {ev.enCurso&&<div data-aviso-en-curso style={{color:C.warnText,fontWeight:700,marginTop:4}}><Ic n="⚠"/> {labelMes} es el mes en curso: su comisión todavía no es exigible y seguirá cambiando con las ventas del mes.</div>}
+        {ev.provisoria&&<div data-aviso-provisoria style={{color:C.warnText,fontWeight:700,marginTop:4}}><Ic n="⚠"/> Comisión provisoria: {ev.sinIvaRegistrado?`el IVA de ${labelMes} no está registrado`:`falta el total del F29 (IVA + PPM) de ${labelMes}`}. Puede cambiar al registrarlo; si baja, la diferencia quedará como saldo por regularizar (el pago no se reclasifica solo).</div>}
       </div>
       <Field label="Monto total transferido ($)" required hint="Lo que salió realmente de la cuenta. Puede ser menor, igual o mayor que el saldo pendiente.">
         <input data-monto-transferido style={iMono} type="number" inputMode="numeric" min="0" value={monto} disabled={revisar} onChange={e=>setMonto(e.target.value)} />
@@ -324,7 +344,7 @@ export function FormPagoVendedorSimple({ vendedores, ocs, ivaMensual, pagosVende
             Total transferido <b style={{color:C.ink}}>{fmt.money(ev.total)}</b> = comisión <b style={{color:C.ink}}>{fmt.money(ev.pagoComision)}</b> + extra por gestión <b style={{color:C.ink}}>{fmt.money(ev.extraGestion)}</b><br/>
             Comisión de {labelMes}: pendiente {fmt.money(ev.pendienteAntes)} → {fmt.money(ev.pendiente)}{ev.completo&&ev.ocIds.length?` · ${ev.ocIds.length} OC quedan con comisión pagada`:""}
           </div>
-          {ev.provisoria&&<div style={{fontSize:12,color:C.warnText,fontWeight:700,marginBottom:8}}><Ic n="⚠"/> Pago sobre una comisión PROVISORIA (IVA sin registrar): podría cambiar cuando se registre el IVA.</div>}
+          {(ev.provisoria||ev.enCurso)&&<div style={{fontSize:12,color:C.warnText,fontWeight:700,marginBottom:8}}><Ic n="⚠"/> Pago sobre una comisión {ev.enCurso?"del MES EN CURSO":"PROVISORIA"} ({ev.enCurso?"aún no exigible":ev.sinIvaRegistrado?"IVA sin registrar":"falta el total del F29"}): podría cambiar cuando se registre el IVA y el F29.</div>}
           {parecido&&<div data-aviso-duplicado style={{fontSize:12,color:C.dangerText,fontWeight:700,marginBottom:8}}><Ic n="⚠"/> Ya hay un pago de {fmt.money(totalTransferido(parecido))} a {vend?.nombre} para {labelMes} con esta misma fecha. Confirma solo si es una transferencia distinta.</div>}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
             <button onClick={()=>setRevisar(false)} disabled={saving} style={btnG}>Corregir</button>

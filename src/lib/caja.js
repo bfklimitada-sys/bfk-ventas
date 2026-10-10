@@ -17,7 +17,7 @@
 // Compromisos: todos los pendientes, sin importar el mes en que nacieron. Lo que depende de un IVA
 // todavía no registrado (F29 y comisiones de esos meses) se marca como PROVISORIO, nunca como definitivo.
 // ═══════════════════════════════════════════════════════════════
-import { calcularPagoVendedor, facturasVigentes, mesesConFactura, pagoVigente, registroIvaDe, totalTransferido, extraGestion } from "./calculos.js";
+import { calcularPagoVendedor, estadoComisionMes, facturasVigentes, mesesConFactura, pagoVigente, registroIvaDe, totalTransferido, extraGestion } from "./calculos.js";
 import { F29_DESDE, calcularF29 } from "./f29.js";
 import { ingresoPendienteOC, valeVistasPendientes } from "./ocs.js";
 import { aporteEnCaja, cobroEnCaja, gastoEnCaja } from "./mediosPago.js";
@@ -62,20 +62,26 @@ export function conciliacionBancaria(movs, saldoBanco) {
   return { caja, hayCorte: true, corte, saldoBancoCorte, movPosteriores, nPosteriores: posteriores.length, esperado, pendienteConciliacion: caja - esperado, sinFecha };
 }
 
-// Comisiones por pagar de TODOS los meses (no solo el actual). Provisorias: las de meses sin IVA registrado.
-export function comisionesPorPagar({ vendedores, ocs, ivaMensual, pagosVendedor }) {
+// Comisiones impagas de TODOS los meses (no solo el actual), separadas por estado (regla única en calculos.js):
+//  · exigible (pendiente de pago) ... comisión definitiva aún no pagada: es la única deuda exigible con el vendedor.
+//  · porLiquidar .................... mes cerrado con comisión provisoria (falta IVA o total del F29).
+//  · enCurso ........................ mes actual: sigue acumulando ventas.
+// total = exigible + porLiquidar + enCurso (el saldo proyectado descuenta las tres, igual que antes).
+// definitivas = exigible; provisorias = porLiquidar + enCurso (no son definitivas).
+export function comisionesPorPagar({ vendedores, ocs, ivaMensual, pagosVendedor, hoy = new Date() }) {
   const detalle = [];
   for (const v of vendedores || []) {
     for (const { anio, mes } of mesesConFactura(v.id, ocs || [])) {
       const r = calcularPagoVendedor({ vendedorId: v.id, ocs, anio, mes, ivaMensual, pagosVendedor });
       if (!r || !(r.deuda > 0)) continue;
-      const provisoria = !r.esVerificado && !r.sinIva && (!r.ivaRegistrado || r.f29Incompleto);
-      detalle.push({ vendedorId: v.id, vendedor: v.nombre, anio, mes, deuda: r.deuda, provisoria });
+      const estado = estadoComisionMes(r, hoy);
+      detalle.push({ vendedorId: v.id, vendedor: v.nombre, anio, mes, deuda: r.deuda, estado, provisoria: estado !== "pendiente" });
     }
   }
-  const total = detalle.reduce((s, d) => s + d.deuda, 0);
-  const provisorias = detalle.filter((d) => d.provisoria).reduce((s, d) => s + d.deuda, 0);
-  return { total, definitivas: total - provisorias, provisorias, detalle };
+  const suma = (e) => detalle.filter((d) => d.estado === e).reduce((s, d) => s + d.deuda, 0);
+  const exigible = suma("pendiente"), porLiquidar = suma("por_liquidar"), enCurso = suma("en_curso");
+  const total = exigible + porLiquidar + enCurso;
+  return { total, exigible, porLiquidar, enCurso, definitivas: exigible, provisorias: porLiquidar + enCurso, detalle };
 }
 
 // Períodos F29 (desde F29_DESDE hasta el mes actual) con ventas o compras y SIN IVA registrado.
@@ -115,7 +121,7 @@ export function resumenCaja({ ocs, financiadores, gastos, pagosVendedor, ivaMens
   }
   const porFinanciador = (financiadores || []).filter((f) => f.tipo !== "propio" && n(f.saldo_deuda) !== 0).map((f) => ({ id: f.id, nombre: f.nombre, saldo: n(f.saldo_deuda) }));
   const deudaFinanciadores = porFinanciador.reduce((s, f) => s + f.saldo, 0);
-  const comisiones = comisionesPorPagar({ vendedores, ocs: activas, ivaMensual, pagosVendedor });
+  const comisiones = comisionesPorPagar({ vendedores, ocs: activas, ivaMensual, pagosVendedor, hoy });
   const f29 = calcularF29({ ivaMensual, gastos, anioActual, mesActual });
   const ivaSinRegistrar = periodosIvaSinRegistrar({ ocs: activas, ivaMensual, anioActual, mesActual });
   // Dinero de ventas externas que entró a la cuenta y aún no se liquida a quien corresponde.

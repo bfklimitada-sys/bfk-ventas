@@ -274,9 +274,17 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
             <Fila dato="vale_vista" signo="+" k="Vale vista / cheques pendientes" v={r.valeVista} tono="#FBBF24" nota={r.nValeVista?`${r.nValeVista} documento${r.nValeVista>1?"s":""} entregado${r.nValeVista>1?"s":""} y aún sin depositar en el banco`:"Ninguno pendiente"} onClick={r.nValeVista?()=>onNavigate&&onNavigate("compras","vale_vista"):undefined} />
             <Fila dato="deuda_fin" signo="−" k="Deuda con financiadores" v={r.deudaFinanciadores} tono="#F87171"
               nota={r.porFinanciador.map(f=>`${f.nombre.split(" ")[0]} ${f.saldo<0?"a favor de BFK ":""}${fmt.money(Math.abs(f.saldo))}`).join(" · ")} onClick={()=>onNavigate&&onNavigate("financiamiento",null)} />
-            <Fila dato="comisiones" signo="−" k="Comisiones por pagar" v={r.comisiones.total} tono="#F87171"
-              nota={r.comisiones.detalle.length?<>{r.comisiones.detalle.map(d=>`${d.vendedor.split(" ")[0]} ${MES[d.mes-1]}-${d.anio} ${fmt.money(d.deuda)}${d.provisoria?" (provisoria)":""}`).join(" · ")}{r.comisiones.provisorias>0&&<span style={{display:"block",color:"#FBBF24"}}>Provisorias {fmt.money(r.comisiones.provisorias)}: calculadas sin el IVA del mes o sin el total del F29 (PPM). No son definitivas.</span>}</>:"Ninguna pendiente"}
-              onClick={()=>onNavigate&&onNavigate("vendedores",null)} />
+            {/* Comisiones en tres estados (regla única, lib/calculos.js). Solo la primera es deuda exigible; las tres se descuentan
+                de la proyección, igual que antes (el total no cambia). */}
+            {(()=>{ const det=(e)=>r.comisiones.detalle.filter(d=>d.estado===e).map(d=>`${d.vendedor.split(" ")[0]} ${MES[d.mes-1]}-${d.anio} ${fmt.money(d.deuda)}`).join(" · ");
+              return (<>
+                <Fila dato="comisiones" signo="−" k="Comisiones pendientes de pago" v={r.comisiones.exigible} tono="#F87171"
+                  nota={det("pendiente")||"Ninguna exigible: comisiones definitivas al día"} onClick={()=>onNavigate&&onNavigate("vendedores",null)} />
+                <Fila dato="comisiones_por_liquidar" signo="−" k="Comisiones por liquidar (provisorias)" v={r.comisiones.porLiquidar} tono="#FBBF24"
+                  nota={r.comisiones.porLiquidar>0?<>{det("por_liquidar")}<span style={{display:"block",color:"#FBBF24"}}>Meses cerrados sin el IVA o sin el total del F29 (IVA + PPM): el monto puede cambiar. No es deuda exigible.</span></>:"Ninguna"} onClick={()=>onNavigate&&onNavigate("vendedores",null)} />
+                <Fila dato="comisiones_en_curso" signo="−" k="Comisiones del mes en curso" v={r.comisiones.enCurso} tono="#FBBF24"
+                  nota={r.comisiones.enCurso>0?<>{det("en_curso")}<span style={{display:"block",color:"#94A3B8"}}>Acumulado del mes actual: no es deuda exigible.</span></>:"Ninguna"} onClick={()=>onNavigate&&onNavigate("vendedores",null)} />
+              </>); })()}
             <Fila dato="f29" signo="−" k="F29 pendiente (IVA + PPM)" v={r.f29Pendiente} tono="#F87171"
               nota={<>{r.f29.periodos.filter(x=>x.pend>0).map(x=>`${MES[x.mes-1]}-${x.anio} ${fmt.money(x.pend)}`).join(" · ")||"Sin saldo pendiente en los períodos registrados"}
                 {ivaPend&&<span data-iva-sin-registrar style={{display:"block",color:"#FBBF24"}}>Pendiente de registrar: {ivaPend}. Sin el F29 real no se estima ningún monto.</span>}
@@ -286,7 +294,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
               <span>
                 <span style={{display:"block",fontSize:13,color:"#E2E8F0",fontWeight:800,textTransform:"uppercase",letterSpacing:0.6}}>= Saldo proyectado</span>
                 <span data-proyectado-nota style={{display:"block",fontSize:11.5,color:"#94A3B8",marginTop:2}}>Proyección al cobrar y pagar todo lo pendiente: no es dinero disponible hoy</span>
-                {r.provisorio&&<span data-proyectado-provisorio style={{display:"block",fontSize:11.5,color:"#FBBF24",fontWeight:700,marginTop:2}}>PROVISORIO: falta registrar IVA/F29 de {ivaPend||"algún período"}{r.comisiones.provisorias>0?" y hay comisiones provisorias":""}</span>}
+                {r.provisorio&&<span data-proyectado-provisorio style={{display:"block",fontSize:11.5,color:"#FBBF24",fontWeight:700,marginTop:2}}>PROVISORIO: falta registrar IVA/F29 de {ivaPend||"algún período"}{r.comisiones.provisorias>0?" y hay comisiones por liquidar o en curso":""}</span>}
               </span>
               <span data-monto="proyectado" style={{fontFamily:MONO,fontWeight:800,fontSize:28,color:r.saldoProyectado>=0?"#2DD4BF":"#F87171",letterSpacing:-1}}>{fmt.money(r.saldoProyectado)}</span>
             </div>
