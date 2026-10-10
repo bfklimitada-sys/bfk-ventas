@@ -91,6 +91,9 @@ async function rpcSimple(t, fn, body) {
   if (!r.ok) throw Object.assign(new Error(cuerpo?.message || `HTTP ${r.status}`), { rpcStatus: r.status, rpcCuerpo: cuerpo });
   return cuerpo;
 }
+// Registro desde la cartola (funciones de la base con la garantía atómica). El error conserva el código
+// (23505 = ya registrado; BFK01 = posible duplicado de un registro manual; PGRST202 = función aún no instalada).
+export const rpcCartola = (t, fn, body) => rpcSimple(t, fn, body);
 export const rpcArchivarOC = (t, ocId, motivo) => rpcSimple(t, "archivar_oc", { p_oc_id: ocId, p_motivo: motivo || null });
 export const rpcRestaurarOC = (t, ocId) => rpcSimple(t, "restaurar_oc", { p_oc_id: ocId });
 

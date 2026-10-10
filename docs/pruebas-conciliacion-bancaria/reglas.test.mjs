@@ -9,7 +9,7 @@ import { calcularPagoVendedor } from "../../src/lib/calculos.js";
 import { comisionesPorPagar, movimientosCaja, resumenCaja } from "../../src/lib/caja.js";
 import { repartirFIFO, ocsPendientesFinanciador } from "../../src/components/forms/FormAbonoFinanciador.jsx";
 import { cartolaEnLinea, cartolaHistorica, idaYVuelta } from "./cartolas_sinteticas.mjs";
-import { esConflictoDuplicado, idRegistroCartola, marcaMovimiento, verificarRegistro } from "../../src/lib/registroCartola.js";
+import { esConflictoDuplicado, esFuncionNoDisponible, esPosibleDuplicadoManual, idsDelMensaje, marcaCartola, registrosConAlerta, verificarRegistro } from "../../src/lib/registroCartola.js";
 
 let ok = 0, fallas = 0;
 const eq = (nombre, real, esperado) => {
@@ -180,26 +180,29 @@ const cSep = calcularPagoVendedor({ vendedorId: "v_luis", ocs: [ocCom], anio: 20
 eq("comisión de septiembre con IVA pero sin total F29 → provisoria", [cSep.f29Incompleto, comisionesPorPagar({ vendedores: datos.vendedores, ocs: [ocCom], ivaMensual: ivaM, pagosVendedor: [] }).detalle.map((d) => d.provisoria)], [true, [true]]);
 eq("misma comisión con el total del F29 registrado → definitiva", comisionesPorPagar({ vendedores: datos.vendedores, ocs: [ocCom], ivaMensual: [{ anio: 2026, mes: 9, iva_ventas: 100000, iva_compras: 40000, iva_pagado: 75000 }], pagosVendedor: [] }).detalle.map((d) => d.provisoria), [false]);
 
-// ════════════════ 7. Registro desde la cartola: protección contra duplicados (concurrencia) ════════════════
+// ════════════════ 7. Registro desde la cartola: marca del movimiento y respuestas de la base ════════════════
 const um = unirCartolas([cart]).movs;
 const iPago = um.findIndex((m) => m.fecha === "2026-10-12");
-eq("verificación con datos frescos: pendiente posterior al cierre → se puede registrar", verificarRegistro(um, iPago, datos).ok, true);
-const idA = idRegistroCartola("vendedor", um, iPago, []), idB = idRegistroCartola("vendedor", unirCartolas([cart, cart]).movs, iPago, []);
-eq("dos sesiones (o reimportación) calculan el MISMO id para el mismo movimiento", [idA, idA === idB], ["pv_cart_20261012_480000_0_" + um[iPago].saldo + "_1", true]);
-eq("tablas distintas → prefijos distintos (gasto, retiro, cobro)", ["gasto", "retiro", "cobro"].map((t) => idRegistroCartola(t, um, iPago, []).split("_cart_")[0]), ["gas", "ap", "evp"]);
+const marcaPago = marcaCartola(um, iPago);
+eq("marca del movimiento: cart:fecha:cargo:abono:saldo:ocurrencia", marcaPago, `cart:20261012:480000:0:${um[iPago].saldo}:1`);
+eq("reimportar (o la otra sesión) produce la MISMA marca", marcaCartola(unirCartolas([cart, cart]).movs, iPago), marcaPago);
+eq("verificación previa con datos frescos: pendiente posterior al cierre → se puede registrar", verificarRegistro(um, iPago, datos).ok, true);
 const vaivenes = unirCartolas([leer(cartolaHistorica([{ fecha: "2026-10-14", op: "", desc: "GIRO FICTICIO", cargo: 100 }, { fecha: "2026-10-14", op: "7000050", desc: "TEF DE FICTICIO", abono: 100 },
   { fecha: "2026-10-14", op: "", desc: "GIRO FICTICIO", cargo: 100 }], { saldoInicial: 1000 }))]).movs;
-eq("dos movimientos reales con la misma clave → marcas distintas (ocurrencia)", [vaivenes.length, vaivenes[0].clave === vaivenes[2].clave, marcaMovimiento(vaivenes, 0) !== marcaMovimiento(vaivenes, 2)], [3, true, true]);
-const frescoConPago = { ...datos, pagosVendedor: [{ id: idA, vendedor_id: "v_luis", anio: 2026, mes: 8, fecha: "2026-10-12", monto_pagado: 461250, monto_extra_gestion: 18750, monto_transferido: 480000 }] };
-eq("otra sesión ya lo registró (datos frescos) → bloqueado antes de escribir", [verificarRegistro(um, iPago, frescoConPago).ok, /otra sesión|ya tiene/.test(verificarRegistro(um, iPago, frescoConPago).motivo)], [false, true]);
-const frescoOtroTipo = { ...datos, gastos: [...datos.gastos, { id: idRegistroCartola("gasto", um, iPago, []), fecha: "2026-11-30", monto: 1, categoria_id: "cat_otros", anio: 2026, mes: 11, detalle: "registro de otra sesión" }] };
-eq("otra sesión lo registró como OTRO tipo (su marca está en otra tabla) → bloqueado", verificarRegistro(um, iPago, frescoOtroTipo).ok, false);
-const anulado = { ...datos, pagosVendedor: [{ ...frescoConPago.pagosVendedor[0], anulado_en: "2026-10-12T15:00:00Z" }] };
-const vAn = verificarRegistro(um, iPago, anulado);
-eq("pago anulado: se puede volver a registrar con un id nuevo, igual para dos sesiones", [vAn.ok, idRegistroCartola("vendedor", um, iPago, vAn.existentes)], [true, idA + "_r2"]);
+eq("dos movimientos reales con la misma clave → marcas distintas (ocurrencia)", [vaivenes.length, vaivenes[0].clave === vaivenes[2].clave, marcaCartola(vaivenes, 0) !== marcaCartola(vaivenes, 2)], [3, true, true]);
+const frescoConMarca = { ...datos, gastos: [...datos.gastos, { id: "gas_x", fecha: "2026-10-12", monto: 480000, categoria_id: "cat_otros", anio: 2026, mes: 10, detalle: "otra sesión", marca_cartola: marcaPago }] };
+eq("otra sesión ya lo registró (aunque sea como OTRO tipo) → aviso previo, no se envía", [verificarRegistro(um, iPago, frescoConMarca).ok, /otra sesión/.test(verificarRegistro(um, iPago, frescoConMarca).motivo)], [false, true]);
+const conAnulado = { ...datos, pagosVendedor: [{ id: "pv_a", vendedor_id: "v_luis", anio: 2026, mes: 8, fecha: "2026-10-12", monto_pagado: 480000, monto_extra_gestion: 0, monto_transferido: 480000, anulado_en: "2026-10-12T15:00:00Z", marca_cartola: marcaPago }] };
+eq("pago anulado con la marca: no cuenta (se puede registrar de nuevo)", verificarRegistro(um, iPago, conAnulado).ok, true);
 eq("sin datos frescos (lectura fallida) → no se registra", verificarRegistro(um, iPago, null).ok, false);
 eq("anterior al cierre → no se registra", verificarRegistro(um, um.findIndex((m) => m.fecha === "2026-09-26"), datos).ok, false);
-eq("rechazo por clave primaria reconocido", [esConflictoDuplicado(new Error('duplicate key value violates unique constraint "pagos_vendedor_pkey"')), esConflictoDuplicado(new Error("Error de red"))], [true, false]);
+const e23505 = Object.assign(new Error("duplicate key: el movimiento bancario x ya está registrado en gastos_indirectos"), { rpcCuerpo: { code: "23505" } });
+const eBFK = Object.assign(new Error("Posible duplicado de un registro manual (pv_man1, pv_man2): vincúlelo o confirme que es otra operación"), { rpcCuerpo: { code: "BFK01" } });
+const e202 = Object.assign(new Error("Could not find the function public.registrar_movimiento_cartola"), { rpcCuerpo: { code: "PGRST202" } });
+eq("respuestas de la base reconocidas: 23505, BFK01 (con sus ids) y función no instalada",
+  [esConflictoDuplicado(e23505), esPosibleDuplicadoManual(e23505), esPosibleDuplicadoManual(eBFK), idsDelMensaje(eBFK), esConflictoDuplicado(eBFK), esFuncionNoDisponible(e202), esConflictoDuplicado(new Error("Error de red"))],
+  [true, false, true, ["pv_man1", "pv_man2"], false, true, false]);
+eq("alertas de posible duplicado listadas para revisar", registrosConAlerta({ ...datos, gastos: [...datos.gastos, { id: "g_al", fecha: "2026-10-13", monto: 1000, detalle: "manual", alerta_cartola: "posible duplicado de cart:x" }] }).map((r) => [r.tabla, r.id]), [["gastos_indirectos", "g_al"]]);
 eq("la verificación no modifica los datos", huella(datos), crudo);
 
 // ════════════════ 6. Invariantes: consultar o importar no cambia nada ════════════════

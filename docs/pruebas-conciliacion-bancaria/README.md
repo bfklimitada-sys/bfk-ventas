@@ -55,10 +55,13 @@ Reglas de la conciliación:
 - **Sin selección previa:** el destino se elige a mano y nada viene marcado.
 - **Confirmación:** se exige confirmación explícita, con el resumen de lo que se escribirá.
 - **Verificación final:** antes de escribir se vuelven a leer los registros **actuales de la base** (no los de pantalla) y se concilia de nuevo. Si el movimiento ya tiene registro, o lleva la marca de cartola de otra sesión, no se registra (`src/lib/registroCartola.js`).
-- **Concurrencia (09/10/2026):**
+- **Garantía en la base (requiere la migración «garantía atómica de la cartola», aplicada ANTES que esta versión):**
+  - Cobros, pagos a vendedor, gastos y retiros se escriben con `registrar_movimiento_cartola`; los pagos a financiador con `registrar_pago_financiador_cartola` (misma función FIFO de hoy). Cada registro lleva la marca del movimiento (`marca_cartola`).
+  - Un movimiento queda registrado **una sola vez**, aunque dos sesiones lo intenten a la vez o con tipos distintos (respuesta `23505`).
+  - Registro manual parecido (respuesta `BFK01`): la pantalla lo muestra y el usuario elige **«Es este registro»** (se vincula, no se crea nada) o **«Es otra operación»**.
+  - Registro manual posterior que coincide con uno de cartola: queda con alerta, visible en el Panel («Posibles duplicados con la cartola») hasta marcarlo **Revisado**.
+  - Sin la migración, la cartola no registra nada y lo avisa (función no instalada).
   - Bloqueo inmediato contra doble clic.
-  - El registro lleva un id derivado del movimiento (fecha, cargo, abono, saldo y ocurrencia): si dos sesiones registran el mismo movimiento en la misma tabla, la clave primaria rechaza la segunda escritura.
-  - **Límite conocido:** dos sesiones que registran el mismo movimiento como **tipos distintos** en el mismo instante, o un pago a financiador (función de la base con ids propios), solo quedan protegidas por la verificación final. Cerrar esa ventana requiere un cambio en la base, no aplicado.
 - **Retiro de capital:** se registra en `aportes_socios` como retiro, nunca como gasto.
 - **N° de operación:** queda en la nota del registro, o en `referencia_bancaria` en los pagos a vendedor.
 - **Control inverso:** avisa de registros BFK posteriores al cierre que no tienen movimiento bancario (posible doble registro).
@@ -94,8 +97,9 @@ Reglas de la conciliación:
 - **Interfaz** (Supabase simulado; nada sale a la red):
   1. Construir con `vite build`.
   2. Servir con `vite preview --port 4179`.
-  3. Ejecutar `node docs/pruebas-conciliacion-bancaria/e2e_cartola.mjs http://127.0.0.1:4179/` y `node docs/pruebas-conciliacion-bancaria/e2e_concurrencia.mjs http://127.0.0.1:4179/` (dos sesiones, doble clic y reimportación).
-  - La simulación de Supabase (`pruebas-oc/mock_estado.mjs`) rechaza ids repetidos, igual que la clave primaria.
+  3. Ejecutar `node docs/pruebas-conciliacion-bancaria/e2e_cartola.mjs http://127.0.0.1:4179/` y `node docs/pruebas-conciliacion-bancaria/e2e_concurrencia.mjs http://127.0.0.1:4179/` (dos sesiones, doble clic, reimportación, BFK01, alertas y función no instalada).
+  4. Contrato con la base: correr las pruebas de interfaz con `BFK_CAPTURA_RPC=capturas.jsonl` y luego `node docs/pruebas-conciliacion-bancaria/contrato_rpc.mjs capturas.jsonl [propuesta.sql]`.
+  - La simulación de Supabase (`pruebas-oc/mock_estado.mjs`) rechaza ids repetidos y replica las funciones de la cartola (marca exclusiva, BFK01, vínculo y alertas).
 - **Pruebas existentes ajustadas por cambio de regla autorizado:**
 
   | Archivo | Ajuste |

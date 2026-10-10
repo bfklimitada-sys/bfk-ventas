@@ -16,7 +16,7 @@ const ok = (k, v, detalle) => { if (!v) { F.push(k); console.log("FALLA " + k + 
 const espera = (p, ms = 600) => p.waitForTimeout(ms);
 const escritorio = { ancho: 1440, alto: 900, movil: false };
 const FINANCIERAS = ["eventos_pago_cliente", "eventos_pago_financiamiento", "pagos_vendedor", "gastos_indirectos", "aportes_socios", "ordenes_compra_v2", "ajustes_saldo_financiador"];
-const escriturasFinancieras = (b, desde = 0) => b.escr.slice(desde).filter((w) => w.metodo !== "GET" && (FINANCIERAS.includes(w.tabla) || w.tabla === "rpc"));
+const escriturasFinancieras = (b, desde = 0) => b.escr.slice(desde).filter((w) => w.metodo !== "GET" && (FINANCIERAS.includes(w.tabla) || w.tabla === "rpc" || /(^|_)cartola($|_)/.test(w.tabla)));
 const escribe = (nombre, wb) => { const r = path.join(os.tmpdir(), nombre); XLSX.writeFile(wb, r); return r; };
 
 // Personas con dos palabras distintivas en el nombre (así la glosa del banco se reconoce como en producción).
@@ -91,10 +91,12 @@ const estado = (p, clave) => p.locator(`[data-mov="${clave}"]`).first().getAttri
   await p.locator("[data-confirmo]").check(); await espera(p, 150);
   await p.locator("[data-registrar]").click(); await espera(p, 3000);
   const w = escriturasFinancieras(b, n0);
-  const pv = w.filter((x) => x.tabla === "pagos_vendedor" && x.metodo === "POST");
-  ok("E2_un_solo_pago_registrado", pv.length === 1 && w.filter((x) => x.tabla !== "pagos_vendedor" && x.tabla !== "ordenes_compra_v2").length === 0, w.map((x) => [x.metodo, x.tabla]));
-  const fila = Array.isArray(pv[0]?.cuerpo) ? pv[0].cuerpo[0] : pv[0]?.cuerpo;
-  ok("E2_pago_con_total_y_operacion_bancaria", fila && Number(fila.monto_transferido) === 480000 && fila.referencia_bancaria === "8811" && Number(fila.mes) === 8 && fila.fecha === "2026-10-12", fila);
+  // Desde la cartola el pago lo escribe la función de la base (pago + OCs en una transacción, con la marca del movimiento).
+  const pv = w.filter((x) => x.tabla === "registrar_movimiento_cartola" && x.cuerpo?.p_tipo === "vendedor");
+  ok("E2_un_solo_pago_registrado", pv.length === 1 && w.filter((x) => x.tabla !== "registrar_movimiento_cartola").length === 0 && b.db.pagos_vendedor.filter((f) => f.marca_cartola).length === 1, w.map((x) => [x.metodo, x.tabla]));
+  const fila = pv[0]?.cuerpo?.p_filas?.[0];
+  ok("E2_pago_con_total_y_operacion_bancaria", fila && Number(fila.monto_transferido) === 480000 && fila.referencia_bancaria === "8811" && Number(fila.mes) === 8 && fila.fecha === "2026-10-12"
+    && pv[0].cuerpo.p_marca === "cart:20261012:480000:0:2663003:1", pv[0]?.cuerpo);
   await abrirCartola(p, [rHist, rLinea, rHist]);
   ok("E2_reimportado_queda_conciliado_y_no_se_vuelve_a_proponer", (await estado(p, "2026-10-12|480000|0|2663003")) === "conciliado" && (await p.locator('[data-preparar="2026-10-12|480000|0|2663003"]').count()) === 0);
   ok("E2_reimportar_no_escribe", escriturasFinancieras(b, n0).length === w.length);
@@ -113,10 +115,10 @@ const estado = (p, clave) => p.locator(`[data-mov="${clave}"]`).first().getAttri
   ok("E3_confirmacion_dice_que_no_es_gasto", /no es gasto/.test(await p.locator("[data-confirmacion]").innerText()));
   await p.locator("[data-confirmo]").check(); await p.locator("[data-registrar]").click(); await espera(p, 2500);
   const w = escriturasFinancieras(b, n0);
-  const ap = w.find((x) => x.tabla === "aportes_socios" && x.metodo === "POST");
-  const filaAp = Array.isArray(ap?.cuerpo) ? ap.cuerpo[0] : ap?.cuerpo;
+  const ap = w.find((x) => x.tabla === "registrar_movimiento_cartola" && x.cuerpo?.p_tipo === "retiro");
+  const filaAp = ap?.cuerpo?.p_filas?.[0];
   ok("E3_retiro_en_aportes_socios", filaAp && filaAp.tipo === "retiro" && Number(filaAp.monto) === 260000 && filaAp.medio === "Transferencia BancoEstado", filaAp);
-  ok("E3_ningun_gasto_registrado", !w.some((x) => x.tabla === "gastos_indirectos"));
+  ok("E3_ningun_gasto_registrado", !w.some((x) => x.tabla === "gastos_indirectos" || x.cuerpo?.p_tipo === "gasto") && !b.db.gastos_indirectos.some((g) => g.marca_cartola));
   ok("E3_sin_errores", errs.length === 0, errs);
   await ctx.close();
 }

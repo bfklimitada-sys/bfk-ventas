@@ -5,7 +5,7 @@ import { C, MONO, SANS, btnP, btnG, fmt } from "../../lib/theme";
 import { Ic, I } from "../ui/Iconos";
 import { leerCartolaBancoEstado, totalesPorMes, unirCartolas } from "../../lib/cartolas";
 import { CIERRE_CONCILIACION, ESTADOS, conciliarMovimientos, opcionesAbono } from "../../lib/conciliacion";
-import { esConflictoDuplicado, idRegistroCartola, verificarRegistro } from "../../lib/registroCartola";
+import { esConflictoDuplicado, esFuncionNoDisponible, esPosibleDuplicadoManual, idsDelMensaje, marcaCartola, verificarRegistro } from "../../lib/registroCartola";
 
 // ═══════════════════════════════════════════════════════════════
 // Cartola BancoEstado · conciliación (2026-10)
@@ -13,8 +13,9 @@ import { esConflictoDuplicado, idRegistroCartola, verificarRegistro } from "../.
 //    TODOS los movimientos con su estado (Conciliado · Posible registrado · Pendiente · Neutro). No preselecciona nada.
 //  Etapa 2 (registro seguro): solo movimientos PENDIENTES posteriores al cierre (07/10/2026), uno a la vez, con
 //    destino elegido a mano y confirmación explícita. Antes de escribir se vuelve a conciliar con los registros
-//    RECIÉN leídos de la base (no los de pantalla) y el registro lleva un id derivado del movimiento, para que la
-//    clave primaria rechace un segundo registro hecho desde otra sesión (lib/registroCartola.js). Un bloqueo
+//    RECIÉN leídos de la base y la escritura la hace una función de la base con la marca del movimiento: un mismo
+//    movimiento queda registrado una sola vez, aun desde dos sesiones o con tipos distintos (23505). Si existe un
+//    registro manual parecido (BFK01), el usuario elige vincularlo o confirmar que es otra operación. Un bloqueo
 //    inmediato evita el doble envío. Lo anterior al cierre es solo consulta (ya está en saldos y FIFO históricos).
 // ═══════════════════════════════════════════════════════════════
 
@@ -75,6 +76,7 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, ga
   const [guardando, setGuardando] = useState(false);
   const [confirmaTotales, setConfirmaTotales] = useState(false);
   const enCurso = useRef(false);                     // bloqueo inmediato contra doble envío (no espera al re-render)
+  const [duplicado, setDuplicado] = useState(null);  // { clave, registros }: la base encontró un registro manual parecido
 
   const datos = useMemo(() => ({ ocs, financiadores, vendedores, gastos, pagosVendedor, pagoFinSueltos, aportes }),
     [ocs, financiadores, vendedores, gastos, pagosVendedor, pagoFinSueltos, aportes]);
@@ -107,10 +109,10 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, ga
   };
 
   const abrir = (x) => {
-    setErr(""); setConfirmo(false); setAbierto(x.m.clave);
+    setErr(""); setConfirmo(false); setAbierto(x.m.clave); setDuplicado(null);
     setBorrador(x.dir === "entra" ? { opcionId: "" } : { tipo: "", destinoId: "", categoriaId: "", mesCom: "", anioCom: "", socio: "" });
   };
-  const cerrar = () => { setAbierto(null); setBorrador({}); setConfirmo(false); };
+  const cerrar = () => { setAbierto(null); setBorrador({}); setConfirmo(false); setDuplicado(null); };
 
   // Validación del borrador: todo elegido a mano, sin valores por defecto.
   const problemaBorrador = (x) => {
@@ -126,41 +128,46 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, ga
     return null;
   };
 
-  // Registro de UN movimiento, con confirmación explícita y verificación final contra duplicados.
-  const registrar = async (x) => {
+  // Registro de UN movimiento, con confirmación explícita. La base garantiza que el movimiento quede registrado una
+  // sola vez (marca del movimiento); antes se verifica con datos frescos para avisar temprano.
+  //  opc.vincular: ids de registros manuales que SON este movimiento (se marcan; no se crea nada).
+  //  opc.confirmoDistinto: el usuario confirma que el registro manual parecido es OTRA operación.
+  const registrar = async (x, opc = {}) => {
     if (enCurso.current) return;                     // un segundo clic mientras se guarda no hace nada
     const p = problemaBorrador(x);
     if (p) { setErr(p); return; }
     if (!confirmo) { setErr("Marca la confirmación antes de registrar"); return; }
     enCurso.current = true; setErr(""); setGuardando(true);
+    let frescos = null;
     try {
-      // Verificación final con los registros ACTUALES de la base (otra sesión pudo registrar este movimiento).
       if (!onLeerDatosFrescos) throw new Error("No se puede verificar contra la base: no se registra.");
-      const frescos = await onLeerDatosFrescos();
-      const v = verificarRegistro(union.movs, x.i, frescos, { cierre });
-      if (!v.ok) { setErr(v.motivo); onRecargar?.(); return; }
+      frescos = await onLeerDatosFrescos();
+      const v = verificarRegistro(union.movs, x.i, frescos, { cierre, decidido: !!(opc.vincular || opc.confirmoDistinto) });
+      if (!v.ok) { setErr(v.motivo); setDuplicado(null); onRecargar?.(); return; }
       const m = x.m, ref = m.operacion ? ` (op. ${m.operacion})` : "";
+      const marca = { marca: marcaCartola(union.movs, x.i), vincular: opc.vincular || null, confirmoDistinto: !!opc.confirmoDistinto };
       if (x.dir === "entra") {
         const op = opcionesAbono(m, frescos.ocs || ocs).find((o) => o.id === borrador.opcionId);
         if (!op) throw new Error("La opción elegida ya no está disponible");
-        const id = idRegistroCartola("cobro", union.movs, x.i, v.existentes);
-        const cobros = (op.asignaciones || []).map((a, k) => ({ id: `${id}-${k + 1}`, ocId: a.ocId, numeroOc: a.numeroOc, monto: a.monto, parcial: a.parcial, tipo: op.tipo,
+        const cobros = (op.asignaciones || []).map((a) => ({ ocId: a.ocId, numeroOc: a.numeroOc, monto: a.monto, parcial: a.parcial, tipo: op.tipo,
           fecha: m.fecha, descripcion: `${m.descripcion}${ref}` }));
         const valeVistas = op.valeVista ? [{ ...op.valeVista, fecha: m.fecha, monto: m.abono, descripcion: m.descripcion }] : [];
-        await onRegistrar(cobros, resumenCartola(), valeVistas);
+        await onRegistrar(cobros, resumenCartola(), valeVistas, marca);
       } else if (borrador.tipo === "retiro") {
         if (!onRegistrarRetiro) throw new Error("El registro de retiros de capital no está disponible");
-        await onRegistrarRetiro({ id: idRegistroCartola("retiro", union.movs, x.i, v.existentes), socio: String(borrador.socio).trim(), monto: m.cargo, fecha: m.fecha,
-          notas: `Desde cartola${ref}: ${m.descripcion}` });
+        await onRegistrarRetiro({ ...marca, socio: String(borrador.socio).trim(), monto: m.cargo, fecha: m.fecha, notas: `Desde cartola${ref}: ${m.descripcion}` });
       } else {
-        // Pago a financiador: lo registra una función de la base que genera sus propios ids (sin id determinista).
-        const id = borrador.tipo === "vendedor" || borrador.tipo === "gasto" ? idRegistroCartola(borrador.tipo, union.movs, x.i, v.existentes) : undefined;
-        await onRegistrarEgresos([{ id, tipo: borrador.tipo, destinoId: borrador.destinoId, categoriaId: borrador.categoriaId, monto: m.cargo, fecha: m.fecha,
+        await onRegistrarEgresos([{ ...marca, tipo: borrador.tipo, destinoId: borrador.destinoId, categoriaId: borrador.categoriaId, monto: m.cargo, fecha: m.fecha,
           descripcion: `${m.descripcion}${ref}`, operacion: m.operacion || "", mesCom: Number(borrador.mesCom), anioCom: Number(borrador.anioCom) }], resumenCartola());
       }
       cerrar();
     } catch (e) {
-      if (esConflictoDuplicado(e)) { setErr("Otra sesión registró este movimiento en este mismo momento: no se guardó de nuevo."); onRecargar?.(); }
+      if (esPosibleDuplicadoManual(e)) {
+        const ids = idsDelMensaje(e);
+        setDuplicado({ clave: x.m.clave, registros: registrosPorId(frescos || datos, ids), ids });
+        setErr("");
+      } else if (esConflictoDuplicado(e)) { setDuplicado(null); setErr("Otra sesión ya registró este movimiento: no se guardó de nuevo."); onRecargar?.(); }
+      else if (esFuncionNoDisponible(e)) setErr("La protección de la base para la cartola aún no está activa: no se registró nada. Avise al administrador.");
       else setErr(e.message || String(e));
     } finally { enCurso.current = false; setGuardando(false); }
   };
@@ -263,12 +270,16 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, ga
             {x.registrable && !esAbierto && (
               <button data-preparar={m.clave} onClick={() => abrir(x)} style={{ ...btnG, width: "100%", marginTop: 7, fontSize: 12, padding: "7px" }}>Preparar registro…</button>
             )}
-            {x.registrable && esAbierto && (
+            {x.registrable && esAbierto && (<>
               <PrepararRegistro x={x} ocs={ocs} financiadores={financiadores} vendedores={vendedores} categorias={categorias}
                 borrador={borrador} setBorrador={(p) => { setBorrador((b) => ({ ...b, ...p })); setConfirmo(false); }}
                 confirmo={confirmo} setConfirmo={setConfirmo} problema={problemaBorrador(x)} guardando={guardando}
                 onCancelar={cerrar} onRegistrar={() => registrar(x)} />
-            )}
+              {duplicado?.clave === x.m.clave && (
+                <DuplicadoManual dup={duplicado} guardando={guardando}
+                  onVincular={() => registrar(x, { vincular: duplicado.ids })} onDistinto={() => registrar(x, { confirmoDistinto: true })} />
+              )}
+            </>)}
           </div>
         );
       })}
@@ -378,6 +389,40 @@ function PrepararRegistro({ x, ocs, financiadores, vendedores, categorias, borra
           style={{ ...btnP(guardando || problema || !confirmo ? C.inkFaint : C.ok), flex: 2, fontSize: 12.5, padding: "8px" }}>
           {guardando ? "Registrando…" : "Registrar este movimiento"}
         </button>
+      </div>
+    </div>
+  );
+}
+
+// Registros (de los datos leídos) cuyos ids informa la base como posible duplicado manual.
+function registrosPorId(d, ids) {
+  const quiero = new Set(ids || []), r = [];
+  const agrega = (tipo, x, detalle) => { if (x && quiero.has(String(x.id))) r.push({ id: x.id, tipo, fecha: x.fecha, monto: Number(x.monto_transferido ?? x.monto) || 0, detalle }); };
+  for (const o of d?.ocs || []) {
+    (o.eventos_pago_cliente || []).forEach((e) => agrega("Cobro", e, `${o.numero_oc} · ${e.notas || ""}`));
+    (o.eventos_pago_financiamiento || []).forEach((e) => agrega("Pago a financiador", e, o.numero_oc));
+  }
+  (d?.pagoFinSueltos || []).forEach((e) => agrega("Pago a financiador", e, "sin OC"));
+  (d?.gastos || []).forEach((g) => agrega("Gasto", g, g.detalle || ""));
+  (d?.pagosVendedor || []).forEach((p) => agrega("Pago a vendedor", p, p.notas || ""));
+  (d?.aportes || []).forEach((a) => agrega(a.tipo === "retiro" ? "Retiro de capital" : "Aporte", a, a.socio || ""));
+  return r;
+}
+
+// La base encontró un registro MANUAL que podría ser este mismo movimiento. Nada viene elegido: el usuario decide.
+function DuplicadoManual({ dup, guardando, onVincular, onDistinto }) {
+  return (
+    <div data-duplicado-manual style={{ marginTop: 8, padding: "10px 12px", borderRadius: 10, background: C.warnLight, border: `1px solid ${C.warn}`, fontSize: 12.5 }}>
+      <div style={{ fontWeight: 700, color: C.warnText, marginBottom: 6 }}>Ya existe un registro manual que podría ser este mismo movimiento</div>
+      {(dup.registros.length ? dup.registros : dup.ids.map((id) => ({ id, tipo: "Registro", detalle: "" }))).map((r) => (
+        <div key={r.id} data-registro-manual={r.id} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "3px 0" }}>
+          <span>{r.tipo} · {r.fecha ? fmt.date(r.fecha) : ""} {r.detalle ? `· ${r.detalle}` : ""}</span>
+          <span style={{ fontFamily: MONO }}>{r.monto ? fmt.money(r.monto) : ""}</span>
+        </div>
+      ))}
+      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+        <button data-vincular disabled={guardando} onClick={onVincular} style={{ ...btnG, flex: 1, fontSize: 12, padding: "8px" }}>Es este registro (vincular, no crea nada)</button>
+        <button data-distinto disabled={guardando} onClick={onDistinto} style={{ ...btnG, flex: 1, fontSize: 12, padding: "8px" }}>Es otra operación (registrar igual)</button>
       </div>
     </div>
   );

@@ -1,3 +1,4 @@
+import { appendFileSync } from "node:fs";
 // Supabase y /api/oc simulados CON ESTADO (en memoria) para pruebas de interfaz de OCs (Fase 4A, modelo financiero de la Fase 4B).
 // Las escrituras se aplican a la base simulada y se registran; nada sale a la red.
 import { chromium } from "playwright-core";
@@ -104,6 +105,38 @@ export function crearBase(inicial, { mp = {}, borrado = {} } = {}) {
     });
   };
   const dominioDe = (t) => ({ eventos_compra: "financiamiento", eventos_pago_financiamiento: "financiamiento", eventos_factura: "facturacion", eventos_pago_cliente: "cobro" })[t];
+  // ── Cartola (réplica en memoria de la propuesta SQL definitiva: marca exclusiva, BFK01, vínculo y alertas) ──
+  const T_CART = ["eventos_pago_cliente", "eventos_pago_financiamiento", "gastos_indirectos", "pagos_vendedor", "aportes_socios"];
+  const vigenteC = (t, f) => !(t === "pagos_vendedor" && f.anulado_en);
+  const montoC = (t, f) => (t === "pagos_vendedor" ? num(f.monto_transferido ?? num(f.monto_pagado) + num(f.monto_extra_gestion)) : num(f.monto));
+  const destinoC = (t, f) => ({ eventos_pago_cliente: f.oc_id, eventos_pago_financiamiento: f.financiador_id, pagos_vendedor: f.vendedor_id,
+    gastos_indirectos: "monto:" + Math.round(num(f.monto)), aportes_socios: String(f.socio || "").trim().toLowerCase() + ":" + f.tipo })[t];
+  const leerMarcaC = (m) => { const r = /^cart:(\d{4})(\d{2})(\d{2}):(\d+):(\d+):(-?\d+):([1-9]\d{0,3})$/.exec(m || ""); return r ? { fecha: `${r[1]}-${r[2]}-${r[3]}`, cargo: +r[4], abono: +r[5] } : null; };
+  const diasC = (a, b) => Math.round((Date.parse(a) - Date.parse(b)) / 86400000);
+  const marcaEnC = (m) => T_CART.find((t) => (db[t] || []).some((f) => f.marca_cartola === m && vigenteC(t, f)));
+  const gruposC = (t, filtro) => { const g = {}; for (const f of (db[t] || []).filter((x) => vigenteC(t, x) && filtro(x))) (g[f.marca_cartola || f.creadoEn] ||= []).push(f); return Object.values(g); };
+  // Registros MANUALES (sin marca) cuyo grupo coincide: misma tabla y destino, ±3 días, suma igual al monto bancario.
+  const manualesC = (t, destinos, fecha, monto) => gruposC(t, (x) => !x.marca_cartola && x.fecha && Math.abs(diasC(x.fecha, fecha)) <= 3)
+    .filter((g) => g.reduce((a, f) => a + montoC(t, f), 0) === monto && g.some((f) => destinos.includes(destinoC(t, f)))).map((g) => g.map((f) => f.id).sort());
+  // Al registrar algo manual que coincide con un registro de cartola: alerta (no bloquea).
+  const alertarManualC = (t, filas) => {
+    const total = filas.reduce((a, f) => a + montoC(t, f), 0), dest = filas.map((f) => destinoC(t, f)), fecha = filas[0]?.fecha;
+    if (!fecha) return;
+    const g = gruposC(t, (x) => !!x.marca_cartola).find((gr) => gr.reduce((a, f) => a + montoC(t, f), 0) === total && gr.some((f) => dest.includes(destinoC(t, f)))
+      && Math.abs(diasC(gr[0].fecha, fecha)) <= 3);
+    if (g) filas.forEach((f) => { const r = db[t].find((x) => x.id === f.id); if (r && !r.alerta_cartola) r.alerta_cartola = "posible duplicado de " + g[0].marca_cartola; });
+  };
+  const dupC = (m, t) => ({ status: 409, json: { code: "23505", message: `duplicate key: el movimiento bancario ${m} ya está registrado en ${t}` } });
+  const bfk01C = (ids) => ({ status: 400, json: { code: "BFK01", message: `Posible duplicado de un registro manual (${ids.join(", ")}): vincúlelo o confirme que es otra operación` } });
+  const vincularC = (t, ids, m, mov, finId) => {
+    const filas = (ids || []).map((id) => (db[t] || []).find((x) => x.id === id && vigenteC(t, x)));
+    if (!filas.length || filas.some((f) => !f || f.marca_cartola || (finId && f.financiador_id !== finId) || Math.abs(diasC(f.fecha, mov.fecha)) > 3))
+      return { status: 400, json: { message: "Algún registro a vincular no existe, está anulado, ya tiene marca o es de otro destino" } };
+    if (filas.reduce((a, f) => a + montoC(t, f), 0) !== mov.cargo + mov.abono) return { status: 400, json: { message: "Los registros a vincular no suman el monto del movimiento" } };
+    filas.forEach((f, k) => Object.assign(f, { marca_cartola: m, marca_parte: k + 1, marca_partes: filas.length, alerta_cartola: null }));
+    recalcular(); return { status: 200, json: { ok: true, vinculados: ids, marca: m } };
+  };
+
   const escribir = (metodo, tabla, params, cuerpo) => {
     const id = (params.get("id") || "").startsWith("eq.") ? decodeURIComponent(params.get("id").slice(3)) : null;
     escr.push({ metodo, tabla, id, cuerpo: clon(cuerpo ?? null), n: escr.length });
@@ -124,7 +157,9 @@ export function crearBase(inicial, { mp = {}, borrado = {} } = {}) {
       const ids = filas.map((f) => f.id).filter((x) => x != null).map(String);
       if (new Set(ids).size !== ids.length || db[tabla].some((f) => ids.includes(String(f.id))))
         return { status: 409, json: { code: "23505", message: `duplicate key value violates unique constraint "${tabla}_pkey"` } };
-      db[tabla].push(...clon(filas)); recalcular(); return { status: 201, json: clon(db[tabla].filter((f) => filas.some((x) => x.id === f.id))) };
+      db[tabla].push(...clon(filas));
+      if (T_CART.includes(tabla) && filas.every((f) => !f.marca_cartola)) alertarManualC(tabla, filas);
+      recalcular(); return { status: 201, json: clon(db[tabla].filter((f) => filas.some((x) => x.id === f.id))) };
     }
     if (metodo === "PATCH") {
       const afectadas = db[tabla].filter((f) => String(f.id) === String(id));
@@ -143,8 +178,9 @@ export function crearBase(inicial, { mp = {}, borrado = {} } = {}) {
   const err = (message, status = 400) => ({ status, json: { message } });
   const hist = (yo, ocId, accion) => db.historial_cambios.push({ id: "hc_" + db.historial_cambios.length, oc_id: ocId, usuario_id: yo, accion, creadoEn: new Date().toISOString() });
   const resumen = (ocId) => { const o = db.ordenes_compra_v2.find((x) => x.id === ocId); return o ? { oc_id: o.id, costo_total: o.costo_total, monto_pagado_fin: o.monto_pagado_fin, estado_pago_financiamiento: o.estado_pago_financiamiento, saldo_financiador: (db.financiadores || []).find((f) => f.id === o.financiador_id)?.saldo_deuda } : {}; };
-  const rpc = (fn, b, yo) => {
+  const rpc = (fn, b, yo, interno = false) => {
     escr.push({ metodo: "RPC", tabla: fn, id: null, cuerpo: clon(b), n: escr.length });
+    if (process.env.BFK_CAPTURA_RPC && /(^|_)cartola($|_)/.test(fn) && !interno) appendFileSync(process.env.BFK_CAPTURA_RPC, JSON.stringify({ fn, b }) + "\n");
     const ok = (j) => { recalcular(); return { status: 200, json: { ok: true, ...j } }; };
     if (fn === "gestionar_bloqueo_oc") return { status: 200, json: { ok: true, segundos_restantes: 45 } };
     if (fn === "registrar_entidad_desde_oc") return { status: 200, json: { accion: "sin_cambios" } };
@@ -177,7 +213,41 @@ export function crearBase(inicial, { mp = {}, borrado = {} } = {}) {
       Object.assign(ev, { fecha: b.p_fecha, costo_compra: num(b.p_costo), ...(b.p_monto_venta !== null && b.p_monto_venta !== undefined ? { monto_venta: num(b.p_monto_venta) } : {}) });
       hist(yo, ev.oc_id, "Compra corregida"); return ok(resumen(ev.oc_id));
     }
+    if (fn === "registrar_movimiento_cartola") {
+      const mov = leerMarcaC(b.p_marca); if (!mov) return err("Marca de cartola inválida");
+      const t = { cobro: "eventos_pago_cliente", vendedor: "pagos_vendedor", gasto: "gastos_indirectos", retiro: "aportes_socios" }[b.p_tipo];
+      if (!t) return err("Tipo de registro no permitido");
+      const ya = marcaEnC(b.p_marca); if (ya) return dupC(b.p_marca, ya);
+      if (b.p_vincular) return vincularC(t, b.p_vincular, b.p_marca, mov);
+      const filas = (b.p_filas || []).map((f, k, a) => ({ ...f, marca_cartola: b.p_marca, marca_parte: k + 1, marca_partes: a.length, creadoEn: new Date().toISOString(), creado_por: f.creado_por || yo }));
+      if (!filas.length) return err("Filas inválidas");
+      if (filas.reduce((a, f) => a + montoC(t, f), 0) !== mov.cargo + mov.abono) return err("La suma registrada no coincide con el movimiento bancario");
+      if (filas.some((f) => db[t].some((x) => x.id === f.id))) return dupC(b.p_marca, t);
+      if (!b.p_confirmo_distinto) { const c = manualesC(t, filas.map((f) => destinoC(t, f)), mov.fecha, mov.cargo + mov.abono); if (c.length) return bfk01C(c[0]); }
+      db[t].push(...clon(filas));
+      for (const ocId of b.p_ocs_vendedor_pagado || []) { const oc = db.ordenes_compra_v2.find((o) => o.id === ocId); if (oc) oc.vendedor_pagado = true; }
+      return ok({ tabla: t, ids: filas.map((f) => f.id), marca: b.p_marca });
+    }
+    if (fn === "registrar_pago_financiador_cartola") {
+      const mov = leerMarcaC(b.p_marca); if (!mov) return err("Marca de cartola inválida");
+      if (num(b.p_monto) !== mov.cargo || b.p_fecha !== mov.fecha) return err("El pago no coincide con el movimiento");
+      const ya = marcaEnC(b.p_marca); if (ya) return dupC(b.p_marca, ya);
+      if (b.p_vincular) return vincularC("eventos_pago_financiamiento", b.p_vincular, b.p_marca, mov, b.p_financiador_id);
+      if (!b.p_confirmo_distinto) { const c = manualesC("eventos_pago_financiamiento", [b.p_financiador_id], mov.fecha, mov.cargo); if (c.length) return bfk01C(c[0]); }
+      const antes = new Set(db.eventos_pago_financiamiento.map((e) => e.id));
+      const r = rpc("registrar_pago_financiador", { p_financiador_id: b.p_financiador_id, p_fecha: b.p_fecha, p_monto: b.p_monto, p_asignaciones: b.p_asignaciones, p_origen: "cartola" }, yo, true);
+      if (r.status !== 200) return r;
+      const nuevas = db.eventos_pago_financiamiento.filter((e) => !antes.has(e.id));
+      nuevas.forEach((e, k) => Object.assign(e, { marca_cartola: b.p_marca, marca_parte: k + 1, marca_partes: nuevas.length }));
+      r.json.marca = b.p_marca; return r;
+    }
+    if (fn === "cartola_quitar_alerta") {
+      if (!T_CART.includes(b.p_tabla)) return err("Tabla no permitida");
+      const f = (db[b.p_tabla] || []).find((x) => x.id === b.p_id); if (f) f.alerta_cartola = null;
+      return ok({ quitadas: f ? 1 : 0 });
+    }
     if (fn === "registrar_pago_financiador") {
+      const n0 = db.eventos_pago_financiamiento.length, ts = new Date().toISOString();   // una operación = un mismo instante
       const fin = (db.financiadores || []).find((f) => f.id === b.p_financiador_id); if (!fin) return err("El financiador no existe");
       if (fin.tipo === "propio") return err(`Los fondos propios (${fin.nombre}) no son deuda con un financiador: no corresponde registrar pagos`);
       let total = 0;
@@ -191,9 +261,10 @@ export function crearBase(inicial, { mp = {}, borrado = {} } = {}) {
         total += num(a.monto);
       }
       if (total > num(b.p_monto)) return err("Las asignaciones superan el monto del pago");
-      for (const a of b.p_asignaciones || []) { db.eventos_pago_financiamiento.push({ id: "pf_" + db.eventos_pago_financiamiento.length + "_" + escr.length, oc_id: a.oc_id, financiador_id: fin.id, fecha: b.p_fecha, monto: num(a.monto), creado_por: yo, creadoEn: new Date().toISOString() }); hist(yo, a.oc_id, "Abono de financiamiento"); }
+      for (const a of b.p_asignaciones || []) { db.eventos_pago_financiamiento.push({ id: "pf_" + db.eventos_pago_financiamiento.length + "_" + escr.length, oc_id: a.oc_id, financiador_id: fin.id, fecha: b.p_fecha, monto: num(a.monto), creado_por: yo, creadoEn: ts }); hist(yo, a.oc_id, "Abono de financiamiento"); }
       const resto = num(b.p_monto) - total;
-      if (resto > 0) db.eventos_pago_financiamiento.push({ id: "pf_s" + db.eventos_pago_financiamiento.length + "_" + escr.length, oc_id: null, financiador_id: fin.id, fecha: b.p_fecha, monto: resto, creado_por: yo, creadoEn: new Date().toISOString() });
+      if (resto > 0) db.eventos_pago_financiamiento.push({ id: "pf_s" + db.eventos_pago_financiamiento.length + "_" + escr.length, oc_id: null, financiador_id: fin.id, fecha: b.p_fecha, monto: resto, creado_por: yo, creadoEn: ts });
+      if (!interno) alertarManualC("eventos_pago_financiamiento", db.eventos_pago_financiamiento.slice(n0));   // pago manual: alerta si coincide con la cartola
       const r = ok({ ocs: (b.p_asignaciones || []).length, asignado: total, sobrante: resto }); r.json.saldo_financiador = fin.saldo_deuda; return r;
     }
     if (fn === "editar_pago_financiador" || fn === "eliminar_pago_financiador") {

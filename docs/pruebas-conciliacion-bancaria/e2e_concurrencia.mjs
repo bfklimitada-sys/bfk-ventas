@@ -56,8 +56,8 @@ async function preparar(p, clave, como) {
   await p.waitForTimeout(150); await p.locator("[data-confirmo]").check(); await p.waitForTimeout(150);
   return true;
 }
-const filas = (b, tabla) => (b.db[tabla] || []).filter((f) => String(f.id).includes("_cart_"));
-const posts = (b, tabla, desde) => b.escr.slice(desde).filter((w) => w.tabla === tabla && w.metodo === "POST").length;
+const filas = (b, tabla) => (b.db[tabla] || []).filter((f) => f.marca_cartola);
+const rpcs = (b, desde) => b.escr.slice(desde).filter((w) => w.metodo === "RPC" && /cartola/.test(w.tabla)).length;
 const texto = (p) => p.locator("[role=dialog]").innerText().catch(() => "");
 
 // ── X1: dos sesiones registran el MISMO pago a vendedor en el mismo instante → la base acepta uno solo ──
@@ -69,7 +69,7 @@ const texto = (p) => p.locator("[role=dialog]").innerText().catch(() => "");
   await A.p.waitForTimeout(3500);
   const pv = filas(b, "pagos_vendedor");
   ok("X1_dos_sesiones_simultaneas_un_solo_pago", pv.length === 1, pv.map((f) => f.id));
-  ok("X1_id_derivado_del_movimiento", pv[0]?.id === "pv_cart_20261012_480000_0_2519000_1", pv[0]?.id);
+  ok("X1_marca_del_movimiento_en_la_base", pv[0]?.marca_cartola === "cart:20261012:480000:0:2519000:1", pv[0]?.marca_cartola);
   const tA = await texto(A.p), tB = await texto(B.p);
   ok("X1_la_sesion_rechazada_lo_informa", /Otra sesión|ya fue registrado|ya tiene un registro/.test(tA + tB));
   ok("X1_sin_errores", A.errs.length === 0 && B.errs.length === 0, [...A.errs, ...B.errs]);
@@ -84,7 +84,7 @@ const texto = (p) => p.locator("[role=dialog]").innerText().catch(() => "");
   await A.p.locator("[data-registrar]").click(); await A.p.waitForTimeout(3000);
   const n0 = b.escr.length;
   await B.p.locator("[data-registrar]").click(); await B.p.waitForTimeout(2500);
-  ok("X2_sesion_desactualizada_no_escribe", posts(b, "pagos_vendedor", n0) === 0 && filas(b, "pagos_vendedor").length === 1, b.escr.slice(n0).filter((w) => w.metodo !== "GET"));
+  ok("X2_sesion_desactualizada_no_escribe", rpcs(b, n0) === 0 && filas(b, "pagos_vendedor").length === 1, b.escr.slice(n0).filter((w) => w.metodo !== "GET"));
   ok("X2_motivo_visible", /ya fue registrado|ya tiene un registro/.test(await texto(B.p)));
   await A.ctx.close(); await B.ctx.close();
 }
@@ -97,7 +97,7 @@ const texto = (p) => p.locator("[role=dialog]").innerText().catch(() => "");
   const n0 = b.escr.length;
   await A.p.locator("[data-registrar]").evaluate((btn) => { btn.click(); btn.click(); btn.click(); });
   await A.p.waitForTimeout(3000);
-  ok("X3_triple_clic_un_solo_intento_de_escritura", posts(b, "gastos_indirectos", n0) === 1 && filas(b, "gastos_indirectos").length === 1, posts(b, "gastos_indirectos", n0));
+  ok("X3_triple_clic_un_solo_intento_de_escritura", rpcs(b, n0) === 1 && filas(b, "gastos_indirectos").length === 1, rpcs(b, n0));
   ok("X3_sin_errores", A.errs.length === 0, A.errs);
   // Reimportación tras el registro: queda conciliado, no se vuelve a ofrecer y no escribe.
   const n1 = b.escr.length;
@@ -136,9 +136,9 @@ const texto = (p) => p.locator("[role=dialog]").innerText().catch(() => "");
     await Promise.all([A.p.locator("[data-registrar]").click(), B.p.locator("[data-registrar]").click()]);
     await A.p.waitForTimeout(3500);
     const ev = filas(b, "eventos_pago_cliente");
-    ok("X5_cobro_simultaneo_un_solo_registro", ev.length >= 1 && new Set(ev.map((e) => e.id.split("-")[0])).size === 1 && ev.every((e) => e.id.endsWith("-1") || /-\d+$/.test(e.id)), ev.map((e) => e.id));
+    ok("X5_cobro_simultaneo_un_solo_registro", ev.length >= 1 && new Set(ev.map((e) => e.marca_cartola)).size === 1, ev.map((e) => [e.id, e.marca_cartola]));
     ok("X5_cobro_monto_una_vez", ev.reduce((s, e) => s + Number(e.monto), 0) === 760000, ev.map((e) => e.monto));
-    ok("X5_a_lo_mas_dos_intentos_uno_rechazado", posts(b, "eventos_pago_cliente", n0) <= 2);
+    ok("X5_a_lo_mas_dos_intentos_uno_rechazado", rpcs(b, n0) <= 2);
   }
   await A.ctx.close(); await B.ctx.close();
 }
@@ -155,7 +155,7 @@ const texto = (p) => p.locator("[role=dialog]").innerText().catch(() => "");
   await A.ctx.close(); await B.ctx.close();
 }
 
-// ── R1 (informativo, límite conocido): tipos distintos EN EL MISMO INSTANTE. Sin cambio en la base no hay garantía. ──
+// ── X7: tipos distintos EN EL MISMO INSTANTE (A: gasto · B: pago a vendedor) → la base acepta uno solo ──
 {
   const b = crearBase(datos(), { mp: RESPUESTAS_MP });
   const A = await sesion(b), B = await sesion(b);
@@ -163,8 +163,92 @@ const texto = (p) => p.locator("[role=dialog]").innerText().catch(() => "");
   await Promise.all([A.p.locator("[data-registrar]").click(), B.p.locator("[data-registrar]").click()]);
   await A.p.waitForTimeout(3500);
   const n = filas(b, "gastos_indirectos").length + filas(b, "pagos_vendedor").length;
-  console.log(`INFO  R1_tipos_distintos_simultaneos: ${n} registro(s) ${n > 1 ? "→ DUPLICADO POSIBLE (límite conocido, requiere cambio en la base)" : "(esta vez la verificación alcanzó a bloquear)"}`);
+  ok("X7_tipos_distintos_simultaneos_uno_solo", n === 1, n);
   await A.ctx.close(); await B.ctx.close();
+}
+
+// Inserta un registro MANUAL justo antes de que la cartola llame a la base (la carrera que la pantalla no ve).
+const manualAntesDeRpc = (b, tabla, fila) => {
+  const orig = b.rpc; let hecho = false;
+  b.rpc = (fn, cuerpo, yo) => { if (!hecho && /cartola/.test(fn)) { hecho = true; b.db[tabla].push({ creadoEn: "2026-10-11T12:00:00.000Z", ...fila }); } return orig(fn, cuerpo, yo); };
+};
+const pagoManual = { id: "pv_manual", vendedor_id: "v1", anio: 2026, mes: 8, monto_pagado: 480000, monto_extra_gestion: 0, monto_transferido: 480000, fecha: "2026-10-11", estado: "pagado", notas: "registro manual" };
+
+// ── X8: BFK01 → la pantalla muestra el registro manual; «Es este registro» lo vincula sin crear nada ──
+{
+  const b = crearBase(datos(), { mp: RESPUESTAS_MP });
+  const A = await sesion(b);
+  await preparar(A.p, K.pago, "vendedor");
+  manualAntesDeRpc(b, "pagos_vendedor", pagoManual);
+  await A.p.locator("[data-registrar]").click();
+  await A.p.locator("[data-duplicado-manual]").waitFor({ timeout: 8000 }).catch(() => {});
+  ok("X8_bfk01_muestra_el_registro_manual", (await A.p.locator('[data-registro-manual="pv_manual"]').count()) === 1);
+  ok("X8_nada_guardado_ni_preseleccionado", b.db.pagos_vendedor.filter((f) => f.monto_transferido === 480000).length === 1);
+  await A.p.locator("[data-vincular]").click(); await A.p.waitForTimeout(3000);
+  const pv = b.db.pagos_vendedor.filter((f) => f.monto_transferido === 480000);
+  ok("X8_vincular_marca_el_manual_sin_crear_otro", pv.length === 1 && pv[0].id === "pv_manual" && pv[0].marca_cartola === "cart:20261012:480000:0:2519000:1", pv.map((f) => [f.id, f.marca_cartola]));
+  ok("X8_sin_errores", A.errs.length === 0, A.errs);
+  await A.ctx.close();
+}
+
+// ── X9: BFK01 → «Es otra operación» registra el pago de la cartola y deja el manual como está ──
+{
+  const b = crearBase(datos(), { mp: RESPUESTAS_MP });
+  const A = await sesion(b);
+  await preparar(A.p, K.pago, "vendedor");
+  manualAntesDeRpc(b, "pagos_vendedor", pagoManual);
+  await A.p.locator("[data-registrar]").click();
+  await A.p.locator("[data-duplicado-manual]").waitFor({ timeout: 8000 }).catch(() => {});
+  await A.p.locator("[data-distinto]").click(); await A.p.waitForTimeout(3000);
+  const pv = b.db.pagos_vendedor.filter((f) => f.monto_transferido === 480000);
+  ok("X9_confirmar_distinto_registra_y_conserva_el_manual", pv.length === 2 && pv.filter((f) => f.marca_cartola).length === 1 && !pv.find((f) => f.id === "pv_manual").marca_cartola, pv.map((f) => [f.id, f.marca_cartola]));
+  await A.ctx.close();
+}
+
+// ── X10: registro MANUAL posterior a uno de cartola → alerta en el Panel; «Revisado» la quita ──
+{
+  const b = crearBase(datos(), { mp: RESPUESTAS_MP });
+  const A = await sesion(b);
+  await preparar(A.p, K.gasto, "gasto");
+  await A.p.locator("[data-registrar]").click(); await A.p.waitForTimeout(3000);
+  b.escribir("POST", "gastos_indirectos", new URLSearchParams(), { id: "gas_manual", categoria_id: "cat_otros", monto: 55000, mes: 10, anio: 2026, fecha: "2026-10-14", detalle: "registro manual" });
+  ok("X10_manual_posterior_queda_alertado", /posible duplicado de cart:20261013:55000/.test(b.db.gastos_indirectos.find((g) => g.id === "gas_manual")?.alerta_cartola || ""));
+  await A.p.reload(); await A.p.waitForTimeout(3500);
+  await A.p.locator("[data-alertas-cartola]").waitFor({ timeout: 8000 }).catch(() => {});
+  ok("X10_alerta_visible_en_el_panel", (await A.p.locator('[data-alerta="gas_manual"]').count()) === 1);
+  await A.p.locator('[data-quitar-alerta="gas_manual"]').click(); await A.p.waitForTimeout(2500);
+  ok("X10_revisado_quita_la_alerta", !b.db.gastos_indirectos.find((g) => g.id === "gas_manual").alerta_cartola && (await A.p.locator('[data-alerta="gas_manual"]').count()) === 0);
+  await A.ctx.close();
+}
+
+// ── X12: devolución a financiador desde la cartola (FIFO global, función de la base) y reimportación ──
+{
+  const b = crearBase(datos(), { mp: RESPUESTAS_MP });
+  const A = await sesion(b), B = await sesion(b);
+  for (const S of [A, B]) {
+    await S.p.locator(`[data-preparar="${K.retiro}"]`).click(); await S.p.waitForTimeout(200);
+    await S.p.locator("[data-tipo-egreso]").selectOption("financiador"); await S.p.locator("[data-destino]").selectOption("f1");
+    await S.p.waitForTimeout(150); await S.p.locator("[data-confirmo]").check(); await S.p.waitForTimeout(150);
+  }
+  await Promise.all([A.p.locator("[data-registrar]").click(), B.p.locator("[data-registrar]").click()]);
+  await A.p.waitForTimeout(3500);
+  const ev = filas(b, "eventos_pago_financiamiento");
+  ok("X12_financiador_dos_sesiones_un_solo_pago", ev.length >= 1 && new Set(ev.map((e) => e.marca_cartola)).size === 1 && ev.reduce((s, e) => s + Number(e.monto), 0) === 260000, ev.map((e) => [e.oc_id, e.monto]));
+  ok("X12_pagos_al_financiador_elegido", ev.every((e) => e.financiador_id === "f1"));
+  ok("X12_devolucion_no_es_gasto", !b.db.gastos_indirectos.some((g) => g.marca_cartola));
+  await A.ctx.close(); await B.ctx.close();
+}
+
+// ── X11: la aplicación activada antes que la base (función no instalada) → no registra nada y lo dice ──
+{
+  const b = crearBase(datos(), { mp: RESPUESTAS_MP });
+  const orig = b.rpc; b.rpc = (fn, cuerpo, yo) => (/cartola/.test(fn) ? { status: 404, json: { code: "PGRST202", message: `Could not find the function public.${fn}` } } : orig(fn, cuerpo, yo));
+  const A = await sesion(b);
+  await preparar(A.p, K.gasto, "gasto");
+  const n0 = b.escr.length;
+  await A.p.locator("[data-registrar]").click(); await A.p.waitForTimeout(2500);
+  ok("X11_sin_funcion_no_escribe_y_avisa", b.escr.slice(n0).filter((w) => w.metodo !== "GET").length === 0 && /aún no está activa/.test(await texto(A.p)));
+  await A.ctx.close();
 }
 
 await browser.close();

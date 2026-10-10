@@ -11,7 +11,7 @@ import { registrarPagoFinanciador } from "./lib/pagosFinanciador";
 import { cambiarFinanciamientoOC, deudaOC, editarCompraOC, editarPagoFinanciador, eliminarCompraOC, eliminarPagoFinanciador, esFondosPropios, registrarCompraOC } from "./lib/finanzas";
 import { anioMesDe } from "./lib/calculos";
 import { exportarExcelRespaldo } from "./lib/exportacion";
-import { anularPagoVendedor, esPagoDuplicado, registrarPagoVendedor } from "./lib/pagosVendedor";
+import { anularPagoVendedor, esPagoDuplicado, prepararPagoVendedor, registrarPagoVendedor } from "./lib/pagosVendedor";
 import { ImportarCartola } from "./components/forms/ImportarCartola";
 import { FormSaldoBanco } from "./components/forms/FormSaldoBanco";
 import { FormConfirmarEntrega, FormEmitirFactura, FormPagoCliente } from "./components/forms/FormulariosRapidos";
@@ -31,7 +31,7 @@ import { buscarOCPorCodigo, esCodigoMP, esErrorDuplicado, estadoMP, fechaOCEdita
 import { cambiosProducto } from "./lib/productosOC";
 import { CLAVE_REVISION_AUTO, LIMITE_USO_DIARIO, PREFIJO_FOTO_MP, cambiosOCDesdeMP, claveFotoMP, elegirRevisionAutomatica, fotoMP, lineaVentaDesdeMP, mpCancelada, planProductosVenta, toca } from "./lib/mercadoPublico";
 import { alimentarCatalogoDesdeOC } from "./lib/entidadesOC";
-import { rpcArchivarOC, rpcRestaurarOC, cargarCorreosBfk, rpcMarcarCorreo, rpcAsignarVendedor, rpcAsignarFinanciador } from "./lib/supabase";
+import { rpcCartola, rpcArchivarOC, rpcRestaurarOC, cargarCorreosBfk, rpcMarcarCorreo, rpcAsignarVendedor, rpcAsignarFinanciador } from "./lib/supabase";
 import { contarCorreosAccion, desdeCorreos, reemplazarCorreo } from "./lib/correosBfk";
 import { C, MONO, SANS, fmt } from "./lib/theme";
 import { Ic } from "./components/ui/Iconos";
@@ -714,9 +714,19 @@ export default function App() {
   // Fase 4C: un abono puede cubrir una factura, varias del mismo RUT o ser parcial; todos los cobros
   // de la cartola se insertan en UNA sola solicitud (todo o nada). Los depósitos de vale vista ya
   // registrados solo se marcan como cobrados en el banco (no se duplica el cobro).
-  const handleCobrosDesdeCartola=async(cobros,infoCartola,valeVistas=[])=>{
+  const handleCobrosDesdeCartola=async(cobros,infoCartola,valeVistas=[],marca=null)=>{
     const t=session.access_token;
-    if(cobros.length){
+    if(cobros.length&&marca?.marca){
+      // Desde la cartola: la base registra el abono una sola vez (marca del movimiento) o lo vincula a un cobro manual.
+      await rpcCartola(t,"registrar_movimiento_cartola",{p_marca:marca.marca,p_tipo:"cobro",p_vincular:marca.vincular||null,p_confirmo_distinto:!!marca.confirmoDistinto,
+        p_filas:marca.vincular?null:cobros.map(c=>({id:genId("evp"),oc_id:c.ocId,fecha:c.fecha,monto:c.monto,notas:`Desde cartola: ${String(c.descripcion||"").slice(0,120)}`,creado_por:session.user.id}))});
+      if(!marca.vincular) for(const c of cobros){
+        const oc=ocs.find(o=>o.id===c.ocId);
+        await registrarCambio(t,{ocId:c.ocId,ocNumero:c.numeroOc,usuarioId:perfil?.id,usuarioNombre:perfil?.nombre,
+          accion:c.parcial?"Abono parcial registrado desde la cartola del banco":c.tipo==="varias"?"Cobro registrado desde la cartola (un abono para varias facturas)":"Cobro registrado desde la cartola del banco",
+          campo:"monto_cobrado",valorAnterior:fmt.money(oc?.monto_cobrado||0),valorNuevo:`+${fmt.money(c.monto)}`}).catch(()=>{});
+      }
+    } else if(cobros.length){
       // El cobrado y su estado los recalcula la base desde los cobros registrados (Fase 4B).
       await ins("eventos_pago_cliente",t,cobros.map(c=>({id:c.id||genId("evp"),oc_id:c.ocId,fecha:c.fecha,monto:c.monto,
         notas:`Desde cartola: ${String(c.descripcion||"").slice(0,120)}`,creado_por:session.user.id})));
@@ -930,14 +940,18 @@ export default function App() {
     const pagosEnLote=[];
 
     for(const e of egresos){
+      const enBase=!!e.marca;   // desde la cartola: la base registra una sola vez (marca) o vincula un registro manual
+      const opBase={p_marca:e.marca,p_vincular:e.vincular||null,p_confirmo_distinto:!!e.confirmoDistinto};
       if(e.tipo==="financiador"){
         // Lo ya repartido dentro de esta misma cartola (el estado de pantalla aún no se recarga)
         // Mismo criterio que el abono manual (Fase 4B); lo ya repartido en este lote se descuenta.
         const pendientes=ocsPendientesFinanciador(ocs,e.destinoId,difsHistoricas)
           .map(o=>({...o,monto_pagado_fin:Number(o.monto_pagado_fin||0)+(repartidoEnLote.get(o.id)||0)}));
         const {reparto}=repartirFIFO(e.monto,pendientes);
-        // Una sola operación transaccional: pagos, OC, saldo e historial juntos
-        await registrarPagoFinanciador(t,{financiadorId:e.destinoId,fecha:e.fecha,monto:e.monto,origen:"cartola",
+        // Una sola operación transaccional: pagos, OC, saldo e historial juntos (FIFO global: OC más antigua primero)
+        if(enBase) await rpcCartola(t,"registrar_pago_financiador_cartola",{...opBase,p_financiador_id:e.destinoId,p_fecha:e.fecha,p_monto:Number(e.monto),
+          p_asignaciones:reparto.map(r=>({oc_id:r.oc.id,monto:Number(r.asignado)}))});
+        else await registrarPagoFinanciador(t,{financiadorId:e.destinoId,fecha:e.fecha,monto:e.monto,origen:"cartola",
           asignaciones:reparto.map(r=>({ocId:r.oc.id,monto:r.asignado}))});
         reparto.forEach(r=>repartidoEnLote.set(r.oc.id,(repartidoEnLote.get(r.oc.id)||0)+r.asignado));
         nFin++;
@@ -946,18 +960,25 @@ export default function App() {
       if(e.tipo==="vendedor"){
         // Misma función y misma regla de saldo que el pago desde Vendedores.
         // Los pagos ya hechos en este mismo lote se acumulan (el estado de pantalla aún no se recarga).
-        const r=await registrarPagoVendedor({ins,upd,token:t,userId:session.user.id,id:e.id||genId("pv"),vendedorId:e.destinoId,
+        const datosPago={userId:session.user.id,id:genId("pv"),vendedorId:e.destinoId,
           monto:e.monto,fecha:e.fecha,mes:e.mesCom,anio:e.anioCom,notas:`Desde cartola: ${e.descripcion}`,referencia:e.operacion||"",
-          ocs,ivaMensual,pagosVendedor:[...pagosVendedor,...pagosEnLote]});
-        pagosEnLote.push(r.fila);
+          ocs,ivaMensual,pagosVendedor:[...pagosVendedor,...pagosEnLote]};
+        let fila;
+        if(enBase){
+          // Comisión y apoyo en gestión se calculan igual que hoy; la base los valida y escribe pago + OCs en una transacción.
+          const p=prepararPagoVendedor(datosPago); fila=p.fila;
+          await rpcCartola(t,"registrar_movimiento_cartola",{...opBase,p_tipo:"vendedor",p_filas:e.vincular?null:[p.fila],p_ocs_vendedor_pagado:e.vincular?[]:p.ocIds});
+        } else fila=(await registrarPagoVendedor({ins,upd,token:t,...datosPago})).fila;
+        pagosEnLote.push(fila);
         nVen++;
       }
 
       if(e.tipo==="gasto"){
         const {anio:aG,mes:mG}=anioMesDe(e.fecha);   // sin Date: el día 1 no cae en el mes anterior
-        await ins("gastos_indirectos",t,{id:e.id||genId("gas"),categoria_id:e.categoriaId,
-          subcategoria:null,monto:e.monto,mes:mG,anio:aG,
-          fecha:e.fecha,detalle:`Desde cartola: ${e.descripcion}`,creado_por:session.user.id});
+        const filaGasto={id:genId("gas"),categoria_id:e.categoriaId,subcategoria:null,monto:e.monto,mes:mG,anio:aG,
+          fecha:e.fecha,detalle:`Desde cartola: ${e.descripcion}`,creado_por:session.user.id};
+        if(enBase) await rpcCartola(t,"registrar_movimiento_cartola",{...opBase,p_tipo:"gasto",p_filas:e.vincular?null:[filaGasto]});
+        else await ins("gastos_indirectos",t,filaGasto);
         nGas++;
       }
     }
@@ -972,12 +993,19 @@ export default function App() {
   };
 
   // Retiro de capital desde la cartola (Etapa 2): es patrimonio, nunca gasto. Medio bancario (pasa por la caja).
-  // Inserta siempre (nunca actualiza) con el id derivado del movimiento: un segundo registro del mismo
-  // movimiento desde otra sesión lo rechaza la clave primaria (lib/registroCartola.js).
-  const handleRetiroDesdeCartola=async({id,socio,monto,fecha,notas})=>{
-    await ins("aportes_socios",session.access_token,{id:id||genId("ap"),socio,tipo:"retiro",monto,fecha,medio:"Transferencia BancoEstado",notas:notas||null,creado_por:session.user.id});
+  // Retiro de capital desde la cartola: la base lo registra una sola vez (marca del movimiento) o lo vincula a un
+  // retiro manual. Nunca actualiza un registro existente.
+  const handleRetiroDesdeCartola=async({marca,vincular,confirmoDistinto,socio,monto,fecha,notas})=>{
+    await rpcCartola(session.access_token,"registrar_movimiento_cartola",{p_marca:marca,p_tipo:"retiro",p_vincular:vincular||null,p_confirmo_distinto:!!confirmoDistinto,
+      p_filas:vincular?null:[{id:genId("ap"),socio,tipo:"retiro",monto,fecha,medio:"Transferencia BancoEstado",notas:notas||null,creado_por:session.user.id}]});
     showToast("Retiro registrado");
     setAccion(null); await cargarTodo();
+  };
+
+  // Alerta de posible duplicado (la pone la base): el usuario la quita tras revisar.
+  const handleQuitarAlertaCartola=async(tabla,id)=>{
+    await rpcCartola(session.access_token,"cartola_quitar_alerta",{p_tabla:tabla,p_id:id});
+    showToast("Alerta revisada"); await cargarTodo();
   };
 
   // Registros actuales de la base para la verificación final de la cartola (no usa el estado de pantalla).
@@ -1643,7 +1671,7 @@ export default function App() {
 
   const contenidoPantallas=(
     <>
-      {(tab==="panel"||todo)&&hoja("panel",<PanelDashboard onBuscarCompras={(q)=>{setBusquedaCompras(q);setFiltroCompras(null);setOcFoco(null);setVolverA(null);setTab("compras");}} ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} aportes={aportes} ajustes={ajustesSaldo} categorias={categoriasGasto} perfil={perfil} onExportarTodo={handleExportarTodo} exportando={exportando} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setVolverA(null);setTab(t);}} onAccion={(k)=>setAccion(k)} onSincronizar={completarTodasDesdeMP} onCorregirFechas={corregirFechasTodas} sincronizando={sincronizando} porAceptar={porAceptar.filter(a=>!buscarDuplicadoOC(a.numero_oc))} onActualizarPorAceptar={revisarPorAceptar} verificandoPorAceptar={verificandoPorAceptar} aceptadasSinCargar={aceptadasSinCargar.filter(a=>!buscarDuplicadoOC(a.numero_oc))} onCargarOC={(numero)=>{setCodigoOcRapida(numero);setAccion("compra_oc");}} onCargarTodasAceptadas={handleCargarTodasAceptadas} cargandoAceptadas={cargandoAceptadas} onActualizarAceptadas={revisarAceptadasSinCargar} verificandoAceptadas={verificandoAceptadas} canceladasEnMP={canceladasEnMP.filter(c=>ocs.some(o=>o.id===c.id))} onArchivarCancelada={(id)=>handleArchivarOC(id,"Cancelada en Mercado Público")} onActualizarCanceladas={revisarCanceladasEnMP} verificandoCanceladas={verificandoCanceladas} onValidarTodo={validarTodoContraMP} validandoTodo={validandoTodo} usoMP={usoMP} actMP={actMP} esCodigoMP={esCodigoMP} ultimaCartola={ultimaCartola} saldoBanco={saldoBanco} bancoMensual={bancoMensual} onEditarSaldo={()=>setAccion("saldo_banco")} />)}
+      {(tab==="panel"||todo)&&hoja("panel",<PanelDashboard onQuitarAlertaCartola={handleQuitarAlertaCartola} onBuscarCompras={(q)=>{setBusquedaCompras(q);setFiltroCompras(null);setOcFoco(null);setVolverA(null);setTab("compras");}} ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} aportes={aportes} ajustes={ajustesSaldo} categorias={categoriasGasto} perfil={perfil} onExportarTodo={handleExportarTodo} exportando={exportando} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setVolverA(null);setTab(t);}} onAccion={(k)=>setAccion(k)} onSincronizar={completarTodasDesdeMP} onCorregirFechas={corregirFechasTodas} sincronizando={sincronizando} porAceptar={porAceptar.filter(a=>!buscarDuplicadoOC(a.numero_oc))} onActualizarPorAceptar={revisarPorAceptar} verificandoPorAceptar={verificandoPorAceptar} aceptadasSinCargar={aceptadasSinCargar.filter(a=>!buscarDuplicadoOC(a.numero_oc))} onCargarOC={(numero)=>{setCodigoOcRapida(numero);setAccion("compra_oc");}} onCargarTodasAceptadas={handleCargarTodasAceptadas} cargandoAceptadas={cargandoAceptadas} onActualizarAceptadas={revisarAceptadasSinCargar} verificandoAceptadas={verificandoAceptadas} canceladasEnMP={canceladasEnMP.filter(c=>ocs.some(o=>o.id===c.id))} onArchivarCancelada={(id)=>handleArchivarOC(id,"Cancelada en Mercado Público")} onActualizarCanceladas={revisarCanceladasEnMP} verificandoCanceladas={verificandoCanceladas} onValidarTodo={validarTodoContraMP} validandoTodo={validandoTodo} usoMP={usoMP} actMP={actMP} esCodigoMP={esCodigoMP} ultimaCartola={ultimaCartola} saldoBanco={saldoBanco} bancoMensual={bancoMensual} onEditarSaldo={()=>setAccion("saldo_banco")} />)}
       {(tab==="compras"||todo)&&hoja("compras",<>{!todo&&volverA==="notif"&&<button onClick={()=>{setVolverA(null);setTab("notif");}} style={{width:"100%",textAlign:"left",background:C.tealLight,color:C.tealDark,border:"none",borderRadius:10,padding:"10px 12px",marginBottom:10,fontWeight:800,fontSize:13,minHeight:44,cursor:"pointer"}}>← Volver a Alertas</button>}<PanelCompras pagosVendedor={pagosVendedor} onAsignarVendedor={handleAsignarVendedor} onAsignarFinanciador={handleAsignarFinanciador} correosBfk={correosBfk} onMarcarCorreo={handleMarcarCorreo} difsHistoricas={difsHistoricas} onCambiarFinanciamiento={handleCambiarFinanciamiento} busquedaInicial={busquedaCompras} ocs={ocs} perfiles={perfiles} filtroInicial={filtroCompras} ocFoco={ocFoco} onFocoUsado={()=>setOcFoco(null)} contactos={contactos} onEnviarReclamo={handleEnviarReclamo} onCorreoOC={handleCorreoOC} onRegistrarRespuestaReclamo={handleRegistrarRespuestaReclamo} onGuardarContacto={handleGuardarContacto} onGuardarDatosOC={handleGuardarDatosOC} onEditarEvento={handleEditarEvento} financiadores={financiadores} onConfirmarEntrega={handleEntrega} onEmitirFactura={handleFactura} onPagoCliente={handlePagoCliente} onPagoFinanciamiento={handlePagoFin} entidadesCatalogo={entidadesCatalogo} onGuardarLink={handleGuardarLink} onEliminarLink={handleEliminarLink} onEditarLink={handleEditarLink} onRepartirInversion={handleRepartirInversion} buscarDuplicadoOC={buscarDuplicadoOC} onSincronizarFecha={handleSincronizarFecha} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={handleAgregarComentario} onEliminarComentario={handleEliminarComentario} onArchivarOC={handleArchivarOC} onEliminarFactura={handleEliminarFactura} onRegistrarNC={handleNotaCredito} onEliminarEvento={handleEliminarEvento} vendedores={vendedores} onIngresarCompra={handleIngresarCompra} onAsignarResponsable={handleAsignarResponsable} onGuardarPostventa={handleGuardarPostventa} /></>)}
       {(tab==="notif"||todo)&&hoja("notif",<PanelNotificaciones correos={correosBfk} onMarcarCorreo={handleMarcarCorreo} notificaciones={notificaciones} ocs={ocs} onMarcarLeidas={handleMarcarNotificacionesLeidas} filtroAlertas={filtroAlertas} onFiltroAlertas={setFiltroAlertas} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setVolverA(ocId?"notif":null);setTab(t);}} />)}
       {(tab==="agenda"||todo)&&hoja("agenda",<PanelCalendario ocs={ocs} onMarcarFecha={handleMarcarFecha} onVerAlertas={(f)=>{setFiltroCompras(null);setOcFoco(null);setVolverA(null);setFiltroAlertas({nivel:(f&&f.nivel)||"todas",etapa:(f&&f.etapa)||null});setTab("notif");}} />)}

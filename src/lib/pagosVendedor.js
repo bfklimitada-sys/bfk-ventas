@@ -65,20 +65,27 @@ export const pagoParecido = ({ pagosVendedor, vendedorId, mes, anio, fecha, mont
 
 export const esPagoDuplicado = (e) => /duplicate|unique|23505|already exists/i.test(String(e?.message || e || ""));
 
-// Escritura única de un pago a vendedor: una fila = una transferencia, con sus dos componentes.
-// `id` lo fija el formulario al abrirse: si el mismo pago se envía dos veces, la base rechaza el segundo (llave primaria).
-export async function registrarPagoVendedor({ ins, upd, token, userId, id, vendedorId, monto, fecha, mes, anio, notas, referencia, ocs, ivaMensual, pagosVendedor }) {
+// Fila de un pago a vendedor (sin escribir): una fila = una transferencia, con sus dos componentes, y las OC del
+// período que quedan pagadas. La usan el registro manual (registrarPagoVendedor) y la cartola (función de la base).
+export function prepararPagoVendedor({ userId, id, vendedorId, monto, fecha, mes, anio, notas, referencia, ocs, ivaMensual, pagosVendedor }) {
   const ev = evaluarPagoVendedor({ vendedorId, mes, anio, monto, ocs, ivaMensual, pagosVendedor });
   if (!(ev.total > 0)) throw new Error("Indica un monto mayor que $0");
   const fila = {
-    id, vendedor_id: vendedorId, anio: Number(anio), mes: Number(mes),
+    ...(id ? { id } : {}), vendedor_id: vendedorId, anio: Number(anio), mes: Number(mes),
     monto_calculado: ev.pagoComision, monto_pagado: ev.pagoComision,
     monto_extra_gestion: ev.extraGestion, monto_transferido: ev.total,
     referencia_bancaria: String(referencia || "").trim() || null,
-    fecha, estado: "pagado", notas: notas || "", creado_por: userId,
+    fecha, estado: "pagado", notas: notas || "", ...(userId ? { creado_por: userId } : {}),
   };
+  return { ev, fila, ocIds: ev.ocIds };
+}
+
+// Escritura única de un pago a vendedor (registro manual).
+// `id` lo fija el formulario al abrirse: si el mismo pago se envía dos veces, la base rechaza el segundo (llave primaria).
+export async function registrarPagoVendedor({ ins, upd, token, ...datos }) {
+  const { ev, fila, ocIds } = prepararPagoVendedor(datos);
   await ins("pagos_vendedor", token, fila);
-  for (const ocId of ev.ocIds) await upd("ordenes_compra_v2", token, ocId, { vendedor_pagado: true });
+  for (const ocId of ocIds) await upd("ordenes_compra_v2", token, ocId, { vendedor_pagado: true });
   return { ...ev, fila };
 }
 

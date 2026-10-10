@@ -7,6 +7,7 @@ import { resumenCaja } from "../../lib/caja";
 import { Seccion, Tarjeta, Badge, Monto } from "../ui/Sistema";
 import { FILTROS_PANEL, estaCerrada, filtrarPanel, utilidadPorMes, valeVistasPendientes } from "../../lib/ocs";
 import { InformeFinanciero } from "./InformeFinanciero";
+import { AlertasCartola } from "./AlertasCartola";
 
 // Tarjeta base para los avisos ligados a Mercado Público: encabezado con
 // icono + botón de refresco, y cuerpo blanco para el contenido/lista.
@@ -56,7 +57,7 @@ function VerMasAvisoMP({n}){
   return <div style={{fontSize:12,color:C.inkFaint,marginTop:6,textAlign:"center"}}>y {n} más</div>;
 }
 
-export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, aportes: aportesLista, ajustes = [], categorias = [], perfil, onExportarTodo, exportando, onNavigate, onAccion, onSincronizar, onCorregirFechas, sincronizando, porAceptar, onActualizarPorAceptar, verificandoPorAceptar, aceptadasSinCargar, onCargarOC, onCargarTodasAceptadas, cargandoAceptadas, onActualizarAceptadas, verificandoAceptadas, canceladasEnMP, onArchivarCancelada, onActualizarCanceladas, verificandoCanceladas, onValidarTodo, validandoTodo, usoMP, actMP, esCodigoMP, ultimaCartola, saldoBanco, bancoMensual, onEditarSaldo, onBuscarCompras }) {
+export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, aportes: aportesLista, ajustes = [], categorias = [], perfil, onExportarTodo, exportando, onNavigate, onAccion, onSincronizar, onCorregirFechas, sincronizando, porAceptar, onActualizarPorAceptar, verificandoPorAceptar, aceptadasSinCargar, onCargarOC, onCargarTodasAceptadas, cargandoAceptadas, onActualizarAceptadas, verificandoAceptadas, canceladasEnMP, onArchivarCancelada, onActualizarCanceladas, verificandoCanceladas, onValidarTodo, validandoTodo, usoMP, actMP, esCodigoMP, ultimaCartola, saldoBanco, bancoMensual, onEditarSaldo, onBuscarCompras , onQuitarAlertaCartola }) {
   const [busq,setBusq]=useState("");
   const esAdmin=perfil?.rol==="admin";
   const [verMP,setVerMP]=useState(false);
@@ -516,6 +517,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
 
       </Seccion>
 
+      <AlertasCartola ocs={ocs} gastos={gastos} pagosVendedor={pagosVendedor} pagoFinSueltos={pagoFinSueltos} aportes={aportesLista} onQuitar={onQuitarAlertaCartola} />
       <InformeFinanciero ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores}
         pagoFinSueltos={pagoFinSueltos} aportes={aportesLista} ajustes={ajustes} categorias={categorias} />
 

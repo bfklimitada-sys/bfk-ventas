@@ -208,8 +208,10 @@ await escenario("C7", async () => {
   const n = b.escr.length;
   await p.locator("[data-confirmo]").check(); await p.locator("[data-registrar]").click(); await espera(p, 3000);
   const w = desde(b, n);
-  const posts = w.filter((x) => x.metodo === "POST" && x.tabla === "eventos_pago_cliente");
-  ok("C7_cobros_en_una_sola_solicitud", posts.length === 1 && Array.isArray(posts[0].cuerpo) && posts[0].cuerpo.length === 2, posts.map((x) => x.cuerpo));
+  // Desde la cartola los cobros los escribe la función de la base: una sola solicitud, todo o nada, con la marca del movimiento.
+  const posts = w.filter((x) => x.metodo === "RPC" && x.tabla === "registrar_movimiento_cartola" && x.cuerpo?.p_tipo === "cobro");
+  ok("C7_cobros_en_una_sola_solicitud", posts.length === 1 && Array.isArray(posts[0].cuerpo.p_filas) && posts[0].cuerpo.p_filas.length === 2
+    && !w.some((x) => x.metodo === "POST" && x.tabla === "eventos_pago_cliente"), posts.map((x) => x.cuerpo));
   const oc = (id) => b.db.ordenes_compra_v2.find((o) => o.id === id);
   ok("C7_estados_recalculados", oc("oc2").estado_pago_cliente === "pagado" && oc("oc4").estado_pago_cliente === "pagado", ["oc2", "oc4"].map((i) => [oc(i).estado_pago_cliente, oc(i).monto_cobrado]));
   await cargar();
