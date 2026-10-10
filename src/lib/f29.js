@@ -1,4 +1,4 @@
-import { registroIvaDe, ivaAPagarPeriodo, retencionesPeriodo, aplicaRetenciones } from "./calculos.js";
+import { registroIvaDe, ivaAPagarPeriodo, retencionesPeriodo, aplicaRetenciones, f29TotalRegistrado } from "./calculos.js";
 
 // ═══════════════════════════════════════════════════════════════
 // F29 / IVA por período — solo para mostrar el Panel.
@@ -30,7 +30,7 @@ export const desgloseF29 = (ivaMensual, gastos, anio, mes) => {
   const pag = (gastos || [])
     .filter((g) => g.categoria_id === "cat_impuesto" && Number(g.mes) === mes && Number(g.anio) === anio)
     .reduce((s, g) => s + (Number(g.monto) || 0), 0);
-  const faltaTotalF29 = !!registro && aplicaRetenciones(anio, mes) && !(Number(registro.iva_pagado) > 0);
+  const faltaTotalF29 = !!registro && aplicaRetenciones(anio, mes) && !f29TotalRegistrado(registro);
   return { anio, mes, iva, ppm, det, pag, pend: Math.max(0, det - pag), faltaTotalF29 };
 };
 

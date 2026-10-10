@@ -65,12 +65,15 @@ await page.getByText("+ Registrar IVA de otro mes").click(); await page.waitForT
 res.sugiere_septiembre = (await page.locator("select").last().inputValue()) === "9" || (await page.locator(".modal select, select").evaluateAll((s) => s.map((x) => x.value))).includes("9");
 const n2 = page.locator('input[type="number"]');
 const base = (await n2.count()) - 6;
-await n2.nth(base + 2).fill("190000"); await n2.nth(base + 4).fill("50000");
+await n2.nth(base + 2).fill("190000"); await n2.nth(base + 4).fill("50000"); await page.waitForTimeout(200);
+// 10/10/2026: desde agosto 2026 el total del F29 (IVA + PPM) no se precarga con el IVA a pagar: se escribe a mano.
+res.septiembre_total_no_se_presume = (await n2.nth(base + 5).inputValue()) === "" && (await page.locator("[data-f29-sin-total]").count()) === 1;
+await n2.nth(base + 5).fill("140000"); await page.waitForTimeout(150);
 await page.getByText("✓ Guardar IVA del mes").click(); await page.waitForTimeout(1500);
 const sep = escr.filter((e) => e.body && e.body.mes === 9);
 res.septiembre_iva_y_gasto = sep.some((e) => e.t === "iva_mensual" && e.body.iva_pagado === 140000) && sep.some((e) => e.t === "gastos_indirectos" && e.body.categoria_id === "cat_impuesto" && e.body.monto === 140000);
 res.errores = errs; res.escrituras = escr.map((e) => `${e.m} ${e.t}`);
 await browser.close();
 console.log(JSON.stringify(res, null, 1));
-const ok = res.gastos_marca_agosto && res.gasto_impuesto_deriva && res.form_abre_en_agosto && res.form_pagado_precargado && res.vendedores_aviso && res.escribe_un_iva && res.no_duplica_gasto && res.aviso_desaparece && res.comision_agosto === "$395.788" && res.desglose_retenciones && res.sugiere_septiembre && res.septiembre_iva_y_gasto && errs.length === 0;
+const ok = res.gastos_marca_agosto && res.gasto_impuesto_deriva && res.form_abre_en_agosto && res.form_pagado_precargado && res.vendedores_aviso && res.escribe_un_iva && res.no_duplica_gasto && res.aviso_desaparece && res.comision_agosto === "$395.788" && res.desglose_retenciones && res.sugiere_septiembre && res.septiembre_iva_y_gasto && res.septiembre_total_no_se_presume && errs.length === 0;
 console.log(ok ? "RESUMEN e2e IVA unificado: OK" : "RESUMEN e2e IVA unificado: FALLA"); if (!ok) process.exit(1);

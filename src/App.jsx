@@ -1137,7 +1137,7 @@ export default function App() {
     try{
       r=await registrarPagoVendedor({ins,upd,token:session.access_token,userId:session.user.id,id:data.id||genId("pv"),
         vendedorId:data.vendedorId,monto:data.monto,fecha:data.fecha,mes:data.mes,anio:data.anio,
-        notas:data.observacion?.trim()?`${data.label} · ${data.observacion.trim()}`:data.label,referencia:data.referencia,
+        notas:[data.label,data.observacion?.trim(),data.avisoProvisoria].filter(Boolean).join(" · "),referencia:data.referencia,
         ocs,ivaMensual,pagosVendedor});
     }catch(e){
       if(esPagoDuplicado(e)){ showToast("Este pago ya estaba registrado: no se guardó dos veces"); await cargarTodo(); return; }

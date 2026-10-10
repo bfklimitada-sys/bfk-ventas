@@ -285,6 +285,7 @@ export function FormPagoVendedorSimple({ vendedores, ocs, ivaMensual, pagosVende
   const [fecha,setFecha]=useState(new Date().toLocaleDateString("sv-SE"));
   const [referencia,setReferencia]=useState(""); const [observacion,setObservacion]=useState("");
   const [revisar,setRevisar]=useState(false);
+  const [confirmaProvisoria,setConfirmaProvisoria]=useState(false); // pago sobre comisión provisoria o del mes en curso: confirmación explícita
   const [err,setErr]=useState(""); const [saving,setSaving]=useState(false);
   const [idPago]=useState(nuevoIdPago);   // fijo mientras el formulario está abierto: un doble envío no crea dos pagos
   const MESES=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
@@ -292,15 +293,21 @@ export function FormPagoVendedorSimple({ vendedores, ocs, ivaMensual, pagosVende
   const labelMes=`${MESES[mes-1]}/${anio}`;
   const ev=evaluarPagoVendedor({vendedorId,mes,anio,monto:Number(monto)||0,ocs,ivaMensual,pagosVendedor});
   const parecido=pagoParecido({pagosVendedor,vendedorId,mes,anio,fecha,monto});
-  const cambiarPeriodo=(v,m,a)=>{ setRevisar(false); const e=evaluarPagoVendedor({vendedorId:v,mes:Number(m),anio:Number(a),monto:0,ocs,ivaMensual,pagosVendedor}); setMonto(String(e.pendienteAntes)); };
+  const cambiarPeriodo=(v,m,a)=>{ setRevisar(false); setConfirmaProvisoria(false); const e=evaluarPagoVendedor({vendedorId:v,mes:Number(m),anio:Number(a),monto:0,ocs,ivaMensual,pagosVendedor}); setMonto(String(e.pendienteAntes)); };
   const pedirRevision=()=>{
     if(!(Number(monto)>0)){setErr("Indica el monto total transferido");return;}
     if(!fecha){setErr("Indica la fecha de la transferencia");return;}
     setErr(""); setRevisar(true);
   };
+  // Comisión no definitiva (provisoria o del mes en curso): se puede registrar una transferencia real, pero con confirmación
+  // explícita, y la nota del pago lo deja escrito.
+  const noDefinitiva=ev.provisoria||ev.enCurso;
+  const motivoNoDefinitiva=ev.enCurso?"mes en curso":ev.sinIvaRegistrado?"IVA sin registrar":"falta el total del F29";
   const handleSave=async()=>{
+    if(noDefinitiva&&!confirmaProvisoria){setErr("Confirma que la transferencia ya se realizó y que se registra sobre una comisión no definitiva");return;}
     setErr(""); setSaving(true);
-    try{await onSave({id:idPago,vendedorId,monto:Math.round(Number(monto)),fecha,mes:Number(mes),anio:Number(anio),referencia,observacion,label:`Ventas de ${labelMes}`});}
+    try{await onSave({id:idPago,vendedorId,monto:Math.round(Number(monto)),fecha,mes:Number(mes),anio:Number(anio),referencia,observacion,label:`Ventas de ${labelMes}`,
+      avisoProvisoria:noDefinitiva?`Pagado sobre comisión provisoria (${motivoNoDefinitiva}): confirmado por el usuario`:""});}
     catch(e){setErr(e.message);}finally{setSaving(false);}
   };
   const Linea=({k,v,fuerte,tono,dato})=>(
@@ -344,11 +351,16 @@ export function FormPagoVendedorSimple({ vendedores, ocs, ivaMensual, pagosVende
             Total transferido <b style={{color:C.ink}}>{fmt.money(ev.total)}</b> = comisión <b style={{color:C.ink}}>{fmt.money(ev.pagoComision)}</b> + extra por gestión <b style={{color:C.ink}}>{fmt.money(ev.extraGestion)}</b><br/>
             Comisión de {labelMes}: pendiente {fmt.money(ev.pendienteAntes)} → {fmt.money(ev.pendiente)}{ev.completo&&ev.ocIds.length?` · ${ev.ocIds.length} OC quedan con comisión pagada`:""}
           </div>
-          {(ev.provisoria||ev.enCurso)&&<div style={{fontSize:12,color:C.warnText,fontWeight:700,marginBottom:8}}><Ic n="⚠"/> Pago sobre una comisión {ev.enCurso?"del MES EN CURSO":"PROVISORIA"} ({ev.enCurso?"aún no exigible":ev.sinIvaRegistrado?"IVA sin registrar":"falta el total del F29"}): podría cambiar cuando se registre el IVA y el F29.</div>}
+          {noDefinitiva&&(
+            <label data-confirmar-provisoria style={{display:"flex",gap:8,alignItems:"flex-start",background:C.warnLight,border:`1px solid ${C.warn}55`,borderRadius:9,padding:"8px 10px",fontSize:12,color:C.warnText,fontWeight:700,marginBottom:8,lineHeight:1.45,cursor:"pointer"}}>
+              <input type="checkbox" checked={confirmaProvisoria} onChange={e=>setConfirmaProvisoria(e.target.checked)} style={{marginTop:1,width:18,height:18,flexShrink:0}} />
+              <span>Pago sobre una comisión {ev.enCurso?"del MES EN CURSO":"PROVISORIA"} ({motivoNoDefinitiva}). Confirmo que esta transferencia ya se realizó. La comisión puede cambiar al registrar el IVA y el F29; si baja, la diferencia quedará como saldo por regularizar.</span>
+            </label>
+          )}
           {parecido&&<div data-aviso-duplicado style={{fontSize:12,color:C.dangerText,fontWeight:700,marginBottom:8}}><Ic n="⚠"/> Ya hay un pago de {fmt.money(totalTransferido(parecido))} a {vend?.nombre} para {labelMes} con esta misma fecha. Confirma solo si es una transferencia distinta.</div>}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-            <button onClick={()=>setRevisar(false)} disabled={saving} style={btnG}>Corregir</button>
-            <button data-confirmar-pago onClick={handleSave} disabled={saving} style={btnP(saving?C.inkFaint:C.teal)}>{saving?"Guardando…":"✓ Confirmar pago"}</button>
+            <button onClick={()=>{setRevisar(false);setConfirmaProvisoria(false);}} disabled={saving} style={btnG}>Corregir</button>
+            <button data-confirmar-pago onClick={handleSave} disabled={saving||(noDefinitiva&&!confirmaProvisoria)} style={btnP(saving||(noDefinitiva&&!confirmaProvisoria)?C.inkFaint:C.teal)}>{saving?"Guardando…":"✓ Confirmar pago"}</button>
           </div>
         </div>
       )}

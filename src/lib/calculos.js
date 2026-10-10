@@ -120,6 +120,17 @@ export const ivaAPagarPeriodo = (registro) => Math.max(0, ivaNetoPeriodo(registr
 export const RETENCIONES_DESDE = { anio: 2026, mes: 8 };
 export const aplicaRetenciones = (anio, mes) =>
   Number(anio) * 12 + Number(mes) >= RETENCIONES_DESDE.anio * 12 + RETENCIONES_DESDE.mes;
+// Total del F29 REGISTRADO (desde agosto 2026 la comisión lo necesita para ser definitiva). 10/10/2026:
+//  · El total (IVA + PPM y demás retenciones) se guarda en iva_pagado y SOLO cuenta si el usuario lo escribió:
+//    desde agosto 2026 el formulario ya no copia el IVA a pagar como total (no se presume PPM $0).
+//  · Registrado ⇔ total > 0 y total ≥ IVA a pagar (un total menor que su propio IVA es incoherente).
+//  · iva_pagado es NOT NULL DEFAULT 0 en producción: 0 significa «total no registrado». Un F29 declarado
+//    legítimamente en $0 no se puede distinguir sin un cambio de esquema (propuesta aparte): queda provisorio.
+export const f29TotalRegistrado = (registro) => {
+  if (!registro) return false;
+  const total = Number(registro.iva_pagado);
+  return Number.isFinite(total) && total > 0 && total >= ivaAPagarPeriodo(registro);
+};
 export const retencionesPeriodo = (registro) => {
   if (!registro || !aplicaRetenciones(registro.anio, registro.mes)) return 0;
   return Math.max(0, Math.round((Number(registro.iva_pagado) || 0) - ivaAPagarPeriodo(registro)));
@@ -186,7 +197,7 @@ export const calcularPagoVendedor = ({ vendedorId, ocs, anio, mes, ivaMensual = 
     mes, anio, label: fmt.monthYear(mes, anio), sumaFacts, sumaUtilidad, pagoVentasPropias, pagoCalculado, pagado,
     estado: pagado >= pagoCalculado ? "pagado" : "pendiente", esVerificado, impIva, retenciones, descuentoF29, sinIva, ivaRegistrado: !!ivaMes,
     // Desde agosto 2026 la comisión descuenta el PPM del F29: sin el total del F29 registrado aún no es definitiva.
-    f29Incompleto: !sinIva && !!ivaMes && aplicaRetenciones(anio, mes) && !(Number(ivaMes.iva_pagado) > 0),
+    f29Incompleto: !sinIva && !!ivaMes && aplicaRetenciones(anio, mes) && !f29TotalRegistrado(ivaMes),
     ivaVentas: ivaMes ? Number(ivaMes.iva_ventas) || 0 : 0, ivaCompras: ivaMes ? Number(ivaMes.iva_compras) || 0 : 0,
     deuda: Math.max(0, pagoCalculado - pagado),
     // Extra por gestión del período (aparte de la comisión) y total transferido; si la comisión bajó después de pagarla

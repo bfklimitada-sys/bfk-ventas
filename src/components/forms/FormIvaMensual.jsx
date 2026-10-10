@@ -20,7 +20,7 @@ export function FormIvaMensual({ ivaMensual=[], gastos=[], periodo, onSave }) {
     const g=gastosImpuestoDe(gastos,anio,mes);
     return { vN:txt(r?.ventas_netas), iV:txt(r?.iva_ventas), cN:txt(r?.compras_netas), iC:txt(r?.iva_compras),
       pagado:pag>0?String(pag):"", pagadoManual:pag>0, fecha:(g[0]?.fecha&&String(g[0].fecha).slice(0,10))||new Date().toISOString().slice(0,10),
-      existe:!!r, pagos:g.length };
+      existe:!!r, pagos:g.length, totalRegistrado:r&&aplicaRetenciones(anio,mes)?Number(r.iva_pagado)||0:0 };
   };
   const [mes,setMes]=useState(Number(inicial.mes));
   const [anio,setAnio]=useState(Number(inicial.anio));
@@ -32,10 +32,13 @@ export function FormIvaMensual({ ivaMensual=[], gastos=[], periodo, onSave }) {
 
   const ivaNeto=ivaNetoPeriodo({iva_ventas:v.iV,iva_compras:v.iC});
   const aPagar=ivaAPagarPeriodo({iva_ventas:v.iV,iva_compras:v.iC});
-  // El pagado sigue al IVA a pagar mientras no se escriba a mano.
-  const pagado=v.pagadoManual?v.pagado:(aPagar>0?String(aPagar):"");
-  const retenciones=Math.max(0,(Number(pagado)||0)-aPagar);
   const conRet=aplicaRetenciones(anio,mes);
+  // Antes de agosto 2026 el pagado sigue al IVA a pagar mientras no se escriba a mano. Desde agosto 2026 el total del
+  // F29 (IVA + PPM) se escribe siempre a mano: no se presume que sea igual al IVA a pagar (10/10/2026).
+  const pagado=v.pagadoManual?v.pagado:(conRet?"":(aPagar>0?String(aPagar):""));
+  const retenciones=Math.max(0,(Number(pagado)||0)-aPagar);
+  const sinTotal=conRet&&!(Number(pagado)>0)&&!(v.totalRegistrado>0);
+  const totalIncoherente=conRet&&Number(pagado)>0&&Number(pagado)<aPagar;
 
   const handleSave=async()=>{
     if(v.iV===""&&v.iC===""){setErr("Indica el IVA débito y el IVA crédito del F29");return;}
@@ -64,6 +67,8 @@ export function FormIvaMensual({ ivaMensual=[], gastos=[], periodo, onSave }) {
         </Field>
         <Field label="Fecha de pago"><input style={iStyle} type="date" value={v.fecha} disabled={v.pagos>1} onChange={e=>set("fecha",e.target.value)} /></Field>
       </div>
+      {sinTotal&&<div data-f29-sin-total style={{background:C.warnLight,border:`1px solid ${C.warn}55`,borderRadius:9,padding:"8px 12px",marginBottom:10,fontSize:12.5,color:C.warnText,fontWeight:700,lineHeight:1.45}}>Escribe el total del F29 (IVA + PPM y otras retenciones). Sin ese total, las comisiones de {MESES[mes-1]} {anio} quedan provisorias; no se presume que el total sea igual al IVA a pagar.</div>}
+      {totalIncoherente&&<div data-f29-total-menor style={{background:C.dangerLight,borderRadius:9,padding:"8px 12px",marginBottom:10,fontSize:12.5,color:C.dangerText,fontWeight:700,lineHeight:1.45}}>El total del F29 ({fmt.money(Number(pagado))}) es menor que el IVA a pagar ({fmt.money(aPagar)}): no se considerará un total completo.</div>}
       <div data-desglose-f29 style={{background:C.tealLight,borderRadius:9,padding:"10px 12px",fontSize:13,color:C.tealDark,fontWeight:700,marginBottom:12,lineHeight:1.5}}>
         <div>IVA neto (débito − crédito): {conSigno(ivaNeto)} · IVA a pagar: {fmt.money(aPagar)}</div>
         <div>Retenciones (PPM y otras): {fmt.money(retenciones)}</div>

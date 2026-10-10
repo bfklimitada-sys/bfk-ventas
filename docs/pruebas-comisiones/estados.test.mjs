@@ -1,7 +1,9 @@
 // Estados de la comisión (09/10/2026): en curso · por liquidar (provisoria) · pendiente de pago · pagada.
 // Datos ficticios. Solo presentación: los montos calculados y los pagos no cambian.
 // Ejecutar: node docs/pruebas-comisiones/ejecutar.mjs
-import { calcularPagoVendedor, comisionProvisoria, estadoComisionMes, esMesEnCurso, mesesConFactura } from "../../src/lib/calculos.js";
+import { calcularPagoVendedor, comisionProvisoria, estadoComisionMes, esMesEnCurso, f29TotalRegistrado, mesesConFactura } from "../../src/lib/calculos.js";
+import { desgloseF29 } from "../../src/lib/f29.js";
+import { planGuardarIva } from "../../src/lib/ivaUnificado.js";
 import { comisionesPorPagar, resumenCaja } from "../../src/lib/caja.js";
 import { evaluarPagoVendedor } from "../../src/lib/pagosVendedor.js";
 
@@ -81,6 +83,24 @@ const ev = (m) => evaluarPagoVendedor({ vendedorId: "va", mes: m, anio: 2026, mo
 eq("formulario: octubre en curso", [ev(10).enCurso, ev(9).enCurso], [true, false]);
 eq("formulario: provisoria por IVA o por F29", [ev(8).provisoria, ev(8).f29Incompleto, ev(9).provisoria, ev(9).sinIvaRegistrado, ev(7).provisoria], [true, true, true, true, false]);
 eq("formulario: el monto de la comisión no cambia", ev(7).comision, Math.round(calc("va", 2026, 7).pagoCalculado));
+
+// 5. Total del F29 (10/10/2026): solo cuenta el total escrito (IVA + PPM); no se presume igual al IVA a pagar.
+//    Producción: iva_pagado NOT NULL DEFAULT 0 → 0 = total no registrado (un F29 en $0 requiere cambio de esquema).
+eq("F29: total ≥ IVA a pagar → registrado", f29TotalRegistrado({ anio: 2026, mes: 9, iva_ventas: 100, iva_compras: 0, iva_pagado: 150 }), true);
+eq("F29: total = IVA a pagar escrito por el usuario → registrado", f29TotalRegistrado({ anio: 2026, mes: 9, iva_ventas: 100, iva_compras: 0, iva_pagado: 100 }), true);
+eq("F29: total menor que el IVA a pagar → no registrado (incoherente)", f29TotalRegistrado({ anio: 2026, mes: 9, iva_ventas: 500, iva_compras: 100, iva_pagado: 300 }), false);
+eq("F29: 0 → no registrado (también con IVA a pagar $0)", [f29TotalRegistrado({ anio: 2026, mes: 9, iva_ventas: 500, iva_compras: 100, iva_pagado: 0 }), f29TotalRegistrado({ anio: 2026, mes: 9, iva_ventas: 100, iva_compras: 500, iva_pagado: 0 })], [false, false]);
+const ocSep = [venta("S9", "va", "2026-09-10", 500000)];
+const calcSep = (reg) => calcularPagoVendedor({ vendedorId: "va", ocs: ocSep, anio: 2026, mes: 9, ivaMensual: [reg], pagosVendedor: [] });
+eq("comisión con total del F29 escrito → pendiente de pago (definitiva)", estadoComisionMes(calcSep({ anio: 2026, mes: 9, iva_ventas: 50000, iva_compras: 10000, iva_pagado: 45000 }), hoy), "pendiente");
+eq("comisión con IVA registrado pero total 0 → por liquidar", estadoComisionMes(calcSep({ anio: 2026, mes: 9, iva_ventas: 50000, iva_compras: 10000, iva_pagado: 0 }), hoy), "por_liquidar");
+eq("Panel F29: «falta el total» coherente con la comisión", [45000, 0, 30000].map((t) => desgloseF29([{ anio: 2026, mes: 9, iva_ventas: 50000, iva_compras: 10000, iva_pagado: t }], [], 2026, 9).faltaTotalF29), [false, true, true]);
+const plan = (data, ivaMensual = []) => planGuardarIva({ data: { anio: 2026, mes: 9, ivaVentas: 50000, ivaCompras: 10000, pagadoSii: 0, ...data }, gastos: [], ivaMensual }).iva.fila.iva_pagado;
+eq("formulario IVA: sin total escrito → 0 (no el IVA a pagar)", plan({}), 0);
+eq("formulario IVA: total escrito → se guarda tal cual", plan({ pagadoSii: 45000 }), 45000);
+eq("formulario IVA: editar sin total conserva el total registrado", plan({}, [{ id: "i9", anio: 2026, mes: 9, iva_ventas: 50000, iva_compras: 10000, iva_pagado: 45000 }]), 45000);
+eq("formulario IVA: antes de agosto 2026 sin cambios (IVA a pagar)", planGuardarIva({ data: { anio: 2026, mes: 7, ivaVentas: 50000, ivaCompras: 10000, pagadoSii: 0 }, gastos: [], ivaMensual: [] }).iva.fila.iva_pagado, 40000);
+eq("formulario IVA: nunca escribe NULL (columna NOT NULL en producción)", [plan({}), plan({ ivaVentas: 0, ivaCompras: 5000 })].every((x) => x !== null && x !== undefined), true);
 
 console.log(`\nRESUMEN estados de comisión: ${ok} OK, ${fallas} FALLA(S)`);
 if (fallas) process.exitCode = 1;

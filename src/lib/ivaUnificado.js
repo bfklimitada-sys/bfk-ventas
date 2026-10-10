@@ -1,4 +1,4 @@
-import { registroIvaDe, ivaAPagarPeriodo } from "./calculos.js";
+import { registroIvaDe, ivaAPagarPeriodo, aplicaRetenciones } from "./calculos.js";
 import { F29_DESDE } from "./f29.js";
 
 // ═══════════════════════════════════════════════════════════════
@@ -71,8 +71,14 @@ export const planGuardarIva = ({ data, gastos, ivaMensual }) => {
   const pagado = Math.round(Number(data.pagadoSii) || 0);
   // iva_pagado = total pagado del F29 (IVA + retenciones); sin pago indicado, el IVA a pagar.
   // Desde agosto 2026 la diferencia (retenciones) se descuenta en la comisión (lib/calculos.js).
-  fila.iva_pagado = pagado > 0 ? pagado : ivaAPagarPeriodo(fila);
+  // 10/10/2026: desde agosto 2026 el total del F29 (IVA + PPM) NO se presume igual al IVA a pagar. Sin total escrito se
+  // guarda 0 (= total no registrado; la columna es NOT NULL DEFAULT 0) y la comisión del mes queda provisoria. Si el
+  // período ya tenía un total registrado y el formulario llega sin total, se conserva el registrado (no se borra al
+  // editar débito/crédito). Los períodos anteriores a agosto 2026 siguen igual.
   const existente = registroIvaDe(ivaMensual, anio, mes);
+  if (pagado > 0) fila.iva_pagado = pagado;
+  else if (!aplicaRetenciones(anio, mes)) fila.iva_pagado = ivaAPagarPeriodo(fila);
+  else fila.iva_pagado = existente && Number(existente.iva_pagado) > 0 ? Number(existente.iva_pagado) : 0;
   const iva = existente ? { accion: "actualizar", id: existente.id, fila } : { accion: "insertar", fila };
 
   const delMes = gastosImpuestoDe(gastos, anio, mes);
