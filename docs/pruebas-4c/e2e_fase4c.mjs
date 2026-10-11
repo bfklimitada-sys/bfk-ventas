@@ -27,6 +27,8 @@ async function irA(p, k) {
 }
 async function abrirOC(p, numero) {
   if (await p.locator(`[data-oc="${numero}"] [data-testid="oc-campos"]`).count()) return;
+  // Rediseño 2026-10: la ficha abierta es un panel encima de la lista; se cierra antes de abrir otra OC.
+  if (await p.locator("[data-hoja-lateral]").count()) { await p.keyboard.press("Escape"); await espera(p, 400); }
   await p.locator(`[data-oc="${numero}"] > div`).first().click(); await espera(p, 1300);
 }
 const escenario = async (nombre, fn) => {

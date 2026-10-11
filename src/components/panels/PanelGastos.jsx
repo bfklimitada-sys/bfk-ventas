@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { Field, Modal } from "../ui/Basicos";
 import { C, btnP, fmt, iMono, iStyle, selStyle } from "../../lib/theme";
 import { Ic } from "../ui/Iconos";
-import { Seccion, Tarjeta, Badge, Monto, Desplegable, AvisoLinea, BarraAcciones, BotonPrincipal, Ayuda } from "../ui/Sistema";
+import { Seccion, Tarjeta, Badge, Monto, Desplegable, AvisoLinea, BarraAcciones, BotonPrincipal } from "../ui/Sistema";
 import { FormIvaMensual } from "../forms/FormIvaMensual";
 import { CATEGORIA_IMPUESTO, periodosIvaIncompletos } from "../../lib/ivaUnificado";
 import { apoyoEnGestion } from "../../lib/informes";
@@ -83,14 +83,15 @@ export function PanelGastos({ gastos, categorias, ivaMensual=[], pagosVendedor=[
       <BarraAcciones>
         <BotonPrincipal onClick={()=>{setTipoForm("gasto");setShowForm(true);}}>+ Registrar gasto</BotonPrincipal>
       </BarraAcciones>
-      {onIrImpuestos&&<AvisoLinea tono="info" icono="🧾" dato="ir-impuestos" onClick={onIrImpuestos} accion="Ir a Impuestos">El IVA del mes y el F29 se registran en Impuestos (quedan aquí como gasto «Impuesto SII»).</AvisoLinea>}
+      {onIrImpuestos&&<AvisoLinea tono="info" icono="🧾" dato="ir-impuestos" onClick={onIrImpuestos} accion="Ir a Impuestos">El IVA y el F29 se registran en Impuestos.</AvisoLinea>}
 
       <Seccion titulo="Gastos por categoría" nota="Se muestra el último pago de cada categoría. Toca una para ver su historial.">
         {actuales.map(c=>tarjetaCategoria(c,false))}
       </Seccion>
 
-      <Desplegable dato="apoyo-gestion" titulo={<>Apoyo en gestión<Ayuda>Incluye el gasto «Apoyo en gestión» y el extra por gestión que va dentro de un pago a vendedor. Cada monto aparece una vez: la salida bancaria es el gasto o el pago, nunca ambos.</Ayuda></>}
+      <Desplegable dato="apoyo-gestion" titulo="Apoyo en gestión"
         resumen={`${apoyo.items.length} registro${apoyo.items.length===1?"":"s"}`} derecha={<Monto tam="sm">{fmt.money(apoyo.total)}</Monto>}>
+          <div style={{fontSize:12,color:C.inkFaint,lineHeight:1.45,marginBottom:8}}>Incluye el gasto «Apoyo en gestión» y el extra por gestión que va dentro de un pago a vendedor. Cada monto aparece una vez: la salida bancaria es el gasto o el pago, nunca ambos.</div>
           <div data-apoyo-total style={{display:"flex",justifyContent:"space-between",fontWeight:800,fontSize:13,marginBottom:6}}><span>Total</span><Monto>{fmt.money(apoyo.total)}</Monto></div>
           {apoyo.items.map(it=>(
             <div key={it.origen+it.id} data-apoyo={it.origen} style={{display:"flex",justifyContent:"space-between",gap:8,fontSize:12,padding:"3px 0",borderTop:`1px solid ${C.border}`}}>

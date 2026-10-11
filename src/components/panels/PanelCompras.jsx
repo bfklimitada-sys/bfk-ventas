@@ -862,7 +862,7 @@ export function FilaOC({ correosOC = SIN_CORREOS, onMarcarCorreo, pagosVendedor,
   const handleToggle=()=>{ onToggle(); }; // el bloqueo se gestiona de forma central (useBloqueoOC) según la OC expandida
 
   return (
-    <div data-oc={oc.numero_oc} style={{background:expanded?C.tealLight:C.card,border:`1px solid ${expanded?C.teal:C.border}`,borderLeft:`4px solid ${estadoOC.color}`,borderRadius:12,marginBottom:8,overflow:expanded?"visible":"hidden"}}>
+    <div data-oc={oc.numero_oc} style={{background:expanded?C.tealLight:C.card,borderTop:`1px solid ${expanded?C.teal:C.border}`,borderRight:`1px solid ${expanded?C.teal:C.border}`,borderBottom:`1px solid ${expanded?C.teal:C.border}`,borderLeft:`4px solid ${estadoOC.color}`,borderRadius:12,marginBottom:8,overflow:expanded?"visible":"hidden"}}>
       <div onClick={handleToggle} role="button" tabIndex={0} aria-expanded={!!expanded} onKeyDown={e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); handleToggle(); } }} style={{padding:escritorio?"10px 14px":"12px 14px",cursor:"pointer"}}>
         {escritorio?(
           /* Escritorio: una fila compacta — código · cliente y asignaciones · estado y avance · monto */
@@ -1439,6 +1439,8 @@ export function PanelCompras({ pagosVendedor, onAsignarVendedor, onAsignarFinanc
               Filtros{totalActivos>0&&<span style={{background:C.info,color:"#fff",borderRadius:999,fontSize:12,fontWeight:800,padding:"0 7px",lineHeight:"18px"}}>{totalActivos}</span>}
             </BotonSecundario>
           </div>
+          {/* Vendedor y financiador siempre a la vista (decisión de la fase vendedor/financiador): en el celular, bajo la búsqueda */}
+          {!escritorio&&asignacionGrid}
           {totalActivos>0&&!masFiltros&&(
             <div data-filtros-activos style={{display:"flex",alignItems:"center",gap:8,fontSize:12,color:C.info,fontWeight:700,margin:"-2px 2px 10px"}}>
               <span>{totalActivos} filtro{totalActivos>1?"s":""} activo{totalActivos>1?"s":""}</span>
@@ -1457,7 +1459,6 @@ export function PanelCompras({ pagosVendedor, onAsignarVendedor, onAsignarFinanc
                 )}
               </div>
 
-              {!escritorio&&asignacionGrid}
               {/* Fase 4C: quién vendió, quién financió, a quién se compró, qué producto y vale vista */}
               <div data-filtros-4c style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
                 <label style={{fontSize:12,fontWeight:700,color:C.inkFaint}}>Proveedor

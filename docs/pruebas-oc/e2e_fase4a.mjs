@@ -26,6 +26,8 @@ async function irA(p, k) {
 async function abrirOC(p, numero) {
   // Si ya está abierta (misma pantalla), no se vuelve a tocar: tocarla la cerraría.
   if (await p.locator(`[data-oc="${numero}"] [data-testid="oc-campos"]`).count()) return;
+  // Rediseño 2026-10: la ficha abierta es un panel encima de la lista; se cierra antes de abrir otra OC.
+  if (await p.locator("[data-hoja-lateral]").count()) { await p.keyboard.press("Escape"); await espera(p, 400); }
   await p.locator(`[data-oc="${numero}"] > div`).first().click(); await espera(p, 1300);
 }
 const enModal = (p) => p.locator("[role=dialog]").last();
@@ -74,6 +76,7 @@ await escenario("S2", async () => {
   const { page: p, errs, ctx } = await abrir(browser, b, { url: URL_APP, ...escritorio, espera: 3000 });
   await irA(p, "usuarios");
   const n = b.escr.length;
+  if (await p.locator('[role=tablist][aria-label="Administración"] [data-tab="mp"]').count()) { await p.locator('[role=tablist][aria-label="Administración"] [data-tab="mp"]').click(); await espera(p, 400); } // rediseño 2026-10: pestaña Mercado Público
   await boton(p, /Corregir fechas de todas contra Mercado Público/); await espera(p, 4500);
   const ws = desde(b, n);
   ok("S2_revisa_oc_contra_mp", b.llamadasMP.length >= 8, b.llamadasMP);

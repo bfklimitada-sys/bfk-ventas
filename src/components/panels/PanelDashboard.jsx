@@ -444,8 +444,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
         </div>
         <div>
       <Desplegable dato="caja" abiertoInicial={escritorio} icono={<Ic n="🏦"/>} titulo="Caja y compromisos"
-        resumen={`Saldo proyectado ${fmt.money(resumen.saldoProyectado)}${resumen.provisorio?" · provisorio":""}`}
-        derecha={<Enlace onClick={(e)=>{e.stopPropagation();onNavigate&&onNavigate("banco",null);}} style={{minHeight:30,padding:"2px 4px"}}>Banco</Enlace>}>
+        resumen={`Saldo proyectado ${fmt.money(resumen.saldoProyectado)}${resumen.provisorio?" · provisorio":""}`}>
       {/* Cierre financiero: cada concepto por separado, todos los pendientes sin importar el mes; lo que depende
           de un IVA aún no registrado se marca PROVISORIO (lib/caja.js). */}
       {(()=>{

@@ -76,13 +76,15 @@ for (const [modo, vp] of [["escritorio", { width: 1280, height: 900 }], ["movil"
     && /BFK Ltda\. · Capitalización/.test(await fila(7).innerText()) && /F: Cuenta/.test(await fila(7).innerText());
 
   const abrir = async (n) => { await fila(n).locator("> div").first().click(); await page.waitForTimeout(900); return page.locator(`[data-ficha-oc="TVF-${n}-AG26"]`); };
-  const cerrar = async (n) => { await fila(n).locator("> div").first().click(); await page.waitForTimeout(400); };
+  // Rediseño 2026-10: la ficha se abre en un panel encima de la lista; se cierra con Escape.
+  const cerrar = async (n) => { if (await page.locator(`[data-hoja-lateral="TVF-${n}-AG26"]`).count()) await page.keyboard.press("Escape"); else await fila(n).locator("> div").first().click(); await page.waitForTimeout(400); };
   // OC 2 (nueva, sin definir): asignar vendedor y financiador; luego volver a Sin definir
   let f = await abrir(2);
   const bloque = f.locator("[data-asignaciones-oc]");
   r.ficha_visible_sin_definir = (await bloque.count()) === 1 && (await bloque.locator('[data-asignacion="vendedor"]').innerText()).includes("Sin definir")
     && (await bloque.locator('[data-asignacion="financiador"]').innerText()).includes("Sin definir");
-  r.cabecera_v_f = /V: Sin definir · F: Sin definir/.test(await f.locator("[data-cabecera-asignaciones]").innerText());
+  // En el celular la cabecera de la ficha no repite vendedor/financiador (regla de docs/pruebas-ui-movil): se comprueba solo en escritorio.
+  r.cabecera_v_f = modo === "movil" ? (await f.locator("[data-cabecera-asignaciones]").count()) === 0 : /V: Sin definir · F: Sin definir/.test(await f.locator("[data-cabecera-asignaciones]").innerText());
   await bloque.locator('[data-asignacion="vendedor"] [data-asignacion-editar]').click();
   await bloque.locator('[data-asignacion="vendedor"] [data-asignacion-select]').selectOption("v2");
   await bloque.locator('[data-asignacion="vendedor"] [data-asignacion-guardar]').click(); await page.waitForTimeout(1200);

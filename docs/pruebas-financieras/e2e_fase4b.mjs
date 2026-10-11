@@ -30,6 +30,8 @@ async function irA(p, k) {
 }
 async function abrirOC(p, numero) {
   if (await p.locator(`[data-oc="${numero}"] [data-testid="oc-campos"]`).count()) return;
+  // Rediseño 2026-10: la ficha abierta es un panel encima de la lista; se cierra antes de abrir otra OC.
+  if (await p.locator("[data-hoja-lateral]").count()) { await p.keyboard.press("Escape"); await espera(p, 400); }
   await p.locator(`[data-oc="${numero}"] > div`).first().click(); await espera(p, 1300);
 }
 // Abre (sin cerrar si ya está abierto) el detalle de una etapa de la OC.
@@ -37,6 +39,14 @@ async function etapa(p, numero, key) {
   await abrirOC(p, numero);
   const fila = p.locator(`[data-oc="${numero}"]`);
   const det = fila.locator(`[data-detalle-etapa="${key}"]`);
+  // Ficha actual (expediente con secciones): cada etapa vive en una sección de la ficha ([data-etapa-seccion]).
+  if (!(await fila.locator(`[data-etapa="${key}"]`).count())) {
+    const SECCION = { compra: "compra", financ: "compra", entrega: "entrega", postventa: "entrega", factura: "facturacion", cobro: "cobranza" };
+    const sec = fila.locator(`[data-seccion-ficha="${SECCION[key]}-${await fila.getAttribute("data-oc-id") || ""}"]`);
+    const enSec = fila.locator(`[data-etapa-seccion="${key}"]`);
+    if (!(await enSec.count())) { await fila.locator("[data-indice-ficha] button", { hasText: { compra: "Compra", financ: "Compra", entrega: "Entrega", postventa: "Entrega", factura: "Facturación", cobro: "Cobranza" }[key] }).first().click(); await espera(p, 400); }
+    void sec; return enSec;
+  }
   if (!(await det.count())) { await fila.locator(`[data-etapa="${key}"]`).click(); await espera(p, 350); }
   return det;
 }
@@ -84,7 +94,8 @@ await escenario("B1", async () => {
   const det = await etapa(p, "2012-112-SE26", "financ");
   ok("B1_venta_propia_financiamiento_no_aplica", (await det.locator('[data-financiamiento="no_aplica"]').count()) === 1 && /Venta propia/.test(await det.innerText()), await det.innerText());
   ok("B1_venta_propia_sin_registrar_pago", (await det.getByRole("button", { name: /Registrar pago/ }).count()) === 0);
-  ok("B1_etapa_financiamiento_cumplida", (await p.locator('[data-oc="2012-112-SE26"] [data-etapa="financ"]').innerText()).includes("✓"));
+  // Ficha actual: el estado de cada etapa está en la cabecera fija de la ficha («✓ Financ.»).
+  ok("B1_etapa_financiamiento_cumplida", (await p.locator('[data-oc="2012-112-SE26"] [data-ficha-cabecera]').innerText()).includes("✓ Financ."));
   const detC = await etapa(p, "2012-112-SE26", "compra");
   ok("B1_compra_muestra_tipo_venta_propia", (await detC.locator('[data-tipo-financiamiento="venta_propia"]').count()) === 1);
   // La cartola del financiador no incluye la venta propia (no genera deuda)
@@ -242,6 +253,7 @@ await escenario("B7", async () => {
   const b = base4b();
   const { page: p, errs, ctx } = await abrir(browser, b, { url: URL_APP, ...escritorio, espera: 3000 });
   await irA(p, "usuarios");
+  await p.locator('[role=tablist][aria-label="Administración"] [data-tab="correcciones"]').click(); await espera(p, 400); // rediseño 2026-10: pestaña propia
   const filas = b.leer("fin_diferencias_historicas", new URLSearchParams("estado=eq.pendiente"));
   const el = p.locator("[data-correcciones-pendientes]");
   ok("B7_cuenta_exacta", (await el.count()) === 1 && Number(await el.getAttribute("data-correcciones-pendientes")) === filas.length && filas.length > 0, { ui: await el.getAttribute("data-correcciones-pendientes"), base: filas.length });
