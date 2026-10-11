@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { C, T, R, iStyle, iMono, selStyle, fmt, MONO } from "../../lib/theme";
 import { Field, Modal } from "../ui/Basicos";
 import { HojaLateral, Pestanas, PanelPestana, Tarjeta, Badge, AvisoLinea, BotonPrincipal, BotonSecundario, FilaDato, Desplegable, Seccion } from "../ui/Sistema";
-import { calcularCotizacion, estadoParaPDF, textoParaMercadoPublico, margenDeRecargo, itemVacio, envioVacio, proveedorDeEnlace, ESTADOS_COTIZACION, ESTADOS_ENVIO, FORMULA, RECARGO_SUGERIDO } from "../../lib/cotizaciones";
+import { calcularCotizacion, estadoParaPDF, destinoDe, envioConfirmado, textoParaMercadoPublico, margenDeRecargo, itemVacio, envioVacio, proveedorDeEnlace, ESTADOS_COTIZACION, ESTADOS_ENVIO, FORMULA, RECARGO_SUGERIDO } from "../../lib/cotizaciones";
 import { consultarEnlace, traerImagen, logoBFK } from "../../lib/cotizacionesDatos";
 import { extraerDeTexto } from "../../lib/extraerProducto";
 import { descargarPdfEETT, huellaPDF } from "../../lib/eettPdf";
@@ -87,6 +87,12 @@ export function EditorCotizacion({ almacen, inicial, token, entidadesCatalogo = 
 
   // ── Envíos ──
   const setEnvio = (key, k, v) => cambiar((c) => { const e = c.envios.find((x) => x.key === key); if (e) e[k] = v; return c; });
+  // Confirmar un envío lo deja registrado para la dirección ACTUAL del cliente; sin dirección no se puede confirmar.
+  const setEstadoEnvio = (key, estado) => {
+    const destino = destinoDe(cot);
+    if (envioConfirmado({ estado }) && !destino) { showToast?.("Primero ingresa la dirección de entrega del cliente (pestaña Datos): el envío se verifica para esa dirección.", "error"); return; }
+    cambiar((c) => { const e = c.envios.find((x) => x.key === key); if (e) { e.estado = estado; e.destino = envioConfirmado({ estado }) ? destino : ""; if (envioConfirmado({ estado })) e.fecha_cotizacion = new Date().toISOString().slice(0, 10); } return c; });
+  };
   const quitarEnvio = (key) => cambiar((c) => { c.envios = c.envios.filter((e) => e.key !== key); c.items.forEach((it) => { if (it.envio_key === key) it.envio_key = null; }); return c; });
   const asignar = (itemKey, envKey) => cambiar((c) => { const it = c.items.find((x) => x.key === itemKey); if (!it) return c; if (envKey === "__nuevo") { const e = envioVacio(it.proveedor); c.envios.push(e); envKey = e.key; } it.envio_key = envKey || null; return c; });
 
@@ -227,9 +233,12 @@ export function EditorCotizacion({ almacen, inicial, token, entidadesCatalogo = 
                   </div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 8 }}>
                     <Field label="Monto del envío (pagado)"><input data-campo="monto-envio" type="number" inputMode="numeric" min="0" value={e.monto} onChange={(ev) => setEnvio(e.key, "monto", ev.target.value)} style={iMono} /></Field>
-                    <Field label="Verificación"><select data-campo="estado-envio" value={e.estado} onChange={(ev) => setEnvio(e.key, "estado", ev.target.value)} style={selStyle}>{Object.entries(ESTADOS_ENVIO).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}</select></Field>
+                    <Field label="Verificación"><select data-campo="estado-envio" value={e.estado} onChange={(ev) => setEstadoEnvio(e.key, ev.target.value)} style={selStyle}>{Object.entries(ESTADOS_ENVIO).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}</select></Field>
                   </div>
-                  <Field label="Evidencia / destino verificado"><input value={e.evidencia} onChange={(ev) => setEnvio(e.key, "evidencia", ev.target.value)} placeholder={cot.comuna ? `Simulado a ${cot.comuna}…` : "Cómo se verificó (comuna, captura, carro)"} style={iStyle} /></Field>
+                  {envioConfirmado(e) && <div data-destino-envio style={{ fontSize: T.small, marginBottom: 8, color: e.destino && e.destino === destinoDe(cot) ? C.okText : C.warnText, fontWeight: 700 }}>
+                    {e.destino ? `Verificado para: ${e.destino}${e.destino === destinoDe(cot) ? "" : ` · la dirección cambió a "${destinoDe(cot) || "—"}": vuelve a verificar`}` : "Sin dirección verificada: vuelve a elegir el estado"}
+                  </div>}
+                  <Field label="Cómo se verificó (obligatorio para confirmar)"><input data-campo="evidencia-envio" value={e.evidencia} onChange={(ev) => setEnvio(e.key, "evidencia", ev.target.value)} placeholder={destinoDe(cot) ? `Simulación de compra a ${destinoDe(cot)}…` : "Ingresa primero la dirección de entrega"} style={iStyle} /></Field>
                   <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: T.sm, minHeight: 32 }}><input type="checkbox" checked={e.con_factura !== false} onChange={(ev) => setEnvio(e.key, "con_factura", ev.target.checked)} /> Envío incluido en la factura (IVA recuperable)</label>
                   <div style={{ fontSize: T.small, color: C.inkMuted, marginTop: 4 }}>
                     {ls.length ? `Reparto según valor: ${ls.map(({ it, i }) => `${i + 1}. ${m(calc.lineas[i].envio_asignado)}`).join(" · ")}` : "No asignado a ningún producto."}

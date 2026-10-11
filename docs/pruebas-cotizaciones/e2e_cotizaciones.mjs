@@ -131,9 +131,19 @@ const sinScrollH = (p) => p.evaluate(() => document.documentElement.scrollWidth 
   await llenar(envF.locator('[data-campo="monto-envio"]'), 5990); await envF.locator('[data-campo="estado-envio"]').selectOption("confirmado");
   await llenar(envP.locator('[data-campo="monto-envio"]'), 0); await envP.locator('[data-campo="estado-envio"]').selectOption("sin_costo_confirmado");
   await espera(p, 300);
+  ok("U16c_confirmado_registra_direccion_cliente", /Verificado para: Av\. Siempre Viva 742/.test(await envF.locator("[data-destino-envio]").innerText()));
+  ok("U16d_confirmar_exige_como_se_verifico", await h.locator('[data-aviso-linea="pendiente-precio"]').filter({ hasText: "registra cómo se verificó" }).count() === 2);
+  await llenar(envF.locator('[data-campo="evidencia-envio"]'), "Simulación de compra a Av. Siempre Viva 742");
+  await llenar(envP.locator('[data-campo="evidencia-envio"]'), "Retiro sin costo confirmado por correo");
+  await espera(p, 300);
   ok("U17_sin_pendientes_con_envios_confirmados", await h.locator('[data-aviso-linea="pendiente-precio"]').count() === 0);
   await h.locator("[data-totales-cotizacion]").scrollIntoViewIfNeeded(); await cap(p, "2_precios_desglose_iva_estimado");
   ok("U17b_copiar_habilitado_sin_pendientes", !(await h.locator("[data-copiar-mp]").isDisabled()) && await h.locator("[data-copiar-bloqueado]").count() === 0);
+  // Si cambia la dirección del cliente, los envíos vuelven a quedar pendientes y se bloquea copiar.
+  await tab(p, "datos"); await llenar(h.locator('[data-campo="direccion"]'), "Otra calle 100"); await tab(p, "precios");
+  ok("U17d_cambio_de_direccion_invalida_envios", await h.locator('[data-aviso-linea="pendiente-precio"]').filter({ hasText: "Vuelve a verificarlo" }).count() === 2 && await h.locator("[data-copiar-mp]").isDisabled());
+  await tab(p, "datos"); await llenar(h.locator('[data-campo="direccion"]'), "Av. Siempre Viva 742"); await tab(p, "precios");
+  ok("U17e_misma_direccion_vuelve_a_quedar_lista", await h.locator('[data-aviso-linea="pendiente-precio"]').count() === 0);
   ok("U17c_iva_rotulado_como_estimacion_no_f29", /estimado de esta operación/.test(await h.locator('[data-fila="iva-pagar"]').innerText()) && /No es el F29/.test(await h.locator('[data-fila="iva-pagar"]').innerText()));
   const esperado = calcularCotizacion({ recargo: 0.3, envios: [{ key: "f", monto: 5990, con_factura: true, estado: "confirmado" }, { key: "c", monto: 0, con_factura: true, estado: "sin_costo_confirmado" }],
     items: [{ key: "a", cantidad: 3, precio_origen: 187990, precio_incluye_iva: true, con_factura: true, envio_key: "f" }, { key: "b", cantidad: 2, precio_origen: 50000, precio_incluye_iva: false, con_factura: true, envio_key: "c" }] });

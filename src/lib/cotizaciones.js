@@ -34,6 +34,12 @@ export const ESTADOS_ENVIO = {
 };
 
 const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+
+// Dirección real del cliente a la que debe verificarse cada envío (dirección + comuna de la cotización).
+export const destinoDe = (cot) => [cot?.direccion_entrega, cot?.comuna].map((x) => String(x || "").trim()).filter(Boolean).join(", ");
+const mismoDestino = (a, b) => String(a || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()
+  === String(b || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+export const envioConfirmado = (e) => e?.estado === "confirmado" || e?.estado === "sin_costo_confirmado";
 const EPS = 1e-7;
 const redondear = (x, modo) => (modo === "arriba" ? Math.ceil(x - EPS) : Math.round(x));
 
@@ -64,7 +70,7 @@ export function calcularCotizacion(cot, formula = FORMULA) {
   const items = cot?.items || []; const envios = cot?.envios || [];
   const asignado = repartirEnvios(items, envios, formula.prorrateo);
   const recargoCot = cot?.recargo == null || cot.recargo === "" ? RECARGO_SUGERIDO : num(cot.recargo);
-  const pendientes = [];
+  const pendientes = []; const destino = destinoDe(cot);
   const lineas = items.map((it, idx) => {
     const n = idx + 1; const q = num(it.cantidad);
     const env = envios.find((e) => e.key === it.envio_key) || null;
@@ -84,7 +90,10 @@ export function calcularCotizacion(cot, formula = FORMULA) {
     if (q <= 0) avisos.push(`Producto ${n}: falta la cantidad.`);
     if (num(it.precio_origen) <= 0) avisos.push(`Producto ${n}: falta el precio de compra.`);
     if (!env) avisos.push(`Producto ${n}: sin envío asignado. Nunca se asume despacho gratis: verifica el envío a la dirección del cliente.`);
-    else if (env.estado !== "confirmado" && env.estado !== "sin_costo_confirmado") avisos.push(`Producto ${n}: el envío de ${env.proveedor || "proveedor"} está ${ESTADOS_ENVIO[env.estado]?.label.toLowerCase() || "por verificar"}.`);
+    else if (!envioConfirmado(env)) avisos.push(`Producto ${n}: el envío de ${env.proveedor || "proveedor"} está ${ESTADOS_ENVIO[env.estado]?.label.toLowerCase() || "por verificar"}.`);
+    else if (!destino) avisos.push(`Producto ${n}: falta la dirección de entrega del cliente; el envío de ${env.proveedor || "proveedor"} no puede darse por verificado.`);
+    else if (!mismoDestino(env.destino, destino)) avisos.push(`Producto ${n}: el envío de ${env.proveedor || "proveedor"} se verificó para ${env.destino ? `"${env.destino}"` : "otra dirección"}, no para "${destino}". Vuelve a verificarlo.`);
+    else if (!String(env.evidencia || "").trim()) avisos.push(`Producto ${n}: registra cómo se verificó el envío de ${env.proveedor || "proveedor"} (simulación de compra, captura, cotización del proveedor).`);
     if (recargo < 0) avisos.push(`Producto ${n}: recargo negativo (venta bajo costo).`);
     pendientes.push(...avisos);
     return { key: it.key, cantidad: q, recargo, costo_producto_bruto: prodBruto, envio_asignado: envBruto, costo_bruto: costoBruto, costo_neto: costoNeto,
