@@ -25,8 +25,13 @@ ok("saldo_bancario_800000", (await monto("banco")) === 800000, await monto("banc
 ok("proyectado_dice_que_no_es_disponible", /no es dinero disponible hoy/.test(await p.locator("[data-proyectado-nota]").innerText()));
 ok("vale_vista_pendiente_500000", (await monto("vale_vista")) === 500000, await monto("vale_vista"));
 ok("deuda_financiadores_2500000", (await monto("deuda_fin")) === 2500000, await monto("deuda_fin"));
+// Rediseño 2026-10: la conciliación bancaria vive en Finanzas › Banco (mismo cálculo de lib/caja.js).
+await p.evaluate(() => { location.hash = "#/banco"; }); await p.waitForTimeout(700);
 const conc = await p.locator("[data-conciliacion]").innerText();
-ok("conciliacion_diferencia_no_perdida", /Diferencia banco − caja registrada/.test(conc) && /No es pérdida ni ganancia/.test(conc) && !/pérdida de|ganancia de/i.test(conc), conc);
+const ayuda = p.locator('[data-conciliacion] button[aria-label="Qué significa la diferencia"]'); if (await ayuda.count()) { await ayuda.click(); await p.waitForTimeout(200); }
+const concCompleta = await p.locator("[data-conciliacion]").innerText();
+ok("conciliacion_diferencia_no_perdida", /Diferencia banco − caja registrada/.test(concCompleta) && /No es pérdida ni ganancia/.test(concCompleta) && !/pérdida de|ganancia de/i.test(concCompleta), concCompleta);
+await p.evaluate(() => { location.hash = "#/panel"; }); await p.waitForTimeout(700);
 ok("conciliacion_mismo_universo", /1\.000\.000/.test(conc) && /800\.000/.test(conc) && /230\.000/.test(conc) && /570\.000/.test(conc), conc);
 ok("iva_pendiente_de_registrar_sin_monto", (await p.locator("[data-iva-sin-registrar]").count()) === 1 && /Sin el F29 real no se estima/.test(await p.locator("[data-iva-sin-registrar]").innerText()));
 ok("proyectado_marcado_provisorio", (await p.locator("[data-proyectado-provisorio]").count()) === 1);

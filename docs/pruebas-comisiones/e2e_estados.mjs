@@ -45,7 +45,7 @@ const n0 = () => b.escr.length;
 const browser = await chromium.launch({ executablePath: CHROME, args: ["--no-sandbox"] });
 const { page: p, errs } = await abrir(browser, b, { url: URL_APP, ancho: 390, alto: 844, movil: true, espera: 2500 });
 const inicioEscr = n0();
-const irA = async (k) => { const nav = p.locator(`[data-nav="${k}"]`).first(); if (await nav.count()) await nav.click(); else { await p.locator('[data-nav="mas"]').first().click(); await espera(p, 300); await p.locator(`[data-nav="${k}"]`).first().click(); } await espera(p, 900); };
+const irA = async (k) => { /* rediseño 2026-10: Comisiones, Gastos, etc. son pestañas del centro Finanzas */ if (["finanzas","financiamiento","vendedores","gastos","impuestos","banco"].includes(k) && !(await p.locator(`[data-tab="${k}"]`).count())) { await p.locator('[data-nav="finanzas"]').first().click(); await espera(p, 500); } const nav = p.locator(`[data-nav="${k}"]`).first(); if (await nav.count()) await nav.click(); else { await p.locator('[data-nav="mas"]').first().click(); await espera(p, 300); await p.locator(`[data-nav="${k}"]`).first().click(); } await espera(p, 900); };
 
 // ── Vendedores ──
 await irA("vendedores");
@@ -80,7 +80,10 @@ const cerrar = p.locator("[role=dialog] button").filter({ hasText: /×|Cerrar|�
 await espera(p, 300);
 
 // ── Panel ──
-await irA("panel"); await p.waitForSelector("[data-resumen-caja]", { timeout: 8000 }).catch(() => {});
+await irA("panel");
+// Rediseño 2026-10: en el celular el desglose de caja está en el desplegable «Caja y compromisos» (cerrado al entrar).
+if (!(await p.locator("[data-resumen-caja]").count())) { await p.locator('[data-desplegable="caja"] > button').first().click(); await espera(p, 400); }
+await p.waitForSelector("[data-resumen-caja]", { timeout: 8000 }).catch(() => {});
 await p.locator("[data-resumen-caja]").first().scrollIntoViewIfNeeded().catch(() => {}); await captura(p, "panel");
 const lineas = await p.$$eval("[data-resumen-caja] [data-linea]", (xs) => xs.map((x) => x.getAttribute("data-linea")));
 ok("panel_tres_lineas_de_comisiones", ["comisiones", "comisiones_por_liquidar", "comisiones_en_curso"].every((k) => lineas.includes(k)) && lineas.indexOf("comisiones_en_curso") === lineas.indexOf("comisiones") + 2, lineas);

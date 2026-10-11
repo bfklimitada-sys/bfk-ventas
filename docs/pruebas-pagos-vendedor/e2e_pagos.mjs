@@ -30,7 +30,7 @@ const vistos = new Set();
 
 const browser = await chromium.launch({ executablePath: CHROME, args: ["--no-sandbox"] });
 const { page: p, errs } = await abrir(browser, b, { url: URL_APP, ancho: 390, alto: 844, movil: true, espera: 2500 });
-const irA = async (k) => { const nav = p.locator(`[data-nav="${k}"]`).first(); if (await nav.count()) await nav.click(); else { await p.locator('[data-nav="mas"]').first().click(); await espera(p, 300); await p.locator(`[data-nav="${k}"]`).first().click(); } await espera(p, 900); };
+const irA = async (k) => { /* rediseño 2026-10: Comisiones, Gastos, etc. son pestañas del centro Finanzas */ if (["finanzas","financiamiento","vendedores","gastos","impuestos","banco"].includes(k) && !(await p.locator(`[data-tab="${k}"]`).count())) { await p.locator('[data-nav="finanzas"]').first().click(); await espera(p, 500); } const nav = p.locator(`[data-nav="${k}"]`).first(); if (await nav.count()) await nav.click(); else { await p.locator('[data-nav="mas"]').first().click(); await espera(p, 300); await p.locator(`[data-nav="${k}"]`).first().click(); } await espera(p, 900); };
 await irA("vendedores");
 const tarjetaM = () => p.locator("div").filter({ has: p.getByText("Matías Vegas", { exact: true }) }).filter({ has: p.getByRole("button", { name: /Pagar/ }) }).last();
 const boton = tarjetaM().getByRole("button", { name: /Pagar Ago\/2026|Pagar Agosto/i }).first();

@@ -23,7 +23,7 @@ d.iva_mensual = d.iva_mensual.filter((i) => !(i.anio === m1.anio && i.mes === m1
 const b = crearBase(d);
 const browser = await chromium.launch({ executablePath: CHROME, args: ["--no-sandbox"] });
 const { page: p, errs } = await abrir(browser, b, { url: URL_APP, ancho: 390, alto: 844, movil: true, espera: 2500 });
-const irA = async (k) => { const nav = p.locator(`[data-nav="${k}"]`).first(); if (await nav.count()) await nav.click(); else { await p.locator('[data-nav="mas"]').first().click(); await espera(p, 300); await p.locator(`[data-nav="${k}"]`).first().click(); } await espera(p, 900); };
+const irA = async (k) => { /* rediseño 2026-10: Comisiones, Gastos, etc. son pestañas del centro Finanzas */ if (["finanzas","financiamiento","vendedores","gastos","impuestos","banco"].includes(k) && !(await p.locator(`[data-tab="${k}"]`).count())) { await p.locator('[data-nav="finanzas"]').first().click(); await espera(p, 500); } const nav = p.locator(`[data-nav="${k}"]`).first(); if (await nav.count()) await nav.click(); else { await p.locator('[data-nav="mas"]').first().click(); await espera(p, 300); await p.locator(`[data-nav="${k}"]`).first().click(); } await espera(p, 900); };
 const escrituras = (t, m) => b.escr.filter((w) => w.tabla === t && (!m || w.metodo === m)).map((w) => (Array.isArray(w.cuerpo) ? w.cuerpo[0] : w.cuerpo));
 
 // ── 1. Pago manual de un período provisorio ──
@@ -48,8 +48,8 @@ ok("transferencia_real_se_registra", pv.length === 1 && pv[0].monto_transferido 
 ok("nota_deja_constancia", /Pagado sobre comisión provisoria \(IVA sin registrar\): confirmado por el usuario/.test(pv[0]?.notas || ""), pv[0]?.notas);
 ok("calculo_del_pago_sin_cambios", pv[0]?.monto_pagado === 300000 && pv[0]?.monto_extra_gestion === 0, pv[0]);
 
-// ── 2. Total del F29 escrito a mano (desde agosto 2026) ──
-await irA("vendedores");
+// ── 2. Total del F29 escrito a mano (desde agosto 2026) ── (rediseño 2026-10: el IVA se registra en Finanzas › Impuestos)
+await irA("impuestos");
 const abrirIva = async () => { await p.getByRole("button", { name: /Registrar IVA de otro mes/ }).first().click(); await espera(p, 400);
   const dlg = p.locator("[role=dialog]").last();
   await dlg.locator("select").first().selectOption(String(m1.mes)); await dlg.locator('input[type="number"]').first().fill(String(m1.anio)); await espera(p, 200);

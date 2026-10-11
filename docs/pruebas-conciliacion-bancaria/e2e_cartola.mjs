@@ -145,7 +145,7 @@ const estado = (p, clave) => p.locator(`[data-mov="${clave}"]`).first().getAttri
   ok("E5_informe_financiero_visible", /Informe financiero/i.test(t) && /Resultado del mes/.test(t) && /F29 por período/.test(t) && /Financiadores: deuda y devoluciones/.test(t));
   ok("E5_margen_comercial_renombrado", /Margen comercial del mes/i.test(t) && !/Utilidad del mes/i.test(t));
   ok("E5_caja_y_fuera_del_banco", /Registrado fuera de BancoEstado/.test(t));
-  await p.locator('aside [data-nav="gastos"]').click().catch(() => {}); await espera(p, 800);
+  await p.evaluate(() => { location.hash = "#/gastos"; }); await espera(p, 800); // rediseño 2026-10: Gastos es una pestaña de Finanzas
   ok("E5_apoyo_en_gestion_en_gastos", /Apoyo en gestión/.test(await p.evaluate(() => document.body.innerText)));
   ok("E5_sin_errores", errs.length === 0, errs);
   await ctx.close();

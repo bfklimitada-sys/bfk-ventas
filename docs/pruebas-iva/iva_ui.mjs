@@ -19,10 +19,15 @@ for(const [nom,url] of Object.entries(URLS)){
     return route.abort(); });
   await page.addInitScript(()=>{localStorage.setItem("bfk_supabase_session_v2",JSON.stringify({access_token:"t",refresh_token:"r",user:{id:"u1",email:"a@a.cl"}}));});
   await page.goto(url,{waitUntil:"load"}); await page.waitForTimeout(1800);
-  await page.mouse.click(348,820); await page.waitForTimeout(500); await page.getByText("Vendedores",{exact:true}).first().click(); await page.waitForTimeout(900);
+  // Rediseño 2026-10: Comisiones (Vendedores) e Impuestos son pestañas de Finanzas; el historial de IVA está en Impuestos.
+  const vaAImpuestos=await page.evaluate(()=>{ location.hash="#/vendedores"; return true; }); await page.waitForTimeout(900);
   await page.getByText("Vendedor Uno").first().click(); await page.waitForTimeout(700);
-  const ver=page.getByText(/Ver historial/); if(await ver.count()) { await ver.first().click(); await page.waitForTimeout(400); }
-  const b=await page.evaluate(()=>document.body.innerText);
+  let b=await page.evaluate(()=>document.body.innerText);
+  if(vaAImpuestos&&(await page.locator('[data-aviso-linea="ir-impuestos"]').count())){
+    await page.evaluate(()=>{ location.hash="#/impuestos"; }); await page.waitForTimeout(900);
+    const ver=page.getByText(/Ver historial/); if(await ver.count()) { await ver.first().click(); await page.waitForTimeout(400); }
+    b+="\n"+await page.evaluate(()=>document.body.innerText);
+  } else { const ver=page.getByText(/Ver historial/); if(await ver.count()) { await ver.first().click(); await page.waitForTimeout(400); } b=await page.evaluate(()=>document.body.innerText); }
   const bloque=(lbl)=>{const i=b.indexOf(lbl,b.search(/comisión mes a mes/i)); if(i<0) return ""; const j=b.indexOf("= Comisión del mes",i); return b.slice(i,j+40);};
   const com=(lbl)=>(bloque(lbl).match(/= Comisión del mes: (\$[\d.]+)/)||[])[1]||null;
   out[nom]={mar26:com("Mar/2026"),feb26:com("Feb/2026"),ene26:com("Ene/2026"),dic25:com("Dic/2025"),
@@ -39,5 +44,5 @@ console.log(JSON.stringify(out,null,1));
 const n=out.nueva,a=out.anterior;
 const ok=n.mar26==="$530.000"&&n.feb26==="$430.000"&&n.ene26==="$500.000"&&n.dic25==="$0"&&a.mar26==="$500.000"&&a.feb26==="$430.000"&&a.ene26==="$500.000"&&a.dic25==="$0"
   &&n.desglose_neg&&n.desglose_pos&&n.desglose_cero&&n.resultado_negativo_cuenta_0&&n.historial_neto_negativo&&n.historial_neto_positivo&&n.escrituras===0&&n.errores===0&&a.errores===0;
-console.log(ok?"RESULT|iva_ui|OK":"FALLA|iva_ui");
+console.log(ok?"RESULT|iva_ui|OK":"FALLA|iva_ui"); if(!ok) process.exitCode=1;
 await browser.close();

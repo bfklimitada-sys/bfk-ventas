@@ -24,7 +24,7 @@ async function ir(p,k,escritorio){
 }
 // Funciones que deben poder alcanzarse desde cada pantalla (texto visible de botones/campos)
 const FUNCIONES={
-  panel:["Compra","Entrega","Factura","Pago","Cartola","Actualizar saldo de la cuenta","Buscar OC, cliente, factura o monto"],
+  panel:["Compra","Entrega","Factura","Pago","Cartola","Caja y compromisos","Mercado Público","Buscar OC, cliente, factura o monto"],
   finanzas:["Resultado del mes","Margen comercial"],
   impuestos:["IVA mensual","F29","Registrar IVA de otro mes","Ver historial"],
   banco:["Actualizar saldo de la cuenta","Conciliación","Cartola","Por revisar"],
@@ -91,7 +91,10 @@ for(const [modo,ancho,alto,movil] of [["movil",390,844,true],["escritorio",1440,
     ok(`${tag}_ventana_ubicada`, esc ? Math.abs((caja.y+caja.height/2)-alto/2)<60 : Math.abs((caja.y+caja.height)-alto)<4);
     await p.locator('[role=dialog] button[aria-label="Cerrar"]').click(); await espera(p,300);
     // Acciones rápidas del Panel abren su ventana
-    const acciones=[["Compra","Ingresar compra"],["Entrega","Ingresar entrega"],["Factura","Ingresar factura"],["Pago","Ingresar pago"],["Actualizar saldo de la cuenta","Saldo de la cuenta del banco"]];
+    const acciones=[["Compra","Ingresar compra"],["Entrega","Ingresar entrega"],["Factura","Ingresar factura"],["Pago","Ingresar pago"]];
+    // Rediseño 2026-10: el saldo de la cuenta se actualiza desde Finanzas › Banco
+    await ir(p,"banco",esc); await p.getByText("Actualizar saldo de la cuenta",{exact:true}).first().click(); await espera(p,350);
+    { const t=await p.locator('[role=dialog] [id]').first().innerText().catch(()=>""); if(!t.includes("Saldo de la cuenta del banco")){accOk=false; console.log("accion saldo ->",t);} await p.keyboard.press("Escape"); await espera(p,250); await ir(p,"panel",esc); }
     let accOk=true; for(const [b,tit] of acciones){ await p.getByText(b,{exact:true}).first().click(); await espera(p,350); const t=await p.locator('[role=dialog] [id]').first().innerText().catch(()=>""); if(!t.includes(tit)){accOk=false; console.log("accion",b,"->",t);} await p.keyboard.press("Escape"); await espera(p,250);}
     ok(`${tag}_acciones_panel_abren`, accOk);
     // Pestañas dentro de una pantalla (Impuestos → F29) y acceso desde Comisiones a Impuestos

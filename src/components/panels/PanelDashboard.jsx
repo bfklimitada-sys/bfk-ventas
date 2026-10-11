@@ -4,10 +4,12 @@ import { C, MONO, SANS, fmt } from "../../lib/theme";
 import { Ic } from "../ui/Iconos";
 import { coincideBusqueda } from "../../lib/busqueda";
 import { resumenCaja } from "../../lib/caja";
-import { Seccion, Tarjeta, Badge, Monto } from "../ui/Sistema";
-import { FILTROS_PANEL, estaCerrada, filtrarPanel, utilidadPorMes, valeVistasPendientes } from "../../lib/ocs";
-import { InformeFinanciero } from "./InformeFinanciero";
-import { AlertasCartola } from "./AlertasCartola";
+import { Seccion, Tarjeta, Badge, Monto, Desplegable, Indicador, Indicadores, AvisoLinea, Ayuda, Enlace } from "../ui/Sistema";
+import { useEsEscritorio } from "../ui/Navegacion";
+import { registrosConAlerta } from "../../lib/registroCartola";
+
+const MAX_PRIOR=5; // prioridades visibles de entrada; el resto con «Ver más»
+import { FILTROS_PANEL, estaCerrada, filtrarPanel, valeVistasPendientes } from "../../lib/ocs";
 
 // Tarjeta base para los avisos ligados a Mercado Público: encabezado con
 // icono + botón de refresco, y cuerpo blanco para el contenido/lista.
@@ -60,7 +62,10 @@ function VerMasAvisoMP({n}){
 export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, aportes: aportesLista, ajustes = [], categorias = [], perfil, onExportarTodo, exportando, onNavigate, onAccion, onSincronizar, onCorregirFechas, sincronizando, porAceptar, onActualizarPorAceptar, verificandoPorAceptar, aceptadasSinCargar, onCargarOC, onCargarTodasAceptadas, cargandoAceptadas, onActualizarAceptadas, verificandoAceptadas, canceladasEnMP, onArchivarCancelada, onActualizarCanceladas, verificandoCanceladas, onValidarTodo, validandoTodo, usoMP, actMP, esCodigoMP, ultimaCartola, saldoBanco, bancoMensual, onEditarSaldo, onBuscarCompras , onQuitarAlertaCartola }) {
   const [busq,setBusq]=useState("");
   const esAdmin=perfil?.rol==="admin";
-  const [verMP,setVerMP]=useState(false);
+  const [verTodasPrior,setVerTodasPrior]=useState(false);
+  const escritorio=useEsEscritorio();
+  const nAvisosMP=(porAceptar||[]).length+(aceptadasSinCargar||[]).length+(canceladasEnMP||[]).length;
+  const nAlertasCartola=registrosConAlerta({ocs,gastos,pagosVendedor,pagoFinSueltos,aportes:aportesLista}).length;
   // Carga masiva de OCs aceptadas (Fase 4A): el vendedor es obligatorio y se puede indicar venta propia.
   const [masiva,setMasiva]=useState(null); // null | {vendedorId, ventaPropia}
 
@@ -75,23 +80,6 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
     ocs.filter(o=>esCodigoMP&&esCodigoMP(o.numero_oc)&&!o.no_en_mp&&(o.sync_pendiente||!o.rut_cliente||!o.fecha_emision_mp||!o.fecha_hora_emision_mp||String(o.cliente||"").toUpperCase().includes("POR COMPLETAR"))).length
   ,[ocs,esCodigoMP]);
 
-  // ── Utilidad del mes (cuadratura 2026-10): las tres barras con UN criterio (lib/ocs.js, utilidadPorMes):
-  // fecha de la OC, ganancia con postventa y margen agregado del período. Antes cada barra usaba una regla distinta.
-  const utilidad=useMemo(()=>{
-    const porMes=utilidadPorMes(ocs);
-    const h=new Date(); const clave=(a,m)=>`${a}-${String(m).padStart(2,"0")}`;
-    const kActual=clave(h.getFullYear(),h.getMonth()+1);
-    const aAnt=h.getMonth()===0?h.getFullYear()-1:h.getFullYear(), mAnt=h.getMonth()===0?12:h.getMonth();
-    const kAnt=clave(aAnt,mAnt);
-    const hasta=Object.keys(porMes).filter(k=>k<=kActual);
-    const venta=hasta.reduce((s,k)=>s+porMes[k].venta,0), util=hasta.reduce((s,k)=>s+porMes[k].util,0);
-    const meses=Math.max(1,hasta.length);
-    return {
-      historico:{v:Math.round(util/meses),pct:venta>0?Math.round(util/venta*100):0},
-      anterior:{v:porMes[kAnt]?.util||0,pct:porMes[kAnt]?.pct||0,nombre:new Date(aAnt,mAnt-1,1).toLocaleDateString("es-CL",{month:"long"})},
-      actual:{v:porMes[kActual]?.util||0,pct:porMes[kActual]?.pct||0},
-    };
-  },[ocs]);
 
   // ── Prioridades de hoy (reales, derivadas de las OCs) ──
   // Fase 4A: cada contador usa el MISMO criterio que la lista que abre (lib/ocs.js, FILTROS_PANEL),
@@ -200,15 +188,25 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
           </Tarjeta>);
         })()}
       </div>
-      <Seccion titulo="Prioridades de hoy" nota={prioridades.length>0?"Toca una para ver esas órdenes":undefined} margen={18}>
+      {/* Indicadores clave (mismo cierre de caja de lib/caja.js; el desglose completo está en «Caja y compromisos») */}
+      <Indicadores columnas={escritorio?4:2}>
+        <Indicador dato="banco" etiqueta={resumen.baseEsBanco?"Saldo BancoEstado":"Caja registrada BFK"} valor={fmt.money(resumen.baseEsBanco?resumen.saldoBancario:resumen.caja)} tono={resumen.baseEsBanco?"neutro":"warn"} nota={resumen.baseEsBanco?"Saldo esperado en la cuenta":"Sin saldo del banco registrado"} onClick={()=>onNavigate&&onNavigate("banco",null)} />
+        <Indicador dato="por_cobrar" etiqueta="Facturas por cobrar" valor={fmt.money(resumen.facturasPorCobrar)} nota={resumen.nValeVista?`+ ${fmt.money(resumen.valeVista)} en vale vista`:"Facturas vigentes"} onClick={()=>onNavigate&&onNavigate("compras","cobro")} />
+        <Indicador dato="deuda_fin" etiqueta="Deuda con financiadores" valor={fmt.money(resumen.deudaFinanciadores)} tono={resumen.deudaFinanciadores>0?"danger":"ok"} nota="Devolución FIFO" onClick={()=>onNavigate&&onNavigate("financiamiento",null)} />
+        <Indicador dato="proyectado" destacado etiqueta="Saldo proyectado" valor={fmt.money(resumen.saldoProyectado)} tono={resumen.saldoProyectado>=0?"marca":"danger"} nota={resumen.provisorio?"Provisorio · no es dinero disponible hoy":"No es dinero disponible hoy"} onClick={()=>onNavigate&&onNavigate("finanzas",null)} />
+      </Indicadores>
+      {nAlertasCartola>0&&<AvisoLinea dato="alertas-cartola" onClick={()=>onNavigate&&onNavigate("banco",null)} accion="Revisar">{nAlertasCartola} posible{nAlertasCartola>1?"s":""} duplicado{nAlertasCartola>1?"s":""} con la cartola del banco</AvisoLinea>}
+      <div style={escritorio?{display:"grid",gridTemplateColumns:"minmax(0,1.05fr) minmax(0,1fr)",gap:20,alignItems:"start"}:undefined}>
+        <div>
+      <Seccion titulo={`Prioridades de hoy${prioridades.length?` · ${prioridades.length}`:""}`} margen={16}>
       {/* ── Prioridades de hoy: tareas accionables ── */}
       <Tarjeta padding="4px 4px 4px 4px">
         {prioridades.length===0&&<div style={{fontSize:14,color:C.okText,fontWeight:700,padding:"14px 12px"}}>✓ Sin pendientes urgentes</div>}
-        {prioridades.map((p,i)=>(
+        {(verTodasPrior?prioridades:prioridades.slice(0,MAX_PRIOR)).map((p,i,lista)=>(
           <button key={i} data-prioridad={p.filtro} data-n={p.n} onClick={()=>onNavigate&&onNavigate(p.tab,p.filtro)}
             style={{width:"100%",display:"flex",alignItems:"center",gap:10,minHeight:60,
               padding:"8px 10px",background:"none",border:"none",cursor:"pointer",textAlign:"left",
-              borderBottom:i<prioridades.length-1?`1px solid ${C.border}`:"none"}}>
+              borderBottom:i<lista.length-1||prioridades.length>MAX_PRIOR?`1px solid ${C.border}`:"none"}}>
             <span style={{width:4,alignSelf:"stretch",borderRadius:4,background:p.color,flexShrink:0,margin:"4px 0"}} />
             <span style={{minWidth:0,flex:1}}>
               <span style={{fontSize:14,color:C.ink,fontWeight:700,display:"block",lineHeight:1.3}}>{p.label}</span>
@@ -220,10 +218,16 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
             </span>
           </button>
         ))}
+        {prioridades.length>MAX_PRIOR&&(
+          <button type="button" data-ver-prioridades onClick={()=>setVerTodasPrior(v=>!v)}
+            style={{width:"100%",minHeight:40,background:"none",border:"none",color:C.tealDark,fontWeight:700,fontSize:13,cursor:"pointer"}}>
+            {verTodasPrior?"Ver menos":`Ver ${prioridades.length-MAX_PRIOR} más`}
+          </button>
+        )}
       </Tarjeta>
       </Seccion>
 
-      <Seccion titulo="Registrar" nota="Pasos 1 a 4 de una OC ya creada. Cartola es aparte: concilia los movimientos del banco." margen={18}>
+      <Seccion titulo={<>Registrar<Ayuda>Pasos 1 a 4 de una OC ya creada. Cartola es aparte: concilia los movimientos del banco.</Ayuda></>} margen={16}>
       <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:6}}>
         {[
           {key:"compra",      icon:<Ic n="📦"/>, label:"Compra",  color:C.transit, paso:1},
@@ -249,82 +253,9 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
       </div>
       </Seccion>
 
-      <Seccion titulo="Caja">
-      {/* Cierre financiero: cada concepto por separado, todos los pendientes sin importar el mes; lo que depende
-          de un IVA aún no registrado se marca PROVISORIO (lib/caja.js). */}
-      {(()=>{
-        const r=resumen; const MES=["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
-        const Fila=({k,v,signo,tono,nota,dato,onClick})=>(
-          <div data-linea={dato} onClick={onClick} style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:8,padding:"6px 0",borderBottom:"1px solid rgba(255,255,255,0.10)",cursor:onClick?"pointer":"default"}}>
-            <span style={{minWidth:0}}>
-              <span style={{display:"block",fontSize:13,color:"#E2E8F0",fontWeight:700}}>{signo?<span style={{color:"#94A3B8",marginRight:4}}>{signo}</span>:null}{k}</span>
-              {nota&&<span style={{display:"block",fontSize:12,color:"#94A3B8",marginTop:1,lineHeight:1.35}}>{nota}</span>}
-            </span>
-            <span data-monto={dato} style={{fontFamily:MONO,fontWeight:800,fontSize:14,color:tono||"#F1F5F9",flexShrink:0}}>{fmt.money(v)}</span>
-          </div>
-        );
-        const ivaPend=r.ivaSinRegistrar.map(p=>`${MES[p.mes-1]}-${p.anio}`).join(", ");
-        return (<>
-          <div data-resumen-caja style={{background:`linear-gradient(135deg,${C.night},${C.nightSoft})`,borderRadius:16,padding:"16px 18px",marginBottom:8,border:"1px solid rgba(45,212,191,0.25)"}}>
-            {r.baseEsBanco
-              ?<Fila dato="banco" k={r.conciliacion.nPosteriores?"Saldo esperado BancoEstado":"Saldo BancoEstado"} v={r.saldoBancario} nota={`Dinero en la cuenta: saldo informado al ${fmt.date(r.conciliacion.corte)}${r.conciliacion.nPosteriores?` más ${r.conciliacion.nPosteriores} movimiento${r.conciliacion.nPosteriores>1?"s":""} registrado${r.conciliacion.nPosteriores>1?"s":""} después (por confirmar con la cartola)`:""}`} />
-              :<Fila dato="caja" k="Caja registrada BFK" v={r.caja} tono="#FBBF24" nota="Sin saldo de BancoEstado registrado: la proyección parte de los movimientos registrados en BFK. Registre el saldo de la cuenta." />}
-            <Fila dato="por_cobrar" signo="+" k="Facturas por cobrar" v={r.facturasPorCobrar} nota="Facturas vigentes, descontados los abonos parciales y los vale vista pendientes" onClick={()=>onNavigate&&onNavigate("compras","cobro")} />
-            <Fila dato="por_facturar" signo="+" k="Ventas compradas sin facturar" v={r.ventasPorFacturar} nota="Monto de la OC aún sin factura: no es cuenta por cobrar hasta facturarla" />
-            <Fila dato="vale_vista" signo="+" k="Vale vista / cheques pendientes" v={r.valeVista} tono="#FBBF24" nota={r.nValeVista?`${r.nValeVista} documento${r.nValeVista>1?"s":""} entregado${r.nValeVista>1?"s":""} y aún sin depositar en el banco`:"Ninguno pendiente"} onClick={r.nValeVista?()=>onNavigate&&onNavigate("compras","vale_vista"):undefined} />
-            <Fila dato="deuda_fin" signo="−" k="Deuda con financiadores" v={r.deudaFinanciadores} tono="#F87171"
-              nota={r.porFinanciador.map(f=>`${f.nombre.split(" ")[0]} ${f.saldo<0?"a favor de BFK ":""}${fmt.money(Math.abs(f.saldo))}`).join(" · ")} onClick={()=>onNavigate&&onNavigate("financiamiento",null)} />
-            {/* Comisiones en tres estados (regla única, lib/calculos.js). Solo la primera es deuda exigible; las tres se descuentan
-                de la proyección, igual que antes (el total no cambia). */}
-            {(()=>{ const det=(e)=>r.comisiones.detalle.filter(d=>d.estado===e).map(d=>`${d.vendedor.split(" ")[0]} ${MES[d.mes-1]}-${d.anio} ${fmt.money(d.deuda)}`).join(" · ");
-              return (<>
-                <Fila dato="comisiones" signo="−" k="Comisiones pendientes de pago" v={r.comisiones.exigible} tono="#F87171"
-                  nota={det("pendiente")||"Ninguna exigible: comisiones definitivas al día"} onClick={()=>onNavigate&&onNavigate("vendedores",null)} />
-                <Fila dato="comisiones_por_liquidar" signo="−" k="Comisiones por liquidar (provisorias)" v={r.comisiones.porLiquidar} tono="#FBBF24"
-                  nota={r.comisiones.porLiquidar>0?<>{det("por_liquidar")}<span style={{display:"block",color:"#FBBF24"}}>Meses cerrados sin el IVA o sin el total del F29 (IVA + PPM): el monto puede cambiar. No es deuda exigible.</span></>:"Ninguna"} onClick={()=>onNavigate&&onNavigate("vendedores",null)} />
-                <Fila dato="comisiones_en_curso" signo="−" k="Comisiones del mes en curso" v={r.comisiones.enCurso} tono="#FBBF24"
-                  nota={r.comisiones.enCurso>0?<>{det("en_curso")}<span style={{display:"block",color:"#94A3B8"}}>Acumulado del mes actual: no es deuda exigible.</span></>:"Ninguna"} onClick={()=>onNavigate&&onNavigate("vendedores",null)} />
-              </>); })()}
-            <Fila dato="f29" signo="−" k="F29 pendiente (IVA + PPM)" v={r.f29Pendiente} tono="#F87171"
-              nota={<>{r.f29.periodos.filter(x=>x.pend>0).map(x=>`${MES[x.mes-1]}-${x.anio} ${fmt.money(x.pend)}`).join(" · ")||"Sin saldo pendiente en los períodos registrados"}
-                {ivaPend&&<span data-iva-sin-registrar style={{display:"block",color:"#FBBF24"}}>Pendiente de registrar: {ivaPend}. Sin el F29 real no se estima ningún monto.</span>}
-                {(r.f29.faltaTotal||[]).length>0&&<span data-f29-sin-total style={{display:"block",color:"#FBBF24"}}>Falta el total del F29 (IVA + PPM) de {r.f29.faltaTotal.map(p=>`${MES[p.mes-1]}-${p.anio}`).join(", ")}: el pendiente puede ser mayor.</span>}</>} />
-            {r.fondosExternos>0&&<Fila dato="externos" signo="−" k="Fondos de ventas externas por liquidar" v={r.fondosExternos} tono="#F87171" nota="Dinero de ventas externas que entró a la cuenta: está en la caja, pero no es de BFK hasta liquidarlo" />}
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:8,paddingTop:10}}>
-              <span>
-                <span style={{display:"block",fontSize:13,color:"#E2E8F0",fontWeight:800,textTransform:"uppercase",letterSpacing:0.6}}>= Saldo proyectado</span>
-                <span data-proyectado-nota style={{display:"block",fontSize:12,color:"#94A3B8",marginTop:2}}>Proyección al cobrar y pagar todo lo pendiente: no es dinero disponible hoy</span>
-                {r.provisorio&&<span data-proyectado-provisorio style={{display:"block",fontSize:12,color:"#FBBF24",fontWeight:700,marginTop:2}}>PROVISORIO: falta registrar IVA/F29 de {ivaPend||"algún período"}{r.comisiones.provisorias>0?" y hay comisiones por liquidar o en curso":""}</span>}
-              </span>
-              <span data-monto="proyectado" style={{fontFamily:MONO,fontWeight:800,fontSize:28,color:r.saldoProyectado>=0?"#2DD4BF":"#F87171",letterSpacing:-1}}>{fmt.money(r.saldoProyectado)}</span>
-            </div>
-          </div>
-
-          {/* Conciliación bancaria: el saldo esperado usa EXACTAMENTE los mismos movimientos que la caja */}
-          <Tarjeta padding="12px 14px">
-            <div data-conciliacion style={{fontSize:13,color:C.ink}}>
-              <div style={{fontWeight:800,marginBottom:6}}>Conciliación bancaria</div>
-              {r.conciliacion.hayCorte?(<>
-                <div style={{display:"flex",justifyContent:"space-between",color:C.inkMuted}}><span>Saldo informado del banco al {fmt.date(r.conciliacion.corte)}</span><Monto tam="sm">{fmt.money(r.conciliacion.saldoBancoCorte)}</Monto></div>
-                <div style={{display:"flex",justifyContent:"space-between",color:C.inkMuted}}><span>+ Movimientos registrados después de esa fecha ({r.conciliacion.nPosteriores})</span><Monto tam="sm">{fmt.money(r.conciliacion.movPosteriores)}</Monto></div>
-                <div style={{display:"flex",justifyContent:"space-between",fontWeight:700}}><span>= Saldo esperado en el banco</span><Monto tam="sm">{fmt.money(r.conciliacion.esperado)}</Monto></div>
-                <div style={{display:"flex",justifyContent:"space-between",fontWeight:700}}><span>Caja registrada BFK</span><Monto tam="sm">{fmt.money(r.caja)}</Monto></div>
-                <div data-pendiente-conciliacion style={{display:"flex",justifyContent:"space-between",fontWeight:800,color:Math.abs(r.diferenciaBancoCaja)>0.5?C.warnText:C.okText,marginTop:4,paddingTop:4,borderTop:`1px solid ${C.border}`}}>
-                  <span>{Math.abs(r.diferenciaBancoCaja)>0.5?"Diferencia banco − caja registrada":"Conciliado"}</span><Monto tam="sm">{fmt.money(r.diferenciaBancoCaja)}</Monto>
-                </div>
-                {Math.abs(r.diferenciaBancoCaja)>0.5&&<div style={{fontSize:12,color:C.inkMuted,marginTop:4,lineHeight:1.45}}>La caja registrada incluye operaciones que no pasaron por BancoEstado (compras anteriores a la apertura o pagadas por un socio, pagos compensados fuera del banco) y movimientos del banco sin registro en BFK. No es pérdida ni ganancia ni dinero adicional: se explica con el expediente de conciliación. El saldo proyectado parte del saldo del banco.</div>}
-              </>):<div style={{fontSize:12,color:C.inkMuted}}>Sin saldo del banco registrado: no se puede conciliar.</div>}
-              <button onClick={onEditarSaldo}
-                style={{marginTop:10,width:"100%",minHeight:44,background:C.paper,border:`1px solid ${C.border}`,borderRadius:12,padding:"8px 12px",color:C.ink,fontSize:14,fontWeight:700,cursor:"pointer",textAlign:"left",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <span>{saldoBanco?"Actualizar saldo de la cuenta":"Registrar saldo de la cuenta"}</span><Ic n="chevR"/>
-              </button>
-            </div>
-          </Tarjeta>
-        </>);
-      })()}
-      </Seccion>
-
-      <Seccion titulo="Nuevas OC y Mercado Público">
+      <Desplegable dato="mercado-publico" icono={<Ic n="📦"/>} titulo="Mercado Público" tono={nAvisosMP>0?"warn":null}
+        resumen={nAvisosMP>0?"OCs por aceptar, aceptadas sin cargar o canceladas":"Sin avisos pendientes · revisar de nuevo cuando quieras"}
+        derecha={<>{(porAceptar||[]).length>0&&<Badge tono="warn">⏳ {(porAceptar||[]).length}</Badge>}{(aceptadasSinCargar||[]).length>0&&<Badge tono="ok">✓ {(aceptadasSinCargar||[]).length}</Badge>}{(canceladasEnMP||[]).length>0&&<Badge tono="danger">✕ {(canceladasEnMP||[]).length}</Badge>}{sinDatosMP>0&&<Badge tono="info">{sinDatosMP} sin datos</Badge>}</>}>
       {/* ── Contador de uso diario de Mercado Público (estimado) ── */}
       {usoMP&&usoMP.solicitudes>0&&(()=>{
         const pct=Math.min(100,Math.round(usoMP.solicitudes/10000*100));
@@ -402,24 +333,9 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
           </button>
         );
         return (
-          <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,marginBottom:14,overflow:"hidden"}}>
-            <button onClick={()=>setVerMP(v=>!v)}
-              style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"13px 14px",
-                background:"none",border:"none",cursor:"pointer",textAlign:"left"}}>
-              <span style={{flex:1,minWidth:0}}>
-                <span style={{display:"block",fontSize:13,fontWeight:800,color:C.ink}}>
-                  {verificandoAlgo?"Revisando Mercado Público…":"Mercado Público"}
-                </span>
-                {!verificandoAlgo&&ultimaGeneral&&<span style={{display:"block",fontSize:12,color:C.inkFaint,marginTop:1}}>Última consulta exitosa: {hace(ultimaGeneral)}</span>}
-              </span>
-              {nPorAceptar>0&&<span style={{fontSize:12,fontWeight:800,color:C.warnText,background:C.warnLight,borderRadius:999,padding:"2px 8px"}}><Ic n="⏳"/> {nPorAceptar}</span>}
-              {nAceptadas>0&&<span style={{fontSize:12,fontWeight:800,color:C.okText,background:C.okLight,borderRadius:999,padding:"2px 8px"}}>✓ {nAceptadas}</span>}
-              {nCanceladas>0&&<span style={{fontSize:12,fontWeight:800,color:C.dangerText,background:C.dangerLight,borderRadius:999,padding:"2px 8px"}}>✕ {nCanceladas}</span>}
-              <span style={{fontSize:12,color:C.inkFaint,flexShrink:0}}>{verMP?"▲":"▼"}</span>
-            </button>
-
-            {verMP&&(
-              <div style={{padding:"0 14px 14px"}}>
+          <div data-mp-avisos>
+            {true&&(
+              <div>
                 <button onClick={()=>{
                     onActualizarPorAceptar&&onActualizarPorAceptar();
                     onActualizarAceptadas&&onActualizarAceptadas();
@@ -523,46 +439,69 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
         );
       })()}
 
-      </Seccion>
+      </Desplegable>
 
-      <AlertasCartola ocs={ocs} gastos={gastos} pagosVendedor={pagosVendedor} pagoFinSueltos={pagoFinSueltos} aportes={aportesLista} onQuitar={onQuitarAlertaCartola} />
-      <InformeFinanciero ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores}
-        pagoFinSueltos={pagoFinSueltos} aportes={aportesLista} ajustes={ajustes} categorias={categorias} />
-
-      <Seccion titulo="Margen comercial del mes" nota="Venta − costo − postventa, por fecha de la OC. No descuenta comisiones ni gastos: ver «Resultado del mes» en el informe financiero.">
-      {/* Margen comercial: promedio histórico, mes pasado cerrado, y este mes en curso — un solo gráfico, sin vueltas */}
+        </div>
+        <div>
+      <Desplegable dato="caja" abiertoInicial={escritorio} icono={<Ic n="🏦"/>} titulo="Caja y compromisos"
+        resumen={`Saldo proyectado ${fmt.money(resumen.saldoProyectado)}${resumen.provisorio?" · provisorio":""}`}
+        derecha={<Enlace onClick={(e)=>{e.stopPropagation();onNavigate&&onNavigate("banco",null);}} style={{minHeight:30,padding:"2px 4px"}}>Banco</Enlace>}>
+      {/* Cierre financiero: cada concepto por separado, todos los pendientes sin importar el mes; lo que depende
+          de un IVA aún no registrado se marca PROVISORIO (lib/caja.js). */}
       {(()=>{
-        const barras=[
-          {label:"Promedio histórico",v:utilidad.historico.v,pct:utilidad.historico.pct},
-          {label:utilidad.anterior.nombre,v:utilidad.anterior.v,pct:utilidad.anterior.pct},
-          {label:"Este mes",v:utilidad.actual.v,pct:utilidad.actual.pct},
-        ];
-        const max=Math.max(1,...barras.map(b=>Math.abs(b.v)));
-        return (
-          <Tarjeta padding="16px 16px 14px">
-            <div style={{display:"flex",alignItems:"flex-end",gap:10,height:110}}>
-              {barras.map(b=>(
-                <div key={b.label} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-end",height:"100%"}}>
-                  <span style={{fontSize:12,fontWeight:800,fontFamily:MONO,color:b.v>=0?C.ink:C.danger,marginBottom:4,textAlign:"center"}}>{fmt.money(b.v)}</span>
-                  <div style={{width:"64%",minHeight:4,height:`${Math.max(4,Math.min(100,Math.abs(b.v)/max*100))}%`,
-                    background:b.v>=0?C.teal:C.danger,borderRadius:"7px 7px 2px 2px"}} />
-                </div>
-              ))}
-            </div>
-            <div style={{display:"flex",gap:10,marginTop:8}}>
-              {barras.map(b=>(
-                <div key={b.label} style={{flex:1,textAlign:"center"}}>
-                  <div style={{fontSize:12,color:C.inkFaint,lineHeight:1.3}}>{b.label}</div>
-                  {b.pct>0&&<div style={{fontSize:12,fontWeight:700,color:C.inkMuted}}>{b.pct}%</div>}
-                </div>
-              ))}
-            </div>
-          </Tarjeta>
+        const r=resumen; const MES=["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+        const Fila=({k,v,signo,tono,nota,dato,onClick})=>(
+          <div data-linea={dato} onClick={onClick} style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:8,padding:"6px 0",borderBottom:`1px solid ${C.border}`,cursor:onClick?"pointer":"default"}}>
+            <span style={{minWidth:0}}>
+              <span style={{display:"block",fontSize:13,color:C.ink,fontWeight:700}}>{signo?<span style={{color:C.inkFaint,marginRight:4}}>{signo}</span>:null}{k}</span>
+              {nota&&<span style={{display:"block",fontSize:12,color:C.inkFaint,marginTop:1,lineHeight:1.35}}>{nota}</span>}
+            </span>
+            <span data-monto={dato} style={{fontFamily:MONO,fontWeight:800,fontSize:14,color:tono||C.ink,flexShrink:0}}>{fmt.money(v)}</span>
+          </div>
         );
+        const ivaPend=r.ivaSinRegistrar.map(p=>`${MES[p.mes-1]}-${p.anio}`).join(", ");
+        return (<>
+          <div data-resumen-caja>
+            {r.baseEsBanco
+              ?<Fila dato="banco" k={r.conciliacion.nPosteriores?"Saldo esperado BancoEstado":"Saldo BancoEstado"} v={r.saldoBancario} nota={`Dinero en la cuenta: saldo informado al ${fmt.date(r.conciliacion.corte)}${r.conciliacion.nPosteriores?` más ${r.conciliacion.nPosteriores} movimiento${r.conciliacion.nPosteriores>1?"s":""} registrado${r.conciliacion.nPosteriores>1?"s":""} después (por confirmar con la cartola)`:""}`} />
+              :<Fila dato="caja" k="Caja registrada BFK" v={r.caja} tono={C.warnText} nota="Sin saldo de BancoEstado registrado: la proyección parte de los movimientos registrados en BFK. Registre el saldo de la cuenta." />}
+            <Fila dato="por_cobrar" signo="+" k="Facturas por cobrar" v={r.facturasPorCobrar} nota="Facturas vigentes, descontados los abonos parciales y los vale vista pendientes" onClick={()=>onNavigate&&onNavigate("compras","cobro")} />
+            <Fila dato="por_facturar" signo="+" k="Ventas compradas sin facturar" v={r.ventasPorFacturar} nota="Monto de la OC aún sin factura: no es cuenta por cobrar hasta facturarla" />
+            <Fila dato="vale_vista" signo="+" k="Vale vista / cheques pendientes" v={r.valeVista} tono={C.warnText} nota={r.nValeVista?`${r.nValeVista} documento${r.nValeVista>1?"s":""} entregado${r.nValeVista>1?"s":""} y aún sin depositar en el banco`:"Ninguno pendiente"} onClick={r.nValeVista?()=>onNavigate&&onNavigate("compras","vale_vista"):undefined} />
+            <Fila dato="deuda_fin" signo="−" k="Deuda con financiadores" v={r.deudaFinanciadores} tono={C.dangerText}
+              nota={r.porFinanciador.map(f=>`${f.nombre.split(" ")[0]} ${f.saldo<0?"a favor de BFK ":""}${fmt.money(Math.abs(f.saldo))}`).join(" · ")} onClick={()=>onNavigate&&onNavigate("financiamiento",null)} />
+            {/* Comisiones en tres estados (regla única, lib/calculos.js). Solo la primera es deuda exigible; las tres se descuentan
+                de la proyección, igual que antes (el total no cambia). */}
+            {(()=>{ const det=(e)=>r.comisiones.detalle.filter(d=>d.estado===e).map(d=>`${d.vendedor.split(" ")[0]} ${MES[d.mes-1]}-${d.anio} ${fmt.money(d.deuda)}`).join(" · ");
+              return (<>
+                <Fila dato="comisiones" signo="−" k="Comisiones pendientes de pago" v={r.comisiones.exigible} tono={C.dangerText}
+                  nota={det("pendiente")||"Ninguna exigible: comisiones definitivas al día"} onClick={()=>onNavigate&&onNavigate("vendedores",null)} />
+                <Fila dato="comisiones_por_liquidar" signo="−" k="Comisiones por liquidar (provisorias)" v={r.comisiones.porLiquidar} tono={C.warnText}
+                  nota={r.comisiones.porLiquidar>0?<>{det("por_liquidar")}<span style={{display:"block",color:C.warnText}}>Meses cerrados sin el IVA o sin el total del F29 (IVA + PPM): el monto puede cambiar. No es deuda exigible.</span></>:"Ninguna"} onClick={()=>onNavigate&&onNavigate("vendedores",null)} />
+                <Fila dato="comisiones_en_curso" signo="−" k="Comisiones del mes en curso" v={r.comisiones.enCurso} tono={C.warnText}
+                  nota={r.comisiones.enCurso>0?<>{det("en_curso")}<span style={{display:"block",color:C.inkFaint}}>Acumulado del mes actual: no es deuda exigible.</span></>:"Ninguna"} onClick={()=>onNavigate&&onNavigate("vendedores",null)} />
+              </>); })()}
+            <Fila dato="f29" signo="−" k="F29 pendiente (IVA + PPM)" v={r.f29Pendiente} tono={C.dangerText}
+              nota={<>{r.f29.periodos.filter(x=>x.pend>0).map(x=>`${MES[x.mes-1]}-${x.anio} ${fmt.money(x.pend)}`).join(" · ")||"Sin saldo pendiente en los períodos registrados"}
+                {ivaPend&&<span data-iva-sin-registrar style={{display:"block",color:C.warnText}}>Pendiente de registrar: {ivaPend}. Sin el F29 real no se estima ningún monto.</span>}
+                {(r.f29.faltaTotal||[]).length>0&&<span data-f29-sin-total style={{display:"block",color:C.warnText}}>Falta el total del F29 (IVA + PPM) de {r.f29.faltaTotal.map(p=>`${MES[p.mes-1]}-${p.anio}`).join(", ")}: el pendiente puede ser mayor.</span>}</>} />
+            {r.fondosExternos>0&&<Fila dato="externos" signo="−" k="Fondos de ventas externas por liquidar" v={r.fondosExternos} tono={C.dangerText} nota="Dinero de ventas externas que entró a la cuenta: está en la caja, pero no es de BFK hasta liquidarlo" />}
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:8,paddingTop:10}}>
+              <span>
+                <span style={{display:"block",fontSize:13,color:C.ink,fontWeight:800,textTransform:"uppercase",letterSpacing:0.6}}>= Saldo proyectado</span>
+                <span data-proyectado-nota style={{display:"block",fontSize:12,color:C.inkFaint,marginTop:2}}>Proyección al cobrar y pagar todo lo pendiente: no es dinero disponible hoy</span>
+                {r.provisorio&&<span data-proyectado-provisorio style={{display:"block",fontSize:12,color:C.warnText,fontWeight:700,marginTop:2}}>PROVISORIO: falta registrar IVA/F29 de {ivaPend||"algún período"}{r.comisiones.provisorias>0?" y hay comisiones por liquidar o en curso":""}</span>}
+              </span>
+              <span data-monto="proyectado" style={{fontFamily:MONO,fontWeight:800,fontSize:28,color:r.saldoProyectado>=0?C.tealDark:C.dangerText,letterSpacing:-1}}>{fmt.money(r.saldoProyectado)}</span>
+            </div>
+          </div>
+
+        </>);
       })()}
+      </Desplegable>
 
-      </Seccion>
-
+        </div>
+      </div>
     </div>
   );
 }

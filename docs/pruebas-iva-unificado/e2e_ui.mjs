@@ -28,7 +28,9 @@ await page.route("**/*", async (route) => { const u = new URL(route.request().ur
   return route.abort(); });
 await page.addInitScript(() => { localStorage.setItem("bfk_supabase_session_v2", JSON.stringify({ access_token: "t", refresh_token: "r", user: { id: "u1", email: "a@a.cl" } })); });
 await page.goto(APP, { waitUntil: "load" }); await page.waitForTimeout(1800);
-const ir = async (nombre) => { await page.mouse.click(348, 820); await page.waitForTimeout(500); await page.getByText(nombre, { exact: true }).first().click(); await page.waitForTimeout(900); };
+// Rediseño 2026-10: Gastos, Comisiones (Vendedores) e Impuestos son pestañas del centro Finanzas (rutas conservadas).
+const RUTA = { Gastos: "gastos", Vendedores: "vendedores", Impuestos: "impuestos" };
+const ir = async (nombre) => { await page.evaluate((r) => { location.hash = "#/" + r; }, RUTA[nombre]); await page.waitForTimeout(900); };
 
 // 1) Gastos: el historial de Impuesto SII marca agosto incompleto
 await ir("Gastos");
@@ -43,8 +45,8 @@ res.form_abre_en_agosto = (await page.locator("select").first().inputValue()) ==
 res.form_pagado_precargado = (await page.locator('input[type="number"]').nth(5).inputValue()) === "609830";
 await page.keyboard.press("Escape"); await page.goto(APP, { waitUntil: "load" }); await page.waitForTimeout(1800);
 
-// 2) Vendedores: aviso + completar agosto
-await ir("Vendedores");
+// 2) Impuestos (antes en Vendedores): aviso + completar agosto
+await ir("Impuestos");
 res.vendedores_aviso = (await page.locator('[data-aviso="iva-incompleto"]').count()) === 1;
 await page.getByText(/Completar Ago\/2026/).first().click(); await page.waitForTimeout(500);
 const nums = page.locator('input[type="number"]');
@@ -54,13 +56,15 @@ const ivaPost = escr.filter((e) => e.t === "iva_mensual");
 res.escribe_un_iva = ivaPost.length === 1 && ivaPost[0].m === "POST" && ivaPost[0].body.anio === 2026 && ivaPost[0].body.mes === 8 && ivaPost[0].body.iva_ventas === 1552920 && ivaPost[0].body.iva_compras === 983956 && ivaPost[0].body.iva_pagado === 609830;
 res.no_duplica_gasto = escr.filter((e) => e.t === "gastos_indirectos").length === 0;
 res.aviso_desaparece = (await page.locator('[data-aviso="iva-incompleto"]').count()) === 0;
+await ir("Vendedores");
 await page.getByText("Vendedor Uno").first().click(); await page.waitForTimeout(700);
 const b = await page.evaluate(() => document.body.innerText);
 const i = b.indexOf("Ago/2026", b.search(/comisión mes a mes/i)); const bloque = b.slice(i, b.indexOf("= Comisión del mes", i) + 40);
 res.desglose_retenciones = /Retenciones del F29 \(PPM y otras\): −\$40\.866/.test(bloque) && /IVA neto del período \(débito \$1\.552\.920 − crédito \$983\.956\): −\$568\.964/.test(bloque);
 res.comision_agosto = (bloque.match(/= Comisión del mes: (\$[\d.]+)/) || [])[1] || null;
 
-// 3) Mes nuevo desde Vendedores: crea IVA + gasto en un paso (septiembre, sugerido)
+// 3) Mes nuevo desde Impuestos: crea IVA + gasto en un paso (septiembre, sugerido)
+await ir("Impuestos");
 await page.getByText("+ Registrar IVA de otro mes").click(); await page.waitForTimeout(500);
 res.sugiere_septiembre = (await page.locator("select").last().inputValue()) === "9" || (await page.locator(".modal select, select").evaluateAll((s) => s.map((x) => x.value))).includes("9");
 const n2 = page.locator('input[type="number"]');
