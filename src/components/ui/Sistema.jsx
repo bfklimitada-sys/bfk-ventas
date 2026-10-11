@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useId, useRef, useState } from "r
 import { C, MONO, R, S, T, TOUCH, cardStyle, sombra } from "../../lib/theme";
 import { Ic } from "./Iconos";
 import { useCerrarConEscape } from "./Basicos";
+import { ANCHO_LATERAL } from "./Navegacion"; // en escritorio la barra lateral sigue disponible con la ficha abierta
 
 // ── Modo "todas las pantallas" (imprimir / PDF): abre desplegables y muestra todas las pestañas ──
 export const ModoTodoContext = createContext(false);
@@ -244,7 +245,7 @@ export function HojaLateral({ abierta, onCerrar, titulo, subtitulo, derecha, chi
   }, [abierta]);
   if (!abierta) return null;
   return (
-    <div data-hoja-lateral={dato} style={{ position: "fixed", inset: 0, zIndex: 60, display: "flex", justifyContent: "flex-end" }}>
+    <div data-hoja-lateral={dato} style={{ position: "fixed", top: 0, right: 0, bottom: 0, left: escritorio ? ANCHO_LATERAL : 0, zIndex: 60, display: "flex", justifyContent: "flex-end" }}>
       {escritorio && <div data-noprint onClick={onCerrar} style={{ position: "absolute", inset: 0, background: "rgba(11,17,32,0.35)" }} />}
       <div role="dialog" aria-modal="true" aria-label={typeof titulo === "string" ? titulo : "Detalle"} className="bfk-hoja"
         style={{ position: "relative", width: escritorio ? `min(${ancho}px, 92vw)` : "100%", height: "100%", background: C.paper, boxShadow: escritorio ? sombra.panel : "none", display: "flex", flexDirection: "column" }}>

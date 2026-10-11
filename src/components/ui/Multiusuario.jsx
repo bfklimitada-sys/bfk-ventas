@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import { del } from "../../lib/supabase";
 import { C, MONO, SANS, fmt } from "../../lib/theme";
 import { Leyenda } from "./Basicos";
+import { Pestanas, PanelPestana } from "./Sistema";
+import { esPendiente } from "../../lib/correosBfk";
 import { Ic, I } from "./Iconos";
 
 // Estado del bloqueo cooperativo de la OC abierta. El propietario no ve aviso; los demás ven solo lectura.
@@ -262,6 +264,14 @@ export function calcularAlertas(ocs) {
 // nivel: todas | alto | medio | bajo · etapa (opcional): refina con el campo `filtro` que ya trae cada alerta
 // ("entrega" = entregas atrasadas, "cobro" = facturas vencidas), sin categorías nuevas.
 const ETAPA_ALERTA = { entrega: "entregas atrasadas", cobro: "facturas vencidas sin cobrar" };
+const LEYENDA_ALERTAS = [
+        {muestra:<Ic n="🔴"/>, texto:"Urgente: facturas pasadas de plazo o entregas atrasadas. Son las que cuestan plata."},
+        {muestra:<Ic n="🟡"/>, texto:"Atención: vencen dentro de 5 días, o llevan días entregadas sin facturar."},
+        {muestra:<Ic n="⏸"/>, texto:"Informativas: OCs sin avance hace más de dos semanas, o esperando Mercado Público."},
+        {muestra:<Ic n="⚠"/>, texto:"OC sin vendedor: OCs abiertas que no entran en ninguna comisión hasta asignarles un vendedor."},
+        {muestra:"›", texto:"Al tocar una alerta te lleva al listado filtrado por esa etapa."},
+      ];
+
 export function PanelNotificaciones({ notificaciones, ocs, onMarcarLeidas, onNavigate, filtroAlertas, onFiltroAlertas, correos, onMarcarCorreo }) {
   const [filtroLocal, setFiltroLocal] = useState({ nivel: "todas", etapa: null });
   const fa = filtroAlertas || filtroLocal;
@@ -280,10 +290,12 @@ export function PanelNotificaciones({ notificaciones, ocs, onMarcarLeidas, onNav
     bajo:  alertas.filter(a => a.nivel === "bajo").length,
   };
   const colorNivel = (n) => n === "alto" ? C.danger : n === "medio" ? C.warn : C.inkFaint;
+  const [pestana, setPestana] = useState("alertas");
+  const nCorreos = (correos || []).filter(esPendiente).length;
 
   const Chip = ({ id, label, n, color }) => (
     <button onClick={() => setFiltro(id)}
-      style={{fontSize:12,fontWeight:700,padding:"5px 10px",borderRadius:8,cursor:"pointer",
+      style={{fontSize:12,fontWeight:700,padding:"5px 10px",borderRadius:8,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap",
         border:`1.5px solid ${filtro===id?color:C.border}`,
         background:filtro===id?C.paper:C.card, color:filtro===id?color:C.inkMuted}}>
       {label}{n !== undefined ? ` ${n}` : ""}
@@ -292,15 +304,20 @@ export function PanelNotificaciones({ notificaciones, ocs, onMarcarLeidas, onNav
 
   return (
     <div style={{fontFamily:SANS}}>
-      {correos && <CorreosPendientes correos={correos} ocs={ocs} onMarcar={onMarcarCorreo} onAbrirOC={(ocId) => onNavigate && onNavigate("compras", null, ocId)} />}
-      <div style={{marginBottom:12}}>
-        <div style={{fontWeight:800,fontSize:14,color:C.ink}}>Alertas</div>
-        <div style={{fontSize:12,color:C.inkFaint,marginTop:2}}>
-          {alertas.length === 0 ? "Todo al día" : `${alertas.length} cosa${alertas.length>1?"s":""} que revisar · toca para ir a la OC`}
-        </div>
+      <Pestanas etiqueta="Alertas y correos" activa={pestana} onCambiar={setPestana} items={[
+        { key: "alertas", label: "Alertas de OC", n: alertas.length || null, tono: conteo.alto ? "danger" : null },
+        ...(correos ? [{ key: "correos", label: "Correos", n: nCorreos || null, tono: nCorreos ? "warn" : null }] : []),
+        ...(noLeidas.length ? [{ key: "parati", label: "Para ti", n: noLeidas.length }] : []),
+      ]} />
+      {correos && <PanelPestana visible={pestana === "correos"} titulo="Correos de BFK">
+        <CorreosPendientes correos={correos} ocs={ocs} onMarcar={onMarcarCorreo} onAbrirOC={(ocId) => onNavigate && onNavigate("compras", null, ocId)} />
+      </PanelPestana>}
+      <PanelPestana visible={pestana === "alertas"} titulo="Alertas de OC">
+      <div style={{fontSize:12,color:C.inkFaint,margin:"-6px 2px 10px"}}>
+        {alertas.length === 0 ? "Todo al día" : `${alertas.length} cosa${alertas.length>1?"s":""} que revisar · toca para ir a la OC`}
       </div>
 
-      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
+      <div style={{display:"flex",gap:6,flexWrap:"nowrap",overflowX:"auto",scrollbarWidth:"none",marginBottom:12}}>
         <Chip id="todas" label="Todas" n={alertas.length} color={C.teal} />
         <Chip id="alto"  label={<I t={"🔴 Urgente"}/>}   n={conteo.alto}  color={C.danger} />
         <Chip id="medio" label={<I t={"🟡 Atención"}/>}  n={conteo.medio} color={C.warn} />
@@ -342,8 +359,11 @@ export function PanelNotificaciones({ notificaciones, ocs, onMarcarLeidas, onNav
         </button>
       ))}
 
+      <Leyenda titulo="¿Cómo se ordenan las alertas?" items={LEYENDA_ALERTAS} />
+      </PanelPestana>
       {noLeidas.length > 0 && (
-        <div style={{marginTop:18}}>
+        <PanelPestana visible={pestana === "parati"} titulo="Para ti">
+        <div>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
             <span style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4}}>
               Para ti ({noLeidas.length})
@@ -359,15 +379,8 @@ export function PanelNotificaciones({ notificaciones, ocs, onMarcarLeidas, onNav
             </div>
           ))}
         </div>
+        </PanelPestana>
       )}
-
-      <Leyenda titulo="¿Cómo se ordenan las alertas?" items={[
-        {muestra:<Ic n="🔴"/>, texto:"Urgente: facturas pasadas de plazo o entregas atrasadas. Son las que cuestan plata."},
-        {muestra:<Ic n="🟡"/>, texto:"Atención: vencen dentro de 5 días, o llevan días entregadas sin facturar."},
-        {muestra:<Ic n="⏸"/>, texto:"Informativas: OCs sin avance hace más de dos semanas, o esperando Mercado Público."},
-        {muestra:<Ic n="⚠"/>, texto:"OC sin vendedor: OCs abiertas que no entran en ninguna comisión hasta asignarles un vendedor."},
-        {muestra:"›", texto:"Al tocar una alerta te lleva al listado filtrado por esa etapa."},
-      ]} />
     </div>
   );
 }

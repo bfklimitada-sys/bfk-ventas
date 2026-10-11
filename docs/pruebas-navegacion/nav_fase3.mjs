@@ -51,7 +51,12 @@ for(const [modo,ancho,alto,movil] of [["movil",390,844,true],["escritorio",1440,
     for(const k of pantallas){
       await ir(p,k,esc);
       const t=await titulo(p); const h=await hash(p);
-      const faltan=[]; for(const f of FUNCIONES[k]) if(!(await tieneTexto(p,f))) faltan.push(f);
+      const faltan=[];
+      if(k==="usuarios"){ // Rediseño 2026-10: Administración en pestañas; cada función debe existir en alguna pestaña
+        const pend=new Set(FUNCIONES[k]);
+        for(const t of ["usuarios","datos","mp","archivadas","correcciones"]){ await p.locator(`[role=tablist][aria-label="Administración"] [data-tab="${t}"]`).click(); await espera(p,250); for(const f of [...pend]) if(await tieneTexto(p,f)) pend.delete(f); }
+        faltan.push(...pend); await p.locator('[role=tablist][aria-label="Administración"] [data-tab="usuarios"]').click(); await espera(p,200);
+      } else for(const f of FUNCIONES[k]) if(!(await tieneTexto(p,f))) faltan.push(f);
       ok(`${tag}_${k}_accesible`, h===rutas[k] && (titulos[k]===null ? /Buen/.test(t) : t===titulos[k]));
       ok(`${tag}_${k}_funciones`, faltan.length===0); if(faltan.length) console.log("FALTAN",tag,k,faltan);
       ok(`${tag}_${k}_marcada_activa`, (await p.locator(`[data-nav="${k}"][aria-current="page"]`).count())>=(esc||["panel","compras","notif",...EN_FINANZAS].includes(k)?1:0));
@@ -102,11 +107,11 @@ for(const [modo,ancho,alto,movil] of [["movil",390,844,true],["escritorio",1440,
     const enImp=(await hash(p))==="#/impuestos";
     await p.locator('[role=tablist][aria-label="Impuestos"] [data-tab="f29"]').click(); await espera(p,400);
     ok(`${tag}_indice_vendedores`, enImp && (await p.getByText("Total pendiente").count())>0);
-    if(admin){ await ir(p,"usuarios",esc); await p.locator('.bfk-indice button',{hasText:"OCs archivadas"}).click(); await espera(p,900);
-      const t=await p.evaluate(()=>{const r=document.getElementById("adm-archivadas").getBoundingClientRect(); const fin=Math.abs(window.scrollY+innerHeight-document.documentElement.scrollHeight)<4; return {top:r.top, fin, alto:innerHeight};});
-      ok(`${tag}_indice_administracion`, t.top>=0 && (t.top<220 || (t.fin && t.top<t.alto-120))); if(!R[`${tag}_indice_administracion`]) console.log("admTop",t);
-      ok(`${tag}_exportar_unico`, (await p.getByText(/Exportar Excel completo/).count())===1 && (await p.getByText("Exportar todo a Excel").count())===0);
+    if(admin){ await ir(p,"usuarios",esc); await p.locator('[role=tablist][aria-label="Administración"] [data-tab="archivadas"]').click(); await espera(p,500);
+      ok(`${tag}_indice_administracion`, (await p.locator('[data-oc-archivada]').count())===1 && await p.locator('[data-oc-archivada]').first().isVisible());
       ok(`${tag}_archivada_listada`, (await p.locator('[data-oc-archivada]').count())===1);
+      await p.locator('[role=tablist][aria-label="Administración"] [data-tab="datos"]').click(); await espera(p,400);
+      ok(`${tag}_exportar_unico`, (await p.getByText(/Exportar Excel completo/).count())===1 && (await p.getByText("Exportar todo a Excel").count())===0);
     }
     // Enlace directo a Administración
     await p.goto(URL_APP+"#/administracion",{waitUntil:"load"}); await espera(p,1800);

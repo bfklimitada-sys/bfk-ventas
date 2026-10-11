@@ -2,11 +2,12 @@ import { useState, useMemo } from "react";
 import { PanelDatos } from "./PanelDatos";
 import { C, btnP, fmt, iStyle } from "../../lib/theme";
 import { Ic } from "../ui/Iconos";
-import { Seccion, Tarjeta, Badge, BotonAdmin, IndiceSecciones } from "../ui/Sistema";
+import { Seccion, Tarjeta, Badge, BotonAdmin, Pestanas, PanelPestana } from "../ui/Sistema";
 import { ImportarEntidades } from "../forms/ImportarEntidades";
 
 export function PanelUsuarios({ perfiles, ocs, ocsArchivadas, onRestaurarOC, onChangeRol, session, showToast, entidadesCatalogo, onEntidadesImportadas, usoMP, sincronizando, validandoTodo, exportando, onCorregirFechas, onValidarTodo, onExportarTodo, difsHistoricas }) {
   const [verDifs,setVerDifs]=useState(false);
+  const [pestana,setPestana]=useState("usuarios");
   const [showImport,setShowImport]=useState(false);
   const [filtroArch,setFiltroArch]=useState("");
   const [archAbierta,setArchAbierta]=useState(null);
@@ -34,13 +35,14 @@ export function PanelUsuarios({ perfiles, ocs, ocsArchivadas, onRestaurarOC, onC
 
   return (
     <div>
-      <IndiceSecciones items={[
-        {id:"adm-usuarios",label:"Usuarios"},
-        {id:"adm-datos",label:"Datos y respaldo"},
-        {id:"adm-mp",label:"Mercado Público"},
-        {id:"adm-archivadas",label:"OCs archivadas",n:(ocsArchivadas||[]).length},
-        {id:"adm-correcciones",label:"Correcciones pendientes",n:(difsHistoricas||[]).length},
+      <Pestanas etiqueta="Administración" activa={pestana} onCambiar={setPestana} items={[
+        {key:"usuarios",label:"Usuarios"},
+        {key:"datos",label:"Datos y respaldo"},
+        {key:"mp",label:"Mercado Público"},
+        {key:"archivadas",label:"OCs archivadas",n:(ocsArchivadas||[]).length||null},
+        {key:"correcciones",label:"Correcciones",n:(difsHistoricas||[]).length||null,tono:(difsHistoricas||[]).length?"warn":null},
       ]} />
+      <PanelPestana visible={pestana==="usuarios"} titulo="Usuarios y permisos">
       {/* ── 1. Usuarios y permisos ── */}
       <Seccion id="adm-usuarios" titulo="Usuarios y permisos">
       {perfiles.map(p=>{
@@ -64,7 +66,9 @@ export function PanelUsuarios({ perfiles, ocs, ocsArchivadas, onRestaurarOC, onC
         );
       })}
       </Seccion>
+      </PanelPestana>
 
+      <PanelPestana visible={pestana==="datos"} titulo="Datos y respaldo">
       {/* ── 2. Datos y respaldo ── */}
       <Seccion id="adm-datos" titulo="Datos y respaldo" nota="Acciones administrativas: tienen más alcance que el trabajo diario.">
         <Tarjeta>
@@ -87,7 +91,9 @@ export function PanelUsuarios({ perfiles, ocs, ocsArchivadas, onRestaurarOC, onC
           )}
         </Tarjeta>
       </Seccion>
+      </PanelPestana>
 
+      <PanelPestana visible={pestana==="mp"} titulo="Mercado Público">
       {/* ── 3. Mercado Público ── */}
       <Seccion id="adm-mp" titulo="Mercado Público" nota="Mantenimiento masivo. Consulta muchas órdenes a la vez; úsalo solo cuando haga falta.">
         <Tarjeta>
@@ -111,7 +117,9 @@ export function PanelUsuarios({ perfiles, ocs, ocsArchivadas, onRestaurarOC, onC
           </div>
         </Tarjeta>
       </Seccion>
+      </PanelPestana>
 
+      <PanelPestana visible={pestana==="correcciones"} titulo="Correcciones históricas pendientes">
       {/* ── Correcciones históricas pendientes (Fase 4B): solo lectura ── */}
       <Seccion id="adm-correcciones" titulo="Correcciones históricas pendientes" nota="Diferencias encontradas al pasar a totales calculados por la base (Fase 4B). Se conservan los valores guardados hasta aprobar cada corrección; mientras tanto, las operaciones del dominio afectado quedan bloqueadas en esa OC.">
         <Tarjeta>
@@ -142,7 +150,9 @@ export function PanelUsuarios({ perfiles, ocs, ocsArchivadas, onRestaurarOC, onC
           })()}
         </Tarjeta>
       </Seccion>
+      </PanelPestana>
 
+      <PanelPestana visible={pestana==="archivadas"} titulo="OCs archivadas">
       {/* ── 4. OCs archivadas ── */}
       <Seccion id="adm-archivadas" titulo="OCs archivadas" nota="Ocultas de la operación diaria, con todos sus datos intactos. Se pueden consultar y restaurar.">
         <Tarjeta>
@@ -180,6 +190,7 @@ export function PanelUsuarios({ perfiles, ocs, ocsArchivadas, onRestaurarOC, onC
           })}
         </Tarjeta>
       </Seccion>
+      </PanelPestana>
     </div>
   );
 }

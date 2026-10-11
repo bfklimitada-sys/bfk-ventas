@@ -8,13 +8,14 @@ import { entregaAtrasada, esVenta, estadoOperativo, estaEntregada, facturaPorCob
 
 // Resumen compacto de atrasos: una sola tarjeta con acceso a Alertas. No lista OC individuales.
 function ResumenAtraso({ titulo, monto, color, fondo, onVerAlertas }) {
+  // Aviso compacto de una línea (el detalle está en Alertas)
   return (
-    <div style={{background:fondo,border:`1px solid ${color}44`,borderRadius:12,marginBottom:8,display:"flex",alignItems:"center",gap:8,padding:"6px 6px 6px 12px",minHeight:52}}>
-      <span style={{flex:1,minWidth:0,display:"flex",alignItems:"flex-start",gap:6,color,fontWeight:800,fontSize:13,lineHeight:1.3}}>
-        <span style={{paddingTop:1}}><Ic n="⚠"/></span>
-        <span>{titulo}{monto>0&&<span style={{display:"block",fontFamily:MONO,fontSize:16,marginTop:1}}>{fmt.money(monto)}</span>}</span>
+    <div data-resumen-atraso style={{background:fondo,border:`1px solid ${color}33`,borderRadius:8,marginBottom:8,display:"flex",alignItems:"center",gap:8,padding:"4px 4px 4px 12px",minHeight:40}}>
+      <span style={{flex:1,minWidth:0,display:"flex",alignItems:"center",gap:6,color,fontWeight:700,fontSize:13,lineHeight:1.3}}>
+        <Ic n="⚠"/>
+        <span>{titulo}{monto>0&&<span style={{fontFamily:MONO,fontWeight:800}}> · {fmt.money(monto)}</span>}</span>
       </span>
-      {onVerAlertas&&<button onClick={onVerAlertas} style={{background:"none",border:"none",cursor:"pointer",color,fontWeight:800,fontSize:13,minHeight:44,padding:"0 8px",whiteSpace:"nowrap"}}>Ver alertas →</button>}
+      {onVerAlertas&&<button onClick={onVerAlertas} style={{background:"none",border:"none",cursor:"pointer",color,fontWeight:800,fontSize:12,minHeight:36,padding:"0 8px",whiteSpace:"nowrap",textDecoration:"underline"}}>Ver alertas</button>}
     </div>
   );
 }

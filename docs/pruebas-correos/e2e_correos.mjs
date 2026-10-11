@@ -54,6 +54,8 @@ for (const [modo, vp] of [["escritorio", { width: 1280, height: 900 }], ["movil"
   const r = {};
   const n0 = await numAlertas(page);
   await page.locator('[data-nav="notif"]').first().click(); await page.waitForTimeout(700);
+  // Rediseño 2026-10: en Alertas los correos tienen su propia pestaña.
+  await page.locator('[data-tab="correos"]').click(); await page.waitForTimeout(300);
   const sec = page.locator("[data-correos-pendientes]");
   if (modo === "sin_migracion") {
     r.app_carga_sin_tabla = (await page.locator("[data-ficha-oc], [data-nav]").count()) > 0 && errs.length === 0;
@@ -101,6 +103,7 @@ for (const [modo, vp] of [["escritorio", { width: 1280, height: 900 }], ["movil"
     // Rediseño 2026-10: la ficha se abre en un panel encima de la lista; se cierra (Escape) antes de navegar.
     if (await page.locator("[data-hoja-lateral]").count()) { await page.keyboard.press("Escape"); await page.waitForTimeout(300); }
     await page.locator('[data-nav="notif"]').first().click(); await page.waitForTimeout(500);
+    await page.locator('[data-tab="correos"]').click(); await page.waitForTimeout(300);
     await page.locator("[data-correos-pendientes]").screenshot({ path: `${process.env.SALIDA || "."}/alertas-correos-${modo}.png` }).catch(() => {});
   }
   for (const [k, v] of Object.entries(r)) { res[`${modo}.${k}`] = v; if (!v) falla = true; }
