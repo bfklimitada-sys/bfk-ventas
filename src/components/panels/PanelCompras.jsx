@@ -4,6 +4,7 @@ import { FormIngresarCompra } from "../forms/FormIngresarCompra";
 import { FormEntregaFallida, FormFechaEntrega, FormReclamarFactura } from "../forms/FormulariosCorreo";
 import { FormConfirmarEntrega, FormEmitirFactura, FormPagoCliente, FormPagoFinanciamiento } from "../forms/FormulariosRapidos";
 import { DiasBadge, Field, Leyenda, Modal, Trazabilidad } from "../ui/Basicos";
+import { HojaLateral, BotonSecundario } from "../ui/Sistema";
 import { EtapasOC, FormPostventa } from "../ui/EtapasOC";
 import { diferenciasPendientes, tipoFinanciamiento, TIPOS_FINANCIAMIENTO } from "../../lib/finanzas";
 import { useEscritorio, useTopeFijo, SeccionFicha, IndiceFicha, ResumenFinanciero, FacturacionSII, FormNotaCredito, CobranzaFicha, ComunicacionesFicha } from "../ficha/FichaOC";
@@ -861,9 +862,64 @@ export function FilaOC({ correosOC = SIN_CORREOS, onMarcarCorreo, pagosVendedor,
   const handleToggle=()=>{ onToggle(); }; // el bloqueo se gestiona de forma central (useBloqueoOC) según la OC expandida
 
   return (
-    <div data-oc={oc.numero_oc} style={{background:C.card,border:`1px solid ${C.border}`,borderLeft:`4px solid ${estadoOC.color}`,borderRadius:12,marginBottom:8,overflow:expanded?"visible":"hidden"}}>
-      <div onClick={handleToggle} style={{padding:"13px 14px",cursor:"pointer"}}>
-        {/* Línea 1 — dos bloques pareados: código+fecha a la izquierda, monto+ganancia a la derecha */}
+    <div data-oc={oc.numero_oc} style={{background:expanded?C.tealLight:C.card,border:`1px solid ${expanded?C.teal:C.border}`,borderLeft:`4px solid ${estadoOC.color}`,borderRadius:12,marginBottom:8,overflow:expanded?"visible":"hidden"}}>
+      <div onClick={handleToggle} role="button" tabIndex={0} aria-expanded={!!expanded} onKeyDown={e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); handleToggle(); } }} style={{padding:escritorio?"10px 14px":"12px 14px",cursor:"pointer"}}>
+        {escritorio?(
+          /* Escritorio: una fila compacta — código · cliente y asignaciones · estado y avance · monto */
+          <div style={{display:"grid",gridTemplateColumns:"150px minmax(0,1fr) minmax(0,auto) 140px",gap:14,alignItems:"center"}}>
+          <div style={{minWidth:0}}>
+            <div style={{fontFamily:MONO,fontWeight:800,fontSize:14,color:C.ink}}>{oc.numero_oc}</div>
+            {(()=>{
+              const f=fmtFechaHora(fechaOC(oc).valor);
+              return f ? <div style={{fontSize:12,color:C.inkFaint,marginTop:2}}>{f}</div> : null;
+            })()}
+          </div>
+            <div style={{minWidth:0,display:"flex",flexDirection:"column",gap:5}}>
+          <span style={{fontSize:12,color:C.inkMuted,display:"block",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+            {(()=>{
+              const esPorCompletar=oc.cliente?.toUpperCase().includes("POR COMPLETAR");
+              const nombre=esPorCompletar?(oc.entidad||null):oc.cliente;
+              return nombre
+                ? [nombre,oc.comuna].filter(Boolean).join(" · ")
+                : <span style={{color:C.warnText,fontWeight:700}}><Ic n="⚠"/> Falta la entidad</span>;
+            })()}
+          </span>
+        {(oc.tipo_registro||"venta")!=="aporte_socio"&&(
+          <div data-asignaciones-fila style={{display:"flex",gap:6,flexWrap:"wrap",fontSize:12}}>
+            {faltaVendedor(oc)
+              ? <span data-aviso="sin-vendedor" style={{background:C.warnLight,color:C.warnText,fontWeight:800,padding:"2px 8px",borderRadius:999}}><Ic n="⚠"/> Falta vendedor</span>
+              : oc.capitalizacion_bfk
+              ? <span data-chip-capitalizacion style={{background:C.tealLight,color:C.tealDark,fontWeight:800,padding:"2px 8px",borderRadius:999}}>BFK Ltda. · Capitalización</span>
+              : <span data-chip-vendedor style={{background:C.paper,border:`1px solid ${C.border}`,color:C.ink,fontWeight:700,padding:"2px 8px",borderRadius:999}}>V: {primerNombre(nombreVendedor(oc,vendedores))}</span>}
+            {faltaFinanciador(oc)
+              ? <span data-aviso="sin-financiador" style={{background:C.warnLight,color:C.warnText,fontWeight:800,padding:"2px 8px",borderRadius:999}}><Ic n="⚠"/> Falta financiador</span>
+              : <span data-chip-financiador style={{background:C.paper,border:`1px solid ${C.border}`,color:C.ink,fontWeight:700,padding:"2px 8px",borderRadius:999}}>F: {primerNombre(nombreFinanciador(oc,financiadores))}</span>}
+          </div>
+        )}
+                </div>
+            <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4,minWidth:0}}>
+          <span style={{display:"inline-flex",alignItems:"flex-start",gap:5,background:estadoOC.bg,color:estadoOC.color,
+            padding:"3px 9px",borderRadius:12,fontSize:12,fontWeight:700,lineHeight:1.35,minWidth:0,maxWidth:"100%"}}>
+            <span style={{flexShrink:0}}>{estadoOC.icono}</span><span style={{minWidth:0}}>{estadoOC.texto}</span>
+          </span>
+          <span style={{fontSize:12,color:C.inkFaint,flexShrink:0,whiteSpace:"nowrap",lineHeight:1.35,padding:"3px 0",marginLeft:"auto"}}>
+            {estancada&&<span style={{color:C.warnText,fontWeight:700}}><Ic n="⏸"/> {diasEstancada}d · </span>}
+            {completadas}/5
+          </span>
+            </div>
+          <div style={{flexShrink:0,textAlign:"right"}}>
+            <div style={{fontFamily:MONO,fontWeight:800,fontSize:14,color:C.ink}}>{fmt.money(oc.monto_total)}</div>
+            {(()=>{const mg=gananciaReal(oc);
+              return oc.costo_total?(
+                <div style={{marginTop:2}}>
+                  <span style={{display:"block",fontFamily:MONO,fontSize:12,fontWeight:800,color:mg.color}}>+{fmt.money(mg.pesos)}</span>
+                  <span style={{display:"block",fontSize:12,color:mg.color,opacity:0.8}}>{mg.pct}%{mg.extra>0?" · con post-venta":" margen"}</span>
+                </div>
+              ):null;})()}
+          </div>
+          </div>
+        ):(<>
+        {/* Celular — línea 1: código y fecha · monto y ganancia */}
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10}}>
           <div style={{minWidth:0}}>
             <div style={{fontFamily:MONO,fontWeight:800,fontSize:14,color:C.ink}}>{oc.numero_oc}</div>
@@ -883,9 +939,8 @@ export function FilaOC({ correosOC = SIN_CORREOS, onMarcarCorreo, pagosVendedor,
               ):null;})()}
           </div>
         </div>
-
-        {/* Línea 2 — cliente y comuna, a todo el ancho */}
-        <div style={{marginTop:7}}>
+        {/* Línea 2 — cliente y comuna */}
+        <div style={{marginTop:6}}>
           <span style={{fontSize:12,color:C.inkMuted,display:"block",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
             {(()=>{
               const esPorCompletar=oc.cliente?.toUpperCase().includes("POR COMPLETAR");
@@ -896,22 +951,14 @@ export function FilaOC({ correosOC = SIN_CORREOS, onMarcarCorreo, pagosVendedor,
             })()}
           </span>
         </div>
-
-        {/* Línea 3 — un solo estado, con el progreso al lado */}
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",columnGap:10,rowGap:4,marginTop:7}}>
+        {/* Línea 3 — estado, asignaciones y avance en una sola fila */}
+        <div style={{display:"flex",alignItems:"center",flexWrap:"wrap",columnGap:6,rowGap:5,marginTop:7}}>
           <span style={{display:"inline-flex",alignItems:"flex-start",gap:5,background:estadoOC.bg,color:estadoOC.color,
             padding:"3px 9px",borderRadius:12,fontSize:12,fontWeight:700,lineHeight:1.35,minWidth:0,maxWidth:"100%"}}>
             <span style={{flexShrink:0}}>{estadoOC.icono}</span><span style={{minWidth:0}}>{estadoOC.texto}</span>
           </span>
-          <span style={{fontSize:12,color:C.inkFaint,flexShrink:0,whiteSpace:"nowrap",lineHeight:1.35,padding:"3px 0",marginLeft:"auto"}}>
-            {estancada&&<span style={{color:C.warnText,fontWeight:700}}><Ic n="⏸"/> {diasEstancada}d · </span>}
-            {completadas}/5
-          </span>
-        </div>
-
-        {/* Línea 4 — vendedor y financiador (compacto). Faltantes marcados. */}
         {(oc.tipo_registro||"venta")!=="aporte_socio"&&(
-          <div data-asignaciones-fila style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:7,fontSize:12}}>
+          <div data-asignaciones-fila style={{display:"flex",gap:6,flexWrap:"wrap",fontSize:12}}>
             {faltaVendedor(oc)
               ? <span data-aviso="sin-vendedor" style={{background:C.warnLight,color:C.warnText,fontWeight:800,padding:"2px 8px",borderRadius:999}}><Ic n="⚠"/> Falta vendedor</span>
               : oc.capitalizacion_bfk
@@ -922,15 +969,20 @@ export function FilaOC({ correosOC = SIN_CORREOS, onMarcarCorreo, pagosVendedor,
               : <span data-chip-financiador style={{background:C.paper,border:`1px solid ${C.border}`,color:C.ink,fontWeight:700,padding:"2px 8px",borderRadius:999}}>F: {primerNombre(nombreFinanciador(oc,financiadores))}</span>}
           </div>
         )}
+              <span style={{fontSize:12,color:C.inkFaint,flexShrink:0,whiteSpace:"nowrap",lineHeight:1.35,padding:"3px 0",marginLeft:"auto"}}>
+            {estancada&&<span style={{color:C.warnText,fontWeight:700}}><Ic n="⏸"/> {diasEstancada}d · </span>}
+            {completadas}/5
+          </span>
+        </div>
+        </>)}
       </div>
-
       {expanded&&(()=>{
         // ═══ Ficha de OC (expediente): cabecera fija · resumen financiero · índice · secciones plegables ═══
         const bloqueadoDom=(d)=>difsOC.some(x=>(x.bloquea||[]).includes(d));
         const tipoFin=tipoFinanciamiento(oc,financiadores);
         const seccionDeEtapa={compra:"compra",entrega:"entrega",factura:"facturacion",pago_cliente:"cobranza",pago_financ:"compra"};
         const porDefecto=escritorio
-          ? {info:true,productos:true,compra:true,facturacion:true,entrega:true,cobranza:true,comunicaciones:true,historial:false}
+          ? {info:true,[proxima?seccionDeEtapa[proxima.key]:"facturacion"]:true}
           : {[proxima?seccionDeEtapa[proxima.key]:"facturacion"]:true};
         const abiertasAct=abiertas||porDefecto;
         const alternar=(id)=>setAbiertas({...abiertasAct,[id]:!abiertasAct[id]});
@@ -974,10 +1026,11 @@ export function FilaOC({ correosOC = SIN_CORREOS, onMarcarCorreo, pagosVendedor,
         const sub=(t)=><div style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,margin:"4px 0 6px"}}>{t}</div>;
         const estadoChip=(ok,t)=><span style={{fontSize:12,fontWeight:700,padding:"2px 7px",borderRadius:999,background:ok?C.okLight:C.paper,color:ok?C.okText:C.inkFaint,border:`1px solid ${ok?C.okLight:C.border}`,whiteSpace:"nowrap"}}>{ok?"✓ ":""}{t}</span>;
         return (
-        <div data-ficha-oc={oc.numero_oc} style={{borderTop:`1px solid ${C.border}`,background:C.paper}}>
+        <HojaLateral abierta onCerrar={handleToggle} dato={oc.numero_oc} titulo={oc.numero_oc} subtitulo={[oc.cliente||oc.entidad,fmt.money(oc.monto_total)].filter(Boolean).join(" · ")}>
+        <div data-ficha-oc={oc.numero_oc} style={{background:C.paper,minHeight:"100%"}}>
           {/* Cabecera fija: OC · cliente · monto · vendedor · estados principales + índice.
               En móvil solo queda el índice: el resumen ya está en la tarjeta principal. */}
-          <div data-ficha-cabecera style={{position:"sticky",top:topeFijo,zIndex:6,background:C.paper,padding:escritorio?"9px 14px 6px":"4px 14px 6px",borderBottom:`1px solid ${C.border}`,boxShadow:"0 2px 6px rgba(15,23,42,0.05)"}}>
+          <div data-ficha-cabecera style={{position:"sticky",top:0,zIndex:6,background:C.paper,padding:escritorio?"9px 14px 6px":"6px 14px 6px",borderBottom:`1px solid ${C.border}`,boxShadow:"0 2px 6px rgba(15,23,42,0.05)"}}>
             {escritorio&&<>
             <div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"baseline",flexWrap:"wrap"}}>
               <div style={{minWidth:0,flex:"1 1 200px"}}>
@@ -1114,6 +1167,7 @@ export function FilaOC({ correosOC = SIN_CORREOS, onMarcarCorreo, pagosVendedor,
           )}
           </div>
         </div>
+        </HojaLateral>
         );
       })()}
       {registrandoNC&&(
@@ -1193,6 +1247,7 @@ export function FilaOC({ correosOC = SIN_CORREOS, onMarcarCorreo, pagosVendedor,
 export function PanelCompras({ pagosVendedor, onAsignarVendedor, onAsignarFinanciador, correosBfk, onMarcarCorreo, onRegistrarNC, difsHistoricas, onCambiarFinanciamiento, ocs, perfiles, filtroInicial, busquedaInicial, ocFoco, onFocoUsado, onSincronizarFecha, contactos, onEnviarReclamo, onCorreoOC, onRegistrarRespuestaReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, onRepartirInversion, buscarDuplicadoOC, perfil, historialCambios, onAgregarComentario, onEliminarComentario, onArchivarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa }) {
   const correosPorOC=useMemo(()=>{ const m=new Map(); for(const c of (correosBfk||[])) if(c.oc_id){ if(!m.has(c.oc_id)) m.set(c.oc_id,[]); m.get(c.oc_id).push(c); } for(const [k,v] of m) m.set(k,ordenarCorreos(v)); return m; },[correosBfk]);
   const [filtros,setFiltros]=useState({}); const [busq,setBusq]=useState(""); const [expId,setExpId]=useState(null);
+  const escritorio=useEscritorio();
   const bloqueoEstado=useBloqueoOC(expId); // un solo ciclo de bloqueo para la OC expandida, venga de donde venga
   const [reclamandoBanner,setReclamandoBanner]=useState(null); const [comunaSel,setComunaSel]=useState("");
   const [bannerAbierto,setBannerAbierto]=useState(false);
@@ -1294,11 +1349,11 @@ export function PanelCompras({ pagosVendedor, onAsignarVendedor, onAsignarFinanc
   return (
     <div>
       {alertas.length>0&&(
-        <div style={{background:C.dangerLight,border:`1px solid ${C.danger}`,borderRadius:12,marginBottom:14,overflow:"hidden"}}>
-          <div onClick={()=>setBannerAbierto(v=>!v)} style={{padding:"10px 12px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <span style={{fontWeight:800,color:C.dangerText,fontSize:12}}><Ic n="⚠"/> {alertas.length} factura{alertas.length>1?"s":""} vencida{alertas.length>1?"s":""} sin cobrar</span>
-            <span style={{color:C.dangerText,fontSize:13,fontWeight:700}}>{bannerAbierto?"▲":"▼"}</span>
-          </div>
+        <div data-banner-vencidas style={{background:C.dangerLight,border:`1px solid ${C.danger}44`,borderRadius:8,marginBottom:10,overflow:"hidden"}}>
+          <button type="button" aria-expanded={bannerAbierto} onClick={()=>setBannerAbierto(v=>!v)} style={{width:"100%",background:"none",border:"none",padding:"8px 12px",minHeight:40,cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,font:"inherit"}}>
+            <span style={{fontWeight:800,color:C.dangerText,fontSize:13}}><Ic n="⚠"/> {alertas.length} factura{alertas.length>1?"s":""} vencida{alertas.length>1?"s":""} sin cobrar</span>
+            <span style={{color:C.dangerText,fontSize:12,fontWeight:700,textDecoration:"underline"}}>{bannerAbierto?"Ocultar":"Ver y reclamar"}</span>
+          </button>
           {bannerAbierto&&(
             <div style={{padding:"0 12px 10px"}}>
               {alertas.map(o=>{
@@ -1349,38 +1404,6 @@ export function PanelCompras({ pagosVendedor, onAsignarVendedor, onAsignarFinanc
             onEnviar={async(data)=>{ await onEnviarReclamo(data); setReclamandoBanner(null); }} />
         </Modal>
       )}
-      {/* ── Buscador ── */}
-      <div style={{marginBottom:10}}>
-        <input style={{...iStyle,fontSize:13,padding:"9px 11px"}} placeholder="Buscar OC, cliente, RUT, factura, producto, proveedor…"
-          value={busq} onChange={e=>setBusq(e.target.value)} />
-      </div>
-
-      {filtroExacto&&(()=>{
-        const urgente=filtroExacto==="vencidas"||filtroExacto==="vale_vista";
-        const col=urgente?C.dangerText:C.info, bg=urgente?C.dangerLight:C.infoLight, borde=urgente?C.danger:C.info;
-        return (
-          <div data-filtro-exacto={filtroExacto} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,background:bg,border:`1px solid ${borde}55`,borderRadius:12,padding:"8px 12px",marginBottom:10}}>
-            <span style={{fontSize:13,fontWeight:700,color:col}}>Mostrando solo: {FILTROS_PANEL[filtroExacto].etiqueta} (<span data-n-exacto>{filtered.length}</span>)</span>
-            <button onClick={()=>setFiltroExacto(null)} style={{background:"none",border:"none",color:col,fontSize:13,fontWeight:800,cursor:"pointer",textDecoration:"underline",padding:"4px 2px",minHeight:36}}>Ver todas</button>
-          </div>
-        );
-      })()}
-
-      {/* ── Vista rápida: qué falta hacer. Un toque, una respuesta ── */}
-      <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:2,marginBottom:12,WebkitOverflowScrolling:"touch"}}>
-        {VISTAS.map(v=>{
-          const activa=vista===v.key;
-          return (
-            <button key={v.key} onClick={()=>{setVista(v.key);setFiltros({});setFiltroExacto(null);}}
-              style={{flexShrink:0,fontSize:12,fontWeight:700,padding:"7px 12px",borderRadius:999,cursor:"pointer",
-                border:`1.5px solid ${activa?v.color:C.border}`,
-                background:activa?v.bg:C.card, color:activa?v.color:C.inkMuted,whiteSpace:"nowrap"}}>
-              {v.label}{v.n>0?` ${v.n}`:""}
-            </button>
-          );
-        })}
-      </div>
-
       {/* ── Filtros avanzados: período, fechas exactas y etapa, todo en un solo lugar ── */}
       {(()=>{
         const etapasActivas=Object.values(filtros).filter(Boolean).length;
@@ -1389,9 +1412,7 @@ export function PanelCompras({ pagosVendedor, onAsignarVendedor, onAsignarFinanc
         const critActivos=Object.values(crit).filter(Boolean).length;
         const totalActivos=etapasActivas+rangoActivo+comunaActiva+critActivos;
         const limpiarTodo=()=>{ setDesde(""); setHasta(""); setFiltros({}); setComunaSel(""); setCrit({vendedor:"",financiador:"",proveedor:"",producto:"",valeVista:""}); };
-        return (<>
-          {/* Vendedor y financiador: siempre a la vista (un toque) */}
-          <div data-filtros-asignacion style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
+        const asignacionGrid=(<div data-filtros-asignacion style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
             <label style={{fontSize:12,fontWeight:700,color:C.inkFaint,minWidth:0}}>Vendedor
               <select data-filtro="vendedor" style={{...selStyle,fontSize:12,padding:"8px 10px",marginTop:4,borderColor:crit.vendedor?C.info:undefined}} value={crit.vendedor} onChange={e=>setC("vendedor",e.target.value)}>
                 <option value="">Todos</option>
@@ -1405,23 +1426,29 @@ export function PanelCompras({ pagosVendedor, onAsignarVendedor, onAsignarFinanc
                 {(financiadores||[]).map(f=><option key={f.id} value={f.id}>{f.nombre}</option>)}
                 <option value="__sin__">Falta financiador ({ocs.filter(faltaFinanciador).length})</option>
               </select></label>
+          </div>);
+        const asignacion=<div data-filtros-asignacion style={{display:"contents"}}>{asignacionGrid.props.children}</div>;
+        return (<>
+          {/* Barra compacta: búsqueda, (escritorio) vendedor y financiador, y Filtros con contador */}
+          <div data-barra-compras style={{display:"grid",gridTemplateColumns:escritorio?"minmax(0,2fr) minmax(0,1fr) minmax(0,1fr) auto":"minmax(0,1fr) auto",gap:8,alignItems:"end",marginBottom:10}}>
+            <input type="search" style={{...iStyle,fontSize:14,padding:"9px 11px",minHeight:40}} placeholder="Buscar OC, cliente, RUT, factura, producto, proveedor…"
+              value={busq} onChange={e=>setBusq(e.target.value)} aria-label="Buscar órdenes" />
+            {escritorio&&asignacion}
+            <BotonSecundario data-abrir-filtros aria-expanded={masFiltros} activo={totalActivos>0||masFiltros} onClick={()=>setMasFiltros(m=>!m)} style={{minHeight:40}}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
+              Filtros{totalActivos>0&&<span style={{background:C.info,color:"#fff",borderRadius:999,fontSize:12,fontWeight:800,padding:"0 7px",lineHeight:"18px"}}>{totalActivos}</span>}
+            </BotonSecundario>
           </div>
-          <button onClick={()=>setMasFiltros(m=>!m)}
-            style={{display:"flex",alignItems:"center",gap:7,background:"none",border:"none",
-              color:totalActivos>0?C.info:C.inkFaint,fontSize:12,fontWeight:700,cursor:"pointer",
-              padding:"3px 2px",marginBottom:masFiltros?10:14}}>
-            <span style={{fontSize:12}}>{masFiltros?"▾":"▸"}</span>
-            Filtros avanzados
-            {totalActivos>0&&(
-              <span style={{background:C.info,color:"#fff",borderRadius:999,fontSize:12,fontWeight:800,
-                padding:"1.5px 7px",lineHeight:1.5}}>{totalActivos}</span>
-            )}
-          </button>
-
+          {totalActivos>0&&!masFiltros&&(
+            <div data-filtros-activos style={{display:"flex",alignItems:"center",gap:8,fontSize:12,color:C.info,fontWeight:700,margin:"-2px 2px 10px"}}>
+              <span>{totalActivos} filtro{totalActivos>1?"s":""} activo{totalActivos>1?"s":""}</span>
+              <button onClick={limpiarTodo} style={{background:"none",border:"none",color:C.dangerText,fontSize:12,fontWeight:700,cursor:"pointer",padding:"4px 2px",minHeight:30}}>✕ Limpiar</button>
+            </div>
+          )}
           {masFiltros&&(
             <div style={{background:C.paper,border:`1px solid ${C.border}`,borderRadius:12,padding:"13px 14px",marginBottom:12}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-                <span style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4}}>Filtros avanzados</span>
+                <span style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4}}>Filtros</span>
                 {totalActivos>0&&(
                   <button onClick={limpiarTodo}
                     style={{background:"none",border:"none",color:C.dangerText,fontSize:12,fontWeight:700,cursor:"pointer",padding:0}}>
@@ -1430,6 +1457,7 @@ export function PanelCompras({ pagosVendedor, onAsignarVendedor, onAsignarFinanc
                 )}
               </div>
 
+              {!escritorio&&asignacionGrid}
               {/* Fase 4C: quién vendió, quién financió, a quién se compró, qué producto y vale vista */}
               <div data-filtros-4c style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
                 <label style={{fontSize:12,fontWeight:700,color:C.inkFaint}}>Proveedor
@@ -1504,6 +1532,32 @@ export function PanelCompras({ pagosVendedor, onAsignarVendedor, onAsignarFinanc
           )}
         </>);
       })()}
+
+      {filtroExacto&&(()=>{
+        const urgente=filtroExacto==="vencidas"||filtroExacto==="vale_vista";
+        const col=urgente?C.dangerText:C.info, bg=urgente?C.dangerLight:C.infoLight, borde=urgente?C.danger:C.info;
+        return (
+          <div data-filtro-exacto={filtroExacto} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,background:bg,border:`1px solid ${borde}55`,borderRadius:12,padding:"8px 12px",marginBottom:10}}>
+            <span style={{fontSize:13,fontWeight:700,color:col}}>Mostrando solo: {FILTROS_PANEL[filtroExacto].etiqueta} (<span data-n-exacto>{filtered.length}</span>)</span>
+            <button onClick={()=>setFiltroExacto(null)} style={{background:"none",border:"none",color:col,fontSize:13,fontWeight:800,cursor:"pointer",textDecoration:"underline",padding:"4px 2px",minHeight:36}}>Ver todas</button>
+          </div>
+        );
+      })()}
+
+      {/* ── Vista rápida: qué falta hacer. Un toque, una respuesta ── */}
+      <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:2,marginBottom:12,WebkitOverflowScrolling:"touch"}}>
+        {VISTAS.map(v=>{
+          const activa=vista===v.key;
+          return (
+            <button key={v.key} onClick={()=>{setVista(v.key);setFiltros({});setFiltroExacto(null);}}
+              style={{flexShrink:0,fontSize:12,fontWeight:700,padding:"7px 12px",borderRadius:999,cursor:"pointer",
+                border:`1.5px solid ${activa?v.color:C.border}`,
+                background:activa?v.bg:C.card, color:activa?v.color:C.inkMuted,whiteSpace:"nowrap"}}>
+              {v.label}{v.n>0?` ${v.n}`:""}
+            </button>
+          );
+        })}
+      </div>
 
       {/* ── Resumen y orden ── */}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:10}}>

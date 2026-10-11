@@ -17,7 +17,14 @@ const espera = (p, ms = 600) => p.waitForTimeout(ms);
 const texto = async (p) => p.evaluate(() => document.body.innerText);
 const escritorio = { ancho: 1440, alto: 900, movil: false };
 const desde = (b, n) => b.escr.slice(n);
-async function irA(p, k) { await p.locator(`aside [data-nav="${k}"]`).click(); await espera(p, 700); }
+// Rediseño 2026-10: Financiamiento, Comisiones (vendedores), Gastos, Impuestos y Banco son pestañas del centro Finanzas.
+async function irA(p, k) {
+  if (["finanzas", "financiamiento", "vendedores", "gastos", "impuestos", "banco"].includes(k)) {
+    if (!(await p.locator(`[data-tab="${k}"]`).count())) { await p.locator('aside [data-nav="finanzas"]').click(); await espera(p, 500); }
+    await p.locator(`[data-tab="${k}"]`).first().click(); await espera(p, 700); return;
+  }
+  await p.locator(`aside [data-nav="${k}"]`).click(); await espera(p, 700);
+}
 async function abrirOC(p, numero) {
   if (await p.locator(`[data-oc="${numero}"] [data-testid="oc-campos"]`).count()) return;
   await p.locator(`[data-oc="${numero}"] > div`).first().click(); await espera(p, 1300);
@@ -75,6 +82,7 @@ await escenario("C2", async () => {
   ok("C2_fotos_guardadas", b.db.mp_cache_avisos.some((f) => f.id === "oc_mp:oc1") && b.db.mp_cache_avisos.some((f) => f.id === "oc_mp:oc3"));
   ok("C2_registra_uso_diario", (b.db.mp_uso_diario || []).reduce((s, r) => s + (r.solicitudes || 0), 0) >= consultas1);
   // Cancelada en MP: Panel, lista, Alertas y Agenda con el mismo criterio.
+  { const v = a1.page.locator("[data-ver-prioridades]"); if ((await v.count()) && /más/.test(await v.innerText())) { await v.click(); await espera(a1.page, 300); } } // rediseño 2026-10: «Ver más»
   const prior = await a1.page.locator('[data-prioridad="mp_cancelada"]').getAttribute("data-n").catch(() => null);
   ok("C2_panel_prioridad_cancelada", prior === "1", prior);
   await a1.page.locator('[data-prioridad="mp_cancelada"]').click(); await espera(a1.page, 900);

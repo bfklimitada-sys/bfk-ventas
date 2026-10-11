@@ -214,6 +214,10 @@ const pagoManual = { id: "pv_manual", vendedor_id: "v1", anio: 2026, mes: 8, mon
   b.escribir("POST", "gastos_indirectos", new URLSearchParams(), { id: "gas_manual", categoria_id: "cat_otros", monto: 55000, mes: 10, anio: 2026, fecha: "2026-10-14", detalle: "registro manual" });
   ok("X10_manual_posterior_queda_alertado", /posible duplicado de cart:20261013:55000/.test(b.db.gastos_indirectos.find((g) => g.id === "gas_manual")?.alerta_cartola || ""));
   await A.p.reload(); await A.p.waitForTimeout(3500);
+  // Rediseño 2026-10: el Panel avisa en una línea y la lista vive en Finanzas › Banco › Por revisar.
+  ok("X10_aviso_en_el_panel", (await A.p.locator('[data-aviso-linea="alertas-cartola"]').count()) === 1);
+  await A.p.evaluate(() => { location.hash = "#/banco"; }); await A.p.waitForTimeout(800);
+  await A.p.locator('[data-tab="revisar"]').click(); await A.p.waitForTimeout(500);
   await A.p.locator("[data-alertas-cartola]").waitFor({ timeout: 8000 }).catch(() => {});
   ok("X10_alerta_visible_en_el_panel", (await A.p.locator('[data-alerta="gas_manual"]').count()) === 1);
   await A.p.locator('[data-quitar-alerta="gas_manual"]').click(); await A.p.waitForTimeout(2500);

@@ -18,5 +18,5 @@ for(const [modo,ancho,alto,movil] of [["escritorio",1440,900,false],["movil",390
 }
 await browser.close();
 console.log(JSON.stringify(R,null,1));
-const ok=Object.values(R).every(x=>x.listo&&x.hojas===8&&x.indices_visibles_en_pdf===0&&x.pdf_bytes>100000&&x.escrituras===0&&x.errores===0&&x.volvio);
+const ok=Object.values(R).every(x=>x.listo&&x.hojas===11&&x.indices_visibles_en_pdf===0&&x.pdf_bytes>100000&&x.escrituras===0&&x.errores===0&&x.volvio);
 console.log(ok?"RESULT|pdf_todas_las_pantallas|OK":"FALLA|pdf_todas_las_pantallas"); process.exit(ok?0:1);

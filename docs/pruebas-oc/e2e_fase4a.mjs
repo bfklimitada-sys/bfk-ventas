@@ -15,7 +15,14 @@ const desde = (b, n) => b.escr.slice(n);
 const cuenta = (ws, metodo, tabla, f = () => true) => ws.filter((w) => w.metodo === metodo && w.tabla === tabla && f(w)).length;
 const texto = async (p) => p.evaluate(() => document.body.innerText);
 const escritorio = { ancho: 1440, alto: 900, movil: false };
-async function irA(p, k) { await p.locator(`aside [data-nav="${k}"]`).click(); await espera(p, 700); }
+// Rediseño 2026-10: Financiamiento, Comisiones (vendedores), Gastos, Impuestos y Banco son pestañas del centro Finanzas.
+async function irA(p, k) {
+  if (["finanzas", "financiamiento", "vendedores", "gastos", "impuestos", "banco"].includes(k)) {
+    if (!(await p.locator(`[data-tab="${k}"]`).count())) { await p.locator('aside [data-nav="finanzas"]').click(); await espera(p, 500); }
+    await p.locator(`[data-tab="${k}"]`).first().click(); await espera(p, 700); return;
+  }
+  await p.locator(`aside [data-nav="${k}"]`).click(); await espera(p, 700);
+}
 async function abrirOC(p, numero) {
   // Si ya está abierta (misma pantalla), no se vuelve a tocar: tocarla la cerraría.
   if (await p.locator(`[data-oc="${numero}"] [data-testid="oc-campos"]`).count()) return;
@@ -188,10 +195,13 @@ await escenario("S6", async () => {
     const filas = b.leer("ordenes_compra_v2", new URLSearchParams("select=*,eventos_compra(*)")).filter((o) => !o.archivada);
     return filas.map((o) => ({ ...o, eventos_postventa: b.db.eventos_postventa.filter((e) => e.oc_id === o.id) }));
   };
+  // Rediseño 2026-10: el Panel muestra 5 prioridades y el resto con «Ver más».
+  const verTodas = async () => { const v = p.locator("[data-ver-prioridades]"); if ((await v.count()) && /más/.test(await v.innerText())) { await v.click(); await espera(p, 300); } };
+  await verTodas();
   const items = await p.locator("[data-prioridad]").evaluateAll((els) => els.map((e) => ({ k: e.getAttribute("data-prioridad"), n: Number(e.getAttribute("data-n")) })));
   ok("S6_panel_muestra_todos_los_contadores", ["vale_vista", "vencidas", "por_vencer", "entregadas_sin_factura", "compradas_sin_entregar", "mp_sin_comprar", "sin_vendedor"].every((k) => items.some((i) => i.k === k)), items);
   for (const it of items) {
-    await irA(p, "panel");
+    await irA(p, "panel"); await verTodas();
     await p.locator(`[data-prioridad="${it.k}"]`).click(); await espera(p, 900);
     const banner = await p.locator(`[data-filtro-exacto="${it.k}"]`).count();
     const filas = await p.locator("[data-oc]").evaluateAll((els) => els.map((e) => e.getAttribute("data-oc")));

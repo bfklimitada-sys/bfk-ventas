@@ -20,7 +20,14 @@ const DERIVADAS = ["costo_total", "estado_compra", "monto_pagado_fin", "estado_p
 const sinTotalesDelNavegador = (ws) => cuenta(ws, "PATCH", "financiadores") === 0
   && ws.filter((w) => w.tabla === "ordenes_compra_v2" && (w.metodo === "PATCH" || w.metodo === "POST") && DERIVADAS.some((k) => w.cuerpo && k in w.cuerpo)).length === 0
   && cuenta(ws, "PATCH", "eventos_compra") === 0 && cuenta(ws, "PATCH", "eventos_pago_financiamiento") === 0;
-async function irA(p, k) { await p.locator(`aside [data-nav="${k}"]`).click(); await espera(p, 700); }
+// Rediseño 2026-10: Financiamiento, Comisiones (vendedores), Gastos, Impuestos y Banco son pestañas del centro Finanzas.
+async function irA(p, k) {
+  if (["finanzas", "financiamiento", "vendedores", "gastos", "impuestos", "banco"].includes(k)) {
+    if (!(await p.locator(`[data-tab="${k}"]`).count())) { await p.locator('aside [data-nav="finanzas"]').click(); await espera(p, 500); }
+    await p.locator(`[data-tab="${k}"]`).first().click(); await espera(p, 700); return;
+  }
+  await p.locator(`aside [data-nav="${k}"]`).click(); await espera(p, 700);
+}
 async function abrirOC(p, numero) {
   if (await p.locator(`[data-oc="${numero}"] [data-testid="oc-campos"]`).count()) return;
   await p.locator(`[data-oc="${numero}"] > div`).first().click(); await espera(p, 1300);
