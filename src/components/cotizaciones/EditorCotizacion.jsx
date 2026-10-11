@@ -18,7 +18,7 @@ export function EditorCotizacion({ almacen, inicial, token, entidadesCatalogo = 
   const [sucio, setSucio] = useState(!inicial.id);
   const [pestana, setPestana] = useState(inicial.id ? "productos" : "datos");
   const [editor, setEditor] = useState(null);       // { item, esNuevo }
-  const [enlace, setEnlace] = useState(""); const [consultando, setConsultando] = useState(""); const [errorEnlace, setErrorEnlace] = useState("");
+  const [enlace, setEnlace] = useState(""); const [consultando, setConsultando] = useState(""); const [errorEnlace, setErrorEnlace] = useState(""); const [enlacePendiente, setEnlacePendiente] = useState("");
   const [verBib, setVerBib] = useState(false); const [buscaBib, setBuscaBib] = useState("");
   const [verTexto, setVerTexto] = useState(false); const [texto, setTexto] = useState("");
   const [guardando, setGuardando] = useState(false); const [generando, setGenerando] = useState(false); const [generados, setGenerados] = useState([]);
@@ -68,13 +68,14 @@ export function EditorCotizacion({ almacen, inicial, token, entidadesCatalogo = 
         const fallas = res.length - item.ficha.imagenes.length; if (fallas) item.consulta.advertencias.push(`${fallas} imagen(es) no se pudieron traer.`);
       }
       setEnlace(""); abrirNuevo(item);
-    } catch (e) { setErrorEnlace(e.message); } finally { setConsultando(""); }
+    } catch (e) { setErrorEnlace(e.message); setEnlacePendiente(u); } finally { setConsultando(""); }
   };
   const manual = (conEnlace) => abrirNuevo({ ...itemVacio(), enlace: conEnlace || "", proveedor: proveedorDeEnlace(conEnlace || ""), origen_datos: "manual" });
   const desdeTexto = () => {
-    const r = extraerDeTexto(texto);
-    abrirNuevo({ ...itemVacio(), ficha: r.ficha, origen_datos: "texto", consulta: { fuente: "texto pegado", fecha_consulta: new Date().toISOString(), metodos: ["texto"], advertencias: r.advertencias } });
-    setVerTexto(false); setTexto("");
+    const r = extraerDeTexto(texto); const e = enlacePendiente;
+    abrirNuevo({ ...itemVacio(), enlace: e, proveedor: proveedorDeEnlace(e), ficha: r.ficha, origen_datos: "texto", fecha_consulta: new Date().toISOString(),
+      consulta: { fuente: e ? `${proveedorDeEnlace(e)} (texto pegado)` : "texto pegado", fecha_consulta: new Date().toISOString(), metodos: ["texto"], advertencias: r.advertencias } });
+    setVerTexto(false); setTexto(""); setEnlacePendiente(""); setErrorEnlace(""); setEnlace("");
   };
   const desdeBiblioteca = (p) => {
     abrirNuevo({ ...itemVacio(), producto_id: p.id, origen_datos: "biblioteca", fecha_consulta: null,
@@ -161,7 +162,13 @@ export function EditorCotizacion({ almacen, inicial, token, entidadesCatalogo = 
               <BotonPrincipal data-consultar-enlace onClick={consultar} disabled={!!consultando || !enlace.trim()} style={{ opacity: consultando || !enlace.trim() ? 0.6 : 1, padding: "8px 14px" }}>{consultando ? "…" : "Consultar"}</BotonPrincipal>
             </div>
             {consultando && <div style={{ fontSize: T.small, color: C.inkMuted, marginTop: 6 }}>{consultando}</div>}
-            {errorEnlace && <AvisoLinea tono="warn" dato="error-enlace" accion="Ingresar manual" onClick={() => { manual(enlace.trim()); setErrorEnlace(""); setEnlace(""); }}>{errorEnlace}</AvisoLinea>}
+            {errorEnlace && <>
+              <AvisoLinea tono="warn" dato="error-enlace">{errorEnlace}</AvisoLinea>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                <BotonSecundario data-error-pegar onClick={() => setVerTexto(true)}>Pegar texto de ficha</BotonSecundario>
+                <BotonSecundario data-error-manual onClick={() => { manual(enlacePendiente); setErrorEnlace(""); setEnlace(""); setEnlacePendiente(""); }}>Ingresar manual</BotonSecundario>
+              </div>
+            </>}
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
               <BotonSecundario data-desde-biblioteca onClick={() => setVerBib(true)}>Desde biblioteca{productosBib.length ? ` (${productosBib.length})` : ""}</BotonSecundario>
               <BotonSecundario data-ingreso-manual onClick={() => manual("")}>Ingresar manual</BotonSecundario>
@@ -323,7 +330,7 @@ export function EditorCotizacion({ almacen, inicial, token, entidadesCatalogo = 
       )}
       {verTexto && (
         <Modal title="Pegar texto de la ficha" onClose={() => setVerTexto(false)}>
-          <Field label="Texto copiado de la página del proveedor" hint="Una característica por línea (Etiqueta: valor, o tabulado). Luego revisas y completas la ficha.">
+          <Field label="Texto copiado de la página del proveedor" hint={`Copia desde tu teléfono la sección de características (una por línea: Etiqueta: valor, o tabulado). Luego revisas y completas la ficha.${enlacePendiente ? " El enlace se guarda como dato interno." : ""}`}>
             <textarea data-texto-ficha rows={10} value={texto} onChange={(e) => setTexto(e.target.value)} style={{ ...iStyle, resize: "vertical" }} />
           </Field>
           <BotonPrincipal onClick={desdeTexto} disabled={!texto.trim()} style={{ width: "100%", justifyContent: "center" }}>Continuar</BotonPrincipal>

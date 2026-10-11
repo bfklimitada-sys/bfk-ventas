@@ -65,6 +65,10 @@ export async function urlPermitida(texto) {
   return { url: u };
 }
 
+// Páginas de verificación antibots / inicio de sesión: nunca se interpretan como producto.
+export const MURO_ANTIBOTS = /account-verification|captcha|challenge|\/gz\/|\/login|\/signin|cdn-cgi|px-captcha|validate\.perfdrive/i;
+const MSG_BLOQUEO = "El proveedor bloqueó la consulta automática (verificación antibots). Usa \u201cPegar texto de ficha\u201d o ingresa los datos manualmente; el enlace se conserva.";
+
 const CABECERAS = {
   "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36",
   "Accept-Language": "es-CL,es;q=0.9", Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
@@ -77,9 +81,9 @@ async function descargar(url, { maxBytes, tiempo = 15_000 }) {
     let r;
     try { r = await dep.fetch(ok.url.href, { headers: CABECERAS, redirect: "manual", signal: AbortSignal.timeout(tiempo) }); }
     catch (e) { return { error: e?.name === "TimeoutError" ? "El sitio del proveedor tardó demasiado en responder." : "No se pudo conectar con el sitio del proveedor." }; }
-    if ([301, 302, 303, 307, 308].includes(r.status)) { const loc = r.headers.get("location"); if (!loc) return { error: "Redirección inválida del proveedor." }; actual = new URL(loc, ok.url).href; continue; }
+    if ([301, 302, 303, 307, 308].includes(r.status)) { const loc = r.headers.get("location"); if (!loc) return { error: "Redirección inválida del proveedor." }; actual = new URL(loc, ok.url).href; if (MURO_ANTIBOTS.test(new URL(actual).pathname + new URL(actual).hostname)) return { error: MSG_BLOQUEO, status: r.status, bloqueo: true }; continue; }
     if (r.status === 404 || r.status === 410) return { error: "El enlace ya no existe en el sitio del proveedor (página no encontrada).", status: r.status };
-    if (r.status === 403 || r.status === 429) return { error: "El proveedor bloqueó la consulta automática. Ingresa los datos manualmente o pega el texto de la ficha.", status: r.status };
+    if (r.status === 403 || r.status === 429 || r.status === 503 && /cloudflare/i.test(r.headers.get("server") || "")) return { error: MSG_BLOQUEO, status: r.status, bloqueo: true };
     if (!r.ok) return { error: `El proveedor respondió con error (${r.status}).`, status: r.status };
     const largo = Number(r.headers.get("content-length") || 0); if (largo > maxBytes) return { error: "El contenido es demasiado grande." };
     const lector = r.body.getReader(); const partes = []; let total = 0;
@@ -106,8 +110,14 @@ export default async function handler(req, res) {
   if (!q.url) return res.status(400).json({ ok: false, error: "Falta el enlace del producto." });
   if (limitado(ses.uid, "pagina")) return res.status(429).json({ ok: false, error: "Demasiadas consultas por minuto. Espere un momento." });
   const d = await descargar(String(q.url), { maxBytes: 6 * 1024 * 1024 });
-  if (d.error) return res.status(422).json({ ok: false, error: d.error, status: d.status || null });
+  if (d.error) return res.status(422).json({ ok: false, error: d.error, status: d.status || null, bloqueo: !!d.bloqueo });
   if (!/html|xml/i.test(d.tipo)) return res.status(422).json({ ok: false, error: "El enlace no corresponde a una página de producto." });
-  const datos = extraerProducto(d.buffer.toString("utf8"), d.final);
+  const html = d.buffer.toString("utf8");
+  if (MURO_ANTIBOTS.test(new URL(d.final).pathname) || /<title>\s*(just a moment|attention required|cloudflare|verifica|security check)/i.test(html))
+    return res.status(422).json({ ok: false, error: MSG_BLOQUEO, bloqueo: true });
+  const datos = extraerProducto(html, d.final);
+  // Sin ninguna señal de producto (precio, especificaciones, imágenes ni datos estructurados): no se propone una ficha vacía.
+  if (!datos.precio_origen && !datos.ficha.especificaciones.length && !datos.ficha.imagenes.length && !datos.metodos.includes("json-ld"))
+    return res.status(422).json({ ok: false, error: "La página no entregó datos del producto (puede ser una verificación antibots o una página que no es de producto). Usa \u201cPegar texto de ficha\u201d o ingresa los datos manualmente.", bloqueo: true });
   return res.status(200).json({ ok: true, enlace: d.final, ...datos });
 }

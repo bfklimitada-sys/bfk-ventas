@@ -159,7 +159,7 @@ export async function consultarEnlace(token, url) {
   let r; try { r = await fetch(`/api/producto?url=${encodeURIComponent(url)}`, { headers: { Authorization: `Bearer ${token}` } }); }
   catch { throw new Error("Sin conexión con el servidor de BFK."); }
   const c = await json(r);
-  if (!r.ok || !c?.ok) throw new Error(c?.error || (r.status === 404 ? "La consulta automática no está disponible en este entorno." : `No se pudo consultar el enlace (HTTP ${r.status}).`));
+  if (!r.ok || !c?.ok) throw Object.assign(new Error(c?.error || (r.status === 404 ? "La consulta automática no está disponible en este entorno." : `No se pudo consultar el enlace (HTTP ${r.status}).`)), { bloqueo: !!c?.bloqueo });
   return c;
 }
 export async function traerImagen(token, url) {

@@ -39,6 +39,7 @@ async function preparar({ ancho, alto, movil, modoBase, fallaRed = 0 }) {
       if (u.searchParams.get("imagen")) return route.fulfill({ json: { ok: true, dataUrl: "data:image/jpeg;base64," + JPG } });
       const e = u.searchParams.get("url") || "";
       if (/caido/.test(e)) return route.fulfill({ status: 422, json: { ok: false, error: "El enlace ya no existe en el sitio del proveedor (página no encontrada)." } });
+      if (/bloqueado/.test(e)) return route.fulfill({ status: 422, json: { ok: false, bloqueo: true, error: "El proveedor bloqueó la consulta automática (verificación antibots). Usa “Pegar texto de ficha” o ingresa los datos manualmente; el enlace se conserva." } });
       return route.fulfill({ json: SMART });
     }
     if (u.hostname.endsWith("supabase.co")) {
@@ -183,9 +184,16 @@ const sinScrollH = (p) => p.evaluate(() => document.documentElement.scrollWidth 
   ok("U34_marca_biblioteca", /Biblioteca/.test(await enHoja(p).locator('[data-item-cotizacion="1"]').innerText()));
   // Enlace caído → aviso con ingreso manual
   await enHoja(p).locator("[data-enlace-proveedor]").fill("https://www.paris.cl/caido"); await enHoja(p).locator("[data-consultar-enlace]").click(); await espera(p, 800);
-  ok("U35_enlace_caido_ofrece_manual", /ya no existe/.test(await enHoja(p).locator('[data-aviso-linea="error-enlace"]').innerText()));
-  await enHoja(p).locator('[data-aviso-linea="error-enlace"]').click(); await espera(p, 500);
+  ok("U35_enlace_caido_ofrece_manual_y_pegar", /ya no existe/.test(await enHoja(p).locator('[data-aviso-linea="error-enlace"]').innerText()) && await enHoja(p).locator("[data-error-pegar]").count() === 1);
+  await enHoja(p).locator("[data-error-manual]").click(); await espera(p, 500);
   ok("U36_manual_conserva_enlace", await ed.locator('[data-campo="enlace"]').inputValue() === "https://www.paris.cl/caido");
+  await p.locator('[role="dialog"] button[aria-label="Cerrar"]').last().click(); await espera(p, 300);
+  await enHoja(p).locator("[data-enlace-proveedor]").fill("https://articulo.mercadolibre.cl/MLC-bloqueado"); await enHoja(p).locator("[data-consultar-enlace]").click(); await espera(p, 800);
+  ok("U36b_bloqueo_antibots_explicado", /antibots/.test(await enHoja(p).locator('[data-aviso-linea="error-enlace"]').innerText()));
+  await enHoja(p).locator("[data-error-pegar]").click(); await espera(p, 400);
+  await p.locator("[data-texto-ficha]").fill("Marca: HP\nModelo: Smart Tank 580\nTipo de impresión: Inyección a color");
+  await p.locator('[role="dialog"] button', { hasText: "Continuar" }).click(); await espera(p, 500);
+  ok("U36c_pegar_texto_conserva_enlace_y_datos", await ed.locator('[data-campo="enlace"]').inputValue() === "https://articulo.mercadolibre.cl/MLC-bloqueado" && await ed.locator('[data-campo="modelo"]').inputValue() === "Smart Tank 580" && await ed.locator('[data-campo="proveedor"]').inputValue() === "Mercado Libre");
   await p.locator('[role="dialog"] button[aria-label="Cerrar"]').last().click(); await espera(p, 300);
   ok("U37_sin_scroll_horizontal", await sinScrollH(p));
   await p.screenshot({ path: join(SALIDA, "cotizacion_movil.png") });

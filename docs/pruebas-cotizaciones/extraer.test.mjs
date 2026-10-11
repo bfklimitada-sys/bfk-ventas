@@ -68,6 +68,9 @@ const paginas = {
   "https://www.falabella.com/p/viejo": () => new Response("", { status: 404 }),
   "https://www.falabella.com/p/bloqueado": () => new Response("", { status: 403 }),
   "https://www.falabella.com/p/redirige": () => new Response("", { status: 302, headers: { location: "https://interno.ejemplo.cl/admin" } }),
+  "https://articulo.mercadolibre.cl/MLC-1": () => new Response("<p>Found</p>", { status: 302, headers: { location: "https://www.mercadolibre.cl/gz/account-verification?go=x" } }),
+  "https://www.falabella.com/p/cloudflare": () => new Response("<html><title>Just a moment...</title></html>", { status: 403, headers: { server: "cloudflare", "content-type": "text/html" } }),
+  "https://www.tienda.cl/portada": () => new Response("<html><head><title>Tienda - Inicio</title></head><body>Bienvenido</body></html>", { status: 200, headers: { "content-type": "text/html" } }),
   "https://media.falabella.com/a.jpg": () => new Response(Buffer.from([0xff, 0xd8, 0xff, 0xd9]), { status: 200, headers: { "content-type": "image/jpeg" } }),
   "https://media.falabella.com/no-imagen": () => new Response("<html>", { status: 200, headers: { "content-type": "text/html" } }),
 };
@@ -84,9 +87,15 @@ ok("X21_enlace_caido_404", r.code === 422 && /ya no existe/.test(r.body.error), 
 r = await llamar({ url: "https://tienda-cerrada.invalid/p" });
 ok("X22_sitio_inexistente", r.code === 422 && /No se encontró el sitio/.test(r.body.error), r.body);
 r = await llamar({ url: "https://www.falabella.com/p/bloqueado" });
-ok("X23_bloqueo_sugiere_ingreso_manual", r.code === 422 && /manualmente/.test(r.body.error), r.body);
+ok("X23_bloqueo_sugiere_ingreso_manual", r.code === 422 && /manualmente/.test(r.body.error) && r.body.bloqueo === true, r.body);
 r = await llamar({ url: "https://www.falabella.com/p/redirige" });
 ok("X24_redireccion_a_red_interna_bloqueada", r.code === 422 && /no permitida/.test(r.body.error) && !llamadas.includes("https://interno.ejemplo.cl/admin"), r.body);
+r = await llamar({ url: "https://articulo.mercadolibre.cl/MLC-1" });
+ok("X28_verificacion_ml_no_es_producto", r.code === 422 && r.body.bloqueo === true && /antibots/.test(r.body.error) && !llamadas.some((u) => u.includes("account-verification")), r.body);
+r = await llamar({ url: "https://www.falabella.com/p/cloudflare" });
+ok("X29_cloudflare_403_bloqueo", r.code === 422 && r.body.bloqueo === true && /Pegar texto de ficha/.test(r.body.error), r.body);
+r = await llamar({ url: "https://www.tienda.cl/portada" });
+ok("X30_pagina_sin_producto_no_propone_ficha_vacia", r.code === 422 && /no entregó datos del producto/.test(r.body.error), r.body);
 r = await llamar({ imagen: "https://media.falabella.com/a.jpg" });
 ok("X25_imagen_como_data_url", r.code === 200 && r.body.dataUrl === "data:image/jpeg;base64,/9j/2Q==", r.body);
 r = await llamar({ imagen: "https://media.falabella.com/no-imagen" });
