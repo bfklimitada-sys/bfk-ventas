@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Field, Modal, Trazabilidad } from "../ui/Basicos";
 import { C, MONO, btnP, fmt, iMono, iStyle } from "../../lib/theme";
 import { Ic, I } from "../ui/Iconos";
-import { Seccion, Tarjeta, Badge, Monto } from "../ui/Sistema";
+import { Seccion, Tarjeta, Badge, Monto, Pestanas, PanelPestana, BarraAcciones, BotonPrincipal, BotonSecundario } from "../ui/Sistema";
 import { MEDIO_APORTE_SIN_BANCO } from "../../lib/mediosPago";
 
 function FormAporte({ aporte, socios, onSave, onEliminar }) {
@@ -61,6 +61,7 @@ export function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onA
   const [verSinDeuda,setVerSinDeuda]=useState(false);
   const [ajustando,setAjustando]=useState(null);
   const [verSolo,setVerSolo]=useState(null);
+  const [pestana,setPestana]=useState("deuda");
 
   const cartola=(finId)=>{
     // Regla 3 (Fase 4B): la venta propia no genera deuda con el financiador; no entra en su cartola.
@@ -184,10 +185,17 @@ export function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onA
 
   return (
     <div>
-      <button onClick={()=>onAbonar&&onAbonar()} style={{...btnP(C.teal),marginBottom:20}}><Ic n="💸"/> Abonar a un financiador</button>
-
+      <BarraAcciones>
+        <BotonPrincipal onClick={()=>onAbonar&&onAbonar()}><Ic n="💸"/> Abonar a un financiador</BotonPrincipal>
+        <BotonSecundario onClick={()=>{setPestana("aportes");setNuevoAporte(true);}}>+ Registrar aporte o retiro</BotonSecundario>
+      </BarraAcciones>
+      <Pestanas etiqueta="Financiamiento" activa={pestana} onCambiar={setPestana} items={[
+        {key:"deuda",label:"Deuda por financiador"},
+        {key:"aportes",label:"Aportes de socios",n:(aportes||[]).filter(a=>a.socio==="Por asignar").length||null,tono:"warn"},
+      ]} />
+      <PanelPestana visible={pestana==="deuda"} titulo="Deuda a financiadores">
       {/* ── 1. Deuda a financiadores ── */}
-      <Seccion titulo="Deuda a financiadores" nota="Toca un financiador para ver su cartola de movimientos.">
+      <Seccion nota="Toca un financiador para ver su cartola de movimientos. Las devoluciones se reparten por FIFO (OC más antigua primero).">
       {(()=>{
         const conDeuda=financiadores.filter(f=>Number(f.saldo_deuda)!==0);
         const enCero=financiadores.filter(f=>Number(f.saldo_deuda)===0);
@@ -227,9 +235,11 @@ export function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onA
       })()}
       </Seccion>
 
+      </PanelPestana>
+      <PanelPestana visible={pestana==="aportes"} titulo="Aportes de socios">
       {/* ── 2. Aportes de socios ── */}
-      <div style={{display:"flow-root",clear:"both",position:"relative",marginTop:24}}>
-      <Seccion titulo="Aportes de socios"
+      <div style={{display:"flow-root",clear:"both",position:"relative"}}>
+      <Seccion titulo="Saldo por socio"
         nota="Capital que entra o sale de la empresa. Suma a la caja pero no cuenta como venta ni utilidad."
         accion={<button onClick={()=>setNuevoAporte(true)} style={{fontSize:13,background:C.okLight,color:"#047857",border:"none",borderRadius:12,minHeight:36,padding:"6px 12px",fontWeight:700,cursor:"pointer"}}>+ Registrar</button>}>
         {(()=>{
@@ -282,7 +292,7 @@ export function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onA
         ))}
       </Seccion>
       )}
-
+      </PanelPestana>
       {(()=>{
         const socios=Array.from(new Set([
           ...(aportes||[]).map(a=>a.socio).filter(n=>n&&n!=="Por asignar"),

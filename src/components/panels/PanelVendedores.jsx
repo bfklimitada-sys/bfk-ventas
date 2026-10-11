@@ -3,7 +3,7 @@ import { Field, Modal } from "../ui/Basicos";
 import { del } from "../../lib/supabase";
 import { C, MONO, btnG, btnP, fmt, iMono, iStyle, selStyle } from "../../lib/theme";
 import { Ic } from "../ui/Iconos";
-import { Seccion, Tarjeta, Badge, Monto, AvisoLinea } from "../ui/Sistema";
+import { Seccion, Tarjeta, Badge, Monto, AvisoLinea, BarraAcciones, BotonPrincipal } from "../ui/Sistema";
 import { evaluarPagoVendedor, pagoParecido } from "../../lib/pagosVendedor";
 import { calcularPagoVendedor, mesesConFactura, registroIvaDe, ivaNetoPeriodo, ivaAPagarPeriodo, totalTransferido, extraGestion, comisionProvisoria, estadoComisionMes, motivoProvisoria, ESTADOS_COMISION } from "../../lib/calculos";
 import { estaFacturada, filtrarPanel } from "../../lib/ocs";
@@ -40,7 +40,15 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, gastos=[], pagosV
 
   return (
     <div>
-      <button onClick={()=>{setPagoInicial(null);setPagando(true);}} style={{...btnP(C.tealDark),minHeight:50,fontSize:16,borderRadius:12,boxShadow:"0 4px 12px rgba(13,148,136,0.35)",marginBottom:20}}>+ Pago a vendedor</button>
+      <BarraAcciones>
+        <BotonPrincipal onClick={()=>{setPagoInicial(null);setPagando(true);}} color={C.tealDark}>+ Pago a vendedor</BotonPrincipal>
+      </BarraAcciones>
+      {/* IVA mensual: vive en Finanzas › Impuestos (mismo formulario y cálculo); aquí solo el acceso. */}
+      {onIrImpuestos&&(
+        <AvisoLinea tono={ivaIncompletos.length?"warn":"info"} icono={ivaIncompletos.length?"⚠":"🧾"} dato="ir-impuestos" onClick={onIrImpuestos} accion="Ir a Impuestos">
+          {ivaIncompletos.length?`IVA incompleto en ${ivaIncompletos.length} mes${ivaIncompletos.length>1?"es":""}: la comisión se calcula sin IVA.`:"El IVA neto y el F29 de cada mes se registran en Impuestos."}
+        </AvisoLinea>
+      )}
       <Seccion id="ven-comisiones" titulo="Comisiones por vendedor">
       {sinVendedor.length>0&&(
         <div data-aviso="ocs-sin-vendedor" style={{display:"flex",alignItems:"center",gap:10,background:C.warnLight,border:`1px solid ${C.warn}55`,borderRadius:12,padding:"10px 12px",marginBottom:10}}>
@@ -74,7 +82,6 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, gastos=[], pagosV
                       : <Badge tono="neutro">Sin ventas registradas</Badge>}
                   {porLiquidar>0&&<span data-vendedor-por-liquidar={v.id}><Badge tono="warn">Por liquidar (provisoria) {fmt.money(porLiquidar)}</Badge></span>}
                   {enCurso>0&&<span data-vendedor-en-curso={v.id}><Badge tono="neutro">En curso {fmt.money(enCurso)}</Badge></span>}
-                  {meses>0&&<Badge tono="neutro">{meses} mes{meses>1?"es":""} con ventas</Badge>}
                 </div>
               </div>
               <div style={{textAlign:"right",flexShrink:0}}>
@@ -98,7 +105,7 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, gastos=[], pagosV
 
             {estaAbierto&&meses>0&&(
               <div style={{padding:"0 14px 14px"}}>
-                <div style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",marginBottom:2,paddingTop:6,borderTop:`1px solid ${C.border}`}}>Comisión mes a mes</div>
+                <div style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",marginBottom:2,paddingTop:6,borderTop:`1px solid ${C.border}`}}>Comisión mes a mes · {meses} mes{meses>1?"es":""} con ventas</div>
                 <div style={{fontSize:12,color:C.inkFaint,marginBottom:6}}>Solo se listan los meses con al menos una venta facturada — el resto no tuvo actividad.</div>
                 {datos.map(d=>(
                   <div key={d.label} style={{padding:"9px 0",borderBottom:`1px solid ${C.border}`}}>
@@ -206,12 +213,6 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, gastos=[], pagosV
       })}
       </Seccion>
 
-      {/* IVA mensual: vive en Finanzas › Impuestos (mismo formulario y cálculo); aquí solo el acceso. */}
-      {onIrImpuestos&&(
-        <AvisoLinea tono={ivaIncompletos.length?"warn":"info"} icono={ivaIncompletos.length?"⚠":"🧾"} dato="ir-impuestos" onClick={onIrImpuestos} accion="Ir a Impuestos">
-          {ivaIncompletos.length?`IVA incompleto en ${ivaIncompletos.length} mes${ivaIncompletos.length>1?"es":""}: la comisión se calcula sin IVA.`:"El IVA neto y el F29 de cada mes se registran en Impuestos."}
-        </AvisoLinea>
-      )}
 
       {pagando&&(
         <Modal title="Pago a vendedor" onClose={()=>{setPagando(false);setPagoInicial(null);}}>

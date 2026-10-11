@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { Field, Modal } from "../ui/Basicos";
 import { C, btnP, fmt, iMono, iStyle, selStyle } from "../../lib/theme";
 import { Ic } from "../ui/Iconos";
-import { Seccion, Tarjeta, Badge, Monto } from "../ui/Sistema";
+import { Seccion, Tarjeta, Badge, Monto, Desplegable, AvisoLinea, BarraAcciones, BotonPrincipal, Ayuda } from "../ui/Sistema";
 import { FormIvaMensual } from "../forms/FormIvaMensual";
 import { CATEGORIA_IMPUESTO, periodosIvaIncompletos } from "../../lib/ivaUnificado";
 import { apoyoEnGestion } from "../../lib/informes";
@@ -10,7 +10,7 @@ import { apoyoEnGestion } from "../../lib/informes";
 // Los pagos a vendedores hoy se administran en Vendedores; la categoria historica solo se consulta.
 const esHistoricaVendedor=(c)=>/vendedor/i.test(c?.nombre||"");
 
-export function PanelGastos({ gastos, categorias, ivaMensual=[], pagosVendedor=[], vendedores=[], onNuevoGasto, onGuardarIva }) {
+export function PanelGastos({ gastos, categorias, ivaMensual=[], pagosVendedor=[], vendedores=[], onNuevoGasto, onGuardarIva, onIrImpuestos }) {
   // Etapa 3: apoyo en gestión en UNA línea (gasto + extra incluido en pagos a vendedores), cada monto una vez.
   const apoyo=useMemo(()=>apoyoEnGestion({gastos,pagosVendedor}),[gastos,pagosVendedor]);
   const [showForm,setShowForm]=useState(false);
@@ -80,14 +80,17 @@ export function PanelGastos({ gastos, categorias, ivaMensual=[], pagosVendedor=[
 
   return (
     <div>
-      <button onClick={()=>{setTipoForm("gasto");setShowForm(true);}} style={{...btnP(C.teal),marginBottom:20}}>+ Registrar gasto</button>
+      <BarraAcciones>
+        <BotonPrincipal onClick={()=>{setTipoForm("gasto");setShowForm(true);}}>+ Registrar gasto</BotonPrincipal>
+      </BarraAcciones>
+      {onIrImpuestos&&<AvisoLinea tono="info" icono="🧾" dato="ir-impuestos" onClick={onIrImpuestos} accion="Ir a Impuestos">El IVA del mes y el F29 se registran en Impuestos (quedan aquí como gasto «Impuesto SII»).</AvisoLinea>}
 
       <Seccion titulo="Gastos por categoría" nota="Se muestra el último pago de cada categoría. Toca una para ver su historial.">
         {actuales.map(c=>tarjetaCategoria(c,false))}
       </Seccion>
 
-      <Seccion titulo="Apoyo en gestión" nota="Incluye el gasto «Apoyo en gestión» y el extra por gestión que va dentro de un pago a vendedor. Cada monto aparece una vez: la salida bancaria es el gasto o el pago, nunca ambos.">
-        <Tarjeta padding="12px 16px">
+      <Desplegable dato="apoyo-gestion" titulo={<>Apoyo en gestión<Ayuda>Incluye el gasto «Apoyo en gestión» y el extra por gestión que va dentro de un pago a vendedor. Cada monto aparece una vez: la salida bancaria es el gasto o el pago, nunca ambos.</Ayuda></>}
+        resumen={`${apoyo.items.length} registro${apoyo.items.length===1?"":"s"}`} derecha={<Monto tam="sm">{fmt.money(apoyo.total)}</Monto>}>
           <div data-apoyo-total style={{display:"flex",justifyContent:"space-between",fontWeight:800,fontSize:13,marginBottom:6}}><span>Total</span><Monto>{fmt.money(apoyo.total)}</Monto></div>
           {apoyo.items.map(it=>(
             <div key={it.origen+it.id} data-apoyo={it.origen} style={{display:"flex",justifyContent:"space-between",gap:8,fontSize:12,padding:"3px 0",borderTop:`1px solid ${C.border}`}}>
@@ -96,13 +99,12 @@ export function PanelGastos({ gastos, categorias, ivaMensual=[], pagosVendedor=[
             </div>
           ))}
           {!apoyo.items.length&&<div style={{fontSize:12,color:C.inkFaint}}>Sin registros</div>}
-        </Tarjeta>
-      </Seccion>
+      </Desplegable>
 
       {historicas.length>0&&(
-        <Seccion titulo="Histórico" nota="Solo consulta. Los pagos a vendedores ahora se registran en Vendedores.">
+        <Desplegable dato="gastos-historico" titulo="Histórico" resumen="Solo consulta. Los pagos a vendedores ahora se registran en Comisiones.">
           {historicas.map(c=>tarjetaCategoria(c,true))}
-        </Seccion>
+        </Desplegable>
       )}
 
       {showForm&&tipoForm==="gasto"&&(

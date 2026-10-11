@@ -98,6 +98,8 @@ for (const [modo, vp] of [["escritorio", { width: 1280, height: 900 }], ["movil"
     // Fuera de la RPC de correos solo aparecen escrituras previas de la app (bloqueo de OC al abrir la ficha y la caché de uso de MP al cargar).
     r.solo_escribe_estado_correo = escr.every((e) => e.t === "correo_bfk_marcar" || e.t === "gestionar_bloqueo_oc" || e.t === "mp_cache_avisos");
     r.sin_errores = errs.length === 0;
+    // Rediseño 2026-10: la ficha se abre en un panel encima de la lista; se cierra (Escape) antes de navegar.
+    if (await page.locator("[data-hoja-lateral]").count()) { await page.keyboard.press("Escape"); await page.waitForTimeout(300); }
     await page.locator('[data-nav="notif"]').first().click(); await page.waitForTimeout(500);
     await page.locator("[data-correos-pendientes]").screenshot({ path: `${process.env.SALIDA || "."}/alertas-correos-${modo}.png` }).catch(() => {});
   }

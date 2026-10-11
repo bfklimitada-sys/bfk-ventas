@@ -102,7 +102,7 @@ await escenario("C3", async () => {
   const b = crearBase(datos(), { mp: RESPUESTAS_MP });
   const { page: p, errs, ctx } = await abrir(browser, b, { url: URL_APP, ...escritorio, espera: 3000 });
   await irA(p, "compras");
-  await p.getByRole("button", { name: /Filtros avanzados/ }).first().click(); await espera(p, 300);
+  await p.getByRole("button", { name: /^Filtros/ }).first().click(); await espera(p, 300);
   const filas = () => p.locator("[data-oc]").evaluateAll((els) => els.map((e) => e.getAttribute("data-oc")).sort());
   await p.locator('[data-filtro="vendedor"]').selectOption("v2"); await espera(p, 400);
   ok("C3_vendedor", JSON.stringify(await filas()) === JSON.stringify(["2002-102-SE26", "2011-111-SE26"]), await filas());
@@ -242,7 +242,7 @@ await escenario("C8", async () => {
   const { page: p, errs, ctx } = await abrir(browser, b, { url: URL_APP, espera: 3000 });
   await p.getByRole("button", { name: /Compras|OCs/ }).first().click().catch(() => {}); await espera(p, 800);
   await p.goto(URL_APP + "#compras"); await espera(p, 1500);
-  await p.getByRole("button", { name: /Filtros avanzados/ }).first().click(); await espera(p, 400);
+  await p.getByRole("button", { name: /^Filtros/ }).first().click(); await espera(p, 400);
   const ancho = await p.evaluate(() => document.documentElement.scrollWidth);
   ok("C8_sin_desborde_horizontal", ancho <= 392, ancho);
   ok("C8_filtros_y_excel_visibles", (await p.locator('[data-filtro="producto"]').isVisible()) && (await p.locator("[data-exportar-vista]").isVisible()));

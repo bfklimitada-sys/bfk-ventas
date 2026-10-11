@@ -62,7 +62,8 @@ for (const [modo, vp] of [["escritorio", { width: 1280, height: 900 }], ["movil"
   r.cadena_orden = tf.indexOf("Factura 203") < tf.indexOf("NC 44");
   await f.locator('[data-seccion-ficha^="facturacion-"]').screenshot({ path: `${process.env.SALIDA || "."}/facturacion-${modo}.png` });
   // OC 2: código 1 + refacturación
-  await abrir(1); await abrir(2);
+  // Rediseño 2026-10: la ficha se abre en un panel encima de la lista; se cierra con Escape antes de abrir otra.
+  await page.keyboard.press("Escape"); await page.waitForTimeout(400); await abrir(2);
   const f2 = page.locator('[data-ficha-oc="TEST-2-AG26"]');
   await f2.locator("[data-indice-ficha] button", { hasText: "Facturación SII" }).click(); await page.waitForTimeout(600);
   r.cod1_anulada = (await f2.locator('[data-documento="Factura 100"]').getAttribute("data-estado")) === "anulada"
@@ -86,9 +87,10 @@ for (const [modo, vp] of [["escritorio", { width: 1280, height: 900 }], ["movil"
   await f3.locator("[data-indice-ficha] button", { hasText: "Facturación SII" }).click(); await page.waitForTimeout(600);
   r.cod3_parcial = (await f3.locator('[data-documento="NC 60"]').getAttribute("data-estado")) === "nc_monto" && /Monto tributario vigente\s*\$228\.000/i.test(await f3.locator("[data-monto-tributario]").innerText());
   await f3.locator("[data-indice-ficha] button", { hasText: "Cobranza" }).click(); await page.waitForTimeout(500);
+  // La ficha se desplaza dentro de su panel: la cabecera queda fija arriba del panel al bajar.
   r.cabecera_fija_visible_al_bajar = await f3.locator("[data-ficha-cabecera]").evaluate((el) => {
-    const r = el.getBoundingClientRect(); const h = [...document.querySelectorAll("header")].find((x) => getComputedStyle(x).position === "sticky");
-    const tope = h ? h.getBoundingClientRect().bottom : 0; return window.scrollY > 200 && Math.abs(r.top - tope) <= 2;
+    const c = el.closest("[data-hoja-cuerpo]"); if (!c) return false;
+    const r = el.getBoundingClientRect(); return c.scrollTop > 200 && Math.abs(r.top - c.getBoundingClientRect().top) <= 2;
   });
   r.cobranza_desde_tributario = /Por cobrar\s*\$228\.000/i.test(await f3.locator("[data-cobranza-ficha]").innerText());
   r.sin_desborde_horizontal = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);

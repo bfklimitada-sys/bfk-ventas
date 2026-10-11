@@ -226,7 +226,7 @@ await escenario("S7", async () => {
   const b = base0();
   const { page: p, errs, ctx } = await abrir(browser, b, { url: URL_APP, ...escritorio, espera: 3000 });
   await irA(p, "compras");
-  await p.getByRole("button", { name: /Filtros avanzados/ }).first().click(); await espera(p, 300);
+  await p.getByRole("button", { name: /^Filtros/ }).first().click(); await espera(p, 300);
   await p.getByRole("button", { name: /^Entregada$/ }).click(); await espera(p, 500);
   let filas = await p.locator("[data-oc]").evaluateAll((els) => els.map((e) => e.getAttribute("data-oc")));
   ok("S7_filtro_entregada_incluye_entregado", filas.includes("2003-103-SE26"), filas);
