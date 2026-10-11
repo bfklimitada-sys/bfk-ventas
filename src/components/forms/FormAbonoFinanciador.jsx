@@ -84,7 +84,7 @@ export function FormAbonoFinanciador({ ocs, financiadores: todosFin, onSave, fin
       </Field>
 
       {fin && (
-        <div style={{ background: C.paper, borderRadius: 9, padding: "10px 12px", marginBottom: 14 }}>
+        <div style={{ background: C.paper, borderRadius: 8, padding: "10px 12px", marginBottom: 14 }}>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.inkMuted }}>
             <span>{pendientes.length} OC{pendientes.length !== 1 ? "s" : ""} por devolver</span>
             <span style={{ fontFamily: MONO, fontWeight: 800, color:C.dangerText }}>{fmt.money(totalAdeudado)}</span>
@@ -115,7 +115,7 @@ export function FormAbonoFinanciador({ ocs, financiadores: todosFin, onSave, fin
           <div style={{ fontSize: 12, fontWeight: 800, color: C.inkMuted, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>
             Cubre {reparto.length} OC{reparto.length !== 1 ? "s" : ""}
           </div>
-          <div style={{ maxHeight: 230, overflowY: "auto", border: `1px solid ${C.border}`, borderRadius: 10 }}>
+          <div style={{ maxHeight: 230, overflowY: "auto", border: `1px solid ${C.border}`, borderRadius: 12 }}>
             {reparto.map((r, i) => (
               <div key={r.oc.id} style={{
                 display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8,
@@ -128,7 +128,7 @@ export function FormAbonoFinanciador({ ocs, financiadores: todosFin, onSave, fin
                     {r.completa ? "Queda saldada" : `Parcial · quedan ${fmt.money(r.debe - r.asignado)}`}
                   </span>
                 </span>
-                <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: 12.5, color: r.completa ? C.ok : C.warn, flexShrink: 0 }}>
+                <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: 13, color: r.completa ? C.ok : C.warn, flexShrink: 0 }}>
                   {fmt.money(r.asignado)}
                 </span>
               </div>
@@ -136,14 +136,14 @@ export function FormAbonoFinanciador({ ocs, financiadores: todosFin, onSave, fin
           </div>
 
           {sobrante > 0 && (
-            <div style={{ background: C.infoLight, borderRadius: 9, padding: "9px 12px", marginTop: 8, fontSize: 12, color: C.info, fontWeight: 600 }}>
+            <div style={{ background: C.infoLight, borderRadius: 8, padding: "9px 12px", marginTop: 8, fontSize: 12, color: C.info, fontWeight: 600 }}>
               Sobran {fmt.money(sobrante)} — el abono supera lo adeudado por las OCs. Se registrará como pago sin OC asociada{(Number(monto) || 0) > saldoFin ? ` y el saldo del financiador quedará ${fmt.money((Number(monto) || 0) - saldoFin)} a favor de BFK` : ""}.
             </div>
           )}
         </div>
       )}
 
-      {err && <div style={{ background: C.dangerLight, color:C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 12.5, marginBottom: 10, fontWeight: 600 }}>{err}</div>}
+      {err && <div style={{ background: C.dangerLight, color:C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 10, fontWeight: 600 }}>{err}</div>}
 
       <button onClick={guardar} disabled={saving} style={btnP(saving ? C.inkFaint : C.purple)}>
         {saving ? "Registrando…" : `✓ Abonar ${fmt.money(Number(monto) || 0)}`}

@@ -51,7 +51,7 @@ export function SeccionFicha({ id, icono, titulo: t, resumen, abierta, onToggle,
     <section id={id} data-seccion-ficha={id} style={{ background: C.card, border: `1px solid ${aviso ? C.warn + "88" : C.border}`, borderRadius: 12, marginBottom: 10, scrollMarginTop: 120, overflow: "hidden" }}>
       <button type="button" data-consulta="1" aria-expanded={abierta} onClick={onToggle}
         style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", minHeight: 48, background: "none", border: "none", cursor: "pointer", textAlign: "left" }}>
-        <span style={{ fontSize: 15, flexShrink: 0 }}>{icono}</span>
+        <span style={{ fontSize: 16, flexShrink: 0 }}>{icono}</span>
         <span style={{ fontWeight: 800, fontSize: 14, color: C.ink, flexShrink: 1, minWidth: 0 }}>{t}</span>
         <span style={{ flex: 1, minWidth: 0, fontSize: 12, color: C.inkMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textAlign: "right" }}>{resumen}</span>
         <span style={{ color: C.inkFaint, fontSize: 12, flexShrink: 0 }}>{abierta ? "▲" : "▼"}</span>
@@ -92,10 +92,10 @@ export function ResumenFinanciero({ oc }) {
   return (
     <div data-resumen-financiero style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(104px, 1fr))", gap: 6 }}>
       {tiles.map((t) => (
-        <div key={t.k} data-tile={t.k} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: "7px 9px", minWidth: 0 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: C.inkFaint, textTransform: "uppercase", letterSpacing: 0.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.k}</div>
+        <div key={t.k} data-tile={t.k} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "7px 9px", minWidth: 0 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: C.inkFaint, textTransform: "uppercase", letterSpacing: 0.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.k}</div>
           <div style={{ fontFamily: MONO, fontWeight: 800, fontSize: 14, color: t.c, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.v}</div>
-          {t.s && <div style={{ fontSize: 11, color: t.c, opacity: 0.85 }}>{t.s}</div>}
+          {t.s && <div style={{ fontSize: 12, color: t.c, opacity: 0.85 }}>{t.s}</div>}
         </div>
       ))}
     </div>
@@ -114,17 +114,17 @@ function FilaDocumento({ oc, d, primero, perfil, bloqueado, onEditar, onEliminar
     <div data-documento={nombreDocumento(d)} data-estado={est}
       style={{ position: "relative", marginLeft: primero ? 0 : 18, paddingLeft: primero ? 0 : 14, borderLeft: primero ? "none" : `2px solid ${C.border}`, marginBottom: 8 }}>
       {!primero && <span style={{ position: "absolute", left: -8, top: 10, fontSize: 12, color: C.inkFaint }}>↳</span>}
-      <div style={{ background: anulada ? C.paper : C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: "9px 11px", opacity: anulada ? 0.8 : 1 }}>
+      <div style={{ background: anulada ? C.paper : C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "9px 11px", opacity: anulada ? 0.8 : 1 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, flexWrap: "wrap" }}>
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontWeight: 800, fontSize: 13.5, color: C.ink, textDecoration: anulada ? "line-through" : "none" }}>
+            <div style={{ fontWeight: 800, fontSize: 14, color: C.ink, textDecoration: anulada ? "line-through" : "none" }}>
               <Ic n={nc ? "📋" : esNotaDebito(d) ? "📄" : "🧾"} /> {nombreDocumento(d)}
             </div>
             <div style={{ fontSize: 12, color: C.inkMuted }}>{d.fecha ? fmt.date(String(d.fecha).slice(0, 10)) : "Sin fecha"}{d.rut_receptor ? ` · RUT ${d.rut_receptor}` : ""}</div>
           </div>
           <div style={{ textAlign: "right" }}>
-            <div style={{ fontFamily: MONO, fontWeight: 800, fontSize: 13.5, color: anulada ? C.inkFaint : C.ink }}>{fmt.money(d.monto)}</div>
-            {(nc || anulada) && <div style={{ fontSize: 11.5, color: ef < 0 ? C.dangerText : C.inkFaint }}>{ef < 0 ? `efecto ${fmt.money(ef)}` : est === "nc_texto" ? "" : anulada ? "no cuenta" : est === "nc_anula" ? "anula la factura" : ""}</div>}
+            <div style={{ fontFamily: MONO, fontWeight: 800, fontSize: 14, color: anulada ? C.inkFaint : C.ink }}>{fmt.money(d.monto)}</div>
+            {(nc || anulada) && <div style={{ fontSize: 12, color: ef < 0 ? C.dangerText : C.inkFaint }}>{ef < 0 ? `efecto ${fmt.money(ef)}` : est === "nc_texto" ? "" : anulada ? "no cuenta" : est === "nc_anula" ? "anula la factura" : ""}</div>}
           </div>
         </div>
         <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 6 }}>
@@ -142,14 +142,14 @@ function FilaDocumento({ oc, d, primero, perfil, bloqueado, onEditar, onEliminar
           <div style={{ fontSize: 12, color: C.inkMuted, marginTop: 5 }}>Reemplaza a la factura {d.factura_anulada_numero}{d.nota_credito ? ` (NC ${d.nota_credito}, registro anterior sin monto)` : ""}</div>
         )}
         {d.motivo_diferencia && <div style={{ fontSize: 12, color: C.warnText, marginTop: 4 }}><Ic n="⚠" /> Difiere de la OC: {d.motivo_diferencia}</div>}
-        {d.evidencia_sii && <div style={{ fontSize: 11.5, color: C.inkFaint, marginTop: 4 }}>{d.evidencia_sii}</div>}
+        {d.evidencia_sii && <div style={{ fontSize: 12, color: C.inkFaint, marginTop: 4 }}>{d.evidencia_sii}</div>}
         {!bloqueado && (
           <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
             {!nc && <button onClick={() => onEditar && onEditar({ tipo: esNotaDebito(d) ? "Nota de débito" : "Factura", e: d, tabla: "eventos_factura" })}
-              style={{ fontSize: 12, background: C.tealLight, color: C.tealDark, border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontWeight: 600 }}><Ic n="✏️" /> Editar</button>}
+              style={{ fontSize: 12, background: C.tealLight, color: C.tealDark, border: "none", borderRadius: 8, padding: "4px 10px", cursor: "pointer", fontWeight: 600 }}><Ic n="✏️" /> Editar</button>}
             {perfil?.rol === "admin" && (
               <button onClick={async () => { if (window.confirm(`¿Eliminar ${nombreDocumento(d)}?\nLo facturado se recalcula según los documentos que queden.`)) await onEliminar(oc.id, d.id); }}
-                style={{ fontSize: 12, background: C.dangerLight, color: C.dangerText, border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontWeight: 600 }}><Ic n="🗑" /> Eliminar</button>
+                style={{ fontSize: 12, background: C.dangerLight, color: C.dangerText, border: "none", borderRadius: 8, padding: "4px 10px", cursor: "pointer", fontWeight: 600 }}><Ic n="🗑" /> Eliminar</button>
             )}
           </div>
         )}
@@ -187,10 +187,10 @@ export function FacturacionSII({ oc, perfil, bloqueado, onEmitir, onRegistrarNC,
         </div>
       ))}
 
-      <div data-monto-tributario style={{ background: C.infoLight, border: `1px solid ${C.info}33`, borderRadius: 10, padding: "10px 12px", marginTop: 4 }}>
+      <div data-monto-tributario style={{ background: C.infoLight, border: `1px solid ${C.info}33`, borderRadius: 12, padding: "10px 12px", marginTop: 4 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
           <span style={{ ...titulo, color: C.info }}>Monto tributario vigente</span>
-          <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: 17, color: C.ink }}>{fmt.money(monto)}</span>
+          <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: 16, color: C.ink }}>{fmt.money(monto)}</span>
         </div>
         <div style={{ fontSize: 12, color: C.inkMuted, marginTop: 4, lineHeight: 1.5 }}>
           Facturas vigentes {fmt.money(totalVig)}{vig.length ? ` (${vig.map((f) => f.numero_factura).join(", ")})` : ""}
@@ -243,7 +243,7 @@ export function FormNotaCredito({ oc, onSave }) {
     catch (e) { setErr(e.message); } finally { setSaving(false); }
   };
   const opcion = (c, t, d) => (
-    <label key={c} style={{ display: "flex", gap: 8, alignItems: "flex-start", padding: "8px 10px", border: `1px solid ${codigo === c ? C.info : C.border}`, borderRadius: 9, marginBottom: 6, cursor: "pointer", background: codigo === c ? C.infoLight : C.card }}>
+    <label key={c} style={{ display: "flex", gap: 8, alignItems: "flex-start", padding: "8px 10px", border: `1px solid ${codigo === c ? C.info : C.border}`, borderRadius: 8, marginBottom: 6, cursor: "pointer", background: codigo === c ? C.infoLight : C.card }}>
       <input type="radio" name="codigo-ref" checked={codigo === c} onChange={() => setCodigo(c)} style={{ marginTop: 3 }} />
       <span><b style={{ fontSize: 13 }}>Código {c} · {t}</b><br /><span style={{ fontSize: 12, color: C.inkMuted }}>{d}</span></span>
     </label>
@@ -265,10 +265,10 @@ export function FormNotaCredito({ oc, onSave }) {
       {opcion(3, "Corrige montos", "Rebaja parte del monto de la factura (NC parcial).")}
       {codigo === 3 && <Field label="Monto de la NC ($)" required><input style={iMono} type="number" inputMode="numeric" value={monto} onChange={(e) => setMonto(e.target.value)} /></Field>}
       <Field label="Motivo (razón de referencia)" required={codigo !== 2}><input style={iStyle} value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder={codigo === 2 ? "Ej.: Corrección giro de factura" : ""} /></Field>
-      <div style={{ background: C.infoLight, borderRadius: 9, padding: "9px 11px", fontSize: 12.5, color: C.info, fontWeight: 700, marginBottom: 12 }}>
+      <div style={{ background: C.infoLight, borderRadius: 8, padding: "9px 11px", fontSize: 13, color: C.info, fontWeight: 700, marginBottom: 12 }}>
         Monto de la NC: {fmt.money(montoFinal)} · {codigo === 2 ? "sin efecto monetario; la factura sigue vigente" : codigo === 1 ? "la factura queda anulada" : `lo facturado baja ${fmt.money(montoFinal)}`}
       </div>
-      {err && <div style={{ background: C.dangerLight, color: C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 12.5, marginBottom: 10, fontWeight: 600 }}>{err}</div>}
+      {err && <div style={{ background: C.dangerLight, color: C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 10, fontWeight: 600 }}>{err}</div>}
       <button onClick={guardar} disabled={saving} style={btnP(saving ? C.inkFaint : C.info)}>{saving ? "Guardando…" : "✓ Registrar nota de crédito"}</button>
     </div>
   );
@@ -284,9 +284,9 @@ export function CobranzaFicha({ oc }) {
     <div data-cobranza-ficha style={{ marginBottom: 10 }}>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6, marginBottom: 8 }}>
         {[["Facturado vigente", facturado, C.info], ["Cobrado", cobrado, C.okText], ["Por cobrar", porCobrar, porCobrar > 0 ? C.dangerText : C.inkMuted]].map(([k, v, c]) => (
-          <div key={k} style={{ background: C.paper, borderRadius: 9, padding: "7px 9px" }}>
-            <div style={{ fontSize: 11, color: C.inkFaint, fontWeight: 700, textTransform: "uppercase" }}>{k}</div>
-            <div style={{ fontFamily: MONO, fontWeight: 800, fontSize: 13.5, color: c }}>{fmt.money(v)}</div>
+          <div key={k} style={{ background: C.paper, borderRadius: 8, padding: "7px 9px" }}>
+            <div style={{ fontSize: 12, color: C.inkFaint, fontWeight: 700, textTransform: "uppercase" }}>{k}</div>
+            <div style={{ fontFamily: MONO, fontWeight: 800, fontSize: 14, color: c }}>{fmt.money(v)}</div>
           </div>
         ))}
       </div>
@@ -297,7 +297,7 @@ export function CobranzaFicha({ oc }) {
             const dias = fmt.diasDesde(f.fecha);
             const v = dias != null ? estadoVencimiento(dias, plazo) : null;
             return (
-              <div key={f.id} style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 12.5, padding: "6px 0", borderBottom: `1px solid ${C.border}` }}>
+              <div key={f.id} style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 13, padding: "6px 0", borderBottom: `1px solid ${C.border}` }}>
                 <span>{nombreDocumento(f)} · {f.fecha ? fmt.date(String(f.fecha).slice(0, 10)) : "sin fecha"}</span>
                 <span style={{ color: v?.vencida ? C.dangerText : v?.porVencer ? C.warnText : C.inkMuted, fontWeight: 700, whiteSpace: "nowrap" }}>
                   {dias == null ? "—" : v.vencida ? `vencida hace ${dias - plazo}d` : `vence en ${v.diasRestantes}d`}
@@ -319,8 +319,8 @@ export function ComunicacionesFicha({ oc, pendientes, correos = [], onMarcarCorr
     <div data-comunicaciones>
       <div style={{ ...titulo, marginBottom: 4 }}>Pendientes</div>
       {pendientes.length === 0
-        ? <div style={{ fontSize: 12.5, color: C.okText, marginBottom: 10 }}>✓ Sin pendientes.</div>
-        : <ul style={{ margin: "0 0 10px", paddingLeft: 18, fontSize: 12.5, color: C.ink, lineHeight: 1.6 }}>{pendientes.map((p, i) => <li key={i}>{p}</li>)}</ul>}
+        ? <div style={{ fontSize: 13, color: C.okText, marginBottom: 10 }}>✓ Sin pendientes.</div>
+        : <ul style={{ margin: "0 0 10px", paddingLeft: 18, fontSize: 13, color: C.ink, lineHeight: 1.6 }}>{pendientes.map((p, i) => <li key={i}>{p}</li>)}</ul>}
       <div style={{ ...titulo, marginBottom: 4 }}>Correos enviados desde BFK</div>
       {reclamos.length === 0
         ? <div style={{ fontSize: 12, color: C.inkFaint, marginBottom: 10 }}>Ninguno.</div>

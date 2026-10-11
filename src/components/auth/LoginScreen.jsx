@@ -32,7 +32,7 @@ export function LoginScreen({ onLogin, emailInicial="", avisoInicial="" }) {
   return (
     <MarcoAuth>
         {mode!=="recover"&&(
-          <div style={{display:"flex",borderRadius:10,background:C.paper,padding:3,marginBottom:22}}>
+          <div style={{display:"flex",borderRadius:12,background:C.paper,padding:3,marginBottom:22}}>
             {["login","signup"].map(m=>(
               <button key={m} onClick={()=>{setMode(m);setErr("");setInfo("");}} style={{flex:1,padding:"8px",borderRadius:8,border:"none",cursor:"pointer",fontSize:13,fontWeight:700,background:mode===m?C.card:"transparent",color:mode===m?C.ink:C.inkMuted,boxShadow:mode===m?"0 1px 4px rgba(0,0,0,0.08)":"none"}}>
                 {m==="login"?"Iniciar sesión":"Crear cuenta"}
@@ -40,9 +40,9 @@ export function LoginScreen({ onLogin, emailInicial="", avisoInicial="" }) {
             ))}
           </div>
         )}
-        {mode==="recover"&&<div style={{fontWeight:800,fontSize:15,color:C.ink,marginBottom:16,textAlign:"center"}}>Recuperar contraseña</div>}
-        {err&&<div style={{background:C.dangerLight,color:C.dangerText,borderRadius:9,padding:"9px 12px",fontSize:12.5,marginBottom:14,textAlign:"center",fontWeight:600}}>{err}</div>}
-        {info&&<div style={{background:C.okLight,color:C.okText,borderRadius:9,padding:"9px 12px",fontSize:12.5,marginBottom:14,textAlign:"center",fontWeight:600}}>{info}</div>}
+        {mode==="recover"&&<div style={{fontWeight:800,fontSize:16,color:C.ink,marginBottom:16,textAlign:"center"}}>Recuperar contraseña</div>}
+        {err&&<div style={{background:C.dangerLight,color:C.dangerText,borderRadius:8,padding:"9px 12px",fontSize:13,marginBottom:14,textAlign:"center",fontWeight:600}}>{err}</div>}
+        {info&&<div style={{background:C.okLight,color:C.okText,borderRadius:8,padding:"9px 12px",fontSize:13,marginBottom:14,textAlign:"center",fontWeight:600}}>{info}</div>}
         {mode==="signup"&&<Field label="Nombre"><input style={iStyle} value={nombre} onChange={e=>setNombre(e.target.value)} placeholder="Tu nombre" onKeyDown={e=>e.key==="Enter"&&submit()} /></Field>}
         <Field label="Correo"><input style={iStyle} type="email" value={email} onChange={e=>{setEmail(e.target.value);setErr("");}} placeholder="correo@ejemplo.com" onKeyDown={e=>e.key==="Enter"&&submit()} /></Field>
         {mode!=="recover"&&<Field label="Contraseña"><input style={iStyle} type="password" value={pass} onChange={e=>{setPass(e.target.value);setErr("");}} placeholder="••••••••" onKeyDown={e=>e.key==="Enter"&&submit()} /></Field>}
@@ -60,11 +60,11 @@ export const TEXTO_CORREO_ENVIADO="Si el correo está registrado, recibirás un 
 export function MarcoAuth({ children }) {
   return (
     <div style={{minHeight:"100vh",background:`linear-gradient(165deg,${C.night} 0%,#1A2540 60%,${C.tealDark} 130%)`,display:"flex",alignItems:"center",justifyContent:"center",padding:16,fontFamily:SANS}}>
-      <div style={{background:C.card,borderRadius:20,padding:"38px 30px",width:"100%",maxWidth:380,boxShadow:"0 30px 70px rgba(0,0,0,0.35)"}}>
+      <div style={{background:C.card,borderRadius:999,padding:"38px 30px",width:"100%",maxWidth:380,boxShadow:"0 30px 70px rgba(0,0,0,0.35)"}}>
         <div style={{textAlign:"center",marginBottom:26}}>
-          <div style={{width:50,height:50,background:C.night,borderRadius:12,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px",fontFamily:MONO,color:C.teal,fontWeight:800,fontSize:18}}>BFK</div>
-          <div style={{fontWeight:800,fontSize:19,color:C.ink,letterSpacing:-0.3}}>Torre de Control</div>
-          <div style={{fontSize:12.5,color:C.inkMuted,marginTop:3}}>BFK Ltda · Ventas Mercado Público</div>
+          <div style={{width:50,height:50,background:C.night,borderRadius:12,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px",fontFamily:MONO,color:C.teal,fontWeight:800,fontSize:20}}>BFK</div>
+          <div style={{fontWeight:800,fontSize:20,color:C.ink,letterSpacing:-0.3}}>Torre de Control</div>
+          <div style={{fontSize:13,color:C.inkMuted,marginTop:3}}>BFK Ltda · Ventas Mercado Público</div>
         </div>
         {children}
       </div>

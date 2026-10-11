@@ -16,12 +16,12 @@ function AvisoMP({icon,color,bg,titulo,descripcion,onActualizar,verificando,chil
     <div style={{background:C.card,borderRadius:16,marginBottom:14,overflow:"hidden",
       border:`1px solid ${C.border}`,boxShadow:"0 1px 3px rgba(15,23,42,0.05)"}}>
       <div style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",background:bg}}>
-        <div style={{width:30,height:30,borderRadius:10,background:color,color:"#fff",flexShrink:0,
+        <div style={{width:30,height:30,borderRadius:12,background:color,color:"#fff",flexShrink:0,
           display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:800}}>{icon}</div>
         <div style={{flex:1,minWidth:0,fontSize:13,fontWeight:800,color,lineHeight:1.3}}>{titulo}</div>
         {onActualizar&&(
           <button onClick={onActualizar} disabled={verificando}
-            style={{flexShrink:0,width:30,height:30,borderRadius:9,border:"none",
+            style={{flexShrink:0,width:30,height:30,borderRadius:8,border:"none",
               background:"rgba(255,255,255,0.65)",color,fontSize:13,fontWeight:800,
               cursor:verificando?"default":"pointer",opacity:verificando?0.55:1,
               display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -185,7 +185,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
       <div style={{marginBottom:14}}>
         <input type="search" value={busq} onChange={e=>setBusq(e.target.value)} placeholder="🔍 Buscar OC, cliente, factura o monto"
           onKeyDown={e=>{if(e.key==="Enter"&&busq.trim()&&onBuscarCompras)onBuscarCompras(busq.trim());}}
-          style={{width:"100%",boxSizing:"border-box",minHeight:46,padding:"10px 14px",fontSize:16,fontFamily:SANS,border:`1px solid ${C.border}`,borderRadius:12,background:C.surface||"#fff",color:C.ink}} />
+          style={{width:"100%",boxSizing:"border-box",minHeight:46,padding:"10px 14px",fontSize:16,fontFamily:SANS,border:`1px solid ${C.border}`,borderRadius:12,background:C.card,color:C.ink}} />
         {busq.trim().length>=2&&(()=>{
           const r=(ocs||[]).filter(o=>coincideBusqueda(o,busq));
           return (<Tarjeta padding="4px" style={{marginTop:6}}>
@@ -196,7 +196,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
                 <span style={{fontSize:14,fontWeight:700,color:C.ink,display:"block"}}>{o.numero_oc}</span>
                 <span style={{fontSize:12,color:C.inkMuted}}>{o.cliente||o.entidad||""}</span>
               </button>))}
-            {r.length>0&&onBuscarCompras&&<button onClick={()=>onBuscarCompras(busq.trim())} style={{width:"100%",minHeight:44,background:"none",border:"none",color:C.accent||C.ink,fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:SANS}}>Ver {r.length>5?`los ${r.length} resultados`:"en Compras"} →</button>}
+            {r.length>0&&onBuscarCompras&&<button onClick={()=>onBuscarCompras(busq.trim())} style={{width:"100%",minHeight:44,background:"none",border:"none",color:C.tealDark,fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:SANS}}>Ver {r.length>5?`los ${r.length} resultados`:"en Compras"} →</button>}
           </Tarjeta>);
         })()}
       </div>
@@ -242,7 +242,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
                 background:a.color,color:"#fff",fontSize:12,fontWeight:800,
                 display:"flex",alignItems:"center",justifyContent:"center"}}>{a.paso}</span>
             )}
-            <span style={{fontSize:19}}>{a.icon}</span>
+            <span style={{fontSize:20}}>{a.icon}</span>
             <span style={{fontSize:12,fontWeight:700,color:a.color,textAlign:"center",lineHeight:1.2}}>{a.label}</span>
           </button>
         ))}
@@ -258,7 +258,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
           <div data-linea={dato} onClick={onClick} style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:8,padding:"6px 0",borderBottom:"1px solid rgba(255,255,255,0.10)",cursor:onClick?"pointer":"default"}}>
             <span style={{minWidth:0}}>
               <span style={{display:"block",fontSize:13,color:"#E2E8F0",fontWeight:700}}>{signo?<span style={{color:"#94A3B8",marginRight:4}}>{signo}</span>:null}{k}</span>
-              {nota&&<span style={{display:"block",fontSize:11.5,color:"#94A3B8",marginTop:1,lineHeight:1.35}}>{nota}</span>}
+              {nota&&<span style={{display:"block",fontSize:12,color:"#94A3B8",marginTop:1,lineHeight:1.35}}>{nota}</span>}
             </span>
             <span data-monto={dato} style={{fontFamily:MONO,fontWeight:800,fontSize:14,color:tono||"#F1F5F9",flexShrink:0}}>{fmt.money(v)}</span>
           </div>
@@ -293,8 +293,8 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:8,paddingTop:10}}>
               <span>
                 <span style={{display:"block",fontSize:13,color:"#E2E8F0",fontWeight:800,textTransform:"uppercase",letterSpacing:0.6}}>= Saldo proyectado</span>
-                <span data-proyectado-nota style={{display:"block",fontSize:11.5,color:"#94A3B8",marginTop:2}}>Proyección al cobrar y pagar todo lo pendiente: no es dinero disponible hoy</span>
-                {r.provisorio&&<span data-proyectado-provisorio style={{display:"block",fontSize:11.5,color:"#FBBF24",fontWeight:700,marginTop:2}}>PROVISORIO: falta registrar IVA/F29 de {ivaPend||"algún período"}{r.comisiones.provisorias>0?" y hay comisiones por liquidar o en curso":""}</span>}
+                <span data-proyectado-nota style={{display:"block",fontSize:12,color:"#94A3B8",marginTop:2}}>Proyección al cobrar y pagar todo lo pendiente: no es dinero disponible hoy</span>
+                {r.provisorio&&<span data-proyectado-provisorio style={{display:"block",fontSize:12,color:"#FBBF24",fontWeight:700,marginTop:2}}>PROVISORIO: falta registrar IVA/F29 de {ivaPend||"algún período"}{r.comisiones.provisorias>0?" y hay comisiones por liquidar o en curso":""}</span>}
               </span>
               <span data-monto="proyectado" style={{fontFamily:MONO,fontWeight:800,fontSize:28,color:r.saldoProyectado>=0?"#2DD4BF":"#F87171",letterSpacing:-1}}>{fmt.money(r.saldoProyectado)}</span>
             </div>
@@ -315,7 +315,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
                 {Math.abs(r.diferenciaBancoCaja)>0.5&&<div style={{fontSize:12,color:C.inkMuted,marginTop:4,lineHeight:1.45}}>La caja registrada incluye operaciones que no pasaron por BancoEstado (compras anteriores a la apertura o pagadas por un socio, pagos compensados fuera del banco) y movimientos del banco sin registro en BFK. No es pérdida ni ganancia ni dinero adicional: se explica con el expediente de conciliación. El saldo proyectado parte del saldo del banco.</div>}
               </>):<div style={{fontSize:12,color:C.inkMuted}}>Sin saldo del banco registrado: no se puede conciliar.</div>}
               <button onClick={onEditarSaldo}
-                style={{marginTop:10,width:"100%",minHeight:44,background:C.paper,border:`1px solid ${C.border}`,borderRadius:10,padding:"8px 12px",color:C.ink,fontSize:14,fontWeight:700,cursor:"pointer",textAlign:"left",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                style={{marginTop:10,width:"100%",minHeight:44,background:C.paper,border:`1px solid ${C.border}`,borderRadius:12,padding:"8px 12px",color:C.ink,fontSize:14,fontWeight:700,cursor:"pointer",textAlign:"left",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                 <span>{saldoBanco?"Actualizar saldo de la cuenta":"Registrar saldo de la cuenta"}</span><Ic n="chevR"/>
               </button>
             </div>
@@ -356,7 +356,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
             </div>
             {!sincronizando&&(
               <button onClick={onSincronizar}
-                style={{width:"100%",minHeight:44,background:C.teal,border:"none",color:"#fff",borderRadius:10,padding:"10px 12px",fontSize:14,fontWeight:700,cursor:"pointer"}}>
+                style={{width:"100%",minHeight:44,background:C.teal,border:"none",color:"#fff",borderRadius:12,padding:"10px 12px",fontSize:14,fontWeight:700,cursor:"pointer"}}>
                 Completar desde Mercado Público
               </button>
             )}
@@ -391,9 +391,9 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
               onActualizarCanceladas&&onActualizarCanceladas();
             }}
             style={{width:"100%",display:"flex",alignItems:"center",gap:10,textAlign:"left",
-              background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"11px 14px",
+              background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"11px 14px",
               cursor:"pointer",marginBottom:10,boxShadow:"0 1px 2px rgba(15,23,42,0.04)"}}>
-            <span style={{width:28,height:28,borderRadius:9,background:C.infoLight,color:C.info,flexShrink:0,
+            <span style={{width:28,height:28,borderRadius:8,background:C.infoLight,color:C.info,flexShrink:0,
               display:"flex",alignItems:"center",justifyContent:"center",fontSize:13}}>↻</span>
             <span style={{flex:1,minWidth:0}}>
               <span style={{display:"block",fontSize:12,fontWeight:700,color:C.ink}}>Revisar Mercado Público de nuevo</span>
@@ -412,9 +412,9 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
                 </span>
                 {!verificandoAlgo&&ultimaGeneral&&<span style={{display:"block",fontSize:12,color:C.inkFaint,marginTop:1}}>Última consulta exitosa: {hace(ultimaGeneral)}</span>}
               </span>
-              {nPorAceptar>0&&<span style={{fontSize:12,fontWeight:800,color:C.warnText,background:C.warnLight,borderRadius:20,padding:"2px 8px"}}><Ic n="⏳"/> {nPorAceptar}</span>}
-              {nAceptadas>0&&<span style={{fontSize:12,fontWeight:800,color:C.okText,background:C.okLight,borderRadius:20,padding:"2px 8px"}}>✓ {nAceptadas}</span>}
-              {nCanceladas>0&&<span style={{fontSize:12,fontWeight:800,color:C.dangerText,background:C.dangerLight,borderRadius:20,padding:"2px 8px"}}>✕ {nCanceladas}</span>}
+              {nPorAceptar>0&&<span style={{fontSize:12,fontWeight:800,color:C.warnText,background:C.warnLight,borderRadius:999,padding:"2px 8px"}}><Ic n="⏳"/> {nPorAceptar}</span>}
+              {nAceptadas>0&&<span style={{fontSize:12,fontWeight:800,color:C.okText,background:C.okLight,borderRadius:999,padding:"2px 8px"}}>✓ {nAceptadas}</span>}
+              {nCanceladas>0&&<span style={{fontSize:12,fontWeight:800,color:C.dangerText,background:C.dangerLight,borderRadius:999,padding:"2px 8px"}}>✕ {nCanceladas}</span>}
               <span style={{fontSize:12,color:C.inkFaint,flexShrink:0}}>{verMP?"▲":"▼"}</span>
             </button>
 
@@ -427,7 +427,7 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
                   }}
                   disabled={verificandoAlgo}
                   style={{width:"100%",background:"none",border:`1px dashed ${C.border}`,
-                    color:verificandoAlgo?C.inkFaint:C.inkMuted,borderRadius:10,padding:"8px 12px",
+                    color:verificandoAlgo?C.inkFaint:C.inkMuted,borderRadius:12,padding:"8px 12px",
                     fontSize:12,fontWeight:700,cursor:verificandoAlgo?"default":"pointer",marginBottom:8}}>
                   {verificandoAlgo?"Revisando…":"↻ Revisar de nuevo"}
                 </button>
@@ -450,11 +450,11 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
                     descripcion="Ya las aceptaron en Mercado Público, pero todavía no existen como registro en la app. Revísalas una a una, o cárgalas todas de una vez indicando el vendedor (sin link de compra — lo agregas después en cada una). Las que figuren canceladas en MP no se cargan."
                     onActualizar={onActualizarAceptadas} verificando={verificandoAceptadas}>
                     {cargandoAceptadas?(
-                      <div style={{background:C.paper,borderRadius:10,padding:"10px 12px",fontSize:12,fontWeight:700,color:C.okText,textAlign:"center",marginBottom:2}}>
+                      <div style={{background:C.paper,borderRadius:12,padding:"10px 12px",fontSize:12,fontWeight:700,color:C.okText,textAlign:"center",marginBottom:2}}>
                         Cargando {cargandoAceptadas.hechas} de {cargandoAceptadas.total}…
                       </div>
                     ):masiva?(
-                      <div data-carga-masiva style={{background:C.paper,borderRadius:10,padding:"10px 12px",marginBottom:6}}>
+                      <div data-carga-masiva style={{background:C.paper,borderRadius:12,padding:"10px 12px",marginBottom:6}}>
                         <label style={{display:"block",fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.3,marginBottom:4}} htmlFor="masiva-vendedor">Vendedor de estas {nAceptadas} OC *</label>
                         <select id="masiva-vendedor" value={masiva.vendedorId} onChange={e=>setMasiva(m=>({...m,vendedorId:e.target.value,ventaPropia:e.target.value?m.ventaPropia:false}))}
                           style={{width:"100%",boxSizing:"border-box",minHeight:40,padding:"8px 10px",borderRadius:8,border:`1px solid ${C.border}`,fontSize:13,fontFamily:SANS,background:C.card,color:C.ink,marginBottom:8}}>
@@ -469,16 +469,16 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
                         )}
                         <div style={{display:"flex",gap:6}}>
                           <button disabled={!masiva.vendedorId} onClick={()=>{ const m=masiva; setMasiva(null); onCargarTodasAceptadas&&onCargarTodasAceptadas({vendedorId:m.vendedorId,ventaPropia:!!(m.vendedorId&&m.ventaPropia)}); }}
-                            style={{flex:2,background:masiva.vendedorId?C.ok:C.inkFaint,border:"none",color:"#fff",borderRadius:10,padding:"10px 12px",fontSize:12.5,fontWeight:700,cursor:masiva.vendedorId?"pointer":"not-allowed"}}>
+                            style={{flex:2,background:masiva.vendedorId?C.ok:C.inkFaint,border:"none",color:"#fff",borderRadius:12,padding:"10px 12px",fontSize:13,fontWeight:700,cursor:masiva.vendedorId?"pointer":"not-allowed"}}>
                             Cargar las {nAceptadas} con este vendedor
                           </button>
-                          <button onClick={()=>setMasiva(null)} style={{flex:1,background:"none",border:`1px solid ${C.border}`,color:C.inkMuted,borderRadius:10,padding:"10px 12px",fontSize:12.5,fontWeight:700,cursor:"pointer"}}>Cancelar</button>
+                          <button onClick={()=>setMasiva(null)} style={{flex:1,background:"none",border:`1px solid ${C.border}`,color:C.inkMuted,borderRadius:12,padding:"10px 12px",fontSize:13,fontWeight:700,cursor:"pointer"}}>Cancelar</button>
                         </div>
                       </div>
                     ):(
                       <button onClick={()=>setMasiva({vendedorId:"",ventaPropia:false})}
-                        style={{width:"100%",background:C.ok,border:"none",color:"#fff",borderRadius:10,padding:"10px 12px",
-                          fontSize:12.5,fontWeight:700,cursor:"pointer",marginBottom:6,boxShadow:`0 2px 8px ${C.ok}40`}}>
+                        style={{width:"100%",background:C.ok,border:"none",color:"#fff",borderRadius:12,padding:"10px 12px",
+                          fontSize:13,fontWeight:700,cursor:"pointer",marginBottom:6,boxShadow:`0 2px 8px ${C.ok}40`}}>
                         Cargar las {nAceptadas} de una vez
                       </button>
                     )}

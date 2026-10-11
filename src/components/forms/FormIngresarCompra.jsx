@@ -146,7 +146,7 @@ export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, ent
             )}
           </Field>
           {ocExistente?(
-            <div style={{background:C.paper,borderRadius:10,padding:"12px 14px",marginTop:4,fontSize:12.5,lineHeight:1.8}}>
+            <div style={{background:C.paper,borderRadius:12,padding:"12px 14px",marginTop:4,fontSize:13,lineHeight:1.8}}>
               <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:4}}>Datos de la OC (no se modifican)</div>
               <b>Cliente:</b> {ocExistente.cliente||"—"}{ocExistente.entidad?` · ${ocExistente.entidad}`:""}<br/>
               <b>Vendedor:</b> {vendedores.find(v=>v.id===ocExistente.vendedor_id)?.nombre||"Sin vendedor asignado"}<br/>
@@ -162,10 +162,10 @@ export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, ent
             {vendedorId===SIN_VENDEDOR&&<div style={{fontSize:12,color:C.warnText,fontWeight:600,marginTop:5}}>Sin vendedor: esta OC no entrará en ninguna comisión.</div>}
           </Field>
           {vendedorReal&&(
-            <label style={{display:"flex",alignItems:"flex-start",gap:9,marginBottom:14,cursor:"pointer",background:C.paper,borderRadius:10,padding:"10px 12px"}}>
+            <label style={{display:"flex",alignItems:"flex-start",gap:9,marginBottom:14,cursor:"pointer",background:C.paper,borderRadius:12,padding:"10px 12px"}}>
               <input type="checkbox" checked={ventaPropia} onChange={e=>setVentaPropia(e.target.checked)} style={{marginTop:2,width:16,height:16,flexShrink:0}} />
               <span>
-                <span style={{display:"block",fontSize:12.5,fontWeight:700,color:C.ink}}>Es venta propia del vendedor</span>
+                <span style={{display:"block",fontSize:13,fontWeight:700,color:C.ink}}>Es venta propia del vendedor</span>
                 <span style={{display:"block",fontSize:12,color:C.inkFaint,marginTop:1}}>Se lleva el 100% de la utilidad (menos el IVA de su propia factura), en vez del 50% general. Como en la compra rápida, la compra de una venta propia no suma deuda al financiador.</span>
               </span>
             </label>
@@ -200,7 +200,7 @@ export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, ent
         <div>
           <div style={{fontSize:12,color:C.inkMuted,marginBottom:12}}>Agrega cada producto con su cantidad, precios y link de compra. <b>Los precios van con IVA incluido</b> (igual que el total de Mercado Público).</div>
           {productos.map((p,i)=>(
-            <div key={i} style={{background:C.paper,borderRadius:10,padding:"12px 12px 8px",marginBottom:10,border:`1px solid ${C.border}`}}>
+            <div key={i} style={{background:C.paper,borderRadius:12,padding:"12px 12px 8px",marginBottom:10,border:`1px solid ${C.border}`}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
                 <div style={{fontSize:12,fontWeight:700,color:C.tealDark}}>Producto {i+1}</div>
                 {productos.length>1&&<button onClick={()=>delProducto(i)} style={{background:"none",border:"none",color:C.dangerText,fontSize:13,cursor:"pointer",padding:"0 4px"}}>✕ Eliminar</button>}
@@ -232,7 +232,7 @@ export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, ent
           ))}
           <button onClick={addProducto} style={{...btnP(C.inkFaint),fontSize:12,marginBottom:14}}>+ Agregar otro producto</button>
           {ventaTotal>0&&(
-            <div style={{background:C.tealLight,borderRadius:9,padding:"10px 14px",fontSize:12.5}}>
+            <div style={{background:C.tealLight,borderRadius:8,padding:"10px 14px",fontSize:13}}>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4}}>
                 <div><div style={{color:C.inkMuted,fontSize:12}}>Costo total con IVA</div><div style={{fontWeight:700,color:C.ink}}>${costoTotal.toLocaleString("es-CL")}</div></div>
                 <div><div style={{color:C.inkMuted,fontSize:12}}>{ocExistente?"Venta de la OC con IVA":"Venta total con IVA"}</div><div style={{fontWeight:700,color:C.ink}}>${ventaOC.toLocaleString("es-CL")}</div></div>
@@ -265,9 +265,9 @@ export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, ent
             <input style={iStyle} value={obs} onChange={e=>setObs(e.target.value)} placeholder="ej: MercadoLibre, nota de despacho, etc." />
           </Field>
           {/* Resumen de montos */}
-          <div style={{background:C.paper,borderRadius:9,padding:"12px 14px",marginTop:8}}>
+          <div style={{background:C.paper,borderRadius:8,padding:"12px 14px",marginTop:8}}>
             <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,marginBottom:8,textTransform:"uppercase"}}>Resumen financiero</div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4,fontSize:12.5}}>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4,fontSize:13}}>
               <div><div style={{color:C.inkMuted,fontSize:12}}>Costo con IVA</div><div style={{fontWeight:700}}>${costoTotal.toLocaleString("es-CL")}</div></div>
               <div><div style={{color:C.inkMuted,fontSize:12}}>Venta con IVA</div><div style={{fontWeight:700}}>${ventaOC.toLocaleString("es-CL")}</div></div>
               <div><div style={{color:C.inkMuted,fontSize:12}}>Utilidad con IVA ({margen}%)</div><div style={{fontWeight:700,color:utilidad>=0?C.ok:C.danger}}>${utilidad.toLocaleString("es-CL")}</div></div>
@@ -280,9 +280,9 @@ export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, ent
       {/* ─── PASO 4: Resumen ─── */}
       {paso===4&&(
         <div>
-          <div style={{background:C.paper,borderRadius:10,padding:"12px 14px",marginBottom:12}}>
+          <div style={{background:C.paper,borderRadius:12,padding:"12px 14px",marginBottom:12}}>
             <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:8}}>Datos de la OC</div>
-            <div style={{fontSize:12.5,lineHeight:1.8}}>
+            <div style={{fontSize:13,lineHeight:1.8}}>
               <b>OC:</b> {numOC}<br/>
               {!ocExistente&&<><b>Fecha de la OC:</b> {fechaOC?fmt.date(fechaOC):"—"}<br/></>}
               <b>Vendedor:</b> {ocExistente?(vendedores.find(v=>v.id===ocExistente.vendedor_id)?.nombre||"Sin vendedor asignado"):nombreVendedor}{!ocExistente&&vendedorReal&&ventaPropia?" · venta propia":""}<br/>
@@ -292,17 +292,17 @@ export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, ent
               {correo&&<><b>Correo:</b> {correo}<br/></>}
             </div>
           </div>
-          <div style={{background:C.paper,borderRadius:10,padding:"12px 14px",marginBottom:12}}>
+          <div style={{background:C.paper,borderRadius:12,padding:"12px 14px",marginBottom:12}}>
             <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:8}}>{productos.length} Producto{productos.length!==1?"s":""}</div>
             {productos.map((p,i)=>(
               <div key={i} style={{borderLeft:`2px solid ${C.teal}`,paddingLeft:10,marginBottom:8}}>
-                <div style={{fontSize:12.5,fontWeight:600}}>{p.desc} × {p.cantidad}</div>
+                <div style={{fontSize:13,fontWeight:600}}>{p.desc} × {p.cantidad}</div>
                 <div style={{fontSize:12,color:C.inkMuted}}>Compra: ${(Number(p.precioCompra)*Number(p.cantidad)).toLocaleString("es-CL")} · Venta: ${(Number(p.precioVenta)*Number(p.cantidad)).toLocaleString("es-CL")}</div>
                 {p.link&&<div style={{fontSize:12,color:C.tealDark,wordBreak:"break-all"}}>{p.link.slice(0,60)}{p.link.length>60?"…":""}</div>}
               </div>
             ))}
           </div>
-          <div style={{background:C.tealLight,borderRadius:10,padding:"12px 14px",marginBottom:12}}>
+          <div style={{background:C.tealLight,borderRadius:12,padding:"12px 14px",marginBottom:12}}>
             <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:8}}>Resumen financiero</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4,fontSize:13}}>
               <div><div style={{color:C.inkMuted,fontSize:12}}>Costo con IVA</div><div style={{fontWeight:800}}>${costoTotal.toLocaleString("es-CL")}</div></div>
@@ -319,7 +319,7 @@ export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, ent
       )}
 
       {/* Error */}
-      {err&&<div style={{background:C.dangerLight,color:C.dangerText,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}
+      {err&&<div style={{background:C.dangerLight,color:C.dangerText,borderRadius:8,padding:"8px 12px",fontSize:13,marginBottom:10,fontWeight:600}}>{err}</div>}
 
       {/* Navegación entre pasos */}
       <div style={{display:"flex",gap:8,marginTop:8}}>

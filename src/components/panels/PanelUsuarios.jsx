@@ -53,7 +53,7 @@ export function PanelUsuarios({ perfiles, ocs, ocsArchivadas, onRestaurarOC, onC
               <div style={{minWidth:0}}>
                 <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
                   <span style={{width:8,height:8,borderRadius:"50%",background:activo?C.ok:C.inkFaint,display:"inline-block",flexShrink:0}} />
-                  <span style={{fontWeight:700,fontSize:15,color:C.ink}}>{p.nombre}</span>
+                  <span style={{fontWeight:700,fontSize:16,color:C.ink}}>{p.nombre}</span>
                   <Badge tono={p.rol==="admin"?"info":"neutro"}>{p.rol==="admin"?"Administrador":"Usuario"}</Badge>
                 </div>
                 <div style={{fontSize:12,color:C.inkMuted,marginTop:4}}>{ultima?`Última actividad: ${fmt.datetime(ultima)}`:"Sin actividad registrada"}</div>

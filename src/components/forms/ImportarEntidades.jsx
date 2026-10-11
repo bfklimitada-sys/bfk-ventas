@@ -66,8 +66,8 @@ export function ImportarEntidades({ session, onTerminado, onCancelar }) {
   const nuevas = comparadas.filter(c => c.estado === "nueva"), actualizaciones = comparadas.filter(c => c.estado === "actualizacion"), ambiguas = comparadas.filter(c => c.estado === "ambigua");
 
   return (
-    <div style={{ background:C.tealLight, borderRadius:10, padding:"12px 14px" }} data-importador-entidades>
-      <div style={{ fontSize:12.5, fontWeight:700, color:C.tealDark, marginBottom:8 }}>Importar entidades</div>
+    <div style={{ background:C.tealLight, borderRadius:12, padding:"12px 14px" }} data-importador-entidades>
+      <div style={{ fontSize:13, fontWeight:700, color:C.tealDark, marginBottom:8 }}>Importar entidades</div>
       <div style={{ fontSize:12, color:C.inkMuted, marginBottom:10 }}>
         Formatos: {TEXTO_FORMATOS}. Primera fila = encabezados: <b>rut</b> y <b>nombre</b> (o <b>entidad</b> / razón social) obligatorios; <b>comuna</b>, <b>contacto</b> y <b>correo</b> opcionales.
         Las celdas vacías no borran datos existentes. Máximo {LIMITE_OPERACIONES} cambios por importación.
@@ -77,7 +77,7 @@ export function ImportarEntidades({ session, onTerminado, onCancelar }) {
 
       {(estado === "vista" || estado === "enviando" || estado === "listo") && (
         <>
-          {info && <div style={{ fontSize:11.5, color:C.inkMuted, marginBottom:6 }}>Archivo {info.formato.toUpperCase()} · {info.detalle}{info.filasVacias ? ` · ${info.filasVacias} filas vacías ignoradas` : ""}{info.ignoradas?.length ? ` · columnas ignoradas: ${info.ignoradas.join(", ")}` : ""}</div>}
+          {info && <div style={{ fontSize:12, color:C.inkMuted, marginBottom:6 }}>Archivo {info.formato.toUpperCase()} · {info.detalle}{info.filasVacias ? ` · ${info.filasVacias} filas vacías ignoradas` : ""}{info.ignoradas?.length ? ` · columnas ignoradas: ${info.ignoradas.join(", ")}` : ""}</div>}
           <div style={{ ...caja, fontWeight:700, color:C.ink }} data-resumen>
             {r.nuevas} nuevas | {r.actualizaciones} actualizaciones | {r.sinCambios} sin cambios | {r.ambiguas} ambiguas | {errores.length} errores{r.omitidas ? ` · ${r.omitidas} omitidas` : ""}
           </div>

@@ -121,8 +121,8 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
   if (paso === 1) {
     return (
       <div style={{ fontFamily: SANS }}>
-        <div style={{ background: C.tealLight, borderRadius: 10, padding: "12px 14px", marginBottom: 16 }}>
-          <div style={{ fontSize: 12.5, color: C.tealDark, fontWeight: 700, marginBottom: 4 }}>Solo necesitas el código</div>
+        <div style={{ background: C.tealLight, borderRadius: 12, padding: "12px 14px", marginBottom: 16 }}>
+          <div style={{ fontSize: 13, color: C.tealDark, fontWeight: 700, marginBottom: 4 }}>Solo necesitas el código</div>
           <div style={{ fontSize: 12, color: C.inkMuted, lineHeight: 1.5 }}>
             La app trae sola el cliente, los productos, cantidades y montos desde Mercado Público.
           </div>
@@ -144,11 +144,11 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
 
         {vendedorId&&(
           <label style={{display:"flex",alignItems:"flex-start",gap:9,marginBottom:14,cursor:"pointer",
-            background:C.paper,borderRadius:10,padding:"10px 12px"}}>
+            background:C.paper,borderRadius:12,padding:"10px 12px"}}>
             <input type="checkbox" checked={ventaPropia} onChange={e=>setVentaPropia(e.target.checked)}
               style={{marginTop:2,width:16,height:16,flexShrink:0}} />
             <span>
-              <span style={{display:"block",fontSize:12.5,fontWeight:700,color:C.ink}}>Es venta propia del vendedor</span>
+              <span style={{display:"block",fontSize:13,fontWeight:700,color:C.ink}}>Es venta propia del vendedor</span>
               <span style={{display:"block",fontSize:12,color:C.inkFaint,marginTop:1}}>Se lleva el 100% de la utilidad (menos el IVA de su propia factura), en vez del 50% general</span>
             </span>
           </label>
@@ -161,7 +161,7 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
             placeholder="ej: 3013-587-AG26" />
         </Field>
 
-        {err && <div style={{ background: C.dangerLight, color:C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 12.5, marginBottom: 10, fontWeight: 600 }}>{err}</div>}
+        {err && <div style={{ background: C.dangerLight, color:C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 10, fontWeight: 600 }}>{err}</div>}
 
         <button onClick={() => buscar()} disabled={cargando} style={btnP(cargando ? C.inkFaint : C.teal)}>
           {cargando ? "Consultando Mercado Público…" : "Buscar OC →"}
@@ -178,8 +178,8 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
   return (
     <div style={{ fontFamily: SANS }}>
       {pendiente ? (
-        <div data-estado-mp="no_disponible" style={{ background: C.warnLight, border: `1px solid ${C.warn}`, borderRadius: 10, padding: "12px 14px", marginBottom: 14 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 700, color:C.warnText, marginBottom: 4 }}><Ic n="⏳"/> Todavía no disponible en Mercado Público</div>
+        <div data-estado-mp="no_disponible" style={{ background: C.warnLight, border: `1px solid ${C.warn}`, borderRadius: 12, padding: "12px 14px", marginBottom: 14 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color:C.warnText, marginBottom: 4 }}><Ic n="⏳"/> Todavía no disponible en Mercado Público</div>
           <div style={{ fontSize: 12, color: C.inkMuted, lineHeight: 1.5 }}>
             Mercado Público respondió que no tiene esta OC: puede que aún no esté publicada o aceptada,
             o que el código tenga un error (revísalo). Si el código es correcto, guárdala igual con el link:
@@ -189,8 +189,8 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
       ) : (() => {
         const est = estadoMP(oc.codigo_estado);
         if (est.tipo === "cancelada") return (
-          <div data-estado-mp="cancelada" style={{ background: C.dangerLight, border: `1px solid ${C.danger}`, borderRadius: 10, padding: "12px 14px", marginBottom: 14 }}>
-            <div style={{ fontSize: 12.5, fontWeight: 800, color: C.dangerText, marginBottom: 4 }}><Ic n="⚠"/> Cancelada en Mercado Público</div>
+          <div data-estado-mp="cancelada" style={{ background: C.dangerLight, border: `1px solid ${C.danger}`, borderRadius: 12, padding: "12px 14px", marginBottom: 14 }}>
+            <div style={{ fontSize: 13, fontWeight: 800, color: C.dangerText, marginBottom: 4 }}><Ic n="⚠"/> Cancelada en Mercado Público</div>
             <div style={{ fontSize: 12, color: C.inkMuted, lineHeight: 1.5, marginBottom: 8 }}>
               El comprador canceló esta OC. Normalmente no se carga: no se debe comprar ni facturar.
             </div>
@@ -201,22 +201,22 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
           </div>
         );
         if (est.tipo === "sin_aceptar") return (
-          <div data-estado-mp="sin_aceptar" style={{ background: C.warnLight, border: `1px solid ${C.warn}`, borderRadius: 10, padding: "12px 14px", marginBottom: 14 }}>
-            <div style={{ fontSize: 12.5, fontWeight: 800, color: C.warnText, marginBottom: 4 }}><Ic n="⏳"/> {est.texto}</div>
+          <div data-estado-mp="sin_aceptar" style={{ background: C.warnLight, border: `1px solid ${C.warn}`, borderRadius: 12, padding: "12px 14px", marginBottom: 14 }}>
+            <div style={{ fontSize: 13, fontWeight: 800, color: C.warnText, marginBottom: 4 }}><Ic n="⏳"/> {est.texto}</div>
             <div style={{ fontSize: 12, color: C.inkMuted, lineHeight: 1.5 }}>
               Los datos ya vienen de Mercado Público, pero la OC sigue sin aceptar. Acéptala en el portal antes de comprar.
             </div>
           </div>
         );
         return (
-          <div data-estado-mp={est.tipo} style={{ background: C.okLight, borderRadius: 10, padding: "10px 14px", marginBottom: 14 }}>
-            <div style={{ fontSize: 12.5, fontWeight: 700, color:C.okText }}>✓ Datos traídos de Mercado Público · {est.texto}</div>
+          <div data-estado-mp={est.tipo} style={{ background: C.okLight, borderRadius: 12, padding: "10px 14px", marginBottom: 14 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color:C.okText }}>✓ Datos traídos de Mercado Público · {est.texto}</div>
           </div>
         );
       })()}
 
       {/* Resumen de lo que trajo la API */}
-      <div style={{ background: C.paper, borderRadius: 10, padding: "12px 14px", marginBottom: 14 }}>
+      <div style={{ background: C.paper, borderRadius: 12, padding: "12px 14px", marginBottom: 14 }}>
         <div style={{ fontFamily: MONO, fontWeight: 800, fontSize: 14, color: C.ink, marginBottom: 10 }}>{oc.numero_oc}</div>
         {!pendiente && (
           <>
@@ -239,8 +239,8 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
             {oc.productos.length} producto{oc.productos.length > 1 ? "s" : ""}
           </div>
           {oc.productos.map((p, i) => (
-            <div key={i} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 9, padding: "10px 12px", marginBottom: 6 }}>
-              <div style={{ fontSize: 12.5, fontWeight: 600, color: C.ink, lineHeight: 1.4 }}>{p.descripcion}</div>
+            <div key={i} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: "10px 12px", marginBottom: 6 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: C.ink, lineHeight: 1.4 }}>{p.descripcion}</div>
               <div style={{ fontSize: 12, color: C.inkMuted, marginTop: 4 }}>
                 {p.cantidad} × {fmt.money(p.precio_venta_unitario)} = <b>{fmt.money(p.total_linea)}</b>
               </div>
@@ -297,7 +297,7 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
           value={(vendedores||[]).find(v=>v.id===vendedorId)?.nombre || "Sin vendedor asignado"} />
       </Field>
 
-      {err && <div style={{ background: C.dangerLight, color:C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 12.5, marginBottom: 10, fontWeight: 600 }}>{err}</div>}
+      {err && <div style={{ background: C.dangerLight, color:C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 10, fontWeight: 600 }}>{err}</div>}
 
       <div style={{ display: "flex", gap: 8 }}>
         <button onClick={() => { setPaso(1); setErr(""); }} style={{ ...btnP(C.inkFaint), flex: 1 }}>← Atrás</button>

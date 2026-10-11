@@ -70,12 +70,12 @@ export function RestablecerContrasena({ retorno, onSalir }) {
 
   const volver=(aviso="")=>onSalir({ email, aviso, usuarioId:usuarioId.current, cambiada:fase==="listo" });
   const enlace={background:"none",border:"none",color:C.tealDark,fontSize:12,fontWeight:700,cursor:"pointer"};
-  const caja=(bg,color)=>({background:bg,color,borderRadius:9,padding:"9px 12px",fontSize:12.5,marginBottom:14,textAlign:"center",fontWeight:600});
+  const caja=(bg,color)=>({background:bg,color,borderRadius:8,padding:"9px 12px",fontSize:13,marginBottom:14,textAlign:"center",fontWeight:600});
   const enter=(fn)=>(e)=>{ if(e.key==="Enter") fn(); };
 
   return (
     <MarcoAuth>
-      <div style={{fontWeight:800,fontSize:15,color:C.ink,marginBottom:16,textAlign:"center"}}>
+      <div style={{fontWeight:800,fontSize:16,color:C.ink,marginBottom:16,textAlign:"center"}}>
         {fase==="listo"?"Contraseña actualizada":fase==="invalido"?"Enlace no válido":"Nueva contraseña"}
       </div>
       {err&&<div role="alert" style={caja(C.dangerLight,C.dangerText)}>{err}</div>}
@@ -84,14 +84,14 @@ export function RestablecerContrasena({ retorno, onSalir }) {
       {fase==="validando"&&<div style={{textAlign:"center",color:C.inkMuted,fontSize:13,padding:"10px 0"}}>Validando el enlace…</div>}
 
       {fase==="formulario"&&<>
-        <div style={{fontSize:12.5,color:C.inkMuted,marginBottom:14,textAlign:"center"}}>Cuenta: <b style={{color:C.ink}}>{email}</b></div>
+        <div style={{fontSize:13,color:C.inkMuted,marginBottom:14,textAlign:"center"}}>Cuenta: <b style={{color:C.ink}}>{email}</b></div>
         <Field label="Nueva contraseña" hint={`Mínimo ${CONTRASENA_MIN} caracteres, con letras y números.`}>
           <input style={iStyle} type={ver?"text":"password"} autoComplete="new-password" value={pass} onChange={e=>{setPass(e.target.value);setErr("");}} placeholder="Nueva contraseña" onKeyDown={enter(guardar)} />
         </Field>
         <Field label="Repetir contraseña">
           <input style={iStyle} type={ver?"text":"password"} autoComplete="new-password" value={pass2} onChange={e=>{setPass2(e.target.value);setErr("");}} placeholder="Repite la contraseña" onKeyDown={enter(guardar)} />
         </Field>
-        <label style={{display:"flex",alignItems:"center",gap:8,fontSize:12.5,color:C.inkMuted,marginBottom:14,cursor:"pointer"}}>
+        <label style={{display:"flex",alignItems:"center",gap:8,fontSize:13,color:C.inkMuted,marginBottom:14,cursor:"pointer"}}>
           <input type="checkbox" checked={ver} onChange={e=>setVer(e.target.checked)} /> Mostrar contraseñas
         </label>
         <button onClick={guardar} disabled={ocupado} style={btnP(ocupado?C.inkFaint:C.night)}>{ocupado?"Guardando…":"Guardar nueva contraseña"}</button>

@@ -9,9 +9,9 @@ import { cajaYFueraDelBanco, comisionesYApoyo, resultadoMes, resumenFinanciadore
 const MES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 const Linea = ({ k, v, signo, fuerte, tono, nota, dato }) => (
   <div data-informe={dato} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "4px 0", borderBottom: fuerte ? "none" : `1px solid ${C.border}`, fontWeight: fuerte ? 800 : 500 }}>
-    <span style={{ fontSize: 12.5, color: C.ink, minWidth: 0 }}>{signo && <span style={{ color: C.inkFaint, marginRight: 4 }}>{signo}</span>}{k}
-      {nota && <span style={{ display: "block", fontSize: 11.5, color: C.inkFaint, fontWeight: 400 }}>{nota}</span>}</span>
-    <span data-monto={dato} style={{ fontFamily: MONO, fontSize: 12.5, color: tono || C.ink, flexShrink: 0 }}>{fmt.money(v)}</span>
+    <span style={{ fontSize: 13, color: C.ink, minWidth: 0 }}>{signo && <span style={{ color: C.inkFaint, marginRight: 4 }}>{signo}</span>}{k}
+      {nota && <span style={{ display: "block", fontSize: 12, color: C.inkFaint, fontWeight: 400 }}>{nota}</span>}</span>
+    <span data-monto={dato} style={{ fontFamily: MONO, fontSize: 13, color: tono || C.ink, flexShrink: 0 }}>{fmt.money(v)}</span>
   </div>
 );
 
@@ -36,7 +36,7 @@ export function InformeFinanciero({ ocs, financiadores, gastos, pagosVendedor, i
         <div data-informe-resultado style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
           <span style={{ fontWeight: 800, fontSize: 13 }}>Resultado del mes</span>
           <select data-periodo-resultado value={`${periodo.anio}-${periodo.mes}`} onChange={(e) => { const [a, m] = e.target.value.split("-").map(Number); setPeriodo({ anio: a, mes: m }); }}
-            style={{ fontSize: 12, padding: "4px 6px", borderRadius: 7, border: `1px solid ${C.border}` }}>
+            style={{ fontSize: 12, padding: "4px 6px", borderRadius: 8, border: `1px solid ${C.border}` }}>
             {Array.from({ length: 12 }, (_, k) => { const d = new Date(anioA, mesA - 1 - k, 1); return { a: d.getFullYear(), m: d.getMonth() + 1 }; })
               .map(({ a, m }) => <option key={`${a}-${m}`} value={`${a}-${m}`}>{MES[m - 1]}-{a}</option>)}
           </select>
@@ -46,7 +46,7 @@ export function InformeFinanciero({ ocs, financiadores, gastos, pagosVendedor, i
         <Linea dato="apoyo" signo="−" k="Apoyo en gestión" v={res.apoyoGestion} nota="Gasto de apoyo + extra incluido en pagos a vendedores (cada monto una vez)" />
         <Linea dato="gastos_operacionales" signo="−" k="Gastos operacionales" v={res.gastosOperacionales} nota="Sin impuestos (IVA/PPM), retenciones, devoluciones a financiadores ni capital" />
         <Linea dato="resultado" fuerte k="= Resultado después de comisiones y gastos" v={res.resultado} tono={res.resultado >= 0 ? C.okText : C.dangerText} />
-        {res.impuestosInformativos > 0 && <div style={{ fontSize: 11.5, color: C.inkFaint }}>Impuestos y retenciones del mes (no son gasto operacional): {fmt.money(res.impuestosInformativos)}</div>}
+        {res.impuestosInformativos > 0 && <div style={{ fontSize: 12, color: C.inkFaint }}>Impuestos y retenciones del mes (no son gasto operacional): {fmt.money(res.impuestosInformativos)}</div>}
       </Tarjeta>
 
       {/* 2. F29: IVA + PPM */}
@@ -59,7 +59,7 @@ export function InformeFinanciero({ ocs, financiadores, gastos, pagosVendedor, i
             <span style={{ color: d.pend > 0 ? C.dangerText : C.okText, fontWeight: 700 }}>pendiente {fmt.money(d.pend)}</span>
             {d.faltaTotalF29 && <span style={{ display: "block", color: C.warnText }}>Falta registrar el total del F29 (PPM): el pendiente puede ser mayor.</span>}
           </div>); })}
-        <div style={{ fontSize: 11.5, color: C.inkFaint, marginTop: 4 }}>Total pendiente desde {MES[0]}-2026: {fmt.money(f29.total)}. Los períodos anteriores a agosto 2026 no incluyen PPM (regla vigente; sin cambios retroactivos).</div>
+        <div style={{ fontSize: 12, color: C.inkFaint, marginTop: 4 }}>Total pendiente desde {MES[0]}-2026: {fmt.money(f29.total)}. Los períodos anteriores a agosto 2026 no incluyen PPM (regla vigente; sin cambios retroactivos).</div>
       </Tarjeta>
 
       {/* 3. Caja bancaria vs. fuera del banco */}
@@ -72,7 +72,7 @@ export function InformeFinanciero({ ocs, financiadores, gastos, pagosVendedor, i
         <Linea dato="caja_vendedores" signo="−" k="Pagos a vendedores (comisión + apoyo en gestión)" v={-t("pago_vendedor")} />
         <Linea dato="caja_gastos" signo="−" k="Gastos (incluye impuestos pagados)" v={-t("gasto")} />
         <Linea dato="caja_total" fuerte k="= Caja registrada BFK" v={cajaInf.caja} />
-        <div style={{ fontWeight: 800, fontSize: 12.5, margin: "8px 0 4px" }}>Registrado fuera de BancoEstado (no suma a la caja)</div>
+        <div style={{ fontWeight: 800, fontSize: 13, margin: "8px 0 4px" }}>Registrado fuera de BancoEstado (no suma a la caja)</div>
         <Linea dato="fuera_cobros" k={`Cobros fuera del banco y retenciones (${fuera.cobrosFueraBanco.n})`} v={fuera.cobrosFueraBanco.total} />
         <Linea dato="fuera_valevista" k={`Vale vista / cheques por cobrar (${fuera.valeVistaPorCobrar.n})`} v={fuera.valeVistaPorCobrar.total} />
         <Linea dato="fuera_gastos" k={`Gastos sin cargo bancario (${fuera.gastosSinCargo.n})`} v={fuera.gastosSinCargo.total} />
@@ -89,7 +89,7 @@ export function InformeFinanciero({ ocs, financiadores, gastos, pagosVendedor, i
             {f.calculado !== f.saldo && <span style={{ display: "block", color: C.warnText }}>El cálculo por OC da {fmt.money(f.calculado)}: revisar en Financiamiento.</span>}
           </div>
         ))}
-        <div style={{ fontSize: 11.5, color: C.inkFaint, marginTop: 4 }}>Las devoluciones se reparten por FIFO (OC más antigua primero) y nunca se cuentan como gasto.</div>
+        <div style={{ fontSize: 12, color: C.inkFaint, marginTop: 4 }}>Las devoluciones se reparten por FIFO (OC más antigua primero) y nunca se cuentan como gasto.</div>
       </Tarjeta>
 
       {/* 5. Comisiones y apoyo en gestión */}
@@ -100,8 +100,8 @@ export function InformeFinanciero({ ocs, financiadores, gastos, pagosVendedor, i
             {r.vendedor.split(" ")[0]} · ventas de {MES[r.mes - 1]}-{r.anio}: comisión {fmt.money(r.comision)}{r.apoyoEnPago ? ` + apoyo en gestión ${fmt.money(r.apoyoEnPago)}` : ""} = transferido {fmt.money(r.transferido)}
           </div>
         ))}
-        {com.apoyoGastos.length > 0 && <div style={{ fontSize: 11.5, color: C.inkFaint, marginTop: 4 }}>Apoyo en gestión registrado como gasto: {com.apoyoGastos.map((g) => `${MES[g.mes - 1]}-${g.anio} ${fmt.money(g.monto)}`).join(" · ")}.</div>}
-        <div style={{ fontSize: 11.5, color: C.inkFaint, marginTop: 2 }}>Cada transferencia sale del banco una sola vez; el desglose es solo informativo.</div>
+        {com.apoyoGastos.length > 0 && <div style={{ fontSize: 12, color: C.inkFaint, marginTop: 4 }}>Apoyo en gestión registrado como gasto: {com.apoyoGastos.map((g) => `${MES[g.mes - 1]}-${g.anio} ${fmt.money(g.monto)}`).join(" · ")}.</div>}
+        <div style={{ fontSize: 12, color: C.inkFaint, marginTop: 2 }}>Cada transferencia sale del banco una sola vez; el desglose es solo informativo.</div>
       </Tarjeta>
     </Seccion>
   );

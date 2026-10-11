@@ -61,7 +61,7 @@ const TONO = {
 };
 const TIPO_REG = { cobro: "Cobro", pago_financiador: "Pago a financiador", pago_vendedor: "Pago a vendedor", gasto: "Gasto", retiro_capital: "Retiro de capital", aporte_capital: "Aporte de capital" };
 const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
-const caja = (extra) => ({ width: "100%", padding: "7px 9px", borderRadius: 8, fontSize: 12.5, border: `1px solid ${C.border}`, background: C.card, color: C.ink, fontFamily: SANS, ...extra });
+const caja = (extra) => ({ width: "100%", padding: "7px 9px", borderRadius: 8, fontSize: 13, border: `1px solid ${C.border}`, background: C.card, color: C.ink, fontFamily: SANS, ...extra });
 
 export function ImportarCartola({ ocs, financiadores, vendedores, categorias, gastos = [], pagosVendedor = [], pagoFinSueltos = [], aportes = [],
   onRegistrar, onRegistrarEgresos, onRegistrarRetiro, onLeerDatosFrescos, onRecargar, cierre = CIERRE_CONCILIACION }) {
@@ -176,8 +176,8 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, ga
   if (!cartolas.length) {
     return (
       <div style={{ fontFamily: SANS }}>
-        <div style={{ background: C.tealLight, borderRadius: 10, padding: "12px 14px", marginBottom: 16 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 700, color: C.tealDark, marginBottom: 5 }}>Cómo obtener la cartola</div>
+        <div style={{ background: C.tealLight, borderRadius: 12, padding: "12px 14px", marginBottom: 16 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.tealDark, marginBottom: 5 }}>Cómo obtener la cartola</div>
           <div style={{ fontSize: 12, color: C.inkMuted, lineHeight: 1.55 }}>
             En BancoEstado Empresas descarga la Cartola en Línea o las Históricas de Chequera Electrónica. Se leen ambos formatos;
             puedes subir varias a la vez (un archivo repetido no duplica nada).
@@ -188,7 +188,7 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, ga
           <input data-cartola-archivos type="file" accept=".xlsx,.xls" multiple disabled={leyendo}
             onChange={e => procesar(Array.from(e.target.files || []))} style={{ display: "none" }} />
         </label>
-        {err && <div style={{ background: C.dangerLight, color: C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 12.5, marginTop: 12, fontWeight: 600 }}>{err}</div>}
+        {err && <div style={{ background: C.dangerLight, color: C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 13, marginTop: 12, fontWeight: 600 }}>{err}</div>}
         <div style={{ fontSize: 12, color: C.inkFaint, marginTop: 14, lineHeight: 1.5 }}>
           Primero es solo consulta: cada movimiento muestra si ya está registrado en BFK. Nada se registra sin tu confirmación,
           y lo anterior al {fmt.date(cierre)} no se puede registrar desde aquí.
@@ -200,7 +200,7 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, ga
   return (
     <div data-cartola-conciliacion style={{ fontFamily: SANS }}>
       {/* Archivos leídos y validaciones */}
-      <div style={{ background: C.paper, borderRadius: 10, padding: "10px 13px", marginBottom: 10 }}>
+      <div style={{ background: C.paper, borderRadius: 12, padding: "10px 13px", marginBottom: 10 }}>
         {cartolas.map((c, k) => (
           <div key={k} data-archivo={c.errores.length ? "rechazado" : "ok"} style={{ fontSize: 12, color: c.errores.length ? C.dangerText : C.inkMuted, marginBottom: 3 }}>
             {c.errores.length ? <><Ic n="⚠" /> {c.nombre}: rechazado — {c.errores.slice(0, 2).join(" · ")}</>
@@ -208,14 +208,14 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, ga
           </div>
         ))}
         {movs.length > 0 && (
-          <div data-cartola-resumen style={{ fontSize: 12.5, color: C.ink, fontWeight: 700, marginTop: 6 }}>
+          <div data-cartola-resumen style={{ fontSize: 13, color: C.ink, fontWeight: 700, marginTop: 6 }}>
             {movs.length} movimientos únicos · {fmt.date(movs[0].fecha)} a {fmt.date(movs[movs.length - 1].fecha)} · saldo al cierre <span style={{ fontFamily: MONO }}>{fmt.money(movs[movs.length - 1].saldo)}</span>
             {union.duplicadosQuitados > 0 && <span data-duplicados style={{ display: "block", fontWeight: 600, color: C.inkMuted }}>{union.duplicadosQuitados} línea(s) repetida(s) entre archivos no se cuentan dos veces{union.archivosRepetidos ? ` (${union.archivosRepetidos} archivo(s) repetido(s))` : ""}.</span>}
           </div>
         )}
       </div>
       {union.faltantes.length > 0 && (
-        <div data-cartolas-faltantes style={{ background: C.dangerLight, border: `1px solid ${C.danger}`, borderRadius: 9, padding: "9px 12px", marginBottom: 10, fontSize: 12, color: C.dangerText, fontWeight: 600, lineHeight: 1.45 }}>
+        <div data-cartolas-faltantes style={{ background: C.dangerLight, border: `1px solid ${C.danger}`, borderRadius: 8, padding: "9px 12px", marginBottom: 10, fontSize: 12, color: C.dangerText, fontWeight: 600, lineHeight: 1.45 }}>
           Falta(n) cartola(s): {union.faltantes.map((g) => `entre el ${fmt.date(g.despuesDe)} y el ${fmt.date(g.antesDe)} (el saldo pasa de ${fmt.money(g.saldoEsperado)} a ${fmt.money(g.saldoEncontrado)})`).join("; ")}. Los movimientos de ese tramo no se ven.
         </div>
       )}
@@ -224,49 +224,49 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, ga
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6, marginBottom: 8 }}>
         {Object.keys(ESTADOS).map((e) => (
           <button key={e} data-filtro={e} onClick={() => setFiltro(filtro === e ? "todos" : e)}
-            style={{ padding: "7px 4px", borderRadius: 9, cursor: "pointer", border: `1.5px solid ${filtro === e ? TONO[e].borde : C.border}`, background: filtro === e ? TONO[e].fondo : C.card, color: TONO[e].texto, fontSize: 11.5, fontWeight: 700, lineHeight: 1.3 }}>
+            style={{ padding: "7px 4px", borderRadius: 8, cursor: "pointer", border: `1.5px solid ${filtro === e ? TONO[e].borde : C.border}`, background: filtro === e ? TONO[e].fondo : C.card, color: TONO[e].texto, fontSize: 12, fontWeight: 700, lineHeight: 1.3 }}>
             {ESTADOS[e]}<br /><span data-cuenta={e} style={{ fontFamily: MONO, fontSize: 13 }}>{cuenta(e)}</span>
           </button>
         ))}
       </div>
       <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
         {[["ambos", `Todo · ${conc.movimientos.length}`], ["entra", `Entra · ${conc.movimientos.filter(x => x.dir === "entra").length}`], ["sale", `Sale · ${conc.movimientos.filter(x => x.dir === "sale").length}`]].map(([k, t]) => (
-          <button key={k} data-sentido={k} onClick={() => setSentido(k)} style={{ flex: 1, padding: "7px", borderRadius: 9, cursor: "pointer", fontSize: 12, fontWeight: 700, border: `1.5px solid ${sentido === k ? C.tealDark : C.border}`, background: sentido === k ? C.paper : C.card, color: sentido === k ? C.tealDark : C.inkMuted }}>{t}</button>
+          <button key={k} data-sentido={k} onClick={() => setSentido(k)} style={{ flex: 1, padding: "7px", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 700, border: `1.5px solid ${sentido === k ? C.tealDark : C.border}`, background: sentido === k ? C.paper : C.card, color: sentido === k ? C.tealDark : C.inkMuted }}>{t}</button>
         ))}
-        <button data-filtro="registrable" onClick={() => setFiltro(filtro === "registrable" ? "todos" : "registrable")} style={{ flex: 1, padding: "7px", borderRadius: 9, cursor: "pointer", fontSize: 12, fontWeight: 700, border: `1.5px solid ${filtro === "registrable" ? C.warn : C.border}`, background: filtro === "registrable" ? C.warnLight : C.card, color: C.warnText }}>Por registrar · {nRegistrables}</button>
+        <button data-filtro="registrable" onClick={() => setFiltro(filtro === "registrable" ? "todos" : "registrable")} style={{ flex: 1, padding: "7px", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 700, border: `1.5px solid ${filtro === "registrable" ? C.warn : C.border}`, background: filtro === "registrable" ? C.warnLight : C.card, color: C.warnText }}>Por registrar · {nRegistrables}</button>
       </div>
       <div style={{ fontSize: 12, color: C.inkFaint, marginBottom: 10, lineHeight: 1.5 }}>
         Consulta: nada viene marcado ni se registra solo. Lo anterior al {fmt.date(cierre)} ya está en los saldos y en el FIFO histórico y no se registra desde aquí.
         {conc.sinLinea.length > 0 && <span data-control-inverso style={{ display: "block", color: C.dangerText, fontWeight: 700 }}>Hay {conc.sinLinea.length} registro(s) BFK posterior(es) al cierre sin movimiento bancario: revisa si están duplicados ({conc.sinLinea.slice(0, 3).map((r) => `${TIPO_REG[r.tipo] || r.tipo} ${fmt.date(r.fecha)} ${fmt.money(r.monto)}`).join("; ")}).</span>}
       </div>
 
-      {err && <div data-error style={{ background: C.dangerLight, color: C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 12.5, margin: "0 0 10px", fontWeight: 600 }}>{err}</div>}
+      {err && <div data-error style={{ background: C.dangerLight, color: C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 13, margin: "0 0 10px", fontWeight: 600 }}>{err}</div>}
 
       {/* Movimientos */}
       {lista.length === 0 && <div style={{ textAlign: "center", padding: "20px 0", color: C.inkFaint, fontSize: 13 }}>Sin movimientos con este filtro</div>}
       {lista.map((x) => {
         const m = x.m, t = TONO[x.estado], esAbierto = abierto === m.clave;
         return (
-          <div key={m.clave + "|" + x.i} data-mov={m.clave} data-estado={x.estado} style={{ background: C.card, border: `1px solid ${esAbierto ? C.tealDark : C.border}`, borderLeft: `4px solid ${t.borde}`, borderRadius: 10, padding: "9px 12px", marginBottom: 6 }}>
+          <div key={m.clave + "|" + x.i} data-mov={m.clave} data-estado={x.estado} style={{ background: C.card, border: `1px solid ${esAbierto ? C.tealDark : C.border}`, borderLeft: `4px solid ${t.borde}`, borderRadius: 12, padding: "9px 12px", marginBottom: 6 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
               <span style={{ fontSize: 12, color: C.inkMuted, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {fmt.date(m.fecha)}{m.operacion ? ` · op. ${m.operacion}` : ""} · {m.descripcion}
               </span>
-              <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: 12.5, color: x.dir === "entra" ? C.okText : C.dangerText, flexShrink: 0 }}>
+              <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: 13, color: x.dir === "entra" ? C.okText : C.dangerText, flexShrink: 0 }}>
                 {x.dir === "entra" ? "+" : "−"}{fmt.money(x.monto)}
               </span>
             </div>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginTop: 3, fontSize: 11.5 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginTop: 3, fontSize: 12 }}>
               <span style={{ color: t.texto, fontWeight: 700 }}>{ESTADOS[x.estado]}{x.evidencia.length ? ` · ${x.evidencia.join(", ")}` : ""}</span>
               <span style={{ color: C.inkFaint, fontFamily: MONO, flexShrink: 0 }}>saldo {fmt.money(m.saldo)}</span>
             </div>
             {x.registros.length > 0 && (
-              <div style={{ fontSize: 11.5, color: C.inkMuted, marginTop: 3 }}>
+              <div style={{ fontSize: 12, color: C.inkMuted, marginTop: 3 }}>
                 {x.registros.slice(0, 4).map((r) => `${TIPO_REG[r.tipo] || r.tipo}${r.oc ? " " + r.oc : ""} ${fmt.date(r.fecha)} ${fmt.money(r.monto)}`).join(" · ")}{x.registros.length > 4 ? ` · y ${x.registros.length - 4} más` : ""}
               </div>
             )}
-            {x.estado !== "conciliado" && x.nota && <div style={{ fontSize: 11.5, color: C.inkFaint, marginTop: 2 }}>{x.nota}</div>}
-            {x.anteriorCierre && x.estado === "pendiente" && <div style={{ fontSize: 11.5, color: C.inkFaint, marginTop: 2 }}>Anterior al cierre: queda visible como pendiente; no se registra desde la cartola.</div>}
+            {x.estado !== "conciliado" && x.nota && <div style={{ fontSize: 12, color: C.inkFaint, marginTop: 2 }}>{x.nota}</div>}
+            {x.anteriorCierre && x.estado === "pendiente" && <div style={{ fontSize: 12, color: C.inkFaint, marginTop: 2 }}>Anterior al cierre: queda visible como pendiente; no se registra desde la cartola.</div>}
             {x.registrable && !esAbierto && (
               <button data-preparar={m.clave} onClick={() => abrir(x)} style={{ ...btnG, width: "100%", marginTop: 7, fontSize: 12, padding: "7px" }}>Preparar registro…</button>
             )}
@@ -286,7 +286,7 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, ga
 
       {/* Totales del banco: también requieren confirmación (escriben banco_mensual y el registro de la cartola) */}
       {movs.length > 0 && onRegistrar && (
-        <div style={{ background: C.paper, borderRadius: 10, padding: "10px 12px", marginTop: 12 }}>
+        <div style={{ background: C.paper, borderRadius: 12, padding: "10px 12px", marginTop: 12 }}>
           <label style={{ display: "flex", gap: 8, fontSize: 12, color: C.inkMuted, alignItems: "flex-start", cursor: "pointer" }}>
             <input data-confirmar-totales type="checkbox" checked={confirmaTotales} onChange={(e) => setConfirmaTotales(e.target.checked)} style={{ marginTop: 2 }} />
             <span>Confirmo guardar los totales mensuales del banco de este período (no registra cobros, pagos ni gastos).</span>
@@ -338,7 +338,7 @@ function PrepararRegistro({ x, ocs, financiadores, vendedores, categorias, borra
               {opciones.map((o) => <option key={o.id} value={o.id}>{({ exacto: "Factura", varias: "Varias facturas", parcial: "Abono parcial", vale_vista: "Vale vista" })[o.tipo]} · {o.etiqueta}</option>)}
             </select>
       ) : (<>
-        {sugerencia && <div style={{ fontSize: 11.5, color: C.inkFaint, marginBottom: 5 }}>Sugerencia (no se aplica sola): {sugerencia.nombre}</div>}
+        {sugerencia && <div style={{ fontSize: 12, color: C.inkFaint, marginBottom: 5 }}>Sugerencia (no se aplica sola): {sugerencia.nombre}</div>}
         <select data-tipo-egreso value={borrador.tipo} onChange={(e) => setBorrador({ tipo: e.target.value, destinoId: "", categoriaId: "", socio: "", mesCom: e.target.value === "vendedor" ? am.mes : "", anioCom: e.target.value === "vendedor" ? am.anio : "" })} style={caja()}>
           <option value="">— Elige qué es este egreso —</option>
           <option value="financiador">Devolución a financiador</option>
@@ -373,7 +373,7 @@ function PrepararRegistro({ x, ocs, financiadores, vendedores, categorias, borra
         <datalist id="socios-cartola">{(financiadores || []).filter((f) => f.tipo !== "propio").map((f) => <option key={f.id} value={f.nombre} />)}</datalist>
       </>)}
       {resumen && (
-        <div data-confirmacion style={{ background: C.warnLight, border: `1px solid ${C.warn}`, borderRadius: 9, padding: "9px 11px", marginTop: 8, fontSize: 12, color: C.ink, lineHeight: 1.45 }}>
+        <div data-confirmacion style={{ background: C.warnLight, border: `1px solid ${C.warn}`, borderRadius: 8, padding: "9px 11px", marginTop: 8, fontSize: 12, color: C.ink, lineHeight: 1.45 }}>
           <div style={{ fontWeight: 700, marginBottom: 4 }}>Se registrará en BFK:</div>
           <div>{resumen}</div>
           <div style={{ color: C.inkMuted, marginTop: 3 }}>Fecha {fmt.date(m.fecha)}{m.operacion ? ` · operación ${m.operacion}` : ""} · movimiento bancario (no fuera del banco).</div>
@@ -386,7 +386,7 @@ function PrepararRegistro({ x, ocs, financiadores, vendedores, categorias, borra
       <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
         <button onClick={onCancelar} disabled={guardando} style={{ ...btnG, flex: 1, fontSize: 12, padding: "8px" }}>Cancelar</button>
         <button data-registrar disabled={guardando || !!problema || !confirmo} onClick={onRegistrar}
-          style={{ ...btnP(guardando || problema || !confirmo ? C.inkFaint : C.ok), flex: 2, fontSize: 12.5, padding: "8px" }}>
+          style={{ ...btnP(guardando || problema || !confirmo ? C.inkFaint : C.ok), flex: 2, fontSize: 13, padding: "8px" }}>
           {guardando ? "Registrando…" : "Registrar este movimiento"}
         </button>
       </div>
@@ -412,7 +412,7 @@ function registrosPorId(d, ids) {
 // La base encontró un registro MANUAL que podría ser este mismo movimiento. Nada viene elegido: el usuario decide.
 function DuplicadoManual({ dup, guardando, onVincular, onDistinto }) {
   return (
-    <div data-duplicado-manual style={{ marginTop: 8, padding: "10px 12px", borderRadius: 10, background: C.warnLight, border: `1px solid ${C.warn}`, fontSize: 12.5 }}>
+    <div data-duplicado-manual style={{ marginTop: 8, padding: "10px 12px", borderRadius: 12, background: C.warnLight, border: `1px solid ${C.warn}`, fontSize: 13 }}>
       <div style={{ fontWeight: 700, color: C.warnText, marginBottom: 6 }}>Ya existe un registro manual que podría ser este mismo movimiento</div>
       {(dup.registros.length ? dup.registros : dup.ids.map((id) => ({ id, tipo: "Registro", detalle: "" }))).map((r) => (
         <div key={r.id} data-registro-manual={r.id} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "3px 0" }}>

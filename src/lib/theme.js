@@ -15,12 +15,14 @@ export const SANS = "'Inter',system-ui,-apple-system,sans-serif";
 // ─── Reglas visuales únicas (Fase 4) ─────────────────────────
 // Escala de espaciado, radios, tamaños de texto y zona táctil mínima.
 export const S = { xs:4, sm:8, md:12, lg:16, xl:24 };
-export const R = { sm:8, md:10, lg:14, xl:18, pill:999 };
-export const T = { min:12, small:12, body:14, title:15, h2:18, h1:22 };
+// Escala única (rediseño 2026-10): letra 12/13/14/16/20/28 · radios 8/12/16.
+export const R = { sm:8, md:12, lg:12, xl:16, pill:999 };
+export const T = { min:12, small:12, sm:13, body:14, title:16, h2:20, h1:28 };
 export const TOUCH = 44;
 
 export const sombra = {
   card:"0 1px 2px rgba(15,23,42,0.04), 0 1px 3px rgba(15,23,42,0.06)",
+  panel:"-12px 0 40px rgba(15,23,42,0.18)",
   flotante:"0 8px 24px rgba(0,0,0,0.25)",
 };
 
@@ -39,12 +41,12 @@ export const fmt = {
   diasDesde: (fechaStr) => { if(!fechaStr) return null; const hoy=new Date(); hoy.setHours(0,0,0,0); const f=new Date(fechaStr+"T00:00:00"); return Math.floor((hoy-f)/(1000*60*60*24)); },
 };
 
-export const iStyle = { width:"100%", padding:"10px 12px", minHeight:42, borderRadius:R.md, border:`1.5px solid ${C.border}`, fontSize:14, color:C.ink, background:C.card, boxSizing:"border-box", fontFamily:SANS };
+export const iStyle = { width:"100%", padding:"10px 12px", minHeight:42, borderRadius:R.sm, border:`1.5px solid ${C.border}`, fontSize:14, color:C.ink, background:C.card, boxSizing:"border-box", fontFamily:SANS };
 
 export const iMono = { ...iStyle, fontFamily:MONO };
 
 export const selStyle = { ...iStyle, cursor:"pointer" };
 
-export const btnP = (bg=C.teal) => ({ padding:"11px 16px", minHeight:TOUCH, borderRadius:R.md, border:"none", background:bg, color:"#fff", fontWeight:700, fontSize:14, cursor:"pointer", width:"100%" });
+export const btnP = (bg=C.teal) => ({ padding:"11px 16px", minHeight:TOUCH, borderRadius:R.sm, border:"none", background:bg, color:"#fff", fontWeight:700, fontSize:14, cursor:"pointer", width:"100%" });
 
-export const btnG = { padding:"11px 16px", minHeight:TOUCH, borderRadius:R.md, border:`1.5px solid ${C.border}`, background:C.card, color:C.ink, fontWeight:600, fontSize:14, cursor:"pointer" };
+export const btnG = { padding:"11px 16px", minHeight:TOUCH, borderRadius:R.sm, border:`1.5px solid ${C.border}`, background:C.card, color:C.ink, fontWeight:600, fontSize:14, cursor:"pointer" };

@@ -67,14 +67,14 @@ export function FormIvaMensual({ ivaMensual=[], gastos=[], periodo, onSave }) {
         </Field>
         <Field label="Fecha de pago"><input style={iStyle} type="date" value={v.fecha} disabled={v.pagos>1} onChange={e=>set("fecha",e.target.value)} /></Field>
       </div>
-      {sinTotal&&<div data-f29-sin-total style={{background:C.warnLight,border:`1px solid ${C.warn}55`,borderRadius:9,padding:"8px 12px",marginBottom:10,fontSize:12.5,color:C.warnText,fontWeight:700,lineHeight:1.45}}>Escribe el total del F29 (IVA + PPM y otras retenciones). Sin ese total, las comisiones de {MESES[mes-1]} {anio} quedan provisorias; no se presume que el total sea igual al IVA a pagar.</div>}
-      {totalIncoherente&&<div data-f29-total-menor style={{background:C.dangerLight,borderRadius:9,padding:"8px 12px",marginBottom:10,fontSize:12.5,color:C.dangerText,fontWeight:700,lineHeight:1.45}}>El total del F29 ({fmt.money(Number(pagado))}) es menor que el IVA a pagar ({fmt.money(aPagar)}): no se considerará un total completo.</div>}
-      <div data-desglose-f29 style={{background:C.tealLight,borderRadius:9,padding:"10px 12px",fontSize:13,color:C.tealDark,fontWeight:700,marginBottom:12,lineHeight:1.5}}>
+      {sinTotal&&<div data-f29-sin-total style={{background:C.warnLight,border:`1px solid ${C.warn}55`,borderRadius:8,padding:"8px 12px",marginBottom:10,fontSize:13,color:C.warnText,fontWeight:700,lineHeight:1.45}}>Escribe el total del F29 (IVA + PPM y otras retenciones). Sin ese total, las comisiones de {MESES[mes-1]} {anio} quedan provisorias; no se presume que el total sea igual al IVA a pagar.</div>}
+      {totalIncoherente&&<div data-f29-total-menor style={{background:C.dangerLight,borderRadius:8,padding:"8px 12px",marginBottom:10,fontSize:13,color:C.dangerText,fontWeight:700,lineHeight:1.45}}>El total del F29 ({fmt.money(Number(pagado))}) es menor que el IVA a pagar ({fmt.money(aPagar)}): no se considerará un total completo.</div>}
+      <div data-desglose-f29 style={{background:C.tealLight,borderRadius:8,padding:"10px 12px",fontSize:13,color:C.tealDark,fontWeight:700,marginBottom:12,lineHeight:1.5}}>
         <div>IVA neto (débito − crédito): {conSigno(ivaNeto)} · IVA a pagar: {fmt.money(aPagar)}</div>
         <div>Retenciones (PPM y otras): {fmt.money(retenciones)}</div>
         <div>Se descuenta en comisiones: {conSigno(ivaNeto+(conRet?retenciones:0))}{!conRet&&retenciones>0?" (antes de ago-2026 las retenciones no se descuentan)":""}</div>
       </div>
-      {err&&<div style={{background:C.dangerLight,color:C.dangerText,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}
+      {err&&<div style={{background:C.dangerLight,color:C.dangerText,borderRadius:8,padding:"8px 12px",fontSize:13,marginBottom:10,fontWeight:600}}>{err}</div>}
       <button onClick={handleSave} disabled={saving} style={btnP(saving?C.inkFaint:C.info)}>{saving?"Guardando…":"✓ Guardar IVA del mes"}</button>
     </div>
   );

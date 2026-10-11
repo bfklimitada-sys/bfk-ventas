@@ -32,7 +32,7 @@ export function TarjetaCorreo({ correo: c, oc, onMarcar, onAbrirOC, mostrarOC = 
       <div style={{ fontSize: 12, color: C.inkMuted, marginTop: 2, wordBreak: "break-all" }}>
         {c.remitente_nombre ? `${c.remitente_nombre} · ` : ""}{c.remitente_correo || "—"}
       </div>
-      {c.resumen && <div style={{ fontSize: 12.5, color: C.ink, marginTop: 5, lineHeight: 1.45, wordBreak: "break-word" }}>{c.resumen}</div>}
+      {c.resumen && <div style={{ fontSize: 13, color: C.ink, marginTop: 5, lineHeight: 1.45, wordBreak: "break-word" }}>{c.resumen}</div>}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
         {mostrarOC && (c.oc_id && !oc
           ? <span style={{ fontSize: 12, color: C.inkFaint }}>Asociado a una OC archivada</span>
@@ -91,7 +91,7 @@ export function CorreosPendientes({ correos, ocs, onMarcar, onAbrirOC }) {
         {chip("todos", "Todos")}{chip("oc", "Con OC")}{chip("general", "Generales")}
       </div>
       {lista.length === 0
-        ? <div style={{ fontSize: 12.5, color: C.inkFaint, padding: "10px 0" }}>{verGestionados ? "Ningún correo gestionado en los últimos 30 días." : "✓ Nada pendiente aquí."}</div>
+        ? <div style={{ fontSize: 13, color: C.inkFaint, padding: "10px 0" }}>{verGestionados ? "Ningún correo gestionado en los últimos 30 días." : "✓ Nada pendiente aquí."}</div>
         : lista.map((c) => <TarjetaCorreo key={c.id} correo={c} oc={porId.get(c.oc_id)} onMarcar={onMarcar} onAbrirOC={onAbrirOC} />)}
       <div style={{ fontSize: 12, color: C.inkFaint, lineHeight: 1.5 }}>
         Se revisa el buzón de BFK cada hora (solo lectura: BFK no marca, mueve, borra ni responde correos). El contador de Alertas suma solo los que requieren acción. Un correo se asocia a una OC solo con evidencia inequívoca; si no la hay, queda como general.

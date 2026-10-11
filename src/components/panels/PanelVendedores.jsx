@@ -44,7 +44,7 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, gastos=[], pagosV
 
   return (
     <div>
-      <button onClick={()=>{setPagoInicial(null);setPagando(true);}} style={{...btnP(C.tealDark),minHeight:50,fontSize:15,borderRadius:12,boxShadow:"0 4px 12px rgba(13,148,136,0.35)",marginBottom:20}}>+ Pago a vendedor</button>
+      <button onClick={()=>{setPagoInicial(null);setPagando(true);}} style={{...btnP(C.tealDark),minHeight:50,fontSize:16,borderRadius:12,boxShadow:"0 4px 12px rgba(13,148,136,0.35)",marginBottom:20}}>+ Pago a vendedor</button>
       <IndiceSecciones items={[{id:"ven-comisiones",label:"Comisiones"},{id:"ven-iva",label:"IVA mensual"}]} />
       <Seccion id="ven-comisiones" titulo="Comisiones por vendedor">
       {sinVendedor.length>0&&(
@@ -70,7 +70,7 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, gastos=[], pagosV
               style={{width:"100%",background:"none",border:"none",padding:"14px 16px",textAlign:"left",cursor:"pointer",minHeight:64,
                 display:"flex",alignItems:"center",gap:10}}>
               <div style={{flex:1,minWidth:0}}>
-                <div style={{fontWeight:800,fontSize:15,color:C.ink,lineHeight:1.25}}>{v.nombre}</div>
+                <div style={{fontWeight:800,fontSize:16,color:C.ink,lineHeight:1.25}}>{v.nombre}</div>
                 <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:6}}>
                   {deudaTotal>0
                     ? <Badge tono="warn">{mesesPend} mes{mesesPend!==1?"es":""} pendiente{mesesPend!==1?"s":""} de pago</Badge>
@@ -108,7 +108,7 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, gastos=[], pagosV
                 {datos.map(d=>(
                   <div key={d.label} style={{padding:"9px 0",borderBottom:`1px solid ${C.border}`}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:3}}>
-                      <span style={{fontSize:12.5,fontWeight:700,color:C.ink}}>{d.label}</span>
+                      <span style={{fontSize:13,fontWeight:700,color:C.ink}}>{d.label}</span>
                       <span style={{display:"flex",gap:4,flexWrap:"wrap",justifyContent:"flex-end"}}>
                         {/* Cierre financiero: sin IVA o sin total del F29 el cálculo no es definitivo (misma regla que el Panel) */}
                         {d.provisoria&&d.estadoComision!=="en_curso"&&<span data-comision-provisoria><Badge tono="warn">Provisoria · {motivoProvisoria(d)}</Badge></span>}
@@ -125,7 +125,7 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, gastos=[], pagosV
                             ? <div style={{color:C.inkFaint}}>Sin descuento de IVA (regla especial de ese mes)</div>
                             : d.ivaRegistrado
                               ? <div>IVA neto del período (débito {fmt.money(d.ivaVentas)} − crédito {fmt.money(d.ivaCompras)}): <b style={{color:d.impIva>0?C.dangerText:C.okText}}>{d.impIva>0?"−":d.impIva<0?"+":""}{fmt.money(Math.abs(d.impIva))}</b>{d.impIva<0&&<span style={{color:C.inkFaint}}> (crédito mayor que débito: suma)</span>}</div>
-                              : <div style={{color:C.warnText}}><Ic n="⚠"/> IVA de este mes sin registrar todavía — se está calculando sin IVA neto; cambiará cuando lo cargues{" "}<button onClick={()=>{setEditandoIvaExistente({anio:d.anio,mes:d.mes});setEditIva(true);}} style={{background:"none",border:"none",color:C.info,fontSize:12.5,fontWeight:700,cursor:"pointer",textDecoration:"underline",padding:0}}>Registrar IVA de {fmt.monthYear(d.mes,d.anio)}</button></div>
+                              : <div style={{color:C.warnText}}><Ic n="⚠"/> IVA de este mes sin registrar todavía — se está calculando sin IVA neto; cambiará cuando lo cargues{" "}<button onClick={()=>{setEditandoIvaExistente({anio:d.anio,mes:d.mes});setEditIva(true);}} style={{background:"none",border:"none",color:C.info,fontSize:13,fontWeight:700,cursor:"pointer",textDecoration:"underline",padding:0}}>Registrar IVA de {fmt.monthYear(d.mes,d.anio)}</button></div>
                           }
                           {!d.sinIva&&d.retenciones>0&&<div>Retenciones del F29 (PPM y otras): <b style={{color:C.dangerText}}>−{fmt.money(d.retenciones)}</b> <span style={{color:C.inkFaint}}>· total F29 descontado {fmt.money(d.descuentoF29)}</span></div>}
                           <div>Mitad de (utilidad − IVA neto{d.retenciones>0?" − retenciones":""}): <b style={{color:C.ink}}>{conSigno(Math.round((d.sumaUtilidad-(d.sinIva?0:d.descuentoF29))/2))}</b>{(d.sumaUtilidad-(d.sinIva?0:d.descuentoF29))<0&&<span style={{color:C.inkFaint}}> (negativo: cuenta como $0)</span>}</div>
@@ -137,7 +137,7 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, gastos=[], pagosV
                     {/* Fase 4C: las OCs que forman el cálculo del mes (cada una entra solo por su factura vigente) */}
                     {(()=>{ const k=`${v.id}|${d.anio}|${d.mes}`; const ab=detalleMes===k; return (<>
                       <button data-ver-ocs-comision={k} onClick={()=>setDetalleMes(ab?null:k)}
-                        style={{background:"none",border:"none",color:C.info,fontWeight:700,fontSize:12.5,cursor:"pointer",padding:"4px 0",minHeight:36}}>
+                        style={{background:"none",border:"none",color:C.info,fontWeight:700,fontSize:13,cursor:"pointer",padding:"4px 0",minHeight:36}}>
                         {ab?"▾":"▸"} {d.detalle.length} OC{d.detalle.length!==1?"s":""} en este cálculo
                       </button>
                       {ab&&(
@@ -192,9 +192,9 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, gastos=[], pagosV
                     )}
                     {d.deuda>0&&(d.estadoComision==="pendiente"
                       ?<button data-pagar-mes={`${v.id}|${d.anio}|${d.mes}`} onClick={()=>{setPagoInicial({vendedorId:v.id,mes:d.mes,anio:d.anio,monto:Math.round(d.deuda)});setPagando(true);}}
-                        style={{...btnG,minHeight:40,fontSize:12.5,marginTop:6,padding:"6px 12px"}}>Pagar este mes · {fmt.money(d.deuda)}</button>
+                        style={{...btnG,minHeight:40,fontSize:13,marginTop:6,padding:"6px 12px"}}>Pagar este mes · {fmt.money(d.deuda)}</button>
                       :<div>
-                        <button data-pagar-mes={`${v.id}|${d.anio}|${d.mes}`} disabled style={{...btnG,minHeight:40,fontSize:12.5,marginTop:6,padding:"6px 12px",cursor:"not-allowed",opacity:0.6}}>Pagar este mes · {d.estadoComision==="en_curso"?"en curso":"por liquidar"}</button>
+                        <button data-pagar-mes={`${v.id}|${d.anio}|${d.mes}`} disabled style={{...btnG,minHeight:40,fontSize:13,marginTop:6,padding:"6px 12px",cursor:"not-allowed",opacity:0.6}}>Pagar este mes · {d.estadoComision==="en_curso"?"en curso":"por liquidar"}</button>
                         <div style={{fontSize:12,color:C.inkMuted,marginTop:3,lineHeight:1.4}}>{motivoNoPagable(d)}</div>
                       </div>)}
                     {!d.esVerificado&&d.pagado>d.pagoCalculado+1000&&!d.pagos.some(p=>p.monto_transferido!=null)&&(
@@ -216,7 +216,7 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, gastos=[], pagosV
         <div data-aviso="iva-incompleto" style={{background:C.warnLight,border:`1px solid ${C.warn}55`,borderRadius:12,padding:"10px 12px",marginBottom:10}}>
           <div style={{fontSize:13,fontWeight:700,color:C.warnText,marginBottom:6}}>Pago al SII registrado sin débito/crédito: la comisión de estos meses se calcula sin IVA.</div>
           {ivaIncompletos.map(p=>(
-            <button key={`${p.anio}-${p.mes}`} onClick={()=>{setEditandoIvaExistente({anio:p.anio,mes:p.mes});setEditIva(true);}} style={{...btnG,minHeight:40,fontSize:12.5,marginRight:6,marginTop:4,padding:"6px 12px"}}>
+            <button key={`${p.anio}-${p.mes}`} onClick={()=>{setEditandoIvaExistente({anio:p.anio,mes:p.mes});setEditIva(true);}} style={{...btnG,minHeight:40,fontSize:13,marginRight:6,marginTop:4,padding:"6px 12px"}}>
               Completar {fmt.monthYear(p.mes,p.anio)} · pagado {fmt.money(p.pagado)}
             </button>
           ))}
@@ -228,10 +228,10 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, gastos=[], pagosV
           <button onClick={()=>{setEditandoIvaExistente(registroIvaDe(ivaMensual,anioActual,mesActual));setEditIva(true);}} style={btnG}>{registroIvaDe(ivaMensual,anioActual,mesActual)?"Editar":"Registrar"}</button>
         </div>
         {registroIvaDe(ivaMensual,anioActual,mesActual)?(()=>{ const r=registroIvaDe(ivaMensual,anioActual,mesActual); return (<>
-          <div style={{fontFamily:MONO,fontWeight:800,fontSize:22,color:C.info}}>{conSigno(ivaNetoPeriodo(r))}</div>
+          <div style={{fontFamily:MONO,fontWeight:800,fontSize:20,color:C.info}}>{conSigno(ivaNetoPeriodo(r))}</div>
           <div style={{fontSize:12,color:C.inkMuted,marginTop:2}}>IVA neto = débito {fmt.money(Number(r.iva_ventas)||0)} − crédito {fmt.money(Number(r.iva_compras)||0)} · se descuenta en comisiones · a pagar al SII: {fmt.money(ivaAPagarPeriodo(r))}</div>
         </>); })():
-          <div style={{fontSize:12.5,color:C.inkFaint}}>Sin registrar.</div>
+          <div style={{fontSize:13,color:C.inkFaint}}>Sin registrar.</div>
         }
         <div style={{display:"flex",gap:14,marginTop:10,paddingTop:10,borderTop:`1px solid ${C.border}`}}>
           <button onClick={()=>{setEditandoIvaExistente(null);setEditIva(true);}} style={{background:"none",border:"none",color:C.info,fontSize:12,fontWeight:700,cursor:"pointer",textDecoration:"underline",padding:0}}>+ Registrar IVA de otro mes</button>
@@ -322,7 +322,7 @@ export function FormPagoVendedorSimple({ vendedores, ocs, ivaMensual, pagosVende
         <Field label="Mes de la comisión" required><select style={selStyle} value={mes} disabled={revisar} onChange={e=>{setMes(Number(e.target.value));cambiarPeriodo(vendedorId,e.target.value,anio);}}>{MESES.map((m,i)=><option key={i} value={i+1}>{m}</option>)}</select></Field>
         <Field label="Año" required><input style={iMono} type="number" value={anio} disabled={revisar} onChange={e=>{setAnio(Number(e.target.value));cambiarPeriodo(vendedorId,mes,e.target.value);}} /></Field>
       </div>
-      <div style={{background:C.paper,borderRadius:9,padding:"10px 12px",marginBottom:12,fontSize:12.5,color:C.inkMuted,lineHeight:1.5}}>
+      <div style={{background:C.paper,borderRadius:8,padding:"10px 12px",marginBottom:12,fontSize:13,color:C.inkMuted,lineHeight:1.5}}>
         <Linea k={`Comisión calculada · ${labelMes}`} v={ev.comision} dato="comision" />
         <Linea k="Comisión ya pagada" v={ev.pagadoAntes} dato="pagada" />
         <Linea k="Saldo pendiente" v={ev.pendienteAntes} fuerte dato="pendiente" />
@@ -332,7 +332,7 @@ export function FormPagoVendedorSimple({ vendedores, ocs, ivaMensual, pagosVende
       <Field label="Monto total transferido ($)" required hint="Lo que salió realmente de la cuenta. Puede ser menor, igual o mayor que el saldo pendiente.">
         <input data-monto-transferido style={iMono} type="number" inputMode="numeric" min="0" value={monto} disabled={revisar} onChange={e=>setMonto(e.target.value)} />
       </Field>
-      <div data-desglose-pago style={{background:C.tealLight,borderRadius:9,padding:"10px 12px",marginBottom:12,fontSize:12.5,color:C.tealDark,lineHeight:1.5}}>
+      <div data-desglose-pago style={{background:C.tealLight,borderRadius:8,padding:"10px 12px",marginBottom:12,fontSize:13,color:C.tealDark,lineHeight:1.5}}>
         <Linea k="Pago de comisión" v={ev.pagoComision} fuerte tono={C.tealDark} dato="pago_comision" />
         <Linea k="Extra por gestión" v={ev.extraGestion} fuerte tono={C.tealDark} dato="extra_gestion" />
         <div style={{fontSize:12,marginTop:2}}>Saldo de comisión de {labelMes} después de este pago: <b data-desglose="pendiente_despues">{fmt.money(ev.pendiente)}</b>{ev.extraGestion>0?" · el extra es gestión de este mes: no aumenta la comisión ni pasa a otro mes":""}</div>
@@ -340,19 +340,19 @@ export function FormPagoVendedorSimple({ vendedores, ocs, ivaMensual, pagosVende
       <Field label="Fecha efectiva de la transferencia" required><input style={iStyle} type="date" value={fecha} disabled={revisar} onChange={e=>setFecha(e.target.value)} /></Field>
       <Field label="Referencia o comprobante bancario"><input style={iStyle} value={referencia} disabled={revisar} onChange={e=>setReferencia(e.target.value)} placeholder="Opcional" /></Field>
       <Field label="Observación"><input style={iStyle} value={observacion} disabled={revisar} onChange={e=>setObservacion(e.target.value)} placeholder="Opcional" /></Field>
-      {err&&<div style={{background:C.dangerLight,color:C.dangerText,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}
+      {err&&<div style={{background:C.dangerLight,color:C.dangerText,borderRadius:8,padding:"8px 12px",fontSize:13,marginBottom:10,fontWeight:600}}>{err}</div>}
       {!revisar?(
         <button data-revisar-pago onClick={pedirRevision} style={btnP(C.teal)}>Revisar pago</button>
       ):(
         <div data-vista-previa style={{border:`1.5px solid ${C.teal}`,borderRadius:12,padding:"12px 14px"}}>
           <div style={{fontSize:13,fontWeight:800,color:C.ink,marginBottom:6}}>Vista previa · una sola transferencia</div>
-          <div style={{fontSize:12.5,color:C.inkMuted,lineHeight:1.6,marginBottom:8}}>
+          <div style={{fontSize:13,color:C.inkMuted,lineHeight:1.6,marginBottom:8}}>
             {vend?.nombre} · {labelMes} · {fecha?`${fecha.slice(8,10)}-${fecha.slice(5,7)}-${fecha.slice(0,4)}`:""}{referencia.trim()?` · ref. ${referencia.trim()}`:""}<br/>
             Total transferido <b style={{color:C.ink}}>{fmt.money(ev.total)}</b> = comisión <b style={{color:C.ink}}>{fmt.money(ev.pagoComision)}</b> + extra por gestión <b style={{color:C.ink}}>{fmt.money(ev.extraGestion)}</b><br/>
             Comisión de {labelMes}: pendiente {fmt.money(ev.pendienteAntes)} → {fmt.money(ev.pendiente)}{ev.completo&&ev.ocIds.length?` · ${ev.ocIds.length} OC quedan con comisión pagada`:""}
           </div>
           {noDefinitiva&&(
-            <label data-confirmar-provisoria style={{display:"flex",gap:8,alignItems:"flex-start",background:C.warnLight,border:`1px solid ${C.warn}55`,borderRadius:9,padding:"8px 10px",fontSize:12,color:C.warnText,fontWeight:700,marginBottom:8,lineHeight:1.45,cursor:"pointer"}}>
+            <label data-confirmar-provisoria style={{display:"flex",gap:8,alignItems:"flex-start",background:C.warnLight,border:`1px solid ${C.warn}55`,borderRadius:8,padding:"8px 10px",fontSize:12,color:C.warnText,fontWeight:700,marginBottom:8,lineHeight:1.45,cursor:"pointer"}}>
               <input type="checkbox" checked={confirmaProvisoria} onChange={e=>setConfirmaProvisoria(e.target.checked)} style={{marginTop:1,width:18,height:18,flexShrink:0}} />
               <span>Pago sobre una comisión {ev.enCurso?"del MES EN CURSO":"PROVISORIA"} ({motivoNoDefinitiva}). Confirmo que esta transferencia ya se realizó. La comisión puede cambiar al registrar el IVA y el F29; si baja, la diferencia quedará como saldo por regularizar.</span>
             </label>
@@ -373,13 +373,13 @@ export function FormAnularPago({ pago, vendedor, onAnular }) {
   const [motivo,setMotivo]=useState(""); const [err,setErr]=useState(""); const [saving,setSaving]=useState(false);
   return (
     <div>
-      <div style={{background:C.paper,borderRadius:9,padding:"10px 12px",marginBottom:12,fontSize:12.5,color:C.inkMuted,lineHeight:1.6}}>
+      <div style={{background:C.paper,borderRadius:8,padding:"10px 12px",marginBottom:12,fontSize:13,color:C.inkMuted,lineHeight:1.6}}>
         {vendedor?.nombre} · {String(pago.mes).padStart(2,"0")}/{pago.anio} · {pago.fecha?fmt.date(String(pago.fecha).slice(0,10)):"—"}<br/>
         Transferido {fmt.money(totalTransferido(pago))}{pago.monto_transferido!=null?` (comisión ${fmt.money(Number(pago.monto_pagado)||0)} + gestión ${fmt.money(extraGestion(pago))})`:""}<br/>
         El pago queda guardado como anulado y deja de contar en la comisión y en la caja.
       </div>
       <Field label="Motivo de la anulación" required><input data-motivo-anulacion style={iStyle} value={motivo} onChange={e=>setMotivo(e.target.value)} /></Field>
-      {err&&<div style={{background:C.dangerLight,color:C.dangerText,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}
+      {err&&<div style={{background:C.dangerLight,color:C.dangerText,borderRadius:8,padding:"8px 12px",fontSize:13,marginBottom:10,fontWeight:600}}>{err}</div>}
       <button data-confirmar-anulacion disabled={saving} onClick={async()=>{ if(!motivo.trim()){setErr("Indica el motivo");return;} setSaving(true); try{await onAnular(motivo.trim());}catch(e){setErr(e.message);}finally{setSaving(false);} }} style={btnP(saving?C.inkFaint:C.danger)}>{saving?"Anulando…":"Anular pago"}</button>
     </div>
   );

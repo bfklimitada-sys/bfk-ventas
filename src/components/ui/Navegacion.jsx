@@ -30,7 +30,7 @@ export const contarAlertas = (notificaciones, urgentes) =>
   (notificaciones || []).filter((n) => !n.leida).length + Number(urgentes || 0);
 
 const Contador = ({ n, oscuro }) => (n > 0
-  ? <span aria-hidden="true" style={{ background: C.danger, color: "#fff", borderRadius: 10, fontSize: 12, fontWeight: 800, padding: "1px 6px", marginLeft: 4, lineHeight: "16px", boxShadow: oscuro ? "0 0 0 2px #0B1120" : "none" }}>{n > 9 ? "9+" : n}</span>
+  ? <span aria-hidden="true" style={{ background: C.danger, color: "#fff", borderRadius: 12, fontSize: 12, fontWeight: 800, padding: "1px 6px", marginLeft: 4, lineHeight: "16px", boxShadow: oscuro ? "0 0 0 2px #0B1120" : "none" }}>{n > 9 ? "9+" : n}</span>
   : null);
 
 const nombreAccesible = (p, nAlertas) => (p.key === "notif" && nAlertas > 0 ? `${p.label}, ${nAlertas} pendiente${nAlertas > 1 ? "s" : ""}` : p.label);
@@ -47,7 +47,7 @@ export function BarraInferior({ visibles, tab, onIr, menuAbierto, onAlternarMenu
         return (
           <button key={p.key} data-nav={p.key} aria-current={activo ? "page" : undefined} aria-label={nombreAccesible(p, nAlertas)} onClick={() => onIr(p.key)}
             style={{ flex: 1, background: "none", border: "none", padding: "6px 1px", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
-            <span style={{ fontSize: 17, position: "relative", display: "flex", alignItems: "center", justifyContent: "center", width: 44, height: 28, borderRadius: 14, background: activo ? C.tealLight : "transparent", transition: "all 0.18s" }}>
+            <span style={{ fontSize: 16, position: "relative", display: "flex", alignItems: "center", justifyContent: "center", width: 44, height: 28, borderRadius: 12, background: activo ? C.tealLight : "transparent", transition: "all 0.18s" }}>
               <Ic n={p.icono} />
               {p.key === "notif" && <Contador n={nAlertas} />}
             </span>
@@ -58,7 +58,7 @@ export function BarraInferior({ visibles, tab, onIr, menuAbierto, onAlternarMenu
       {secundarias.length > 0 && (
         <button data-nav="mas" aria-haspopup="dialog" aria-expanded={menuAbierto} aria-label="Más pantallas y cuenta" onClick={onAlternarMenu}
           style={{ flex: 1, background: "none", border: "none", padding: "6px 1px", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
-          <span style={{ fontSize: 17, display: "flex", alignItems: "center", justifyContent: "center", width: 44, height: 28, borderRadius: 14, background: enMas || menuAbierto ? C.tealLight : "transparent", transition: "all 0.18s" }}><Ic n="☰" /></span>
+          <span style={{ fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center", width: 44, height: 28, borderRadius: 12, background: enMas || menuAbierto ? C.tealLight : "transparent", transition: "all 0.18s" }}><Ic n="☰" /></span>
           <span style={{ fontSize: 12, fontWeight: enMas || menuAbierto ? 800 : 600, color: enMas || menuAbierto ? C.tealDark : C.inkMuted }}>Más</span>
         </button>
       )}
@@ -92,7 +92,7 @@ export function MenuMas({ abierto, onCerrar, visibles, tab, onIr, perfil, onImpr
             <div style={titulo}>{g.label}</div>
             {g.items.map((p) => (
               <button key={p.key} data-nav={p.key} aria-current={tab === p.key ? "page" : undefined} onClick={() => onIr(p.key)} style={fila(tab === p.key)}>
-                <span style={{ width: 38, height: 38, borderRadius: 10, background: tab === p.key ? "#fff" : C.paper, color: tab === p.key ? C.tealDark : C.inkMuted, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}><Ic n={p.icono} /></span>
+                <span style={{ width: 38, height: 38, borderRadius: 12, background: tab === p.key ? "#fff" : C.paper, color: tab === p.key ? C.tealDark : C.inkMuted, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}><Ic n={p.icono} /></span>
                 <span style={{ minWidth: 0, flex: 1 }}>
                   <span style={{ display: "block", fontSize: 14, fontWeight: 700, color: tab === p.key ? C.tealDark : C.ink }}>{p.label}</span>
                   <span style={{ display: "block", fontSize: 12, color: C.inkMuted, lineHeight: 1.35 }}>{p.desc}</span>
@@ -109,12 +109,12 @@ export function MenuMas({ abierto, onCerrar, visibles, tab, onIr, perfil, onImpr
           </div>
           {esAdmin && onImprimir && (
             <button aria-label="Imprimir o guardar como PDF todas las pantallas" onClick={onImprimir} style={fila(false)}>
-              <span style={{ width: 38, height: 38, borderRadius: 10, background: C.paper, color: C.inkMuted, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}><Ic n="printer" /></span>
+              <span style={{ width: 38, height: 38, borderRadius: 12, background: C.paper, color: C.inkMuted, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}><Ic n="printer" /></span>
               <span style={{ fontSize: 14, fontWeight: 700, color: C.ink }}>Imprimir o guardar PDF de todas las pantallas</span>
             </button>
           )}
           <button data-nav="salir" onClick={onSalir} style={fila(false)}>
-            <span style={{ width: 38, height: 38, borderRadius: 10, background: C.paper, color: C.dangerText, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}><Ic n="salir" /></span>
+            <span style={{ width: 38, height: 38, borderRadius: 12, background: C.paper, color: C.dangerText, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}><Ic n="salir" /></span>
             <span style={{ fontSize: 14, fontWeight: 700, color: C.dangerText }}>Cerrar sesión</span>
           </button>
         </div>
@@ -127,17 +127,17 @@ export function MenuMas({ abierto, onCerrar, visibles, tab, onIr, perfil, onImpr
 export function BarraLateral({ visibles, tab, onIr, nAlertas, perfil, onNuevaOC, onImprimir, onSalir }) {
   const grupos = GRUPOS.map((g) => ({ ...g, items: visibles.filter((p) => p.grupo === g.key) })).filter((g) => g.items.length);
   const esAdmin = perfil?.rol === "admin";
-  const sec = { width: "100%", display: "flex", alignItems: "center", gap: 10, background: "transparent", border: "1px solid rgba(255,255,255,0.10)", borderRadius: 10, padding: "8px 10px", color: "#B8C4D9", fontSize: 13, fontWeight: 600, cursor: "pointer", textAlign: "left", minHeight: 40 };
+  const sec = { width: "100%", display: "flex", alignItems: "center", gap: 10, background: "transparent", border: "1px solid rgba(255,255,255,0.10)", borderRadius: 12, padding: "8px 10px", color: "#B8C4D9", fontSize: 13, fontWeight: 600, cursor: "pointer", textAlign: "left", minHeight: 40 };
   return (
     <aside data-noprint aria-label="Navegación" style={{ position: "sticky", top: 0, height: "100vh", width: ANCHO_LATERAL, flexShrink: 0, boxSizing: "border-box", display: "flex", flexDirection: "column", background: `linear-gradient(180deg,${C.night} 0%,#16213E 100%)`, color: "#fff", padding: "18px 14px 14px", overflowY: "auto", zIndex: 30 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 4px 16px" }}>
-        <div style={{ width: 38, height: 38, background: "rgba(20,184,166,0.15)", border: `1.5px solid ${C.teal}`, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: MONO, color: C.teal, fontWeight: 800, fontSize: 13, flexShrink: 0 }}>BFK</div>
+        <div style={{ width: 38, height: 38, background: "rgba(20,184,166,0.15)", border: `1.5px solid ${C.teal}`, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: MONO, color: C.teal, fontWeight: 800, fontSize: 13, flexShrink: 0 }}>BFK</div>
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontWeight: 800, fontSize: 15, letterSpacing: -0.3 }}>BFK Ltda</div>
+          <div style={{ fontWeight: 800, fontSize: 16, letterSpacing: -0.3 }}>BFK Ltda</div>
           <div style={{ fontSize: 12, color: "#8B9AB5" }}>Ventas Mercado Público</div>
         </div>
       </div>
-      <button onClick={onNuevaOC} style={{ width: "100%", background: C.teal, border: "none", color: "#fff", borderRadius: 10, padding: "11px 14px", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 3px 10px rgba(20,184,166,0.35)", marginBottom: 14 }}>+ Nueva OC</button>
+      <button onClick={onNuevaOC} style={{ width: "100%", background: C.teal, border: "none", color: "#fff", borderRadius: 12, padding: "11px 14px", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 3px 10px rgba(20,184,166,0.35)", marginBottom: 14 }}>+ Nueva OC</button>
       <nav aria-label="Pantallas" style={{ flex: 1 }}>
         {grupos.map((g) => (
           <div key={g.key} style={{ marginBottom: 14 }}>

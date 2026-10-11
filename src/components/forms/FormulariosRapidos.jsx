@@ -15,7 +15,7 @@ export function FormConfirmarEntrega({ ocs, onSave, ocPreseleccionada }) {
       {!ocPreseleccionada&&<Field label="Orden de Compra" required><BuscadorOC ocs={ocs} ocId={ocId} setOcId={setOcId} /></Field>}
       <Field label="Fecha de entrega" required><input style={iStyle} type="date" value={fecha} onChange={e=>setFecha(e.target.value)} /></Field>
       <Field label="Persona que recibe"><input style={iStyle} value={persona} onChange={e=>setPersona(e.target.value)} /></Field>
-      {err&&<div style={{background:C.dangerLight,color:C.dangerText,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}
+      {err&&<div style={{background:C.dangerLight,color:C.dangerText,borderRadius:8,padding:"8px 12px",fontSize:13,marginBottom:10,fontWeight:600}}>{err}</div>}
       <button onClick={handleSave} disabled={saving} style={btnP(saving?C.inkFaint:C.transit)}>{saving?"Guardando…":"✓ Confirmar entrega"}</button>
     </div>
   );
@@ -57,12 +57,12 @@ export function FormEmitirFactura({ ocs, onSave, ocPreseleccionada }) {
     <div>
       {!ocPreseleccionada&&<Field label="Orden de Compra" required><BuscadorOC ocs={ocs} ocId={ocId} setOcId={setOcId} /></Field>}
       {esReemision&&(
-        <div style={{background:C.warnLight,borderRadius:9,padding:"10px 12px",fontSize:12,color:C.warnText,fontWeight:600,marginBottom:14}}>
+        <div style={{background:C.warnLight,borderRadius:8,padding:"10px 12px",fontSize:12,color:C.warnText,fontWeight:600,marginBottom:14}}>
           Esta OC ya tiene la factura N°{facturaAnterior.numero_factura} ({fmt.date(facturaAnterior.fecha)}). Si la estás reemplazando, indica la nota de crédito que la anula — el pago al vendedor solo contará esta venta una vez.
         </div>
       )}
       {selected&&!entregada&&(
-        <div style={{background:C.warnLight,border:`1px solid ${C.warn}`,borderRadius:9,padding:"10px 12px",marginBottom:14}}>
+        <div style={{background:C.warnLight,border:`1px solid ${C.warn}`,borderRadius:8,padding:"10px 12px",marginBottom:14}}>
           <div style={{fontSize:12,fontWeight:700,color:C.warnText,marginBottom:6}}><Ic n="⚠"/> Sin entrega registrada</div>
           <div style={{fontSize:12,color:C.inkMuted,lineHeight:1.45,marginBottom:8}}>
             Lo normal es registrar la entrega antes de facturar. Si ya se entregó y solo faltó anotarlo,
@@ -78,7 +78,7 @@ export function FormEmitirFactura({ ocs, onSave, ocPreseleccionada }) {
       <Field label="N° factura" required><input style={iMono} value={numFact} onChange={e=>setNumFact(e.target.value)} placeholder="ej: 215" /></Field>
       <Field label="Monto ($)" required hint="Autocompletado con el monto de la OC — ajústalo si el SII cuadró distinto"><input style={iMono} type="number" value={monto} onChange={e=>setMonto(e.target.value)} /></Field>
       {hayDif&&(
-        <div style={{background:difGrande?C.warnLight:C.paper,border:`1px solid ${difGrande?C.warn:C.border}`,borderRadius:9,padding:"10px 12px",marginBottom:14}}>
+        <div style={{background:difGrande?C.warnLight:C.paper,border:`1px solid ${difGrande?C.warn:C.border}`,borderRadius:8,padding:"10px 12px",marginBottom:14}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:difGrande?8:0}}>
             <span style={{fontSize:12,color:C.inkMuted}}>Difiere de la OC ({fmt.money(montoOC)})</span>
             <span style={{fontSize:13,fontWeight:800,fontFamily:MONO,color:difGrande?C.warn:C.inkMuted}}>{dif>0?"+":""}{fmt.money(dif)}</span>
@@ -92,7 +92,7 @@ export function FormEmitirFactura({ ocs, onSave, ocPreseleccionada }) {
         </Field>
       )}
       {esReemision&&<Field label="N° Nota de crédito (anula factura anterior)" required><input style={iMono} value={notaCredito} onChange={e=>setNotaCredito(e.target.value)} placeholder="ej: 123" /></Field>}
-      {err&&<div style={{background:C.dangerLight,color:C.dangerText,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}
+      {err&&<div style={{background:C.dangerLight,color:C.dangerText,borderRadius:8,padding:"8px 12px",fontSize:13,marginBottom:10,fontWeight:600}}>{err}</div>}
       <button onClick={handleSave} disabled={saving} style={btnP(saving?C.inkFaint:C.info)}>{saving?"Guardando…":esReemision?"✓ Reemitir factura":"✓ Registrar factura"}</button>
     </div>
   );
@@ -119,7 +119,7 @@ export function FormPagoCliente({ ocs, onSave, ocPreseleccionada }) {
     <div>
       {!ocPreseleccionada&&<Field label="Orden de Compra" required><BuscadorOC ocs={ocs} ocId={ocId} setOcId={setOcId} /></Field>}
       {sinFactura&&(
-        <div style={{background:C.dangerLight,border:`1px solid ${C.danger}`,borderRadius:9,padding:"10px 12px",marginBottom:14,fontSize:12,color:C.dangerText,fontWeight:600}}>
+        <div style={{background:C.dangerLight,border:`1px solid ${C.danger}`,borderRadius:8,padding:"10px 12px",marginBottom:14,fontSize:12,color:C.dangerText,fontWeight:600}}>
           <Ic n="⚠"/> Sin factura emitida — no se puede registrar el cobro. Emite la factura primero.
         </div>
       )}
@@ -148,18 +148,18 @@ export function FormPagoCliente({ ocs, onSave, ocPreseleccionada }) {
       )}
       {esDocumentoBancario({medio_pago:medioPago})&&(
         <label style={{display:"flex",alignItems:"flex-start",gap:9,marginBottom:14,cursor:"pointer",
-          background:cobradoEnBanco?C.okLight:C.warnLight,borderRadius:10,padding:"10px 12px"}}>
+          background:cobradoEnBanco?C.okLight:C.warnLight,borderRadius:12,padding:"10px 12px"}}>
           <input type="checkbox" checked={cobradoEnBanco} onChange={e=>setCobradoEnBanco(e.target.checked)}
             style={{marginTop:2,width:16,height:16,flexShrink:0}} />
           <span>
-            <span style={{display:"block",fontSize:12.5,fontWeight:700,color:C.ink}}>Ya lo cobré / depositó en el banco</span>
+            <span style={{display:"block",fontSize:13,fontWeight:700,color:C.ink}}>Ya lo cobré / depositó en el banco</span>
             <span style={{display:"block",fontSize:12,color:C.inkFaint,marginTop:1}}>
               {cobradoEnBanco?"Se cuenta como plata real en la cuenta.":"El cliente pagó, pero esta plata todavía no está en el banco — aparecerá en \"Vale vistas por cobrar\" hasta que la marques cobrada."}
             </span>
           </span>
         </label>
       )}
-      {err&&<div style={{background:C.dangerLight,color:C.dangerText,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}
+      {err&&<div style={{background:C.dangerLight,color:C.dangerText,borderRadius:8,padding:"8px 12px",fontSize:13,marginBottom:10,fontWeight:600}}>{err}</div>}
       <button onClick={handleSave} disabled={saving} style={btnP(saving?C.inkFaint:C.ok)}>{saving?"Guardando…":"✓ Registrar pago"}</button>
     </div>
   );
@@ -183,7 +183,7 @@ export function FormPagoFinanciamiento({ ocs, financiadores: todosFin, onSave, o
       {!ocPreseleccionada&&<Field label="OC relacionada (opcional)"><BuscadorOC ocs={ocs} ocId={ocId} setOcId={setOcId} /></Field>}
       <Field label="Fecha" required><input style={iStyle} type="date" value={fecha} onChange={e=>setFecha(e.target.value)} /></Field>
       <Field label="Monto ($)" required hint="La base descuenta el pago de la deuda; si supera lo adeudado por la OC, el resto queda como pago sin OC"><input style={iMono} type="number" value={monto} onChange={e=>setMonto(e.target.value)} /></Field>
-      {err&&<div style={{background:C.dangerLight,color:C.dangerText,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}
+      {err&&<div style={{background:C.dangerLight,color:C.dangerText,borderRadius:8,padding:"8px 12px",fontSize:13,marginBottom:10,fontWeight:600}}>{err}</div>}
       <button onClick={handleSave} disabled={saving} style={btnP(saving?C.inkFaint:C.purple)}>{saving?"Guardando…":"✓ Registrar pago a financiador"}</button>
     </div>
   );

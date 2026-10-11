@@ -30,7 +30,7 @@ function Fila({ etiqueta, rol, nombre, falta, detalle, opciones, extras = [], va
         </span>
         {!editando && !deshabilitado && (
           <button data-asignacion-editar onClick={abrir}
-            style={{ border: `1px solid ${C.border}`, background: C.card, color: C.tealDark, borderRadius: R.sm, padding: "6px 12px", fontSize: 12.5, fontWeight: 800, cursor: "pointer", minHeight: TOUCH - 8 }}>
+            style={{ border: `1px solid ${C.border}`, background: C.card, color: C.tealDark, borderRadius: R.sm, padding: "6px 12px", fontSize: 13, fontWeight: 800, cursor: "pointer", minHeight: TOUCH - 8 }}>
             Editar
           </button>
         )}

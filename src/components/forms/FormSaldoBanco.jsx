@@ -23,8 +23,8 @@ export function FormSaldoBanco({ actual, onSave }) {
 
   return (
     <div style={{ fontFamily: SANS }}>
-      <div style={{ background: C.tealLight, borderRadius: 10, padding: "12px 14px", marginBottom: 16 }}>
-        <div style={{ fontSize: 12.5, fontWeight: 700, color: C.tealDark, marginBottom: 5 }}>
+      <div style={{ background: C.tealLight, borderRadius: 12, padding: "12px 14px", marginBottom: 16 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: C.tealDark, marginBottom: 5 }}>
           Cómo funciona
         </div>
         <div style={{ fontSize: 12, color: C.inkMuted, lineHeight: 1.55 }}>
@@ -36,7 +36,7 @@ export function FormSaldoBanco({ actual, onSave }) {
       </div>
 
       {actual && (
-        <div style={{ background: C.paper, borderRadius: 9, padding: "9px 12px", marginBottom: 14, fontSize: 12, color: C.inkMuted }}>
+        <div style={{ background: C.paper, borderRadius: 8, padding: "9px 12px", marginBottom: 14, fontSize: 12, color: C.inkMuted }}>
           Actual: <b style={{ color: C.ink, fontFamily: MONO }}>{fmt.money(actual.saldo)}</b>
           {" "}al {fmt.date(String(actual.fecha_corte).slice(0, 10))}
         </div>
@@ -56,7 +56,7 @@ export function FormSaldoBanco({ actual, onSave }) {
           placeholder="ej: revisado con la cartola del día" />
       </Field>
 
-      {err && <div style={{ background: C.dangerLight, color:C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 12.5, marginBottom: 10, fontWeight: 600 }}>{err}</div>}
+      {err && <div style={{ background: C.dangerLight, color:C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 10, fontWeight: 600 }}>{err}</div>}
 
       <button onClick={guardar} disabled={saving} style={btnP(saving ? C.inkFaint : C.teal)}>
         {saving ? "Guardando…" : "✓ Fijar este saldo"}

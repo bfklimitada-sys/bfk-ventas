@@ -43,7 +43,7 @@ export function PanelGastos({ gastos, categorias, ivaMensual=[], pagosVendedor=[
           style={{width:"100%",background:"none",border:"none",padding:"12px 16px",minHeight:60,cursor:historial.length?"pointer":"default",
             display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,textAlign:"left"}}>
           <div style={{flex:1,minWidth:0}}>
-            <div style={{fontWeight:700,fontSize:15,color:historica?C.inkMuted:C.ink,lineHeight:1.25}}>{c.nombre}</div>
+            <div style={{fontWeight:700,fontSize:16,color:historica?C.inkMuted:C.ink,lineHeight:1.25}}>{c.nombre}</div>
             {u
               ?<div style={{fontSize:12,color:C.inkMuted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",marginTop:2}}>{u.subcategoria||u.detalle||"—"} · {fmt.monthYear(u.mes,u.anio)}</div>
               :<div style={{fontSize:12,color:C.inkMuted,marginTop:2}}>Sin pagos registrados</div>}
@@ -141,7 +141,7 @@ export function FormNuevoGasto({ categorias, onSave, onIva }) {
       <Field label="Categoría" required><select style={selStyle} value={catId} onChange={e=>{setCatId(e.target.value);setSub("");}}>{categorias.map(c=><option key={c.id} value={c.id}>{c.nombre}</option>)}</select></Field>
       {subs.length>0&&<Field label="Subcategoría"><select style={selStyle} value={sub} onChange={e=>handleSubChange(e.target.value)}><option value="">Selecciona…</option>{subs.map(s=><option key={s.nombre} value={s.nombre}>{s.nombre}{s.monto_sugerido?` (${fmt.money(s.monto_sugerido)})`:"" }</option>)}</select></Field>}
       {esImpuesto&&(
-        <div style={{background:C.tealLight,borderRadius:9,padding:"10px 12px",fontSize:13,color:C.tealDark,marginBottom:12}}>
+        <div style={{background:C.tealLight,borderRadius:8,padding:"10px 12px",fontSize:13,color:C.tealDark,marginBottom:12}}>
           El impuesto del mes se registra junto con su débito y crédito, en un solo paso: así queda en caja y en la comisión.
           <button onClick={onIva} style={{...btnP(C.info),marginTop:10}}>Registrar IVA del mes</button>
         </div>
@@ -154,7 +154,7 @@ export function FormNuevoGasto({ categorias, onSave, onIva }) {
       <Field label="Fecha de pago" required><input style={iStyle} type="date" value={fecha} onChange={e=>setFecha(e.target.value)} /></Field>
       <Field label="Monto ($)" required><input style={iMono} type="number" value={monto} onChange={e=>setMonto(e.target.value)} /></Field>
       <Field label="Detalle"><input style={iStyle} value={detalle} onChange={e=>setDetalle(e.target.value)} /></Field>
-      {err&&<div style={{background:C.dangerLight,color:C.dangerText,borderRadius:8,padding:"8px 12px",fontSize:12.5,marginBottom:10,fontWeight:600}}>{err}</div>}
+      {err&&<div style={{background:C.dangerLight,color:C.dangerText,borderRadius:8,padding:"8px 12px",fontSize:13,marginBottom:10,fontWeight:600}}>{err}</div>}
       <button onClick={handleSave} disabled={saving} style={btnP(saving?C.inkFaint:C.warn)}>{saving?"Guardando…":"✓ Registrar gasto"}</button>
       </>}
     </div>

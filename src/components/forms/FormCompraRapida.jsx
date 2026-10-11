@@ -51,9 +51,9 @@ export function FormCompraRapida({ ocs, financiadores, perfil, onSave, ocPresele
       )}
 
       {oc && (
-        <div style={{ background: C.paper, borderRadius: 10, padding: "10px 14px", marginBottom: 14 }}>
+        <div style={{ background: C.paper, borderRadius: 12, padding: "10px 14px", marginBottom: 14 }}>
           <div style={{ fontSize: 12, color: C.inkMuted }}>{oc.cliente}{oc.comuna ? ` · ${oc.comuna}` : ""}</div>
-          <div style={{ fontSize: 12.5, color: C.inkMuted, marginTop: 4 }}>
+          <div style={{ fontSize: 13, color: C.inkMuted, marginTop: 4 }}>
             Venta: <b style={{ color: C.ink, fontFamily: MONO }}>{fmt.money(venta)}</b>
           </div>
         </div>
@@ -68,7 +68,7 @@ export function FormCompraRapida({ ocs, financiadores, perfil, onSave, ocPresele
       {oc && c > 0 && (
         <div style={{
           background: margenPct >= 20 ? C.okLight : margenPct >= 10 ? C.warnLight : C.dangerLight,
-          borderRadius: 10, padding: "10px 14px", marginBottom: 14,
+          borderRadius: 12, padding: "10px 14px", marginBottom: 14,
           display: "flex", justifyContent: "space-between", alignItems: "center"
         }}>
           <div>
@@ -106,7 +106,7 @@ export function FormCompraRapida({ ocs, financiadores, perfil, onSave, ocPresele
           placeholder="ej: MercadoLibre, Sodimac…" />
       </Field>
 
-      {err && <div style={{ background: C.dangerLight, color:C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 12.5, marginBottom: 10, fontWeight: 600 }}>{err}</div>}
+      {err && <div style={{ background: C.dangerLight, color:C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 10, fontWeight: 600 }}>{err}</div>}
 
       <button onClick={guardar} disabled={saving} style={btnP(saving ? C.inkFaint : C.teal)}>
         {saving ? "Guardando…" : "✓ Registrar compra"}
