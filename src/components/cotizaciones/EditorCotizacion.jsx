@@ -158,21 +158,15 @@ export function EditorCotizacion({ almacen, inicial, token, entidadesCatalogo = 
         <PanelPestana visible={pestana === "productos"} titulo="Productos">
           <Tarjeta padding="12px">
             <div style={{ display: "flex", gap: 6 }}>
-              <input data-enlace-proveedor value={enlace} onChange={(e) => setEnlace(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") consultar(); }} inputMode="url" placeholder="Pega el enlace del proveedor (Falabella, Mercado Libre…)" style={{ ...iStyle, flex: 1 }} />
+              <input data-enlace-proveedor value={enlace} onChange={(e) => { setEnlace(e.target.value); if (enlacePendiente) { setEnlacePendiente(""); setErrorEnlace(""); } }} onKeyDown={(e) => { if (e.key === "Enter") consultar(); }} inputMode="url" placeholder="Pega el enlace del proveedor (Falabella, Mercado Libre…)" style={{ ...iStyle, flex: 1 }} />
               <BotonPrincipal data-consultar-enlace onClick={consultar} disabled={!!consultando || !enlace.trim()} style={{ opacity: consultando || !enlace.trim() ? 0.6 : 1, padding: "8px 14px" }}>{consultando ? "…" : "Consultar"}</BotonPrincipal>
             </div>
             {consultando && <div style={{ fontSize: T.small, color: C.inkMuted, marginTop: 6 }}>{consultando}</div>}
-            {errorEnlace && <>
-              <AvisoLinea tono="warn" dato="error-enlace">{errorEnlace}</AvisoLinea>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                <BotonSecundario data-error-pegar onClick={() => setVerTexto(true)}>Pegar texto de ficha</BotonSecundario>
-                <BotonSecundario data-error-manual onClick={() => { manual(enlacePendiente); setErrorEnlace(""); setEnlace(""); setEnlacePendiente(""); }}>Ingresar manual</BotonSecundario>
-              </div>
-            </>}
+            {errorEnlace && <AvisoLinea tono="warn" dato="error-enlace">{errorEnlace}</AvisoLinea>}
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
               <BotonSecundario data-desde-biblioteca onClick={() => setVerBib(true)}>Desde biblioteca{productosBib.length ? ` (${productosBib.length})` : ""}</BotonSecundario>
-              <BotonSecundario data-ingreso-manual onClick={() => manual("")}>Ingresar manual</BotonSecundario>
-              <BotonSecundario onClick={() => setVerTexto(true)}>Pegar texto de ficha</BotonSecundario>
+              <BotonSecundario data-ingreso-manual onClick={() => { manual(enlacePendiente); setErrorEnlace(""); setEnlace(""); setEnlacePendiente(""); }}>Ingresar manual</BotonSecundario>
+              <BotonSecundario data-pegar-texto onClick={() => setVerTexto(true)}>Pegar texto de ficha</BotonSecundario>
             </div>
           </Tarjeta>
           {!cot.items.length && <div style={{ fontSize: T.sm, color: C.inkFaint, textAlign: "center", padding: 20 }}>Agrega el primer producto con un enlace, desde la biblioteca o manualmente.</div>}

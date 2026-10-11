@@ -71,6 +71,7 @@ const irCotizaciones = async (p, movil) => {
 const llenar = async (loc, v) => { await loc.fill(""); await loc.fill(String(v)); };
 const enHoja = (p) => p.locator('[data-hoja-lateral="cotizacion"]');
 const tab = (p, k) => enHoja(p).locator(`[role="tab"][data-tab="${k}"]`).click().then(() => espera(p, 300));
+const cap = async (p, n) => { if (process.env.CAPTURAS) await p.screenshot({ path: join(SALIDA, n + ".png") }); };
 const sinScrollH = (p) => p.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1);
 
 // ═════ 1. Modo prueba (módulo sin instalar), celular 390 ═════
@@ -124,12 +125,14 @@ const sinScrollH = (p) => p.evaluate(() => document.documentElement.scrollWidth 
   await tab(p, "precios");
   ok("U15_formula_confirmada_sin_aviso_provisional", await h.locator('[data-aviso-linea="formula-provisional"]').count() === 0);
   ok("U16_pendientes_por_envio", await h.locator('[data-aviso-linea="pendiente-precio"]').count() >= 2);
+  await h.locator("[data-copiar-mp]").scrollIntoViewIfNeeded(); await cap(p, "1_precios_copiar_bloqueado");
   ok("U16b_copiar_bloqueado_con_pendientes", await h.locator("[data-copiar-mp]").isDisabled() && await h.locator("[data-copiar-bloqueado]").count() === 1);
   const envF = h.locator('[data-envio="Falabella"]'); const envP = h.locator('[data-envio="PC Factory"]');
   await llenar(envF.locator('[data-campo="monto-envio"]'), 5990); await envF.locator('[data-campo="estado-envio"]').selectOption("confirmado");
   await llenar(envP.locator('[data-campo="monto-envio"]'), 0); await envP.locator('[data-campo="estado-envio"]').selectOption("sin_costo_confirmado");
   await espera(p, 300);
   ok("U17_sin_pendientes_con_envios_confirmados", await h.locator('[data-aviso-linea="pendiente-precio"]').count() === 0);
+  await h.locator("[data-totales-cotizacion]").scrollIntoViewIfNeeded(); await cap(p, "2_precios_desglose_iva_estimado");
   ok("U17b_copiar_habilitado_sin_pendientes", !(await h.locator("[data-copiar-mp]").isDisabled()) && await h.locator("[data-copiar-bloqueado]").count() === 0);
   ok("U17c_iva_rotulado_como_estimacion_no_f29", /estimado de esta operación/.test(await h.locator('[data-fila="iva-pagar"]').innerText()) && /No es el F29/.test(await h.locator('[data-fila="iva-pagar"]').innerText()));
   const esperado = calcularCotizacion({ recargo: 0.3, envios: [{ key: "f", monto: 5990, con_factura: true, estado: "confirmado" }, { key: "c", monto: 0, con_factura: true, estado: "sin_costo_confirmado" }],
@@ -150,6 +153,7 @@ const sinScrollH = (p) => p.evaluate(() => document.documentElement.scrollWidth 
   await h.locator('[data-revision-eett="1"] [data-aprobar-ficha] input').check(); await espera(p, 200);
   ok("U24a_cada_ficha_con_avisos_se_aprueba", await h.locator("[data-generar-eett]").isDisabled() && /sin imágenes|no tiene imágenes/.test(await h.locator('[data-revision-eett="2"]').innerText()));
   await h.locator('[data-revision-eett="2"] [data-aprobar-ficha] input').check(); await espera(p, 200);
+  await cap(p, "3_eett_fichas_aprobadas");
   ok("U24_generar_habilitado", !(await h.locator("[data-generar-eett]").isDisabled()));
   const [descarga] = await Promise.all([p.waitForEvent("download", { timeout: 15000 }), h.locator("[data-generar-eett]").click()]);
   const rutaPdf = join(SALIDA, descarga.suggestedFilename()); await descarga.saveAs(rutaPdf); await espera(p, 600);
@@ -184,13 +188,14 @@ const sinScrollH = (p) => p.evaluate(() => document.documentElement.scrollWidth 
   ok("U34_marca_biblioteca", /Biblioteca/.test(await enHoja(p).locator('[data-item-cotizacion="1"]').innerText()));
   // Enlace caído → aviso con ingreso manual
   await enHoja(p).locator("[data-enlace-proveedor]").fill("https://www.paris.cl/caido"); await enHoja(p).locator("[data-consultar-enlace]").click(); await espera(p, 800);
-  ok("U35_enlace_caido_ofrece_manual_y_pegar", /ya no existe/.test(await enHoja(p).locator('[data-aviso-linea="error-enlace"]').innerText()) && await enHoja(p).locator("[data-error-pegar]").count() === 1);
-  await enHoja(p).locator("[data-error-manual]").click(); await espera(p, 500);
+  ok("U35_enlace_caido_ofrece_manual_y_pegar", /ya no existe/.test(await enHoja(p).locator('[data-aviso-linea="error-enlace"]').innerText()) && await enHoja(p).locator("[data-pegar-texto]").count() === 1 && await enHoja(p).locator("[data-ingreso-manual]").count() === 1);
+  await enHoja(p).locator("[data-ingreso-manual]").click(); await espera(p, 500);
   ok("U36_manual_conserva_enlace", await ed.locator('[data-campo="enlace"]').inputValue() === "https://www.paris.cl/caido");
   await p.locator('[role="dialog"] button[aria-label="Cerrar"]').last().click(); await espera(p, 300);
   await enHoja(p).locator("[data-enlace-proveedor]").fill("https://articulo.mercadolibre.cl/MLC-bloqueado"); await enHoja(p).locator("[data-consultar-enlace]").click(); await espera(p, 800);
+  await cap(p, "4_enlace_bloqueado_antibots");
   ok("U36b_bloqueo_antibots_explicado", /antibots/.test(await enHoja(p).locator('[data-aviso-linea="error-enlace"]').innerText()));
-  await enHoja(p).locator("[data-error-pegar]").click(); await espera(p, 400);
+  await enHoja(p).locator("[data-pegar-texto]").click(); await espera(p, 400);
   await p.locator("[data-texto-ficha]").fill("Marca: HP\nModelo: Smart Tank 580\nTipo de impresión: Inyección a color");
   await p.locator('[role="dialog"] button', { hasText: "Continuar" }).click(); await espera(p, 500);
   ok("U36c_pegar_texto_conserva_enlace_y_datos", await ed.locator('[data-campo="enlace"]').inputValue() === "https://articulo.mercadolibre.cl/MLC-bloqueado" && await ed.locator('[data-campo="modelo"]').inputValue() === "Smart Tank 580" && await ed.locator('[data-campo="proveedor"]').inputValue() === "Mercado Libre");
@@ -237,6 +242,7 @@ const sinScrollH = (p) => p.evaluate(() => document.documentElement.scrollWidth 
 for (const falla of ["503", "red", "404sin"]) {
   const { p, ctx, errs } = await preparar({ ancho: 390, alto: 844, movil: true, modoBase: false, fallaRed: falla });
   await irCotizaciones(p, true); await espera(p, 3500);
+  if (falla === "503") await cap(p, "5_error_conexion_no_modo_prueba");
   ok(`E_${falla}_muestra_error_con_reintentar`, await p.locator('[data-aviso-linea="error-conexion"]').count() === 1 && /Reintentar/.test(await p.locator('[data-aviso-linea="error-conexion"]').innerText()));
   ok(`E_${falla}_no_activa_modo_prueba`, await p.locator('[data-aviso-linea="modo-prueba"]').count() === 0);
   ok(`E_${falla}_no_permite_crear`, await p.locator("[data-nueva-cotizacion]").isDisabled());
