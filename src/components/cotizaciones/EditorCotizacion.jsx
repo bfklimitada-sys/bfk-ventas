@@ -110,6 +110,7 @@ export function EditorCotizacion({ almacen, inicial, token, entidadesCatalogo = 
     } catch (e) { showToast?.(`No se pudo generar el PDF: ${e.message}`, "error"); } finally { setGenerando(false); }
   };
   const copiarMP = async () => {
+    if (!calc.listo) { showToast?.("Hay costos o despachos pendientes: confírmalos antes de copiar precios.", "error"); return; }
     try { await navigator.clipboard.writeText(textoParaMercadoPublico(cot, calc)); showToast?.("Valores copiados (tabulados)"); }
     catch { showToast?.("No se pudo copiar en este navegador", "error"); }
   };
@@ -270,10 +271,11 @@ export function EditorCotizacion({ almacen, inicial, token, entidadesCatalogo = 
             <FilaDato k="Total con IVA" signo="=" v={m(calc.totales.total)} fuerte dato="total" />
             <FilaDato k="Despacho en Mercado Público (modalidad A)" v={m(0)} dato="despacho-mp" />
             <FilaDato k="Utilidad neta (venta neta − costo neto)" v={m(calc.totales.utilidad_neta)} tono={calc.totales.utilidad_neta >= 0 ? "ok" : "danger"} fuerte dato="utilidad" nota={`Margen ${pct(calc.totales.margen_sobre_venta)} sobre venta · recargo efectivo ${pct(calc.totales.recargo_efectivo)}`} />
-            <FilaDato k="IVA a pagar al SII (débito − crédito)" v={m(calc.totales.iva_a_pagar)} dato="iva-pagar" />
+            <FilaDato k="IVA neto estimado de esta operación (débito − crédito)" v={m(calc.totales.iva_a_pagar)} dato="iva-pagar" nota="Estimación referencial de esta cotización. No es el F29 ni el IVA a pagar del mes: ese se determina con todas las compras y ventas del período." />
           </Tarjeta>
           {calc.pendientes.map((p, i) => <AvisoLinea key={i} tono="warn" dato="pendiente-precio">{p}</AvisoLinea>)}
-          <BotonSecundario data-copiar-mp onClick={copiarMP} disabled={!cot.items.length} style={{ width: "100%", justifyContent: "center", minHeight: 44 }}>Copiar valores para Mercado Público</BotonSecundario>
+          <BotonSecundario data-copiar-mp onClick={copiarMP} disabled={!cot.items.length || !calc.listo} style={{ width: "100%", justifyContent: "center", minHeight: 44 }}>Copiar valores para Mercado Público</BotonSecundario>
+          {cot.items.length > 0 && !calc.listo && <div data-copiar-bloqueado style={{ fontSize: T.small, color: C.warnText, textAlign: "center", marginTop: 6 }}>Bloqueado: confirma los costos y despachos pendientes ({calc.pendientes.length}) antes de copiar precios a Mercado Público.</div>}
         </PanelPestana>
 
         <PanelPestana visible={pestana === "eett"} titulo="EETT">

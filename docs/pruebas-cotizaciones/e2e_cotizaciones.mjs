@@ -26,7 +26,7 @@ const SMART = { ok: true, enlace: "https://www.falabella.com/falabella-cl/produc
   ficha: { nombre: "IMPRESORA MULTIFUNCIONAL SMART TANK 520 TANQUE DE TINTA COLOR", marca: "HP", modelo: "SMART TANK 580", color: "BLANCO", descripcion: "", generales: [],
     especificaciones: [{ etiqueta: "Tipo de impresión", valor: "Inyección a color" }, { etiqueta: "Resolución (DPI)", valor: "Hasta 1200 x 1200 dpi" }], imagenes: ["https://media.falabella.com/a.jpg", "https://media.falabella.com/b.jpg"] } };
 
-async function preparar({ ancho, alto, movil, modoBase }) {
+async function preparar({ ancho, alto, movil, modoBase, fallaRed = 0 }) {
   const b = crearBase(crearDatos(), {});
   const r = await abrir(browser, b, { url: URL_APP, ancho, alto, movil, espera: 2500 });
   const p = r.page; const reg = { rpc: [], storage: [], api: [] };
@@ -45,6 +45,9 @@ async function preparar({ ancho, alto, movil, modoBase }) {
       const t = u.pathname.split("/").pop();
       if (u.pathname.startsWith("/storage/v1/")) { reg.storage.push({ m, ruta: u.pathname }); return route.fulfill({ json: { Key: u.pathname } }); }
       if (["cotizaciones", "productos_catalogo", "cotizacion_items", "cotizacion_envios"].includes(t)) {
+        if (fallaRed === "503") return route.fulfill({ status: 503, json: { message: "Service Unavailable" } });
+        if (fallaRed === "red") return route.abort("internetdisconnected");
+        if (fallaRed === "404sin") return route.fulfill({ status: 404, body: "Not Found" });
         if (!modoBase) return route.fulfill({ status: 404, json: { code: "PGRST205", message: `Could not find the table 'public.${t}' in the schema cache` } });
         return route.fulfill({ json: tabla[t] || [] });
       }
@@ -118,13 +121,16 @@ const sinScrollH = (p) => p.evaluate(() => document.documentElement.scrollWidth 
 
   // Precios y envíos
   await tab(p, "precios");
-  ok("U15_formula_provisional_visible", await h.locator('[data-aviso-linea="formula-provisional"]').count() === 1);
+  ok("U15_formula_confirmada_sin_aviso_provisional", await h.locator('[data-aviso-linea="formula-provisional"]').count() === 0);
   ok("U16_pendientes_por_envio", await h.locator('[data-aviso-linea="pendiente-precio"]').count() >= 2);
+  ok("U16b_copiar_bloqueado_con_pendientes", await h.locator("[data-copiar-mp]").isDisabled() && await h.locator("[data-copiar-bloqueado]").count() === 1);
   const envF = h.locator('[data-envio="Falabella"]'); const envP = h.locator('[data-envio="PC Factory"]');
   await llenar(envF.locator('[data-campo="monto-envio"]'), 5990); await envF.locator('[data-campo="estado-envio"]').selectOption("confirmado");
   await llenar(envP.locator('[data-campo="monto-envio"]'), 0); await envP.locator('[data-campo="estado-envio"]').selectOption("sin_costo_confirmado");
   await espera(p, 300);
   ok("U17_sin_pendientes_con_envios_confirmados", await h.locator('[data-aviso-linea="pendiente-precio"]').count() === 0);
+  ok("U17b_copiar_habilitado_sin_pendientes", !(await h.locator("[data-copiar-mp]").isDisabled()) && await h.locator("[data-copiar-bloqueado]").count() === 0);
+  ok("U17c_iva_rotulado_como_estimacion_no_f29", /estimado de esta operación/.test(await h.locator('[data-fila="iva-pagar"]').innerText()) && /No es el F29/.test(await h.locator('[data-fila="iva-pagar"]').innerText()));
   const esperado = calcularCotizacion({ recargo: 0.3, envios: [{ key: "f", monto: 5990, con_factura: true, estado: "confirmado" }, { key: "c", monto: 0, con_factura: true, estado: "sin_costo_confirmado" }],
     items: [{ key: "a", cantidad: 3, precio_origen: 187990, precio_incluye_iva: true, con_factura: true, envio_key: "f" }, { key: "b", cantidad: 2, precio_origen: 50000, precio_incluye_iva: false, con_factura: true, envio_key: "c" }] });
   const dinero = async (dato) => Number((await h.locator(`[data-fila="${dato}"]`).innerText()).replace(/[^\d-]/g, "").replace(/^.*?(-?\d+)$/, "$1"));
@@ -203,7 +209,7 @@ const sinScrollH = (p) => p.evaluate(() => document.documentElement.scrollWidth 
   await ed.locator("[data-guardar-ficha]").click(); await espera(p, 1000);
   const prod = reg.rpc.find((x) => x.fn === "cz_guardar_producto");
   ok("B3_producto_por_rpc_solo_tecnico", !!prod && !["precio_origen", "enlace", "proveedor", "cantidad", "recargo", "envio_key"].some((k) => k in prod.cuerpo.p) && prod.cuerpo.p.imagenes.every((x) => /^img\//.test(x)), prod?.cuerpo.p && Object.keys(prod.cuerpo.p));
-  ok("B4_imagenes_a_deposito_privado", reg.storage.some((s) => /\/storage\/v1\/object\/productos\/img\//.test(s.ruta)));
+  ok("B4_imagenes_a_deposito_privado", reg.storage.some((s) => /\/storage\/v1\/object\/cz-productos\/img\//.test(s.ruta)));
   await p.locator("[data-guardar-cotizacion]").click(); await espera(p, 1200);
   const gc = reg.rpc.find((x) => x.fn === "cz_guardar_cotizacion");
   ok("B5_cotizacion_por_rpc_atomica", !!gc && gc.cuerpo.p.items.length === 1 && gc.cuerpo.p.items[0].unitario_venta_neto > 0 && gc.cuerpo.p.formula?.base === "neto" && gc.cuerpo.p.envios.length === 1, gc?.cuerpo.p && Object.keys(gc.cuerpo.p));
@@ -216,6 +222,18 @@ const sinScrollH = (p) => p.evaluate(() => document.documentElement.scrollWidth 
   await p.locator('aside [data-nav="cotizaciones"]').click(); await espera(p, 800);
   await p.screenshot({ path: join(SALIDA, "cotizaciones_escritorio.png") });
   ok("B9_sin_errores", errs.length === 0, errs);
+  await ctx.close();
+}
+
+// ═════ 3. Error de conexión con Supabase: nunca activa el modo prueba ni guarda en el dispositivo ═════
+for (const falla of ["503", "red", "404sin"]) {
+  const { p, ctx, errs } = await preparar({ ancho: 390, alto: 844, movil: true, modoBase: false, fallaRed: falla });
+  await irCotizaciones(p, true); await espera(p, 3500);
+  ok(`E_${falla}_muestra_error_con_reintentar`, await p.locator('[data-aviso-linea="error-conexion"]').count() === 1 && /Reintentar/.test(await p.locator('[data-aviso-linea="error-conexion"]').innerText()));
+  ok(`E_${falla}_no_activa_modo_prueba`, await p.locator('[data-aviso-linea="modo-prueba"]').count() === 0);
+  ok(`E_${falla}_no_permite_crear`, await p.locator("[data-nueva-cotizacion]").isDisabled());
+  ok(`E_${falla}_no_escribe_en_dispositivo`, await p.evaluate(() => localStorage.getItem("bfk_cotizaciones_prueba_v1")) === null);
+  ok(`E_${falla}_sin_errores`, errs.length === 0, errs);
   await ctx.close();
 }
 

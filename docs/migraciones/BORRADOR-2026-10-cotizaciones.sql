@@ -38,7 +38,7 @@ create table public.productos_catalogo (
   descripcion_tecnica text,
   caracteristicas jsonb not null default '[]'::jsonb check (jsonb_typeof(caracteristicas) = 'array'),   -- [{etiqueta, valor}] generales
   especificaciones jsonb not null default '[]'::jsonb check (jsonb_typeof(especificaciones) = 'array'), -- [{etiqueta, valor}]
-  imagenes jsonb not null default '[]'::jsonb check (jsonb_typeof(imagenes) = 'array'),                 -- rutas del depósito privado "productos"
+  imagenes jsonb not null default '[]'::jsonb check (jsonb_typeof(imagenes) = 'array'),                 -- rutas del depósito privado "cz-productos"
   fuente text,                       -- dominio de origen de los datos técnicos (p. ej. falabella.com); el enlace comercial va en la línea
   fecha_verificacion timestamptz,    -- fecha de la consulta al proveedor
   estado text not null default 'aprobado' check (estado in ('aprobado', 'archivado')),
@@ -110,7 +110,7 @@ create table public.eett_documentos (
   id uuid primary key default gen_random_uuid(),
   cotizacion_id uuid not null references public.cotizaciones(id),
   version integer not null,          -- versión de la cotización usada
-  ubicacion_pdf text,                -- ruta en el depósito privado "eett"
+  ubicacion_pdf text,                -- ruta en el depósito privado "cz-eett"
   paginas integer, hash text check (hash is null or hash ~ '^[0-9a-f]{64}$'),
   estado text not null default 'generado' check (estado in ('generado','reemplazado')),
   fecha timestamptz not null default now(), generado_por uuid not null default auth.uid()
@@ -228,11 +228,18 @@ do $$ declare f text; begin
   end loop;
 end $$;
 
--- Depósitos privados (Supabase Storage): imágenes de la biblioteca y PDF EETT. Sin acceso público ni anónimo:
--- se leen con la sesión BFK y se comparten con enlaces firmados de duración limitada.
+-- Depósitos privados (Supabase Storage) con nombres propios del módulo: "cz-productos" (imágenes de la biblioteca)
+-- y "cz-eett" (PDF). Sin acceso público ni anónimo. Las políticas nuevas son PERMISIVAS y están limitadas a
+-- bucket_id in ('cz-productos','cz-eett'): no cambian el acceso a ningún otro depósito (las políticas permisivas
+-- solo se suman; no restringen lo que otras políticas ya permiten). Si ya existe un depósito o una política con
+-- esos nombres, NO se adopta: se detiene todo sin aplicar nada.
 do $$ begin
   if to_regclass('storage.buckets') is null then raise notice 'CZ|SIN_STORAGE|'; return; end if;
-  insert into storage.buckets (id, name, public) values ('productos', 'productos', false), ('eett', 'eett', false) on conflict (id) do nothing;
-  execute $p$create policy cz_storage_leer on storage.objects for select to authenticated using (bucket_id in ('productos','eett') and public.cz_es_usuario())$p$;
-  execute $p$create policy cz_storage_subir on storage.objects for insert to authenticated with check (bucket_id in ('productos','eett') and public.cz_es_usuario())$p$;
+  if exists (select 1 from storage.buckets where id in ('cz-productos','cz-eett') or name in ('cz-productos','cz-eett')) then
+    raise exception 'CZ: ya existe un depósito cz-productos o cz-eett; no se aplicó nada'; end if;
+  if exists (select 1 from pg_policies where schemaname = 'storage' and policyname in ('cz_storage_leer','cz_storage_subir')) then
+    raise exception 'CZ: ya existe una política cz_storage_*; no se aplicó nada'; end if;
+  insert into storage.buckets (id, name, public) values ('cz-productos', 'cz-productos', false), ('cz-eett', 'cz-eett', false);
+  execute $p$create policy cz_storage_leer on storage.objects for select to authenticated using (bucket_id in ('cz-productos','cz-eett') and public.cz_es_usuario())$p$;
+  execute $p$create policy cz_storage_subir on storage.objects for insert to authenticated with check (bucket_id in ('cz-productos','cz-eett') and public.cz_es_usuario())$p$;
 end $$;

@@ -2,7 +2,7 @@
 // Datos del módulo Cotizaciones y EETT.
 //  · Modo "base": tablas y funciones del módulo en Supabase (docs/migraciones/BORRADOR-2026-10-cotizaciones.sql).
 //    Lectura directa; toda escritura por RPC (cz_guardar_cotizacion, cz_guardar_producto, cz_registrar_eett).
-//    Imágenes y PDF en depósitos privados ("productos", "eett"), leídos con la sesión BFK.
+//    Imágenes y PDF en depósitos privados del módulo ("cz-productos", "cz-eett"), leídos con la sesión BFK.
 //  · Modo "prueba": mientras el SQL NO esté aplicado, la app detecta que las tablas no existen y guarda
 //    en este dispositivo (localStorage). No escribe nada en la base real.
 // No toca ninguna tabla existente de BFK.
@@ -11,6 +11,8 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./supabase.jsx";
 import { fichaPublica, calcularCotizacion, FORMULA } from "./cotizaciones.js";
 
 const CLAVE_LOCAL = "bfk_cotizaciones_prueba_v1";
+export const DEP_IMG = "cz-productos"; // depósitos propios del módulo (no se comparten con otros)
+export const DEP_PDF = "cz-eett";
 const cab = (t, extra = {}) => ({ apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${t}`, ...extra });
 
 async function json(r) { return r.json().catch(() => null); }
@@ -19,15 +21,26 @@ function errorDe(r, cuerpo, base) {
   return Object.assign(new Error(/CZ409/.test(msg) ? "Otra persona guardó cambios en esta cotización. Cierra y vuelve a abrirla para ver la versión actual." : msg), { status: r.status, codigo: cuerpo?.code });
 }
 
-// ¿Está instalado el módulo en la base? (404 / PGRST205 / 42P01 = tabla inexistente → modo prueba)
-export async function detectarModo(token) {
-  try {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/cotizaciones?select=id&limit=1`, { headers: cab(token) });
-    if (r.ok) return "base";
-    const c = await json(r);
-    if (r.status === 404 || ["PGRST205", "42P01", "PGRST202"].includes(c?.code)) return "prueba";
-    return "prueba";
-  } catch { return "prueba"; }
+// ¿Está instalado el módulo en la base? Devuelve { modo, detalle }:
+//  · "base"   → las tablas existen: se trabaja contra Supabase.
+//  · "prueba" → SOLO si Supabase confirma que la tabla no existe (404 + PGRST205/42P01): módulo sin instalar.
+//  · "error"  → cualquier otra falla (sin conexión, tiempo agotado, 5xx, sesión vencida): NO se guarda nada,
+//               ni en la base ni en el dispositivo; se ofrece reintentar. Un error transitorio nunca activa el modo prueba.
+export const TABLA_INEXISTENTE = ["PGRST205", "42P01"];
+export async function detectarModo(token, { intentos = 3, pausa = 800 } = {}) {
+  let ultimo = "No se pudo conectar con la base de datos.";
+  for (let n = 1; n <= intentos; n++) {
+    try {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/cotizaciones?select=id&limit=1`, { headers: cab(token), signal: AbortSignal.timeout(10_000) });
+      if (r.ok) return { modo: "base" };
+      const c = await json(r);
+      if (r.status === 404 && TABLA_INEXISTENTE.includes(c?.code)) return { modo: "prueba" };
+      if (r.status === 401 || r.status === 403) return { modo: "error", detalle: "La sesión venció o no tiene permiso. Cierra sesión y vuelve a entrar." };
+      ultimo = `La base de datos respondió con un error (HTTP ${r.status}${c?.code ? ` · ${c.code}` : ""}).`;
+    } catch (e) { ultimo = e?.name === "TimeoutError" ? "La base de datos no respondió a tiempo." : "Sin conexión con la base de datos."; }
+    if (n < intentos) await new Promise((ok) => setTimeout(ok, pausa * n));
+  }
+  return { modo: "error", detalle: `${ultimo} No se guardó nada. Revisa la conexión y reintenta.` };
 }
 
 // ── Almacenamiento local (modo prueba) ──
@@ -44,14 +57,15 @@ async function sha1(texto) { const b = await crypto.subtle.digest("SHA-1", new T
 function blobDeDataUrl(d) { const [m, b64] = d.split(","); const tipo = m.match(/data:([^;]+)/)?.[1] || "image/jpeg"; const bin = atob(b64); const u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return new Blob([u], { type: tipo }); }
 async function subirImagen(token, dataUrl) {
   const ruta = `img/${await sha1(dataUrl)}.${/png/.test(dataUrl.slice(0, 30)) ? "png" : "jpg"}`;
-  const r = await fetch(`${SUPABASE_URL}/storage/v1/object/productos/${ruta}`, { method: "POST", headers: cab(token, { "x-upsert": "true", "Content-Type": blobDeDataUrl(dataUrl).type }), body: blobDeDataUrl(dataUrl) });
-  if (!r.ok && r.status !== 409) throw errorDe(r, await json(r), "No se pudo subir la imagen");
+  const r = await fetch(`${SUPABASE_URL}/storage/v1/object/${DEP_IMG}/${ruta}`, { method: "POST", headers: cab(token, { "Content-Type": blobDeDataUrl(dataUrl).type }), body: blobDeDataUrl(dataUrl) });
+  // Ruta = huella del contenido: si ya existe, es la misma imagen (no se sobrescribe nada).
+  if (!r.ok && r.status !== 409 && !(r.status === 400 && /exist|duplicate/i.test(await r.clone().text()))) throw errorDe(r, await json(r), "No se pudo subir la imagen");
   cacheImg.set(ruta, dataUrl); return ruta;
 }
 async function bajarImagen(token, ruta) {
   if (String(ruta).startsWith("data:")) return ruta;
   if (cacheImg.has(ruta)) return cacheImg.get(ruta);
-  const r = await fetch(`${SUPABASE_URL}/storage/v1/object/authenticated/productos/${ruta}`, { headers: cab(token) });
+  const r = await fetch(`${SUPABASE_URL}/storage/v1/object/authenticated/${DEP_IMG}/${ruta}`, { headers: cab(token) });
   if (!r.ok) return null;
   const b = await r.blob(); const d = await new Promise((ok) => { const f = new FileReader(); f.onload = () => ok(f.result); f.readAsDataURL(b); });
   cacheImg.set(ruta, d); return d;
@@ -69,7 +83,8 @@ export function crearAlmacen(token, modo) {
     const c = await json(r); if (!r.ok) throw errorDe(r, c, `No se pudo leer ${tabla}`); return c || [];
   };
 
-  if (modo !== "base") return {
+  if (modo !== "base" && modo !== "prueba") return null; // modo "error": sin almacén (no se guarda nada)
+  if (modo === "prueba") return {
     modo: "prueba",
     async listarCotizaciones() {
       return leerLocal().cotizaciones.map((c) => ({ id: c.id, id_externo: c.id_externo, nombre: c.nombre, institucion: c.institucion, estado: c.estado, fecha: c.fecha, subtotal_neto: c.subtotal_neto, total: c.total, n_items: (c.items || []).length, actualizado_en: c.actualizado_en }))
@@ -132,9 +147,9 @@ export function crearAlmacen(token, modo) {
     },
     async registrarEETT(cot, blob, hash, paginas) {
       const ruta = `${cot.id}/v${cot.version}-${Date.now()}.pdf`;
-      const r = await fetch(`${SUPABASE_URL}/storage/v1/object/eett/${ruta}`, { method: "POST", headers: cab(token, { "Content-Type": "application/pdf" }), body: blob });
+      const r = await fetch(`${SUPABASE_URL}/storage/v1/object/${DEP_PDF}/${ruta}`, { method: "POST", headers: cab(token, { "Content-Type": "application/pdf" }), body: blob });
       if (!r.ok) throw errorDe(r, await json(r), "No se pudo guardar el PDF");
-      return rpc("cz_registrar_eett", { p_cotizacion: cot.id, p_version: cot.version, p_ruta: `eett/${ruta}`, p_hash: hash, p_paginas: paginas });
+      return rpc("cz_registrar_eett", { p_cotizacion: cot.id, p_version: cot.version, p_ruta: `${DEP_PDF}/${ruta}`, p_hash: hash, p_paginas: paginas });
     },
   };
 }

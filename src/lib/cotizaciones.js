@@ -2,15 +2,16 @@
 // Cotizaciones y EETT (módulo nuevo, octubre 2026). Funciones puras: no leen ni escriben datos.
 // No usan ni modifican ningún cálculo financiero existente (OC, FIFO, IVA mensual, F29, comisiones).
 //
-// FÓRMULA PROVISIONAL — pendiente de confirmación de Kevin (ver docs/cotizaciones/README.md §4).
-// Todas las decisiones abiertas están en FORMULA; confirmar = cambiar sus valores, no el algoritmo.
+// FÓRMULA CONFIRMADA por Kevin el 11/10/2026 (ver docs/cotizaciones/README.md §4): recargo sobre costo neto
+// cuando el IVA es recuperable, 30% sugerido y editable, unitario neto redondeado hacia arriba, despacho
+// compartido proporcional al valor, despacho $0 en Mercado Público (modalidad A).
 // ═══════════════════════════════════════════════════════════════
 
 export const IVA = 0.19;
 export const RECARGO_SUGERIDO = 0.30; // sugerido por el Excel histórico (112 de 163 filas); nunca obligatorio
 
 export const FORMULA = {
-  confirmada: false,
+  confirmada: true,
   base: "neto",          // "neto": recargo sobre costo neto real (IVA no recuperable = costo) · "bruto": método histórico del Excel
   redondeo: "arriba",    // unitario neto para Mercado Público: "arriba" (nunca bajo el recargo) · "normal"
   prorrateo: "valor",    // envío compartido: "valor" (según subtotal de cada línea) · "cantidad"

@@ -26,11 +26,11 @@ Reglas adicionales del documento: nunca asumir despacho gratis (una línea sin e
 
 ## 3. Datos (borrador, no aplicado)
 
-`docs/migraciones/BORRADOR-2026-10-cotizaciones.sql` y su `-deshacer.sql`. Validado en un PostgreSQL local desechable (`docs/pruebas-cotizaciones/validar_sql.sh`, 24 comprobaciones): aplica en una transacción, no toca tablas existentes, lectura solo para perfiles BFK, sin escritura ni borrado directo (solo RPC), control de versiones con rechazo de guardados concurrentes, depósitos de archivos privados, deshacer completo.
+`docs/migraciones/BORRADOR-2026-10-cotizaciones.sql` y su `-deshacer.sql`. Validado en un PostgreSQL local desechable (`docs/pruebas-cotizaciones/validar_sql.sh`, 24 comprobaciones): aplica en una transacción, no toca tablas existentes, lectura solo para perfiles BFK, sin escritura ni borrado directo (solo RPC), control de versiones con rechazo de guardados concurrentes, depósitos de archivos privados con nombre propio (`cz-productos`, `cz-eett`) que no adoptan ni modifican depósitos existentes, deshacer completo.
 
 Adaptaciones al esquema real respecto de la especificación: `cliente` → `institucion` + `rut`; versiones completas en `cotizacion_versiones`; ficha congelada por línea en `cotizacion_items.especificaciones_aprobadas`; `productos_catalogo.fuente` guarda solo el dominio (el enlace comercial vive en la línea).
 
-## 4. Fórmula de precio (PROVISIONAL — pendiente de confirmación)
+## 4. Fórmula de precio (CONFIRMADA por Kevin el 11/10/2026)
 
 Por línea, con recargo *r*:
 1. Costo bruto = cantidad × precio con IVA + envío asignado.
@@ -40,9 +40,17 @@ Por línea, con recargo *r*:
 5. Unitario neto Mercado Público = venta neta ÷ cantidad, redondeado hacia arriba al peso.
 6. Despacho Mercado Público = $0.
 
-Totales: neto = Σ unitario × cantidad; IVA débito = 19% del neto; total = neto + IVA débito; utilidad neta = neto − costo neto; IVA a pagar = débito − crédito.
+Totales: neto = Σ unitario × cantidad; IVA débito = 19% del neto; total = neto + IVA débito; utilidad neta = neto − costo neto; IVA neto estimado de la operación = débito − crédito.
+
+> El IVA neto que muestra la cotización es una **estimación referencial de esa operación**. No es el F29 ni el IVA a pagar del mes, que se determina con todas las compras y ventas del período (módulo Impuestos).
 Con todo comprado con factura, el resultado es idéntico al método histórico del Excel (`(gastos × 1,3) ÷ cantidad ÷ 1,19`).
-Decisiones abiertas en `FORMULA` (`src/lib/cotizaciones.js`): `base` (neto | bruto), `redondeo` (arriba | normal), `prorrateo` (valor | cantidad).
+Valores vigentes en `FORMULA` (`src/lib/cotizaciones.js`): `base: "neto"`, `redondeo: "arriba"`, `prorrateo: "valor"`.
+
+Controles: no se pueden copiar precios a Mercado Público mientras existan costos o despachos pendientes de confirmar.
+
+## 4b. Conexión con la base
+
+El "modo prueba" (guardar solo en el dispositivo) se activa **únicamente** si Supabase confirma que las tablas del módulo no existen (HTTP 404 con código PGRST205/42P01). Cualquier otra falla (sin conexión, tiempo agotado, error 5xx, sesión vencida) muestra un error con "Reintentar" y no guarda nada, ni en la base ni en el dispositivo.
 
 ## 5. Casos de prueba (datos simulados)
 
@@ -60,7 +68,6 @@ Decisiones abiertas en `FORMULA` (`src/lib/cotizaciones.js`): `base` (neto | bru
 
 ## 6. Pendientes
 
-1. Confirmar la fórmula (§4): base del recargo, redondeo, reparto del envío y tratamiento del IVA del despacho según su documento tributario.
-2. Plantilla Excel editable de la EETT, si se quiere reproducir el diseño exacto (hoy se usa el PDF de referencia como modelo visual).
-3. Qué proveedores entregan costo de envío confiable por dirección: por ahora **todo envío se verifica manualmente** y queda "por verificar" hasta confirmarlo.
-4. Autorización para aplicar el SQL en Supabase (con respaldo cifrado previo) y para el merge/despliegue.
+1. Diseño del PDF: se mantiene el actual, basado en la referencia 1525570-33-COT26 (la plantilla Excel no se requiere por ahora).
+2. Qué proveedores entregan costo de envío confiable por dirección: por ahora **todo envío se verifica manualmente** y queda "por verificar" hasta confirmarlo.
+3. Autorización para aplicar el SQL en Supabase (con respaldo cifrado previo) y para el merge/despliegue.

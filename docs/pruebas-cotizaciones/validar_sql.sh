@@ -21,9 +21,17 @@ insert into public.perfiles values ('11111111-1111-1111-1111-111111111111','Usua
 create table public.ordenes_compra_v2 (id serial primary key, numero_oc text); insert into public.ordenes_compra_v2 (numero_oc) values ('OC-EXISTENTE');
 create schema storage; create table storage.buckets (id text primary key, name text, public boolean);
 create table storage.objects (id serial primary key, bucket_id text, name text); alter table storage.objects enable row level security;
+-- Depósitos y políticas que YA existen (otros usos): el módulo no debe adoptarlos ni cambiarlos.
+insert into storage.buckets values ('productos','productos',true), ('documentos','documentos',false);
+insert into storage.objects (bucket_id, name) values ('productos','foto-ajena.jpg'), ('documentos','contrato.pdf');
+create policy docs_leer on storage.objects for select to authenticated using (bucket_id = 'documentos');
+create policy productos_publico on storage.objects for select to anon using (bucket_id = 'productos');
+grant usage on schema storage to authenticated, anon; grant select, insert on storage.objects to authenticated; grant select on storage.objects to anon;
 SQL
 F=0; ok() { if [ "$2" = "$3" ]; then echo "OK    $1"; else echo "FALLA $1 :: esperado [$3] obtenido [$2]"; F=$((F+1)); fi; }
 ANTES=$(Q -c "select md5(string_agg(numero_oc, ',')) from public.ordenes_compra_v2")
+HUELLA_STORAGE() { Q -c "select md5((select string_agg(id||name||public::text, ',' order by id) from storage.buckets where id not like 'cz-%')||(select string_agg(policyname||coalesce(qual,'')||cmd||roles::text, ',' order by policyname) from pg_policies where schemaname='storage' and policyname not like 'cz\_%')||(select string_agg(bucket_id||name, ',' order by id) from storage.objects where bucket_id not like 'cz-%'))"; }
+ST_ANTES=$(HUELLA_STORAGE)
 Q -1 -f "$MIG/BORRADOR-2026-10-cotizaciones.sql" > "$D/apl.log" 2>&1; ok "S1_aplica_en_una_transaccion" $? 0
 ok "S2_reaplicar_se_rechaza" "$(Q -1 -f "$MIG/BORRADOR-2026-10-cotizaciones.sql" 2>&1 | grep -c 'ya existe')" 1
 ok "S3_tablas_existentes_intactas" "$(Q -c "select md5(string_agg(numero_oc, ',')) from public.ordenes_compra_v2")" "$ANTES"
@@ -57,9 +65,19 @@ ok "S19_admin_archiva_sin_borrar" "$(Q -c "select estado from productos_catalogo
 H=$(printf 'a%.0s' {1..64})
 COMO $USR "select cz_registrar_eett('$ID', 2, 'eett/$ID/v2.pdf', '$H', 3)" >/dev/null; COMO $USR "select cz_registrar_eett('$ID', 2, 'eett/$ID/v2b.pdf', '$H', 3)" >/dev/null
 ok "S20_eett_anterior_reemplazado" "$(Q -c "select string_agg(estado, ',' order by fecha, ubicacion_pdf) from eett_documentos")" "reemplazado,generado"
-ok "S21_depositos_privados" "$(Q -c "select string_agg(id||':'||public::text, ',' order by id) from storage.buckets")" "eett:false,productos:false"
+ok "S21_depositos_propios_privados" "$(Q -c "select string_agg(id||':'||public::text, ',' order by id) from storage.buckets where id like 'cz-%'")" "cz-eett:false,cz-productos:false"
+ok "S21b_depositos_y_politicas_existentes_intactos" "$(HUELLA_STORAGE)" "$ST_ANTES"
+ok "S21c_politicas_cz_solo_sobre_sus_depositos" "$(Q -c "select count(*) from pg_policies where schemaname='storage' and policyname like 'cz\_%' and coalesce(qual, with_check) ~ 'cz-productos' and coalesce(qual, with_check) ~ 'cz-eett' and coalesce(qual, with_check) !~ '[^-]productos' and coalesce(qual, with_check) !~ 'documentos'")" 2
+ok "S21d_usuario_bfk_no_gana_acceso_a_otros_depositos" "$(COMO $USR "select count(*) from storage.objects where bucket_id in ('productos','documentos')")" "1"
+Q -c "insert into storage.objects (bucket_id,name) values ('cz-eett','x.pdf')" >/dev/null
+ok "S21e_sin_perfil_no_ve_depositos_cz" "$(COMO $EXT "select count(*) from storage.objects where bucket_id like 'cz-%'")" 0
+ok "S21f_usuario_bfk_ve_depositos_cz" "$(COMO $USR "select count(*) from storage.objects where bucket_id like 'cz-%'")" 1
 ok "S22_cantidad_cero_rechazada" "$(COMO $USR "select cz_guardar_cotizacion('$(echo "$P" | sed 's/"cantidad":3/"cantidad":0/')'::jsonb)" | grep -c 'violates check')" 1
 Q -1 -f "$MIG/BORRADOR-2026-10-cotizaciones-deshacer.sql" >/dev/null 2>&1
 ok "S23_deshacer_limpia_todo" "$(Q -c "select count(*) from pg_class where relname in ('cotizaciones','productos_catalogo','cotizacion_items','eett_documentos') union all select count(*) from pg_proc where proname like 'cz\_%'" | tr '\n' ',')" "0,0,"
 ok "S24_deshacer_no_toca_existentes" "$(Q -c "select md5(string_agg(numero_oc, ',')) from public.ordenes_compra_v2")" "$ANTES"
-echo; echo "$((24-F)) OK · $F fallas"; exit $F
+ok "S25_deshacer_no_toca_otros_depositos" "$(HUELLA_STORAGE)" "$ST_ANTES"
+Q -c "delete from storage.objects where bucket_id like 'cz-%'; delete from storage.buckets where id like 'cz-%'; insert into storage.buckets values ('cz-productos','cz-productos',false)"
+ok "S26_no_adopta_deposito_cz_preexistente" "$(Q -1 -f "$MIG/BORRADOR-2026-10-cotizaciones.sql" 2>&1 | grep -c 'ya existe un depósito')" 1
+ok "S27_rechazo_no_deja_nada_a_medias" "$(Q -c "select (select count(*) from pg_class where relname='cotizaciones')||'/'||(select count(*) from pg_policies where policyname like 'cz\_%')")" "0/0"
+N=$(grep -c "^ok \"" "$0"); echo; echo "$((N-F)) OK · $F fallas"; exit $F

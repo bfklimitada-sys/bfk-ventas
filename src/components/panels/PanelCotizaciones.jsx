@@ -16,7 +16,16 @@ export function PanelCotizaciones({ token, entidadesCatalogo, showToast }) {
   const [abierta, setAbierta] = useState(null); const [ficha, setFicha] = useState(null);
   const [busca, setBusca] = useState(""); const [buscaBib, setBuscaBib] = useState("");
 
-  useEffect(() => { let vivo = true; (async () => { const md = await detectarModo(token); if (!vivo) return; setModo(md); setAlmacen(crearAlmacen(token, md)); })(); return () => { vivo = false; }; }, [token]);
+  const [detalleError, setDetalleError] = useState(""); const [intento, setIntento] = useState(0);
+  useEffect(() => {
+    let vivo = true; setModo(null); setAlmacen(null); setCargando(true);
+    (async () => {
+      const r = await detectarModo(token); if (!vivo) return;
+      setModo(r.modo); setDetalleError(r.detalle || ""); setAlmacen(crearAlmacen(token, r.modo));
+      if (r.modo === "error") setCargando(false);
+    })();
+    return () => { vivo = false; };
+  }, [token, intento]);
   const recargar = useCallback(async () => {
     if (!almacen) return; setError("");
     try { const [l, p] = await Promise.all([almacen.listarCotizaciones(), almacen.listarProductos()]); setLista(l); setProductos(p); }
@@ -33,6 +42,7 @@ export function PanelCotizaciones({ token, entidadesCatalogo, showToast }) {
 
   return (
     <div data-panel-cotizaciones>
+      {modo === "error" && <AvisoLinea tono="danger" dato="error-conexion" accion="Reintentar" onClick={() => setIntento((n) => n + 1)}>{detalleError}</AvisoLinea>}
       {modo === "prueba" && <AvisoLinea tono="info" dato="modo-prueba" icono="⚠">Modo prueba: el módulo aún no está instalado en la base de datos. Lo que guardes queda solo en este dispositivo.</AvisoLinea>}
       <Indicadores columnas={2}>
         <Indicador dato="cotizaciones-abiertas" etiqueta="Cotizaciones en preparación" valor={String(abiertas)} tono={abiertas ? "info" : "neutro"} onClick={() => setPestana("cotizaciones")} />
@@ -42,12 +52,12 @@ export function PanelCotizaciones({ token, entidadesCatalogo, showToast }) {
 
       <PanelPestana visible={pestana === "cotizaciones"} titulo="Cotizaciones">
         <BarraAcciones>
-          <BotonPrincipal data-nueva-cotizacion onClick={() => setAbierta(cotizacionVacia())} disabled={!almacen}>+ Nueva cotización</BotonPrincipal>
+          <BotonPrincipal data-nueva-cotizacion onClick={() => setAbierta(cotizacionVacia())} disabled={!almacen} style={{ opacity: almacen ? 1 : 0.5 }}>+ Nueva cotización</BotonPrincipal>
           <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar por ID, nombre o institución" style={{ ...iStyle, flex: "1 1 200px", width: "auto" }} />
         </BarraAcciones>
         {error && <AvisoLinea tono="danger" accion="Reintentar" onClick={recargar}>{error}</AvisoLinea>}
         {cargando && <div style={{ fontSize: T.sm, color: C.inkFaint }}>Cargando…</div>}
-        {!cargando && !lista.length && <Tarjeta><div style={{ fontSize: T.sm, color: C.inkMuted, lineHeight: 1.5 }}>Aún no hay cotizaciones. El módulo parte vacío desde octubre de 2026: crea la primera con <b>Nueva cotización</b> y agrega productos desde los enlaces de tus proveedores.</div></Tarjeta>}
+        {!cargando && modo !== "error" && !lista.length && <Tarjeta><div style={{ fontSize: T.sm, color: C.inkMuted, lineHeight: 1.5 }}>Aún no hay cotizaciones. El módulo parte vacío desde octubre de 2026: crea la primera con <b>Nueva cotización</b> y agrega productos desde los enlaces de tus proveedores.</div></Tarjeta>}
         {filtrada.map((c) => (
           <Tarjeta key={c.id} onClick={() => abrir(c.id)} padding="12px 14px" data-cotizacion={c.id_externo || c.id}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
