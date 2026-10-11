@@ -13,6 +13,7 @@ export const PANTALLAS = [
   { key: "compras",        ruta: "compras",        label: "Compras",        icono: "📦", grupo: "operacion", desc: "Órdenes de compra y su avance" },
   { key: "notif",          ruta: "alertas",        label: "Alertas",        icono: "🔔", grupo: "operacion", desc: "Alertas de OC y correos de BFK" },
   { key: "agenda",         ruta: "agenda",         label: "Agenda",         icono: "📅", grupo: "operacion", desc: "Entregas y vencimientos por fecha" },
+  { key: "cotizaciones",   ruta: "cotizaciones",   label: "Cotizaciones",   icono: "📋", grupo: "operacion", desc: "Cotizaciones, EETT y biblioteca de productos" },
   { key: "finanzas",       ruta: "finanzas",       label: "Resumen",        icono: "🏦", grupo: "finanzas",  hub: "finanzas", desc: "Resultado del mes, caja y margen" },
   { key: "financiamiento", ruta: "financiamiento", label: "Financiamiento", icono: "🏦", grupo: "finanzas",  hub: "finanzas", desc: "Deuda con financiadores, abonos y aportes" },
   { key: "vendedores",     ruta: "vendedores",     label: "Comisiones",     icono: "🧑‍💼", grupo: "finanzas",  hub: "finanzas", desc: "Comisiones y pagos a vendedores" },

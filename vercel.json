@@ -2,6 +2,9 @@
   "functions": {
     "api/oc.mjs": {
       "maxDuration": 60
+    },
+    "api/producto.mjs": {
+      "maxDuration": 30
     }
   }
 }
