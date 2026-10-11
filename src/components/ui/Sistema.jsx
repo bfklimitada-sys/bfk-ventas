@@ -1,6 +1,6 @@
 // Sistema visual único de BFK Ventas: secciones, tarjetas, badges, montos, pestañas, desplegables,
 // indicadores, panel lateral y avisos. Solo presentación: no contiene lógica de negocio.
-import { createContext, useContext, useEffect, useId, useState } from "react";
+import { createContext, useContext, useEffect, useId, useRef, useState } from "react";
 import { C, MONO, R, S, T, TOUCH, cardStyle, sombra } from "../../lib/theme";
 import { Ic } from "./Iconos";
 import { useCerrarConEscape } from "./Basicos";
@@ -85,19 +85,33 @@ export function IndiceSecciones({ items }) {
 
 // ── Pestañas (control segmentado con desplazamiento horizontal) ────────────
 // items: [{ key, label, n?, tono?, attrs? }]. Cada botón lleva data-tab={key} (y los attrs extra, p. ej. data-nav).
-export function Pestanas({ items, activa, onCambiar, etiqueta = "Secciones", style, compacta }) {
+export function Pestanas({ items, activa, onCambiar, etiqueta = "Secciones", style, compacta, variante = "segmentada" }) {
   const todo = useModoTodo();
+  const ref = useRef(null);
+  // La pestaña activa siempre queda a la vista (en el celular la tira se desplaza).
+  useEffect(() => {
+    const el = ref.current?.querySelector('[aria-selected="true"]');
+    if (el && ref.current.scrollWidth > ref.current.clientWidth) {
+      const c = ref.current; const x = el.offsetLeft - (c.clientWidth - el.offsetWidth) / 2;
+      c.scrollTo({ left: Math.max(0, x), behavior: "auto" });
+    }
+  }, [activa]);
   if (todo) return null; // en la vista de impresión se muestran todas las pestañas seguidas
+  const sub = variante === "subrayado";
   return (
-    <div data-noprint role="tablist" aria-label={etiqueta}
-      style={{ display: "flex", gap: 4, overflowX: "auto", padding: 4, margin: `0 0 ${S.lg}px`, background: "#EEF1F5", borderRadius: R.md, WebkitOverflowScrolling: "touch", scrollbarWidth: "none", ...style }}>
+    <div ref={ref} data-noprint role="tablist" aria-label={etiqueta} data-pestanas={etiqueta}
+      style={sub
+        ? { display: "flex", gap: 2, overflowX: "auto", margin: `-4px 0 ${S.lg}px`, borderBottom: `1px solid ${C.border}`, WebkitOverflowScrolling: "touch", scrollbarWidth: "none", ...style }
+        : { display: "flex", gap: 4, overflowX: "auto", padding: 4, margin: `0 0 ${S.lg}px`, background: "#EEF1F5", borderRadius: R.md, WebkitOverflowScrolling: "touch", scrollbarWidth: "none", ...style }}>
       {items.map((it) => {
         const act = it.key === activa;
         const t = it.tono ? tonoDe(it.tono) : null;
+        const est = sub
+          ? { flex: "0 0 auto", border: "none", borderBottom: `2px solid ${act ? C.teal : "transparent"}`, borderRadius: 0, padding: "10px 12px", minHeight: 42, background: "transparent", color: act ? C.tealDark : C.inkMuted, fontWeight: act ? 800 : 600, marginBottom: -1 }
+          : { flex: compacta ? "0 0 auto" : "1 0 auto", border: "none", borderRadius: R.sm, padding: "8px 12px", minHeight: 38, background: act ? C.card : "transparent", boxShadow: act ? sombra.card : "none", color: act ? C.ink : C.inkMuted, fontWeight: act ? 800 : 600 };
         return (
           <button key={it.key} type="button" role="tab" aria-selected={act} data-tab={it.key} data-compact {...(it.attrs || {})} onClick={() => onCambiar(it.key)}
-            style={{ flex: compacta ? "0 0 auto" : "1 0 auto", border: "none", borderRadius: R.sm, padding: "8px 12px", minHeight: 38, cursor: "pointer", whiteSpace: "nowrap",
-              background: act ? C.card : "transparent", boxShadow: act ? sombra.card : "none", color: act ? C.ink : C.inkMuted, fontSize: T.sm, fontWeight: act ? 800 : 600, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+            style={{ cursor: "pointer", whiteSpace: "nowrap", fontSize: T.sm, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, ...est }}>
             {it.label}
             {it.n != null && it.n !== 0 && <span style={{ fontSize: T.small, fontWeight: 800, borderRadius: R.pill, padding: "0 7px", lineHeight: "18px", background: t ? t.bg : act ? C.tealLight : "#E2E5EB", color: t ? t.fg : act ? C.tealDark : C.inkMuted }}>{it.n}</span>}
           </button>

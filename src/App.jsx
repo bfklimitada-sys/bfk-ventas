@@ -36,7 +36,11 @@ import { contarCorreosAccion, desdeCorreos, reemplazarCorreo } from "./lib/corre
 import { C, MONO, SANS, fmt } from "./lib/theme";
 import { Ic } from "./components/ui/Iconos";
 import { generarPdfPantallas } from "./lib/pdfPantallas";
-import { PANTALLAS, PANTALLA_INICIAL, pantallaDe, pantallaDesdeHash, hashDe, puedeVer, visiblesPara, tituloDocumento } from "./lib/navegacion";
+import { PANTALLAS, PANTALLA_INICIAL, HUBS, pantallaDe, pantallaDesdeHash, hashDe, puedeVer, entradasPara, pestanasDe, tituloDocumento } from "./lib/navegacion";
+import { ModoTodoContext, Pestanas } from "./components/ui/Sistema";
+import { PanelImpuestos } from "./components/panels/PanelImpuestos";
+import { PanelBanco } from "./components/panels/PanelBanco";
+import { PanelResumenFinanzas } from "./components/panels/PanelResumenFinanzas";
 import { BarraInferior, BarraLateral, MenuMas, contarAlertas, useEsEscritorio } from "./components/ui/Navegacion";
 
 // Pantallas, grupos, direcciones (#/ruta) y permisos: una sola definición en lib/navegacion.js.
@@ -124,7 +128,14 @@ export default function App() {
   useEffect(()=>{
     if(perfil&&!puedeVer(tab,perfil.rol==="admin")){ modoHistorial.current="reemplazar"; setTab(PANTALLA_INICIAL); }
   },[perfil,tab]);
-  const irA=(t)=>{ setTab(t); setFiltroCompras(null); setOcFoco(null); setVolverA(null); setMenuMas(false); };
+  // Centro Finanzas: su acceso abre la última pestaña usada (o el Resumen si ya se está dentro).
+  const ultimaFinanzas=useRef("finanzas");
+  useEffect(()=>{ if(pantallaDe(tab)?.hub==="finanzas") ultimaFinanzas.current=tab; },[tab]);
+  const irA=(t)=>{
+    let destino=t;
+    if(t==="finanzas"&&pantallaDe(tab)?.hub!=="finanzas") destino=ultimaFinanzas.current||"finanzas";
+    setTab(destino); setFiltroCompras(null); setOcFoco(null); setVolverA(null); setMenuMas(false);
+  };
   useEffect(()=>{
     (async()=>{
       const saved=storageGet(SESSION_KEY);
@@ -1662,24 +1673,30 @@ export default function App() {
   // ── Encabezado y estructura (Fase 3) ─────────────────────────────
   const pantalla=pantallaDe(tab)||pantallaDe(PANTALLA_INICIAL);
   const saludo=(()=>{ const h=new Date().getHours(); return h<12?"Buenos días":h<19?"Buenas tardes":"Buenas noches"; })();
-  const tituloPantalla=tab==="panel"?`${saludo}, ${perfil?.nombre?.split(" ")[0]||""}`:pantalla.label;
-  const subtituloPantalla=tab==="panel"?new Date().toLocaleDateString("es-CL",{weekday:"long",day:"numeric",month:"long"}):pantalla.desc;
-  const visibles=visiblesPara(perfil?.rol==="admin");
+  const tituloPantalla=tab==="panel"?`${saludo}, ${perfil?.nombre?.split(" ")[0]||""}`:pantalla.hub?HUBS[pantalla.hub].label:pantalla.label;
+  const subtituloPantalla=tab==="panel"?new Date().toLocaleDateString("es-CL",{weekday:"long",day:"numeric",month:"long"}):pantalla.hub?`${pantalla.label} · ${pantalla.desc}`:pantalla.desc;
+  const esAdminNav=perfil?.rol==="admin";
+  const visibles=entradasPara(esAdminNav);
+  const pestanasHub=pantalla.hub?pestanasDe(pantalla.hub,esAdminNav):null;
   const nAlertas=contarAlertas(notificaciones,alertasUrgentes)+contarCorreosAccion(correosBfk);
   const salir=()=>{ setMenuMas(false); handleLogout(); };
   const nuevaOC=()=>{ setMenuMas(false); setAccion("compra_oc"); };
 
   const contenidoPantallas=(
-    <>
+    <ModoTodoContext.Provider value={todo}>
+      {pestanasHub&&!todo&&<Pestanas etiqueta={HUBS[pantalla.hub].label} variante="subrayado" activa={tab} onCambiar={irA} items={pestanasHub.map(p=>({key:p.key,label:p.label,attrs:{"data-nav":p.key,"aria-current":tab===p.key?"page":undefined}}))} />}
       {(tab==="panel"||todo)&&hoja("panel",<PanelDashboard onQuitarAlertaCartola={handleQuitarAlertaCartola} onBuscarCompras={(q)=>{setBusquedaCompras(q);setFiltroCompras(null);setOcFoco(null);setVolverA(null);setTab("compras");}} ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} aportes={aportes} ajustes={ajustesSaldo} categorias={categoriasGasto} perfil={perfil} onExportarTodo={handleExportarTodo} exportando={exportando} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setVolverA(null);setTab(t);}} onAccion={(k)=>setAccion(k)} onSincronizar={completarTodasDesdeMP} onCorregirFechas={corregirFechasTodas} sincronizando={sincronizando} porAceptar={porAceptar.filter(a=>!buscarDuplicadoOC(a.numero_oc))} onActualizarPorAceptar={revisarPorAceptar} verificandoPorAceptar={verificandoPorAceptar} aceptadasSinCargar={aceptadasSinCargar.filter(a=>!buscarDuplicadoOC(a.numero_oc))} onCargarOC={(numero)=>{setCodigoOcRapida(numero);setAccion("compra_oc");}} onCargarTodasAceptadas={handleCargarTodasAceptadas} cargandoAceptadas={cargandoAceptadas} onActualizarAceptadas={revisarAceptadasSinCargar} verificandoAceptadas={verificandoAceptadas} canceladasEnMP={canceladasEnMP.filter(c=>ocs.some(o=>o.id===c.id))} onArchivarCancelada={(id)=>handleArchivarOC(id,"Cancelada en Mercado Público")} onActualizarCanceladas={revisarCanceladasEnMP} verificandoCanceladas={verificandoCanceladas} onValidarTodo={validarTodoContraMP} validandoTodo={validandoTodo} usoMP={usoMP} actMP={actMP} esCodigoMP={esCodigoMP} ultimaCartola={ultimaCartola} saldoBanco={saldoBanco} bancoMensual={bancoMensual} onEditarSaldo={()=>setAccion("saldo_banco")} />)}
       {(tab==="compras"||todo)&&hoja("compras",<>{!todo&&volverA==="notif"&&<button onClick={()=>{setVolverA(null);setTab("notif");}} style={{width:"100%",textAlign:"left",background:C.tealLight,color:C.tealDark,border:"none",borderRadius:12,padding:"10px 12px",marginBottom:10,fontWeight:800,fontSize:13,minHeight:44,cursor:"pointer"}}>← Volver a Alertas</button>}<PanelCompras pagosVendedor={pagosVendedor} onAsignarVendedor={handleAsignarVendedor} onAsignarFinanciador={handleAsignarFinanciador} correosBfk={correosBfk} onMarcarCorreo={handleMarcarCorreo} difsHistoricas={difsHistoricas} onCambiarFinanciamiento={handleCambiarFinanciamiento} busquedaInicial={busquedaCompras} ocs={ocs} perfiles={perfiles} filtroInicial={filtroCompras} ocFoco={ocFoco} onFocoUsado={()=>setOcFoco(null)} contactos={contactos} onEnviarReclamo={handleEnviarReclamo} onCorreoOC={handleCorreoOC} onRegistrarRespuestaReclamo={handleRegistrarRespuestaReclamo} onGuardarContacto={handleGuardarContacto} onGuardarDatosOC={handleGuardarDatosOC} onEditarEvento={handleEditarEvento} financiadores={financiadores} onConfirmarEntrega={handleEntrega} onEmitirFactura={handleFactura} onPagoCliente={handlePagoCliente} onPagoFinanciamiento={handlePagoFin} entidadesCatalogo={entidadesCatalogo} onGuardarLink={handleGuardarLink} onEliminarLink={handleEliminarLink} onEditarLink={handleEditarLink} onRepartirInversion={handleRepartirInversion} buscarDuplicadoOC={buscarDuplicadoOC} onSincronizarFecha={handleSincronizarFecha} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={handleAgregarComentario} onEliminarComentario={handleEliminarComentario} onArchivarOC={handleArchivarOC} onEliminarFactura={handleEliminarFactura} onRegistrarNC={handleNotaCredito} onEliminarEvento={handleEliminarEvento} vendedores={vendedores} onIngresarCompra={handleIngresarCompra} onAsignarResponsable={handleAsignarResponsable} onGuardarPostventa={handleGuardarPostventa} /></>)}
       {(tab==="notif"||todo)&&hoja("notif",<PanelNotificaciones correos={correosBfk} onMarcarCorreo={handleMarcarCorreo} notificaciones={notificaciones} ocs={ocs} onMarcarLeidas={handleMarcarNotificacionesLeidas} filtroAlertas={filtroAlertas} onFiltroAlertas={setFiltroAlertas} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setVolverA(ocId?"notif":null);setTab(t);}} />)}
       {(tab==="agenda"||todo)&&hoja("agenda",<PanelCalendario ocs={ocs} onMarcarFecha={handleMarcarFecha} onVerAlertas={(f)=>{setFiltroCompras(null);setOcFoco(null);setVolverA(null);setFiltroAlertas({nivel:(f&&f.nivel)||"todas",etapa:(f&&f.etapa)||null});setTab("notif");}} />)}
       {(tab==="financiamiento"||todo)&&hoja("financiamiento",<PanelFinanciamiento difsHistoricas={difsHistoricas} financiadores={financiadores} ocs={ocs} ajustes={ajustesSaldo} perfiles={perfiles} onAjustar={handleAjusteSaldo} aportes={aportes} onGuardarAporte={handleGuardarAporte} onEliminarAporte={perfil?.rol==="admin"?handleEliminarAporte:undefined} onAbonar={(finId)=>{setAbonoFinId(typeof finId==="string"||typeof finId==="number"?finId:null);setAccion("abono_fin");}} pagoFinSueltos={pagoFinSueltos} />)}
       {(tab==="gastos"||todo)&&hoja("gastos",<PanelGastos gastos={gastos} categorias={categoriasGasto} ivaMensual={ivaMensual} pagosVendedor={pagosVendedor} vendedores={vendedores} onNuevoGasto={handleNuevoGasto} onGuardarIva={handleGuardarIva} />)}
-      {(tab==="vendedores"||todo)&&hoja("vendedores",<PanelVendedores vendedores={vendedores} ocs={ocs} ivaMensual={ivaMensual} gastos={gastos} pagosVendedor={pagosVendedor} onGuardarIva={handleGuardarIva} onPagoVendedor={handlePagoVendedorSimple} onAnularPago={handleAnularPagoVendedor} esAdmin={perfil?.rol==="admin"} onVerOCs={(filtro)=>{setFiltroCompras(filtro);setOcFoco(null);setVolverA(null);setTab("compras");}} onAbrirOC={(ocId)=>{setFiltroCompras(null);setOcFoco(ocId);setVolverA(null);setTab("compras");}} />)}
+      {(tab==="finanzas"||todo)&&hoja("finanzas",<PanelResumenFinanzas ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} aportes={aportes} ajustes={ajustesSaldo} categorias={categoriasGasto} onIrImpuestos={()=>irA("impuestos")} />)}
+      {(tab==="impuestos"||todo)&&hoja("impuestos",<PanelImpuestos ivaMensual={ivaMensual} gastos={gastos} onGuardarIva={handleGuardarIva} />)}
+      {(tab==="banco"||todo)&&hoja("banco",<PanelBanco ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} aportes={aportes} saldoBanco={saldoBanco} ultimaCartola={ultimaCartola} bancoMensual={bancoMensual} onEditarSaldo={()=>setAccion("saldo_banco")} onImportarCartola={()=>setAccion("cartola")} onQuitarAlertaCartola={handleQuitarAlertaCartola} />)}
+      {(tab==="vendedores"||todo)&&hoja("vendedores",<PanelVendedores vendedores={vendedores} ocs={ocs} ivaMensual={ivaMensual} gastos={gastos} pagosVendedor={pagosVendedor} onGuardarIva={handleGuardarIva} onPagoVendedor={handlePagoVendedorSimple} onAnularPago={handleAnularPagoVendedor} esAdmin={perfil?.rol==="admin"} onIrImpuestos={()=>irA("impuestos")} onVerOCs={(filtro)=>{setFiltroCompras(filtro);setOcFoco(null);setVolverA(null);setTab("compras");}} onAbrirOC={(ocId)=>{setFiltroCompras(null);setOcFoco(ocId);setVolverA(null);setTab("compras");}} />)}
       {(tab==="usuarios"||todo)&&perfil?.rol==="admin"&&hoja("usuarios",<PanelUsuarios difsHistoricas={difsHistoricas} perfiles={perfiles} ocs={ocs} ocsArchivadas={ocsArchivadas} onRestaurarOC={handleRestaurarOC} onChangeRol={handleChangeRol} session={session} showToast={showToast} entidadesCatalogo={entidadesCatalogo} onEntidadesImportadas={handleEntidadesImportadas} usoMP={usoMP} sincronizando={sincronizando} validandoTodo={validandoTodo} exportando={exportando} onCorregirFechas={corregirFechasTodas} onValidarTodo={validarTodoContraMP} onExportarTodo={handleExportarTodo} />)}
-    </>
+    </ModoTodoContext.Provider>
   );
 
   // Contenido + ventanas, igual en celular y escritorio

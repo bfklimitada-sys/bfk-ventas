@@ -3,7 +3,7 @@
 // vienen de lib/navegacion.js y la acción de navegar la decide App.
 import { useEffect, useRef, useState } from "react";
 import { C, MONO } from "../../lib/theme";
-import { GRUPOS, PRINCIPALES } from "../../lib/navegacion";
+import { GRUPOS, PRINCIPALES, entradaDe } from "../../lib/navegacion";
 import { Ic } from "./Iconos";
 
 export const ANCHO_ESCRITORIO = 1024;
@@ -37,13 +37,14 @@ const nombreAccesible = (p, nAlertas) => (p.key === "notif" && nAlertas > 0 ? `$
 
 // ── Celular: barra inferior con las 4 principales + "Más" ──────────────────
 export function BarraInferior({ visibles, tab, onIr, menuAbierto, onAlternarMenu, nAlertas }) {
-  const principales = visibles.filter((p) => PRINCIPALES.includes(p.key));
+  const principales = PRINCIPALES.map((k) => visibles.find((p) => p.key === k)).filter(Boolean);
   const secundarias = visibles.filter((p) => !PRINCIPALES.includes(p.key));
-  const enMas = secundarias.some((p) => p.key === tab);
+  const actual = entradaDe(tab);
+  const enMas = secundarias.some((p) => p.key === actual);
   return (
     <nav data-noprint aria-label="Navegación principal" style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "rgba(255,255,255,0.96)", backdropFilter: "blur(12px)", borderTop: `1px solid ${C.border}`, display: "flex", padding: "6px 4px calc(6px + env(safe-area-inset-bottom))", boxShadow: "0 -4px 20px rgba(15,23,42,0.06)", zIndex: 42 }}>
       {principales.map((p) => {
-        const activo = tab === p.key;
+        const activo = actual === p.key;
         return (
           <button key={p.key} data-nav={p.key} aria-current={activo ? "page" : undefined} aria-label={nombreAccesible(p, nAlertas)} onClick={() => onIr(p.key)}
             style={{ flex: 1, background: "none", border: "none", padding: "6px 1px", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
@@ -80,6 +81,7 @@ export function MenuMas({ abierto, onCerrar, visibles, tab, onIr, perfil, onImpr
   const secundarias = visibles.filter((p) => !PRINCIPALES.includes(p.key));
   const grupos = GRUPOS.map((g) => ({ ...g, items: secundarias.filter((p) => p.grupo === g.key) })).filter((g) => g.items.length);
   const esAdmin = perfil?.rol === "admin";
+  const act = entradaDe(tab);
   const titulo = { fontSize: 12, fontWeight: 800, color: C.inkFaint, textTransform: "uppercase", letterSpacing: 0.6, margin: "4px 6px 6px" };
   const fila = (activo) => ({ width: "100%", display: "flex", alignItems: "center", gap: 12, background: activo ? C.tealLight : "transparent", border: "none", borderRadius: 12, padding: "10px 10px", cursor: "pointer", textAlign: "left" });
   return (
@@ -91,10 +93,10 @@ export function MenuMas({ abierto, onCerrar, visibles, tab, onIr, perfil, onImpr
           <div key={g.key} style={{ marginBottom: 8 }}>
             <div style={titulo}>{g.label}</div>
             {g.items.map((p) => (
-              <button key={p.key} data-nav={p.key} aria-current={tab === p.key ? "page" : undefined} onClick={() => onIr(p.key)} style={fila(tab === p.key)}>
-                <span style={{ width: 38, height: 38, borderRadius: 12, background: tab === p.key ? "#fff" : C.paper, color: tab === p.key ? C.tealDark : C.inkMuted, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}><Ic n={p.icono} /></span>
+              <button key={p.key} data-nav={p.key} aria-current={act === p.key ? "page" : undefined} onClick={() => onIr(p.key)} style={fila(act === p.key)}>
+                <span style={{ width: 38, height: 38, borderRadius: 12, background: act === p.key ? "#fff" : C.paper, color: act === p.key ? C.tealDark : C.inkMuted, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}><Ic n={p.icono} /></span>
                 <span style={{ minWidth: 0, flex: 1 }}>
-                  <span style={{ display: "block", fontSize: 14, fontWeight: 700, color: tab === p.key ? C.tealDark : C.ink }}>{p.label}</span>
+                  <span style={{ display: "block", fontSize: 14, fontWeight: 700, color: act === p.key ? C.tealDark : C.ink }}>{p.label}</span>
                   <span style={{ display: "block", fontSize: 12, color: C.inkMuted, lineHeight: 1.35 }}>{p.desc}</span>
                 </span>
                 <span style={{ color: C.inkFaint, flexShrink: 0 }}><Ic n="chevR" /></span>
@@ -143,7 +145,7 @@ export function BarraLateral({ visibles, tab, onIr, nAlertas, perfil, onNuevaOC,
           <div key={g.key} style={{ marginBottom: 14 }}>
             <div style={{ fontSize: 12, fontWeight: 800, color: "#8B9AB5", textTransform: "uppercase", letterSpacing: 0.7, padding: "0 10px 6px" }}>{g.label}</div>
             {g.items.map((p) => {
-              const activo = tab === p.key;
+              const activo = entradaDe(tab) === p.key;
               return (
                 <button key={p.key} data-nav={p.key} aria-current={activo ? "page" : undefined} aria-label={nombreAccesible(p, nAlertas)} title={p.desc} onClick={() => onIr(p.key)}
                   style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, background: activo ? "rgba(20,184,166,0.16)" : "transparent", border: "none", borderLeft: `3px solid ${activo ? C.teal : "transparent"}`, borderRadius: 8, padding: "9px 10px", marginBottom: 2, color: activo ? "#5EEAD4" : "#CBD5E1", fontSize: 14, fontWeight: activo ? 800 : 600, cursor: "pointer", textAlign: "left", minHeight: 40 }}>
