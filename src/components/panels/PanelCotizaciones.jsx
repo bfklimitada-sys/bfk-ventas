@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { C, T, R, iStyle, fmt } from "../../lib/theme";
-import { Pestanas, PanelPestana, Tarjeta, Badge, AvisoLinea, BotonPrincipal, BarraAcciones, Indicadores, Indicador } from "../ui/Sistema";
+import { Pestanas, PanelPestana, Tarjeta, Badge, AvisoLinea, BotonPrincipal, BotonSecundario, BarraAcciones, Indicadores, Indicador, Desplegable } from "../ui/Sistema";
+import { leerPendiente, descartarPendiente } from "../../lib/captura";
+import { EVENTO_CAPTURA } from "../../lib/capturaEntrada";
+import { codigoAtajo } from "../../lib/atajoSafari.generado";
 import { ESTADOS_COTIZACION, cotizacionVacia } from "../../lib/cotizaciones";
 import { detectarModo, crearAlmacen } from "../../lib/cotizacionesDatos";
 import { EditorCotizacion } from "../cotizaciones/EditorCotizacion";
@@ -17,6 +20,14 @@ export function PanelCotizaciones({ token, entidadesCatalogo, showToast }) {
   const [busca, setBusca] = useState(""); const [buscaBib, setBuscaBib] = useState("");
 
   const [detalleError, setDetalleError] = useState(""); const [intento, setIntento] = useState(0);
+  // Captura recibida desde el atajo de Safari (pendiente de revisión; no se guarda nada hasta que el usuario lo decida).
+  const [captura, setCaptura] = useState(() => leerPendiente());
+  const descartarCaptura = () => { descartarPendiente(); setCaptura(null); };
+  useEffect(() => { const f = () => setCaptura(leerPendiente()); window.addEventListener(EVENTO_CAPTURA, f); return () => window.removeEventListener(EVENTO_CAPTURA, f); }, []);
+  const copiarAtajo = async () => {
+    try { await navigator.clipboard.writeText(codigoAtajo(window.location.origin)); showToast?.("Código del atajo copiado"); }
+    catch { showToast?.("No se pudo copiar en este navegador", "error"); }
+  };
   useEffect(() => {
     let vivo = true; setModo(null); setAlmacen(null); setCargando(true);
     (async () => {
@@ -50,6 +61,19 @@ export function PanelCotizaciones({ token, entidadesCatalogo, showToast }) {
       </Indicadores>
       <Pestanas etiqueta="Cotizaciones" activa={pestana} onCambiar={setPestana} items={[{ key: "cotizaciones", label: "Cotizaciones", n: lista.length || null }, { key: "biblioteca", label: "Biblioteca", n: productos.length || null }]} />
 
+      {captura?.error && <AvisoLinea tono="warn" dato="captura-error" accion="Descartar" onClick={descartarCaptura}>{captura.error}{/[.!?]$/.test(captura.error) ? "" : "."} Puedes ingresar el producto manualmente.</AvisoLinea>}
+      {captura?.captura && (
+        <Tarjeta padding="12px 14px" data-captura-pendiente style={{ borderColor: C.teal, background: C.tealLight }}>
+          <div style={{ fontSize: T.small, fontWeight: 800, color: C.tealDark, textTransform: "uppercase", letterSpacing: 0.5 }}>Producto capturado en Safari</div>
+          <div style={{ fontSize: T.sm, fontWeight: 800, color: C.ink, marginTop: 4, lineHeight: 1.3 }}>{captura.captura.ficha.nombre || "Sin nombre (complétalo al revisar)"}</div>
+          <div style={{ fontSize: T.small, color: C.inkMuted, marginTop: 2 }}>{captura.captura.fuente || ""} · {captura.captura.ficha.especificaciones.length} especificaciones · {captura.captura.ficha.imagenes.length} imágenes</div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
+            <BotonPrincipal data-captura-nueva onClick={() => { setPestana("cotizaciones"); setAbierta(cotizacionVacia()); }} disabled={!almacen} style={{ opacity: almacen ? 1 : 0.5 }}>Nueva cotización con este producto</BotonPrincipal>
+            <BotonSecundario data-captura-descartar onClick={descartarCaptura}>Descartar</BotonSecundario>
+          </div>
+          <div style={{ fontSize: T.small, color: C.inkMuted, marginTop: 8 }}>O toca una cotización de la lista para agregarlo ahí. Se abrirá para revisión antes de guardar.</div>
+        </Tarjeta>
+      )}
       <PanelPestana visible={pestana === "cotizaciones"} titulo="Cotizaciones">
         <BarraAcciones>
           <BotonPrincipal data-nueva-cotizacion onClick={() => setAbierta(cotizacionVacia())} disabled={!almacen} style={{ opacity: almacen ? 1 : 0.5 }}>+ Nueva cotización</BotonPrincipal>
@@ -68,6 +92,18 @@ export function PanelCotizaciones({ token, entidadesCatalogo, showToast }) {
             <div style={{ fontSize: T.small, color: C.inkFaint, marginTop: 3 }}>{c.n_items} producto{c.n_items === 1 ? "" : "s"} · neto {fmt.money(Number(c.subtotal_neto) || 0)} · {fmt.date(String(c.fecha || "").slice(0, 10))}</div>
           </Tarjeta>
         ))}
+        <Desplegable dato="atajo-safari" titulo="Captura desde Safari (iPhone)" resumen="Instala el atajo una vez y comparte productos desde Falabella, Mercado Libre u otras tiendas">
+          <ol style={{ margin: "4px 0 10px", paddingLeft: 20, fontSize: T.sm, color: C.ink, lineHeight: 1.55 }}>
+            <li>Toca <b>Copiar código del atajo</b> (abajo).</li>
+            <li>Abre la app <b>Atajos</b> → <b>+</b> → nombre: <b>Enviar a BFK</b>.</li>
+            <li>Toca <b>ⓘ</b> (detalles) → activa <b>Mostrar en hoja para compartir</b> y deja solo <b>Páginas web de Safari</b>.</li>
+            <li>Agrega la acción <b>Ejecutar JavaScript en página web</b>, borra el texto de ejemplo y <b>pega</b> el código.</li>
+            <li>Agrega la acción <b>Abrir URL</b> (usa el resultado del JavaScript). Guarda.</li>
+            <li>En <b>Ajustes → Atajos → Avanzado</b>, activa <b>Permitir ejecutar scripts</b>.</li>
+          </ol>
+          <div style={{ fontSize: T.small, color: C.inkMuted, marginBottom: 10, lineHeight: 1.45 }}>Uso: en Safari abre el producto → <b>Compartir</b> → <b>Enviar a BFK</b>. BFK Datos se abre en Cotizaciones con el producto listo para revisar. El atajo solo lee la página que estás viendo; el precio queda como dato interno y el envío siempre se verifica aparte.</div>
+          <BotonSecundario data-copiar-atajo onClick={copiarAtajo} style={{ width: "100%", justifyContent: "center", minHeight: 44 }}>Copiar código del atajo</BotonSecundario>
+        </Desplegable>
       </PanelPestana>
 
       <PanelPestana visible={pestana === "biblioteca"} titulo="Biblioteca">
@@ -87,7 +123,7 @@ export function PanelCotizaciones({ token, entidadesCatalogo, showToast }) {
         ))}
       </PanelPestana>
 
-      {abierta && almacen && <EditorCotizacion key={abierta.id || "nueva"} almacen={almacen} inicial={abierta} token={token} entidadesCatalogo={entidadesCatalogo} productosBib={productos} showToast={showToast}
+      {abierta && almacen && <EditorCotizacion key={abierta.id || "nueva"} almacen={almacen} inicial={abierta} token={token} captura={captura?.captura || null} onCapturaUsada={descartarCaptura} entidadesCatalogo={entidadesCatalogo} productosBib={productos} showToast={showToast}
         onGuardada={() => recargar()} onBibliotecaCambio={recargarBib} onCerrar={() => { setAbierta(null); recargar(); }} />}
       {ficha && <EditorFicha inicial={ficha} modo="biblioteca" token={token} onGuardar={guardarFichaBib} onCerrar={() => setFicha(null)} />}
     </div>

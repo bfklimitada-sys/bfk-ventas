@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { C, T, R, iStyle, iMono, selStyle, fmt, MONO } from "../../lib/theme";
 import { Field, Modal } from "../ui/Basicos";
 import { HojaLateral, Pestanas, PanelPestana, Tarjeta, Badge, AvisoLinea, BotonPrincipal, BotonSecundario, FilaDato, Desplegable, Seccion } from "../ui/Sistema";
@@ -13,7 +13,7 @@ const pct = (x) => `${(Math.round(Number(x) * 1000) / 10).toLocaleString("es-CL"
 const m = (x) => fmt.money(Math.round(Number(x) || 0));
 const iguales = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
-export function EditorCotizacion({ almacen, inicial, token, entidadesCatalogo = [], productosBib = [], showToast, onGuardada, onBibliotecaCambio, onCerrar }) {
+export function EditorCotizacion({ almacen, inicial, token, entidadesCatalogo = [], productosBib = [], showToast, onGuardada, onBibliotecaCambio, onCerrar, captura, onCapturaUsada }) {
   const [cot, setCot] = useState(() => JSON.parse(JSON.stringify(inicial)));
   const [sucio, setSucio] = useState(!inicial.id);
   const [pestana, setPestana] = useState(inicial.id ? "productos" : "datos");
@@ -51,25 +51,39 @@ export function EditorCotizacion({ almacen, inicial, token, entidadesCatalogo = 
     if (guardarBiblioteca) showToast?.("Producto guardado en la biblioteca compartida");
   };
 
+  // Resultado de una consulta de enlace o de una captura de Safari → producto para revisar (mismo tratamiento).
+  // Precio y disponibilidad quedan como datos internos; el envío nunca viene incluido y queda por verificar.
+  const prepararItem = async (r, enlaceBase, origen) => {
+    const e = r.enlace || enlaceBase;
+    const item = { ...itemVacio(), enlace: e, proveedor: proveedorDeEnlace(e) || r.fuente, precio_origen: r.precio_origen ?? "", precio_incluye_iva: r.precio_incluye_iva !== false,
+      disponibilidad: r.disponibilidad || "", fecha_consulta: r.fecha_consulta, origen_datos: origen || (r.metodos || []).join(",") || "enlace",
+      consulta: { fuente: origen === "safari" ? `${r.fuente || proveedorDeEnlace(e)} (capturado en Safari)` : r.fuente, fecha_consulta: r.fecha_consulta, metodos: r.metodos, advertencias: [...(r.advertencias || [])] },
+      ficha: { ...r.ficha, imagenes: [] } };
+    const urls = (r.ficha?.imagenes || []).slice(0, 4);
+    if (urls.length) {
+      setConsultando(`Trayendo ${urls.length} imagen${urls.length > 1 ? "es" : ""}…`);
+      const res = await Promise.allSettled(urls.map((x) => traerImagen(token, x)));
+      item.ficha.imagenes = res.filter((x) => x.status === "fulfilled").map((x) => x.value);
+      const fallas = res.length - item.ficha.imagenes.length; if (fallas) item.consulta.advertencias.push(`${fallas} imagen(es) no se pudieron traer: agrégalas con "Agregar foto" (por ejemplo, una captura de pantalla).`);
+    }
+    return item;
+  };
   const consultar = async () => {
     const u = enlace.trim(); if (!u) return;
     setErrorEnlace(""); setConsultando("Consultando el enlace…");
     try {
       const r = await consultarEnlace(token, u);
-      const item = { ...itemVacio(), enlace: r.enlace || u, proveedor: proveedorDeEnlace(r.enlace || u) || r.fuente, precio_origen: r.precio_origen ?? "", precio_incluye_iva: r.precio_incluye_iva !== false,
-        disponibilidad: r.disponibilidad || "", fecha_consulta: r.fecha_consulta, origen_datos: (r.metodos || []).join(",") || "enlace",
-        consulta: { fuente: r.fuente, fecha_consulta: r.fecha_consulta, metodos: r.metodos, advertencias: [...(r.advertencias || [])] },
-        ficha: { ...r.ficha, imagenes: [] } };
-      const urls = (r.ficha?.imagenes || []).slice(0, 4);
-      if (urls.length) {
-        setConsultando(`Trayendo ${urls.length} imagen${urls.length > 1 ? "es" : ""}…`);
-        const res = await Promise.allSettled(urls.map((x) => traerImagen(token, x)));
-        item.ficha.imagenes = res.filter((x) => x.status === "fulfilled").map((x) => x.value);
-        const fallas = res.length - item.ficha.imagenes.length; if (fallas) item.consulta.advertencias.push(`${fallas} imagen(es) no se pudieron traer.`);
-      }
+      const item = await prepararItem(r, u);
       setEnlace(""); abrirNuevo(item);
     } catch (e) { setErrorEnlace(e.message); setEnlacePendiente(u); } finally { setConsultando(""); }
   };
+  // Captura recibida desde el atajo de Safari: se abre una sola vez como producto nuevo para revisión.
+  const capturaUsada = useRef(false);
+  useEffect(() => {
+    if (!captura || capturaUsada.current) return; capturaUsada.current = true;
+    setPestana("productos"); setConsultando("Preparando el producto capturado en Safari…");
+    prepararItem(captura, captura.enlace, "safari").then((item) => { abrirNuevo(item); onCapturaUsada?.(); }).finally(() => setConsultando(""));
+  }, [captura]); // eslint-disable-line react-hooks/exhaustive-deps
   const manual = (conEnlace) => abrirNuevo({ ...itemVacio(), enlace: conEnlace || "", proveedor: proveedorDeEnlace(conEnlace || ""), origen_datos: "manual" });
   const desdeTexto = () => {
     const r = extraerDeTexto(texto); const e = enlacePendiente;

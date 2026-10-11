@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { chromium, CHROME, crearBase, abrir } from "../pruebas-oc/mock_estado.mjs";
 import { crearDatos } from "../pruebas-oc/datos_oc.mjs";
 import { calcularCotizacion } from "../../src/lib/cotizaciones.js";
+import { codificarCaptura } from "../../src/lib/captura.js";
 
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const URL_APP = process.argv[2] || "http://127.0.0.1:4178/";
@@ -250,6 +251,48 @@ const sinScrollH = (p) => p.evaluate(() => document.documentElement.scrollWidth 
   const g = await p.evaluate(() => JSON.parse(localStorage.getItem("bfk_cotizaciones_prueba_v1")).cotizaciones[0]);
   ok("I6_sin_perder_informacion", g.id_externo === "1234-5-COT26" && g.items.length === 1 && g.items[0].ficha.modelo === "AB360NXT12" && Number(g.items[0].precio_origen) === 50000 && g.items[0].ficha_aprobada === true && g.nombre === "COMPRA DE CABLES" && g.institucion === "Municipalidad de Laja" && g.version === 2, g);
   ok("I7_sin_errores", errs.length === 0, errs);
+  await ctx.close();
+}
+
+// ═════ 1c. Captura desde Safari (atajo): llega a Cotizaciones para revisión, en cotización nueva o existente ═════
+{
+  const { p, ctx, errs } = await preparar({ ancho: 390, alto: 844, movil: true, modoBase: false });
+  const cap = { v: 1, enlace: "https://www.falabella.com/falabella-cl/product/121339405/Impresora/121339406", fuente: "falabella.com", fecha_consulta: "2026-10-11T22:00:00.000Z",
+    precio_origen: 189990, moneda: "CLP", precio_incluye_iva: true, disponibilidad: "En stock", metodos: ["json-ld"], advertencias: ["El costo de envío no se obtiene automáticamente: verifícalo con la dirección real del cliente."],
+    ficha: { nombre: "Impresora Multifuncional HP Smart Tank 580", marca: "HP", modelo: "Smart Tank 580", color: "Blanco", descripcion: "", generales: [], especificaciones: [{ etiqueta: "Tipo de impresión", valor: "Inyección a color" }], imagenes: ["https://media.falabella.com/a.jpg", "https://media.falabella.com/b.jpg"] } };
+  const dir = URL_APP.replace(/\/$/, "") + "/#/cotizaciones?captura=" + codificarCaptura(cap);
+  await p.goto(dir); await espera(p, 2500);
+  ok("C1_direccion_limpia_sin_captura", await p.evaluate(() => location.hash) === "#/cotizaciones");
+  ok("C2_aviso_producto_capturado", /Impresora Multifuncional HP Smart Tank 580/.test(await p.locator("[data-captura-pendiente]").innerText()) && /2 imágenes/.test(await p.locator("[data-captura-pendiente]").innerText()));
+  await p.locator("[data-captura-nueva]").click(); await espera(p, 1800);
+  const ed = p.locator("[data-editor-ficha]");
+  ok("C3_ficha_abierta_para_revision", await ed.count() === 1 && await ed.locator('[data-campo="modelo"]').inputValue() === "Smart Tank 580" && /capturado en Safari/.test(await ed.locator("[data-origen-consulta]").innerText()));
+  ok("C4_imagenes_y_enlace_original", await ed.locator("[data-imagen-ficha]").count() === 2 && await ed.locator('[data-campo="enlace"]').inputValue() === cap.enlace);
+  ok("C5_precio_en_datos_internos", await ed.locator('[data-datos-internos] [data-campo="precio"]').inputValue() === "189990" && /envío no se obtiene/i.test(await ed.locator("[data-origen-consulta]").innerText()));
+  await ed.locator("[data-guardar-ficha]").click(); await espera(p, 700);
+  const h = enHoja(p);
+  ok("C6_agregado_con_envio_por_verificar", await h.locator("[data-item-cotizacion]").count() === 1 && /Envío por verificar/.test(await h.locator('[data-item-cotizacion="1"]').innerText()));
+  await llenar(h.locator("[data-enlace-proveedor]"), ""); await tab(p, "datos"); await llenar(h.locator('[data-campo="institucion"]'), "Municipalidad de Laja");
+  await p.locator("[data-guardar-cotizacion]").click(); await espera(p, 700); await p.locator("[data-cerrar-hoja]").click(); await espera(p, 600);
+  ok("C7_captura_consumida", await p.locator("[data-captura-pendiente]").count() === 0);
+  await p.reload(); await espera(p, 2500);
+  ok("C8_no_reaparece_al_recargar", await p.locator("[data-captura-pendiente]").count() === 0 && await p.locator("[data-cotizacion]").count() === 1);
+  // Segunda captura → cotización existente
+  await p.goto(URL_APP.replace(/\/$/, "") + "/#/cotizaciones?captura=" + codificarCaptura({ ...cap, enlace: "https://articulo.mercadolibre.cl/MLC-1-silla-_JM", fuente: "mercadolibre.cl", ficha: { ...cap.ficha, nombre: "Silla Ejecutiva", marca: "Genérica", modelo: "SE-2000", imagenes: [] } })); await espera(p, 2500);
+  await p.locator("[data-cotizacion]").first().click(); await espera(p, 1500);
+  ok("C9_existente_abre_ficha_capturada", /Silla Ejecutiva/.test(await ed.locator('[data-campo="nombre"]').inputValue()));
+  await ed.locator("[data-guardar-ficha]").click(); await espera(p, 600);
+  ok("C10_agregado_a_cotizacion_existente", await enHoja(p).locator("[data-item-cotizacion]").count() === 2);
+  await p.locator("[data-guardar-cotizacion]").click(); await espera(p, 600); await p.locator("[data-cerrar-hoja]").click(); await espera(p, 500);
+  // Descartar y error del atajo
+  await p.goto(dir); await espera(p, 2500); await p.locator("[data-captura-descartar]").click(); await espera(p, 300);
+  ok("C11_descartar_no_guarda_nada", await p.locator("[data-captura-pendiente]").count() === 0 && (await p.evaluate(() => JSON.parse(localStorage.getItem("bfk_cotizaciones_prueba_v1")).cotizaciones[0].items.length)) === 2);
+  await p.goto("about:blank"); // apertura en pestaña nueva (carga completa), como "Abrir URL" del atajo
+  await p.goto(URL_APP.replace(/\/$/, "") + "/#/cotizaciones?captura_error=" + encodeURIComponent("página sin acceso")); await espera(p, 2500);
+  ok("C12_error_del_atajo_avisado", /no pudo leer la página/.test(await p.locator('[data-aviso-linea="captura-error"]').innerText()));
+  ok("C13_instrucciones_del_atajo", await p.locator('[data-desplegable="atajo-safari"], [data-desplegable-dato="atajo-safari"]').count() + await p.getByText("Captura desde Safari (iPhone)").count() >= 1);
+  ok("C14_sin_errores", errs.length === 0, errs);
+  await p.screenshot({ path: join(SALIDA, "captura_safari.png") });
   await ctx.close();
 }
 
