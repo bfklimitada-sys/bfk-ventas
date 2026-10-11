@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { jsPDF } from "jspdf";
-import { crearPdfEETT, textoPDF } from "../../src/lib/eettPdf.js";
+import { crearPdfEETT, textoPDF, nombreArchivoEETT } from "../../src/lib/eettPdf.js";
 
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const F = []; let nOk = 0;
@@ -59,5 +59,15 @@ ok("P13_producto_sin_imagen_no_falla", pCable >= 0);
 const meta = execFileSync("pdfinfo", [ruta]).toString();
 ok("P14_tamano_A4", /595\.28 x 841\.89/.test(meta), meta.match(/Page size:.*/)?.[0]);
 
+// Sin ID de Mercado Público: el PDF se genera y la cabecera omite esa columna.
+{
+  const sinId = { ...cot, id_externo: "" };
+  const d2 = crearPdfEETT(sinId, items.slice(2), { jsPDF, logo });
+  const r2 = join(dir, "EETT_sin_id.pdf"); writeFileSync(r2, Buffer.from(d2.output("arraybuffer")));
+  const t2 = execFileSync("pdftotext", ["-layout", r2, "-"]).toString();
+  ok("P15_sin_id_genera_pdf", d2.getNumberOfPages() === 1 && /AB360NXT12/.test(t2));
+  ok("P16_sin_id_omite_columna_id", !/ID LICITACI/.test(t2) && /NOMBRE LICITACI/.test(t2) && /20-08-2026/.test(t2) && /65\.229\.008-6/.test(t2) && !/undefined|null/.test(t2), t2.slice(0, 400));
+  ok("P17_nombre_archivo_sin_id", nombreArchivoEETT(sinId) === "EETT_2026-08-20_ASOCIACION_DE_MUNICIPIOS_PARA_LA_SEGURIDAD_COMUNI.pdf" && nombreArchivoEETT(cot) === "EETT_1525570-33-COT26.pdf" && nombreArchivoEETT({}) === "EETT_cotizacion.pdf", [nombreArchivoEETT(sinId), nombreArchivoEETT({})]);
+}
 console.log(`\nPDF: ${ruta} (${paginas} páginas)\n${nOk} OK · ${F.length} fallas`);
 process.exit(F.length ? 1 : 0);

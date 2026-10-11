@@ -198,7 +198,7 @@ export function estadoParaPDF(cot) {
     return { key: it.key, n: i + 1, avisos: av, bloqueos, revisar, aprobado: !bloqueos.length && (!revisar.length || !!it.ficha_aprobada) };
   });
   const faltan = [];
-  if (!String(cot?.id_externo || "").trim()) faltan.push("ID de Mercado Público");
+  // El ID de Mercado Público es opcional: si falta, se omite del encabezado del PDF (11/10/2026).
   if (!String(cot?.institucion || "").trim()) faltan.push("institución");
   return { porItem, faltan, listo: items.length > 0 && !faltan.length && porItem.every((p) => p.aprobado) };
 }

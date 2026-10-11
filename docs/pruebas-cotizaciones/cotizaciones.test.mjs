@@ -96,7 +96,8 @@ const item = (key, cantidad, precio, envio_key, extra = {}) => ({ key, cantidad,
   ok("R4_atributo_modelo_distinto", revisarFicha({ ...smart, nombre: "Impresora 580", especificaciones: [{ etiqueta: "Modelo", valor: "Smart Tank 520" }] }).some((a) => a.tipo === "modelo_atributo"));
   const cot = { id_externo: "1-1-COT26", institucion: "Muni", items: [{ key: "a", ficha: smart }, { key: "b", ficha: { ...smart, nombre: "Impresora 580" } }] };
   ok("R5_pdf_requiere_aprobar_discrepancias", !estadoParaPDF(cot).listo && estadoParaPDF({ ...cot, items: [{ ...cot.items[0], ficha_aprobada: true }, cot.items[1]] }).listo);
-  ok("R6_pdf_requiere_id_e_institucion", estadoParaPDF({ ...cot, id_externo: "" }).faltan.includes("ID de Mercado Público"));
+  ok("R6_pdf_sin_id_permitido", !estadoParaPDF({ ...cot, id_externo: "" }).faltan.length && estadoParaPDF({ ...cot, id_externo: "", items: [{ ...cot.items[0], ficha_aprobada: true }, cot.items[1]] }).listo);
+  ok("R6b_pdf_requiere_institucion", estadoParaPDF({ ...cot, institucion: "" }).faltan.includes("institución"));
   const fp = fichaPublica({ ...smart, precio_origen: 1, enlace: "https://x", proveedor: "F", imagenes: ["https://externa/sin-copiar.jpg", "data:image/png;base64,AA"] });
   ok("R7_ficha_publica_solo_tecnica", Object.keys(fp).sort().join(",") === "color,descripcion,especificaciones,generales,imagenes,marca,modelo,nombre" && fp.imagenes.length === 1, fp);
   ok("R8_pares_texto_ida_y_vuelta", textoDePares(paresDeTexto("Marca: HP\nResolución:  1200 dpi\nSolo etiqueta")) === "Marca: HP\nResolución: 1200 dpi\nSolo etiqueta");

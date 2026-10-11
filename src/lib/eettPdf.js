@@ -28,7 +28,7 @@ export function crearPdfEETT(cot, items, { jsPDF, logo } = {}) {
   const fichas = (items || []).map((it) => fichaPublica(it.ficha || it));
   if (!fichas.length) throw new Error("La cotización no tiene productos para la EETT.");
   const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait", compress: true });
-  doc.setProperties({ title: `EETT ${cab.id_externo}`.trim(), subject: "Información técnica de productos", author: "BFK Ingeniería y Servicios", creator: "BFK Datos" });
+  doc.setProperties({ title: `EETT ${cab.id_externo || cab.nombre || cab.institucion}`.trim(), subject: "Información técnica de productos", author: "BFK Ingeniería y Servicios", creator: "BFK Datos" });
   const W = 210, H = 297, X0 = 10, X1 = 200, ANCHO = X1 - X0;
   const PIE_Y = 279; // inicio de la banda del pie
   const paginasFicha = []; // [{ ficha: n, pagina }]
@@ -49,8 +49,9 @@ export function crearPdfEETT(cot, items, { jsPDF, logo } = {}) {
     }
     doc.setDrawColor(40); doc.line(5, 5 + altoCab, W - 5, 5 + altoCab);
     // Tabla de identificación (2 filas de títulos + valores), como la referencia.
-    const cols = [X0, X0 + 42, X0 + 150]; const anchos = [42, 108, 40];
-    const fila = (y, titulos, valores, colorPrimero) => {
+    // Sin ID de Mercado Público, la primera fila omite esa columna y el nombre ocupa su espacio.
+    const conId = !!cab.id_externo;
+    const fila = (y, titulos, valores, colorPrimero, cols = [X0, X0 + 42, X0 + 150], anchos = [42, 108, 40]) => {
       doc.setDrawColor(...LINEA); doc.setLineWidth(0.25); doc.line(X0, y - 4, X1, y - 4); doc.line(X0, y + 1.5, X1, y + 1.5);
       doc.setFont("helvetica", "bold"); doc.setFontSize(6.8); doc.setTextColor(20);
       titulos.forEach((t, i) => doc.text(t, cols[i], y));
@@ -61,7 +62,8 @@ export function crearPdfEETT(cot, items, { jsPDF, logo } = {}) {
         doc.text(txt, cols[i] + anchos[i] / 2, y + 6.2, { align: "center" });
       });
     };
-    fila(42, ["ID LICITACIÓN", "NOMBRE LICITACIÓN", "FECHA EMISIÓN"], [cab.id_externo, cab.nombre, fechaCL(cab.fecha)], true);
+    if (conId) fila(42, ["ID LICITACIÓN", "NOMBRE LICITACIÓN", "FECHA EMISIÓN"], [cab.id_externo, cab.nombre, fechaCL(cab.fecha)], true);
+    else fila(42, ["NOMBRE LICITACIÓN", "FECHA EMISIÓN"], [cab.nombre, fechaCL(cab.fecha)], false, [X0, X0 + 150], [150, 40]);
     fila(53, ["PLAZO ENTREGA", "INSTITUCIÓN SOLICITANTE", "RUT"], [cab.plazo, cab.institucion, cab.rut], false);
     doc.setDrawColor(...LINEA); doc.line(X0, 60.2, X1, 60.2);
     return 64; // y disponible
@@ -191,7 +193,13 @@ export function crearPdfEETT(cot, items, { jsPDF, logo } = {}) {
   return doc;
 }
 
-export const nombreArchivoEETT = (cot) => `EETT_${String(cabeceraPublica(cot).id_externo || "cotizacion").replace(/[^A-Za-z0-9_-]+/g, "_")}.pdf`;
+// Nombre del archivo: el ID si existe; si no, fecha + institución (sin ID no queda "undefined" ni vacío).
+export const nombreArchivoEETT = (cot) => {
+  const c = cabeceraPublica(cot);
+  const base = c.id_externo || [c.fecha, c.institucion].filter(Boolean).join("_") || "cotizacion";
+  const limpio = base.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9_-]+/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "").slice(0, 60);
+  return `EETT_${limpio || "cotizacion"}.pdf`;
+};
 
 // Navegador: carga jsPDF bajo demanda, genera y descarga. Devuelve { blob, nombre, paginas }.
 export async function descargarPdfEETT(cot, items, { logo } = {}) {

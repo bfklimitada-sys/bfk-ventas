@@ -217,6 +217,42 @@ const sinScrollH = (p) => p.evaluate(() => document.documentElement.scrollWidth 
   await ctx.close();
 }
 
+// ═════ 1b. Sin ID de Mercado Público: crear, guardar, generar PDF y agregar el ID después sin perder nada ═════
+{
+  const { p, ctx, errs } = await preparar({ ancho: 390, alto: 844, movil: true, modoBase: false });
+  await irCotizaciones(p, true);
+  await p.locator("[data-nueva-cotizacion]").click(); await espera(p, 600);
+  const h = enHoja(p); const ed = p.locator("[data-editor-ficha]");
+  await llenar(h.locator('[data-campo="institucion"]'), "Municipalidad de Laja");
+  await llenar(h.locator('[data-campo="nombre_licitacion"]'), "COMPRA DE CABLES");
+  await tab(p, "productos");
+  await h.locator("[data-ingreso-manual]").click(); await espera(p, 400);
+  await llenar(ed.locator('[data-campo="nombre"]'), "Cable UTP Cat6 305 m"); await llenar(ed.locator('[data-campo="marca"]'), "Nexxt"); await llenar(ed.locator('[data-campo="modelo"]'), "AB360NXT12");
+  await llenar(ed.locator('[data-campo="especificaciones"]'), "Categoría: 6"); await llenar(ed.locator('[data-campo="precio"]'), 50000);
+  await ed.locator("[data-guardar-biblioteca] input").uncheck(); await ed.locator("[data-guardar-ficha]").click(); await espera(p, 600);
+  await tab(p, "eett");
+  ok("I1_sin_id_no_falta_dato", await h.locator('[data-aviso-linea="faltan-datos"]').count() === 0);
+  await h.locator('[data-revision-eett="1"] [data-aprobar-ficha] input').check(); await espera(p, 200);
+  const [dl] = await Promise.all([p.waitForEvent("download", { timeout: 15000 }), h.locator("[data-generar-eett]").click()]);
+  const rp = join(SALIDA, "sin_id_" + dl.suggestedFilename()); await dl.saveAs(rp); await espera(p, 500);
+  const tx = execFileSync("pdftotext", ["-layout", rp, "-"]).toString();
+  ok("I2_pdf_sin_id_generado", /^EETT_\d{4}-\d{2}-\d{2}_Municipalidad_de_Laja\.pdf$/.test(dl.suggestedFilename()) && /AB360NXT12/.test(tx) && !/ID LICITACI/.test(tx) && /COMPRA DE CABLES/.test(tx), dl.suggestedFilename());
+  await p.locator("[data-guardar-cotizacion]").click(); await espera(p, 700);
+  ok("I3_guarda_sin_id", /Guardado/.test(await p.locator("[data-guardar-cotizacion]").innerText()));
+  await p.locator("[data-cerrar-hoja]").click(); await espera(p, 600);
+  ok("I4_lista_indica_sin_id", /Sin ID Mercado Público/.test(await p.locator("[data-panel-cotizaciones]").innerText()));
+  await p.locator("[data-cotizacion]").first().click(); await espera(p, 700);
+  await tab(p, "datos");
+  await llenar(enHoja(p).locator('[data-campo="id_externo"]'), "1234-5-cot26");
+  await p.locator("[data-guardar-cotizacion]").click(); await espera(p, 700);
+  await p.locator("[data-cerrar-hoja]").click(); await espera(p, 600);
+  ok("I5_id_agregado_despues", await p.locator('[data-cotizacion="1234-5-COT26"]').count() === 1);
+  const g = await p.evaluate(() => JSON.parse(localStorage.getItem("bfk_cotizaciones_prueba_v1")).cotizaciones[0]);
+  ok("I6_sin_perder_informacion", g.id_externo === "1234-5-COT26" && g.items.length === 1 && g.items[0].ficha.modelo === "AB360NXT12" && Number(g.items[0].precio_origen) === 50000 && g.items[0].ficha_aprobada === true && g.nombre === "COMPRA DE CABLES" && g.institucion === "Municipalidad de Laja" && g.version === 2, g);
+  ok("I7_sin_errores", errs.length === 0, errs);
+  await ctx.close();
+}
+
 // ═════ 2. Modo base (tablas instaladas), escritorio 1440 ═════
 {
   const { p, ctx, errs, reg } = await preparar({ ancho: 1440, alto: 900, movil: false, modoBase: true });

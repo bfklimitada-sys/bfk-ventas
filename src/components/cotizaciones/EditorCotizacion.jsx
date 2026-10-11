@@ -129,7 +129,7 @@ export function EditorCotizacion({ almacen, inicial, token, entidadesCatalogo = 
 
   const nPend = calc.pendientes.length; const nRev = pdf.porItem.filter((p) => !p.aprobado).length;
   const filtradosBib = productosBib.filter((p) => !buscaBib.trim() || `${p.nombre} ${p.marca} ${p.modelo}`.toLowerCase().includes(buscaBib.trim().toLowerCase()));
-  const titulo = cot.id_externo || (cot.id ? "Cotización" : "Nueva cotización");
+  const titulo = cot.id_externo || (cot.id ? (cot.nombre || cot.institucion || "Cotización sin ID") : "Nueva cotización");
 
   return (
     <HojaLateral abierta onCerrar={cerrar} dato="cotizacion" titulo={titulo} subtitulo={[cot.institucion, ESTADOS_COTIZACION[cot.estado]?.label].filter(Boolean).join(" · ")}
@@ -143,7 +143,7 @@ export function EditorCotizacion({ almacen, inicial, token, entidadesCatalogo = 
         ]} />
 
         <PanelPestana visible={pestana === "datos"} titulo="Datos">
-          <Field label="ID Mercado Público" required><input data-campo="id_externo" value={cot.id_externo} onChange={(e) => setCampo("id_externo", e.target.value.trim().toUpperCase())} style={iMono} placeholder="1525570-33-COT26" /></Field>
+          <Field label="ID Mercado Público (opcional)" hint="Puedes agregarlo después: la cotización y la EETT funcionan sin él; si falta, se omite del encabezado del PDF."><input data-campo="id_externo" value={cot.id_externo} onChange={(e) => setCampo("id_externo", e.target.value.trim().toUpperCase())} style={iMono} placeholder="1525570-33-COT26" /></Field>
           <Field label="Nombre de la licitación / compra ágil"><input data-campo="nombre_licitacion" value={cot.nombre} onChange={(e) => setCampo("nombre", e.target.value)} style={iStyle} /></Field>
           <Field label="Institución" required><input data-campo="institucion" list="cz-entidades" value={cot.institucion} onChange={(e) => elegirEntidad(e.target.value)} style={iStyle} />
             <datalist id="cz-entidades">{entidadesCatalogo.slice(0, 400).map((e) => <option key={e.id || e.rut} value={e.nombre_entidad} />)}</datalist></Field>
