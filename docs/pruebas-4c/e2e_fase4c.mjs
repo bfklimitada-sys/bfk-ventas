@@ -62,7 +62,8 @@ await escenario("C1", async () => {
   ok("C1_guarda_foto_mp_con_items_estructurados", foto && foto.datos.items.length === 1 && foto.datos.items[0].cantidad === 2 && foto.datos.total === 2380000, foto?.datos);
   ok("C1_producto_editado_no_se_pisa", b.db.oc_productos_link.find((l) => l.id === "l1v").descripcion.startsWith("Silla ergonómica"));
   ok("C1_comprados_no_se_tocan", ws.filter((w) => w.tabla === "oc_productos_link" && ["l1a", "l1b"].includes(w.id)).length === 0);
-  await p.locator('[data-oc="2001-101-SE26"]').getByRole("button", { name: /Productos y números/ }).click(); await espera(p, 500);
+  // Ficha como expediente (desde 29ea625): el detalle de Mercado Público está en la sección «Productos».
+  await p.locator('[data-oc="2001-101-SE26"] [data-indice-ficha] button', { hasText: "Productos" }).first().click(); await espera(p, 500);
   const det = await p.locator("[data-mp-detalle]").innerText().catch(() => "");
   ok("C1_detalle_muestra_neto_iva_aceptacion_recepcion", /Mercado Público/i.test(det) && /Neto/.test(det) && /IVA/.test(det) && /Aceptación/.test(det) && /Recepción/.test(det), det);
   ok("C1_responsable_oculto", (await p.locator('[data-oc="2001-101-SE26"] select option', { hasText: "Sin asignar" }).count()) === 0 && !/Responsable/.test(await p.locator('[data-oc="2001-101-SE26"]').innerText()));
@@ -147,18 +148,25 @@ await escenario("C4", async () => {
 await escenario("C5", async () => {
   const b = crearBase(datos(), { mp: RESPUESTAS_MP });
   const { page: p, errs, ctx } = await abrir(browser, b, { url: URL_APP, ...escritorio, espera: 3000 });
-  const t = await p.locator("[data-desglose-saldo]").innerText();
-  // oc7: factura 1.260.000, abono de 500.000 en vale vista SIN cobrar en el banco → no es caja; queda todo por cobrar.
-  ok("C5_desglose_visible_con_vale_vista", /Caja calculada/.test(t) && /Por cobrar/.test(t) && /vale vista\/cheque sin cobrar\s*\$?500\.000/.test(t.replace(/\n/g, " ")), t);
-  const nums = (s) => Number(String(s).replace(/[^0-9-]/g, ""));
-  const lineas = await p.locator("[data-desglose-saldo] > div").evaluateAll((els) => els.map((e) => e.innerText));
-  const caja = nums(lineas[0].split("\n").pop()), cobrar = nums(lineas[1].split("\n").pop()), deudas = nums(lineas[lineas.length - 1].split("\n").pop());
-  const proyectado = nums(await p.locator("text=Saldo proyectado").locator("xpath=following-sibling::div[1]").innerText());
-  ok("C5_proyectado_cuadra_con_desglose", proyectado === caja + cobrar - deudas, { proyectado, caja, cobrar, deudas });
+  // Desde el cierre financiero (6e825b5, 06/10/2026) el Panel muestra el resumen de caja (data-resumen-caja) en lugar
+  // del antiguo desglose; el vale vista sin cobrar va en su propia línea en vez de dentro de «Por cobrar».
+  await p.waitForSelector("[data-resumen-caja]", { timeout: 8000 }).catch(() => {});
+  const nums = (s) => (/[-−]/.test(String(s)) ? -1 : 1) * Number(String(s).replace(/[^0-9]/g, ""));
+  const m = async (k) => ((await p.locator(`[data-monto="${k}"]`).count()) ? nums(await p.locator(`[data-monto="${k}"]`).first().innerText()) : 0);
+  const lineas = await p.$$eval("[data-resumen-caja] [data-linea]", (xs) => xs.map((x) => x.getAttribute("data-linea")));
+  // oc7: factura 1.260.000, abono de 500.000 en vale vista SIN cobrar en el banco → no es caja; queda pendiente.
+  const vale = await m("vale_vista");
+  ok("C5_desglose_visible_con_vale_vista", lineas.includes("por_cobrar") && lineas.includes("vale_vista") && vale === 500000, { lineas, vale });
+  const base = (await p.locator('[data-monto="banco"]').count()) ? await m("banco") : await m("caja");
+  const cobrar = await m("por_cobrar"), facturar = await m("por_facturar");
+  const deudas = (await m("deuda_fin")) + (await m("comisiones")) + (await m("comisiones_por_liquidar")) + (await m("comisiones_en_curso")) + (await m("f29")) + (await m("externos"));
+  const proyectado = await m("proyectado");
+  ok("C5_proyectado_cuadra_con_desglose", proyectado === base + cobrar + facturar + vale - deudas, { proyectado, base, cobrar, facturar, vale, deudas });
   // Por cobrar esperado (lib/ocs.js): por OC de venta, factura vigente (o monto) − cobros en el banco.
+  // En el resumen actual ese total se reparte en facturas por cobrar + ventas sin facturar + vale vista sin cobrar.
   const ocs = b.leer("ordenes_compra_v2", new URLSearchParams("select=*,eventos_compra(*)")).filter((o) => !o.archivada && o.tipo_registro === "venta");
   const esperado = ocs.reduce((s, o) => { const base = o.monto_facturado > 0 ? o.monto_facturado : o.monto_total; const enBanco = o.eventos_pago_cliente.filter((e) => !(e.medio_pago && e.medio_pago !== "transferencia" && !e.cobrado_en_banco)).reduce((a, e) => a + e.monto, 0); return s + Math.max(0, base - enBanco); }, 0);
-  ok("C5_por_cobrar_correcto", cobrar === esperado, { cobrar, esperado });
+  ok("C5_por_cobrar_correcto", cobrar + facturar + vale === esperado, { cobrar, facturar, vale, esperado });
   ok("C5_sin_errores", errs.length === 0, errs);
   await ctx.close();
 });

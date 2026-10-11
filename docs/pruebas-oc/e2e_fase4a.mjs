@@ -30,6 +30,15 @@ async function abrirOC(p, numero) {
   if (await p.locator("[data-hoja-lateral]").count()) { await p.keyboard.press("Escape"); await espera(p, 400); }
   await p.locator(`[data-oc="${numero}"] > div`).first().click(); await espera(p, 1300);
 }
+
+// ── Ficha de OC como expediente (desde 29ea625, 07/10/2026): se llega a cada sección por el índice de la ficha.
+//    Solo cambia la navegación; las comprobaciones de negocio son las mismas.
+async function irSeccion(p, titulo) {
+  const b = p.locator("[data-indice-ficha] button", { hasText: titulo }).first();
+  await b.click(); await p.waitForTimeout(450);
+}
+const SECCION_ETAPA = { compra: "Compra y financiamiento", financ: "Compra y financiamiento", entrega: "Entrega", postventa: "Entrega", factura: "Facturación SII", cobro: "Cobranza" };
+const DETALLE_ETAPA = (etapa) => etapa === "factura" ? "[data-facturacion-sii]" : `[data-etapa-seccion="${etapa}"]`;
 const enModal = (p) => p.locator("[role=dialog]").last();
 async function boton(p, nombre, ambito) { const l = (ambito || p).getByRole("button", { name: nombre }); await l.first().click(); }
 const escenario = async (nombre, fn) => {
@@ -63,7 +72,7 @@ await escenario("S1", async () => {
   ok("S1_no_toca_fecha_de_compra", cuenta(ws, "PATCH", "eventos_compra") === 0 && b.db.eventos_compra.find((e) => e.id === "ec1").fecha === dias(30));
   ok("S1_historial_fecha_de_la_oc", cuenta(ws, "POST", "historial_cambios", (w) => w.cuerpo.accion === "Fecha de la OC actualizada desde Mercado Público") === 1);
   // Detalle: muestra las dos fechas por separado
-  await p.getByRole("button", { name: /Productos y números/ }).first().click(); await espera(p, 400);
+  await irSeccion(p, "Información OC");
   const t = await texto(p);
   ok("S1_detalle_muestra_fecha_oc_y_compra", /Fecha de la OC/.test(t) && /Compra \(fecha real\)/.test(t));
   ok("S1_sin_errores", errs.length === 0, errs);
@@ -251,7 +260,7 @@ await escenario("S8", async () => {
   const b = base0();
   const { page: p, errs, ctx } = await abrir(browser, b, { url: URL_APP, ...escritorio, espera: 3000 });
   await irA(p, "compras"); await abrirOC(p, "2001-101-SE26");
-  await p.getByRole("button", { name: /Productos y números/ }).first().click(); await espera(p, 400);
+  await irSeccion(p, "Productos");
   await boton(p, /repartir/i); await espera(p, 300);
   await p.locator('input[type=number]').last().fill("600000");
   const n = b.escr.length;
@@ -265,9 +274,10 @@ await escenario("S8", async () => {
   const hist = ws.filter((w) => w.metodo === "POST" && w.tabla === "historial_cambios");
   ok("S8_un_solo_registro_de_historial_real", hist.length === 1 && /Inversión repartida/.test(hist[0].cuerpo.accion), hist.map((h) => h.cuerpo.accion));
   // Editar un producto sin cambiar nada: no escribe
-  await p.getByRole("button", { name: /^Editar$/ }).first().click(); await espera(p, 300);
+  const secProd = p.locator('[data-seccion-ficha^="productos-"]');
+  await secProd.getByRole("button", { name: /^Editar$/ }).first().click(); await espera(p, 300);
   const n2 = b.escr.length;
-  await p.getByRole("button", { name: /^Guardar$/ }).click(); await espera(p, 900);
+  await secProd.getByRole("button", { name: /^Guardar$/ }).click(); await espera(p, 900);
   ok("S8_editar_sin_cambios_no_escribe", desde(b, n2).filter((w) => w.metodo !== "RPC").length === 0, desde(b, n2));
   ok("S8_sin_errores", errs.length === 0, errs);
   await ctx.close();
@@ -298,9 +308,8 @@ await escenario("S9", async () => {
 async function borrar(b, numero, etapa, nombreBoton = /Eliminar/) {
   const { page: p, errs, ctx } = await abrir(browser, b, { url: URL_APP, ...escritorio, espera: 3000 });
   await irA(p, "compras"); await abrirOC(p, numero);
-  await p.locator(`[data-etapa="${etapa}"]`).click(); await espera(p, 300);
-  const det = p.locator(`[data-detalle-etapa="${etapa}"]`);
-  if (!(await det.count())) { await p.locator(`[data-etapa="${etapa}"]`).click(); await espera(p, 300); }
+  await irSeccion(p, SECCION_ETAPA[etapa]);
+  const det = p.locator(DETALLE_ETAPA(etapa));
   const n = b.escr.length;
   await det.getByRole("button", { name: nombreBoton }).first().click(); await espera(p, 1800);
   const ws = desde(b, n); const t = await texto(p);
@@ -339,11 +348,11 @@ await escenario("S10", async () => {
   b = base0({ oc_productos_link: "rls", oc_comentarios: "rls" });
   const { page: p, errs, ctx } = await abrir(browser, b, { url: URL_APP, ...escritorio, espera: 3000 });
   await irA(p, "compras"); await abrirOC(p, "2001-101-SE26");
-  await p.getByRole("button", { name: /Productos y números/ }).first().click(); await espera(p, 400);
+  await irSeccion(p, "Productos");
   let n = b.escr.length;
   await p.getByRole("button", { name: /^Eliminar$/ }).first().click(); await espera(p, 1200);
   ok("S10_producto_no_confirmado_sin_historial", cuenta(desde(b, n), "POST", "historial_cambios") === 0 && b.db.oc_productos_link.length === 5 && /no eliminó/.test(await texto(p)));
-  await p.getByRole("button", { name: /Notas e historial/ }).click(); await espera(p, 300);
+  await irSeccion(p, "Historial");
   n = b.escr.length;
   await p.getByRole("button", { name: "✕" }).last().click(); await espera(p, 1000);
   ok("S10_nota_no_confirmada_avisa", cuenta(desde(b, n), "DELETE", "oc_comentarios") === 1 && b.db.oc_comentarios.length === 1 && /no eliminó/.test(await texto(p)));
@@ -438,19 +447,18 @@ await escenario("S12", async () => {
   ok("S12_pago_financiador_por_rpc", cuenta(ws, "RPC", "registrar_pago_financiador") === 1, ws);
   ok("S12_cerrada", /Cerrada/.test(await p.locator('[data-oc="4005-5-SE26"]').innerText()));
   ws = await paso("postventa", async () => {
-    await p.locator('[data-etapa="postventa"]').click(); await espera(p, 300);
+    await irSeccion(p, "Entrega");
     await boton(p, /Registrar incidencia/); await espera(p, 400); m = enModal(p);
     await m.getByPlaceholder("Qué informó el cliente").fill("Pantalla con pixel muerto"); await boton(p, /Registrar incidencia/, m);
   });
   ok("S12_postventa_abierta", cuenta(ws, "POST", "eventos_postventa") === 1 && cuenta(ws, "PATCH", "ordenes_compra_v2", (w) => w.cuerpo.estado_postventa === "con_incidencia") === 1, ws);
   ws = await paso("cierre", async () => {
-    await p.locator('[data-etapa="postventa"]').click(); await espera(p, 300);
-    if (!(await p.locator('[data-detalle-etapa="postventa"]').count())) { await p.locator('[data-etapa="postventa"]').click(); await espera(p, 300); }
-    await p.locator('[data-detalle-etapa="postventa"]').getByRole("button", { name: /Cerrar incidente/ }).click(); await espera(p, 400); m = enModal(p);
+    await irSeccion(p, "Entrega");
+    await p.locator('[data-etapa-seccion="postventa"]').getByRole("button", { name: /Cerrar incidente/ }).click(); await espera(p, 400); m = enModal(p);
     await m.getByPlaceholder("Qué se hizo para resolverlo").fill("Se cambió el monitor"); await boton(p, /Cerrar incidente/, m);
   });
   ok("S12_postventa_cerrada", cuenta(ws, "PATCH", "eventos_postventa") === 1 && cuenta(ws, "PATCH", "ordenes_compra_v2", (w) => w.cuerpo.estado_postventa === "resuelta") === 1, ws);
-  ws = await paso("nota", async () => { await p.getByRole("button", { name: /Notas e historial/ }).click(); await espera(p, 300); await p.getByPlaceholder("Agregar nota…").fill("Todo ok"); await p.keyboard.press("Enter"); });
+  ws = await paso("nota", async () => { await irSeccion(p, "Historial"); await p.getByPlaceholder("Agregar nota…").fill("Todo ok"); await p.keyboard.press("Enter"); });
   ok("S12_nota", cuenta(ws, "POST", "oc_comentarios") === 1, ws);
   ws = await paso("editar", async () => { await boton(p, /Editar datos/); await espera(p, 400); m = enModal(p); await m.locator("select").first().selectOption("v2"); await boton(p, /Guardar datos/, m); });
   ok("S12_editar_vendedor", cuenta(ws, "PATCH", "ordenes_compra_v2", (w) => w.cuerpo.vendedor_id === "v2") === 1 && cuenta(ws, "POST", "historial_cambios", (w) => w.cuerpo.accion === "Vendedor corregido") === 1, ws);

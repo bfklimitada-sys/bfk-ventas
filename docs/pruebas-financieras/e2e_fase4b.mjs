@@ -36,18 +36,13 @@ async function abrirOC(p, numero) {
 }
 // Abre (sin cerrar si ya está abierto) el detalle de una etapa de la OC.
 async function etapa(p, numero, key) {
+  // Ficha de OC como expediente (desde 29ea625, 07/10/2026): cada etapa vive en una sección de la ficha.
+  // La facturación es la sección «Facturación SII» ([data-facturacion-sii]); las demás, [data-etapa-seccion].
   await abrirOC(p, numero);
   const fila = p.locator(`[data-oc="${numero}"]`);
-  const det = fila.locator(`[data-detalle-etapa="${key}"]`);
-  // Ficha actual (expediente con secciones): cada etapa vive en una sección de la ficha ([data-etapa-seccion]).
-  if (!(await fila.locator(`[data-etapa="${key}"]`).count())) {
-    const SECCION = { compra: "compra", financ: "compra", entrega: "entrega", postventa: "entrega", factura: "facturacion", cobro: "cobranza" };
-    const sec = fila.locator(`[data-seccion-ficha="${SECCION[key]}-${await fila.getAttribute("data-oc-id") || ""}"]`);
-    const enSec = fila.locator(`[data-etapa-seccion="${key}"]`);
-    if (!(await enSec.count())) { await fila.locator("[data-indice-ficha] button", { hasText: { compra: "Compra", financ: "Compra", entrega: "Entrega", postventa: "Entrega", factura: "Facturación", cobro: "Cobranza" }[key] }).first().click(); await espera(p, 400); }
-    void sec; return enSec;
-  }
-  if (!(await det.count())) { await fila.locator(`[data-etapa="${key}"]`).click(); await espera(p, 350); }
+  const SECCION = { compra: "Compra y financiamiento", financ: "Compra y financiamiento", entrega: "Entrega", postventa: "Entrega", factura: "Facturación SII", cobro: "Cobranza" };
+  const det = fila.locator(key === "factura" ? "[data-facturacion-sii]" : `[data-etapa-seccion="${key}"]`);
+  await fila.locator("[data-indice-ficha] button", { hasText: SECCION[key] }).first().click(); await espera(p, 400);
   return det;
 }
 const enModal = (p) => p.locator("[role=dialog]").last();
@@ -212,7 +207,8 @@ await escenario("B5", async () => {
   ok("B5_financiamiento_bloqueado_sin_pago", (await detF.locator('[data-bloqueo-historico="financiamiento"]').count()) === 1 && (await detF.getByRole("button", { name: /Registrar pago/ }).count()) === 0);
   // Facturas repetidas: la facturación de esa OC queda bloqueada hasta decidir
   const detFa = await etapa(p, "2015-115-SE26", "factura");
-  ok("B5_facturacion_bloqueada", (await detFa.locator('[data-bloqueo-historico="facturacion"]').count()) === 1 && (await detFa.getByRole("button", { name: /Re-emitir|Emitir factura/ }).count()) === 0
+  // Facturación SII muestra el bloqueo como aviso de texto (opción B, 11/10/2026: la app no se modifica).
+  ok("B5_facturacion_bloqueada", /Corrección histórica pendiente de aprobación/.test(await detFa.innerText()) && (await detFa.getByRole("button", { name: /Re-emitir|re-emitir|Emitir factura/ }).count()) === 0
     && (await detFa.getByRole("button", { name: /Eliminar/ }).count()) === 0 && (await detFa.getByRole("button", { name: /Editar/ }).count()) === 0);
   ok("B5_conserva_monto_facturado_guardado", oc(b, "oc15").monto_facturado === 600000);
   // El abono FIFO no incluye OCs bloqueadas, venta propia ni fondos propios
@@ -347,7 +343,7 @@ await escenario("B11", async () => {
   const { page: p, errs, ctx } = await abrir(browser, b, { url: URL_APP, ...escritorio, espera: 3000 });
   await irA(p, "compras");
   const det = await etapa(p, "2002-102-SE26", "factura");
-  await det.getByRole("button", { name: /Re-emitir/ }).click(); await espera(p, 500);
+  await det.getByRole("button", { name: /re-emitir/i }).click(); await espera(p, 500);   // «Emitir / re-emitir factura» (Facturación SII)
   const m = enModal(p);
   await m.getByPlaceholder("ej: 215").fill("9702");
   await m.getByPlaceholder("ej: 123").fill("55");

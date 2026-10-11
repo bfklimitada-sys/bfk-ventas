@@ -1,4 +1,5 @@
 import { chromium } from "playwright-core";
+// Requiere dos compilaciones servidas a la vez: bash docs/pruebas-iva/servir_compilaciones.sh (actual en 4175, 754c466 en 4176).
 const URLS={nueva:"http://127.0.0.1:4175/",anterior:"http://127.0.0.1:4176/"};
 const oc=(i,fecha,util)=>({id:"oc"+i,numero_oc:`2000-${i}-SE26`,cliente:"Cliente "+i,vendedor_id:"v1",estado_compra:"comprado",estado_entrega:"confirmada",estado_factura_propia:"emitida",estado_pago_cliente:"pendiente",estado_pago_financiamiento:"pendiente",monto_total:1190000,costo_total:1190000-util,monto_facturado:1190000,monto_cobrado:0,vendedor_pagado:false,financiador_id:"f1",creadoEn:"2026-01-01T00:00:00Z",vendedores:{nombre:"Vendedor Uno"},financiadores:{nombre:"Financiador Uno"},eventos_compra:[{id:"ec"+i,fecha,monto:1190000-util}],eventos_entrega:[],eventos_factura:[{id:"fa"+i,fecha,numero_factura:String(i),monto:1190000}],eventos_pago_cliente:[],eventos_pago_financiamiento:[],eventos_postventa:[],oc_productos_link:[],oc_comentarios:[],oc_reclamos:[],oc_responsables:[],items_oc:[]});
 const TABLAS={ordenes_compra_v2:[oc(1,"2026-03-10",1000000),oc(2,"2026-02-10",1000000),oc(3,"2026-01-10",1000000),oc(4,"2025-12-10",100000)],
@@ -19,8 +20,15 @@ for(const [nom,url] of Object.entries(URLS)){
     return route.abort(); });
   await page.addInitScript(()=>{localStorage.setItem("bfk_supabase_session_v2",JSON.stringify({access_token:"t",refresh_token:"r",user:{id:"u1",email:"a@a.cl"}}));});
   await page.goto(url,{waitUntil:"load"}); await page.waitForTimeout(1800);
-  // Rediseño 2026-10: Comisiones (Vendedores) e Impuestos son pestañas de Finanzas; el historial de IVA está en Impuestos.
-  const vaAImpuestos=await page.evaluate(()=>{ location.hash="#/vendedores"; return true; }); await page.waitForTimeout(900);
+  // Cada puerto debe servir su compilación: 4175 = actual (con centro Finanzas, data-nav="finanzas"),
+  // 4176 = regla anterior 754c466 (sin centro Finanzas). Si no, la comparación no tiene sentido: se detiene con un aviso.
+  const tieneFinanzas=(await page.locator('[data-nav="finanzas"]').count())>0;
+  if(nom==="nueva"&&!tieneFinanzas){ console.log("ENTORNO|iva_ui|el puerto 4175 no sirve la compilación actual (ver servir_compilaciones.sh)"); process.exit(2); }
+  if(nom==="anterior"&&tieneFinanzas){ console.log("ENTORNO|iva_ui|el puerto 4176 no sirve la compilación anterior 754c466 (ver servir_compilaciones.sh)"); process.exit(2); }
+  // Navegación según la versión: la actual usa direcciones (#/vendedores, Comisiones en Finanzas); la anterior, el menú «Más» → «Vendedores».
+  const vaAImpuestos=tieneFinanzas;
+  if(tieneFinanzas){ await page.evaluate(()=>{ location.hash="#/vendedores"; }); await page.waitForTimeout(900); }
+  else { await page.mouse.click(348,820); await page.waitForTimeout(500); await page.getByText("Vendedores",{exact:true}).first().click(); await page.waitForTimeout(900); }
   await page.getByText("Vendedor Uno").first().click(); await page.waitForTimeout(700);
   let b=await page.evaluate(()=>document.body.innerText);
   if(vaAImpuestos&&(await page.locator('[data-aviso-linea="ir-impuestos"]').count())){
