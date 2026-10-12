@@ -91,9 +91,9 @@ ok("X23_bloqueo_sugiere_ingreso_manual", r.code === 422 && /manualmente/.test(r.
 r = await llamar({ url: "https://www.falabella.com/p/redirige" });
 ok("X24_redireccion_a_red_interna_bloqueada", r.code === 422 && /no permitida/.test(r.body.error) && !llamadas.includes("https://interno.ejemplo.cl/admin"), r.body);
 r = await llamar({ url: "https://articulo.mercadolibre.cl/MLC-1" });
-ok("X28_verificacion_ml_no_es_producto", r.code === 422 && r.body.bloqueo === true && /antibots/.test(r.body.error) && !llamadas.some((u) => u.includes("account-verification")), r.body);
+ok("X28_verificacion_ml_no_es_producto", r.code === 422 && r.body.bloqueo === true && /no permite la lectura automática/.test(r.body.error) && !llamadas.some((u) => u.includes("account-verification")), r.body);
 r = await llamar({ url: "https://www.falabella.com/p/cloudflare" });
-ok("X29_cloudflare_403_bloqueo", r.code === 422 && r.body.bloqueo === true && /Pegar texto de ficha/.test(r.body.error), r.body);
+ok("X29_cloudflare_403_bloqueo", r.code === 422 && r.body.bloqueo === true && /capturas de pantalla/.test(r.body.error), r.body);
 r = await llamar({ url: "https://www.tienda.cl/portada" });
 ok("X30_pagina_sin_producto_no_propone_ficha_vacia", r.code === 422 && /no entregó datos del producto/.test(r.body.error), r.body);
 r = await llamar({ imagen: "https://media.falabella.com/a.jpg" });

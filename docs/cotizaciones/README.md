@@ -71,3 +71,15 @@ El "modo prueba" (guardar solo en el dispositivo) se activa **únicamente** si S
 1. Diseño del PDF: se mantiene el actual, basado en la referencia 1525570-33-COT26 (la plantilla Excel no se requiere por ahora).
 2. Qué proveedores entregan costo de envío confiable por dirección: por ahora **todo envío se verifica manualmente** y queda "por verificar" hasta confirmarlo.
 3. Autorización para aplicar el SQL en Supabase (con respaldo cifrado previo) y para el merge/despliegue.
+
+## 7. Captura universal de productos (iPhone, Android y PC)
+
+Sin instalar atajos ni extensiones:
+1. **Enlace**: se pega el enlace del producto y BFK intenta leer la publicación (`/api/producto`). Si la tienda lo bloquea (hoy Falabella y Mercado Libre desde servidores), se informa sin prometer lectura automática.
+2. **Capturas de pantalla**: botón «Desde capturas de pantalla» (hasta 4 imágenes). Se leen con **OCR en el propio dispositivo** (Tesseract.js, gratuito, sin credenciales; las imágenes no salen del equipo; el lector y el modelo de español se sirven desde el propio dominio de BFK Datos, copiados al compilar por `vite.config.js`).
+3. **IA opcional** (`/api/interpretar`, Claude): queda preparada pero **inactiva** hasta que exista la variable `ANTHROPIC_API_KEY` en Vercel (servicio de pago por uso; requiere autorización). Con IA activa se usa primero la IA y, si falla, el OCR.
+4. La ficha se muestra para revisión y corrección antes de guardar; luego se agrega a una cotización nueva o existente y se genera la EETT.
+
+Reglas (iguales para OCR e IA, `src/lib/capturaImagen.js`): solo lo visible; si se leen varios precios no se elige ninguno; un precio leído queda marcado para verificar; la disponibilidad nunca se supone; los atributos comerciales no pasan a la ficha; el despacho queda por verificar según la dirección del cliente. Los cálculos, IVA, recargo y reparto de despacho no cambian.
+
+El acceso destacado al atajo de Safari se retiró de la pantalla; las capturas que aún lleguen desde el atajo se siguen recibiendo (docs/cotizaciones/ATAJO-SAFARI.md).

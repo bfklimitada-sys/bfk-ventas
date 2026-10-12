@@ -40,7 +40,7 @@ async function preparar({ ancho, alto, movil, modoBase, fallaRed = 0 }) {
       if (u.searchParams.get("imagen")) return route.fulfill({ json: { ok: true, dataUrl: "data:image/jpeg;base64," + JPG } });
       const e = u.searchParams.get("url") || "";
       if (/caido/.test(e)) return route.fulfill({ status: 422, json: { ok: false, error: "El enlace ya no existe en el sitio del proveedor (página no encontrada)." } });
-      if (/bloqueado/.test(e)) return route.fulfill({ status: 422, json: { ok: false, bloqueo: true, error: "El proveedor bloqueó la consulta automática (verificación antibots). Usa “Pegar texto de ficha” o ingresa los datos manualmente; el enlace se conserva." } });
+      if (/bloqueado/.test(e)) return route.fulfill({ status: 422, json: { ok: false, bloqueo: true, error: "Esta tienda no permite la lectura automática. Sube capturas de pantalla de la publicación (se leerán para completar la ficha) o ingresa los datos manualmente; el enlace se conserva." } });
       return route.fulfill({ json: SMART });
     }
     if (u.hostname.endsWith("supabase.co")) {
@@ -205,7 +205,7 @@ const sinScrollH = (p) => p.evaluate(() => document.documentElement.scrollWidth 
   await p.locator('[role="dialog"] button[aria-label="Cerrar"]').last().click(); await espera(p, 300);
   await enHoja(p).locator("[data-enlace-proveedor]").fill("https://articulo.mercadolibre.cl/MLC-bloqueado"); await enHoja(p).locator("[data-consultar-enlace]").click(); await espera(p, 800);
   await cap(p, "4_enlace_bloqueado_antibots");
-  ok("U36b_bloqueo_antibots_explicado", /antibots/.test(await enHoja(p).locator('[data-aviso-linea="error-enlace"]').innerText()));
+  ok("U36b_bloqueo_explicado_sin_prometer_lectura", /no permite la lectura automática/.test(await enHoja(p).locator('[data-aviso-linea="error-enlace"]').innerText()));
   await enHoja(p).locator("[data-pegar-texto]").click(); await espera(p, 400);
   await p.locator("[data-texto-ficha]").fill("Marca: HP\nModelo: Smart Tank 580\nTipo de impresión: Inyección a color");
   await p.locator('[role="dialog"] button', { hasText: "Continuar" }).click(); await espera(p, 500);
@@ -290,9 +290,49 @@ const sinScrollH = (p) => p.evaluate(() => document.documentElement.scrollWidth 
   await p.goto("about:blank"); // apertura en pestaña nueva (carga completa), como "Abrir URL" del atajo
   await p.goto(URL_APP.replace(/\/$/, "") + "/#/cotizaciones?captura_error=" + encodeURIComponent("página sin acceso")); await espera(p, 2500);
   ok("C12_error_del_atajo_avisado", /no pudo leer la página/.test(await p.locator('[data-aviso-linea="captura-error"]').innerText()));
-  ok("C13_instrucciones_del_atajo", await p.locator('[data-desplegable="atajo-safari"], [data-desplegable-dato="atajo-safari"]').count() + await p.getByText("Captura desde Safari (iPhone)").count() >= 1);
+  ok("C13_acceso_destacado_al_atajo_retirado", await p.getByText("Captura desde Safari (iPhone)").count() === 0);
   ok("C14_sin_errores", errs.length === 0, errs);
   await p.screenshot({ path: join(SALIDA, "captura_safari.png") });
+  await ctx.close();
+}
+
+// ═════ 1d. Capturas de pantalla con OCR real en el navegador (la tienda bloquea el enlace) ═════
+{
+  // Captura simulada de una publicación (resolución de iPhone: 3x).
+  const pub = `<!doctype html><html><head><meta charset="utf-8"><style>body{font-family:Arial,Helvetica,sans-serif;margin:16px;color:#222;background:#fff}h1{font-size:20px;font-weight:600;margin:8px 0}.p{font-size:26px;margin:4px 0}.s{color:#999;text-decoration:line-through;font-size:15px}td,th{font-size:15px;padding:7px 8px;text-align:left}th{background:#f2f2f2;font-weight:600}table{border-collapse:collapse;width:100%}</style></head><body>
+  <div style="font-size:13px;color:#666">Nuevo | +1000 vendidos</div><h1>Impresora Multifuncional HP Smart Tank 580</h1><div class="s">$ 219.990</div><div class="p">$ 189.990</div><div style="font-size:14px">en 6 cuotas de $ 31.665</div><div style="font-size:14px;color:#00a650">Envío gratis</div>
+  <h2 style="font-size:18px;margin-top:22px">Características del producto</h2><table><tr><th>Marca</th><td>HP</td></tr><tr><th>Modelo</th><td>Smart Tank 580</td></tr><tr><th>Tipo de impresión</th><td>Inyección a color</td></tr><tr><th>Conectividad</th><td>USB, Wi-Fi</td></tr><tr><th>Resolución</th><td>4800 x 1200 dpi</td></tr></table></body></html>`;
+  const cctx = await browser.newContext({ viewport: { width: 390, height: 700 }, deviceScaleFactor: 3 }); const cp = await cctx.newPage();
+  await cp.setContent(pub); const png = await cp.screenshot({ type: "png" }); await cctx.close();
+  const { p, ctx, errs } = await preparar({ ancho: 390, alto: 844, movil: true, modoBase: false });
+  // El lector se sirve desde el propio dominio (/ocr); cualquier intento de usar un CDN externo queda registrado y bloqueado.
+  const cdn = [];
+  await ctx.route("https://cdn.jsdelivr.net/**", (route) => { cdn.push(route.request().url()); return route.abort(); });
+  await p.route("**/api/interpretar", (route) => route.fulfill({ json: { ok: true, configurado: false } }));
+  await irCotizaciones(p, true);
+  await p.locator("[data-nueva-cotizacion]").click(); await espera(p, 600);
+  const h = enHoja(p); const ed = p.locator("[data-editor-ficha]");
+  await tab(p, "productos");
+  await h.locator("[data-enlace-proveedor]").fill("https://articulo.mercadolibre.cl/MLC-bloqueado"); await h.locator("[data-consultar-enlace]").click(); await espera(p, 800);
+  ok("O1_bloqueo_ofrece_capturas", /capturas de pantalla/.test(await h.locator('[data-aviso-linea="error-enlace"]').innerText()) && !/se completa sola|automáticamente/i.test(await h.locator('[data-aviso-linea="error-enlace"]').innerText()));
+  await h.locator("[data-desde-capturas]").click(); await espera(p, 400);
+  await p.locator("[data-archivos-capturas]").setInputFiles({ name: "captura.png", mimeType: "image/png", buffer: png }); await espera(p, 300);
+  await p.locator("[data-leer-capturas]").click();
+  await ed.waitFor({ timeout: 60000 }).catch(async () => { console.log("      ventana:", (await p.locator('[role="dialog"]').last().innerText().catch(() => "")).slice(-500)); });
+  const v = async (c) => (await ed.locator(`[data-campo="${c}"]`).count()) ? ed.locator(`[data-campo="${c}"]`).inputValue() : null;
+  const ficha = { nombre: await v("nombre"), marca: await v("marca"), modelo: await v("modelo"), esp: await v("especificaciones"), precio: await v("precio"), enlace: await v("enlace") };
+  console.log("      OCR →", JSON.stringify(ficha));
+  ok("O2_ocr_real_completa_ficha", /Smart Tank 580/i.test(ficha.nombre || "") && /^HP$/i.test(ficha.marca || "") && /Smart Tank 580/i.test(ficha.modelo || ""), ficha);
+  ok("O3_especificaciones_leidas", /Tipo de impresi.n: Inyecci.n a color/i.test(ficha.esp || "") && /Conectividad: USB/i.test(ficha.esp || ""), ficha.esp);
+  const origenTxt = await ed.locator("[data-origen-consulta]").innerText();
+  // El precio tachado (gris claro) no lo lee el OCR; el precio visible se propone marcado para verificar (la regla de varios precios está en capturas.test.mjs).
+  ok("O4_precio_visible_marcado_para_verificar", ficha.precio === "189990" && /verifícalo/.test(origenTxt), origenTxt);
+  ok("O5_enlace_conservado_y_origen", ficha.enlace === "https://articulo.mercadolibre.cl/MLC-bloqueado" && /capturas de pantalla/.test(await ed.locator("[data-origen-consulta]").innerText()));
+  ok("O6_ocr_sin_cdn_externo", cdn.length === 0, cdn);
+  await ed.locator("[data-guardar-biblioteca] input").uncheck();
+  await ed.locator("[data-guardar-ficha]").click(); await espera(p, 600);
+  ok("O7_agregado_con_envio_por_verificar", /Envío por verificar/.test(await h.locator('[data-item-cotizacion="1"]').innerText()));
+  ok("O8_sin_errores", errs.length === 0, errs);
   await ctx.close();
 }
 

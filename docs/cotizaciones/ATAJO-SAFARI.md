@@ -1,5 +1,7 @@
 # Atajo "Enviar a BFK": captura de productos desde Safari (iPhone)
 
+> **Nota:** desde la captura universal (capturas de pantalla y enlace en Cotizaciones) este atajo es opcional y ya no aparece destacado en la app. Sigue funcionando si ya está instalado.
+
 Comparte una publicación de Falabella, Mercado Libre u otra tienda desde Safari y llega a **BFK Datos → Cotizaciones** lista para revisar: nombre, marca, modelo, descripción, especificaciones, imágenes y el enlace original. El precio y la disponibilidad quedan como datos internos; el envío siempre queda **por verificar** para la dirección del cliente.
 
 ## Instalar (una sola vez)

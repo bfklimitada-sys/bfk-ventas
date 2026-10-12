@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { C, T, R, iStyle, fmt } from "../../lib/theme";
-import { Pestanas, PanelPestana, Tarjeta, Badge, AvisoLinea, BotonPrincipal, BotonSecundario, BarraAcciones, Indicadores, Indicador, Desplegable } from "../ui/Sistema";
+import { Pestanas, PanelPestana, Tarjeta, Badge, AvisoLinea, BotonPrincipal, BotonSecundario, BarraAcciones, Indicadores, Indicador } from "../ui/Sistema";
 import { leerPendiente, descartarPendiente } from "../../lib/captura";
 import { EVENTO_CAPTURA } from "../../lib/capturaEntrada";
-import { codigoAtajo } from "../../lib/atajoSafari.generado";
 import { ESTADOS_COTIZACION, cotizacionVacia } from "../../lib/cotizaciones";
 import { detectarModo, crearAlmacen } from "../../lib/cotizacionesDatos";
 import { EditorCotizacion } from "../cotizaciones/EditorCotizacion";
@@ -24,10 +23,6 @@ export function PanelCotizaciones({ token, entidadesCatalogo, showToast }) {
   const [captura, setCaptura] = useState(() => leerPendiente());
   const descartarCaptura = () => { descartarPendiente(); setCaptura(null); };
   useEffect(() => { const f = () => setCaptura(leerPendiente()); window.addEventListener(EVENTO_CAPTURA, f); return () => window.removeEventListener(EVENTO_CAPTURA, f); }, []);
-  const copiarAtajo = async () => {
-    try { await navigator.clipboard.writeText(codigoAtajo(window.location.origin)); showToast?.("Código del atajo copiado"); }
-    catch { showToast?.("No se pudo copiar en este navegador", "error"); }
-  };
   useEffect(() => {
     let vivo = true; setModo(null); setAlmacen(null); setCargando(true);
     (async () => {
@@ -92,18 +87,6 @@ export function PanelCotizaciones({ token, entidadesCatalogo, showToast }) {
             <div style={{ fontSize: T.small, color: C.inkFaint, marginTop: 3 }}>{c.n_items} producto{c.n_items === 1 ? "" : "s"} · neto {fmt.money(Number(c.subtotal_neto) || 0)} · {fmt.date(String(c.fecha || "").slice(0, 10))}</div>
           </Tarjeta>
         ))}
-        <Desplegable dato="atajo-safari" titulo="Captura desde Safari (iPhone)" resumen="Instala el atajo una vez y comparte productos desde Falabella, Mercado Libre u otras tiendas">
-          <ol style={{ margin: "4px 0 10px", paddingLeft: 20, fontSize: T.sm, color: C.ink, lineHeight: 1.55 }}>
-            <li>Toca <b>Copiar código del atajo</b> (abajo).</li>
-            <li>Abre la app <b>Atajos</b> → <b>+</b> → nombre: <b>Enviar a BFK</b>.</li>
-            <li>Toca <b>ⓘ</b> (detalles) → activa <b>Mostrar en hoja para compartir</b> y deja solo <b>Páginas web de Safari</b>.</li>
-            <li>Agrega la acción <b>Ejecutar JavaScript en página web</b>, borra el texto de ejemplo y <b>pega</b> el código.</li>
-            <li>Agrega la acción <b>Abrir URL</b> (usa el resultado del JavaScript). Guarda.</li>
-            <li>En <b>Ajustes → Atajos → Avanzado</b>, activa <b>Permitir ejecutar scripts</b>.</li>
-          </ol>
-          <div style={{ fontSize: T.small, color: C.inkMuted, marginBottom: 10, lineHeight: 1.45 }}>Uso: en Safari abre el producto → <b>Compartir</b> → <b>Enviar a BFK</b>. BFK Datos se abre en Cotizaciones con el producto listo para revisar. El atajo solo lee la página que estás viendo; el precio queda como dato interno y el envío siempre se verifica aparte.</div>
-          <BotonSecundario data-copiar-atajo onClick={copiarAtajo} style={{ width: "100%", justifyContent: "center", minHeight: 44 }}>Copiar código del atajo</BotonSecundario>
-        </Desplegable>
       </PanelPestana>
 
       <PanelPestana visible={pestana === "biblioteca"} titulo="Biblioteca">

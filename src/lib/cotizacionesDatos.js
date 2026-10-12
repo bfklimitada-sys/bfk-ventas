@@ -169,14 +169,14 @@ export async function traerImagen(token, url) {
 }
 
 // Reduce la imagen (máx. 1000 px, JPEG) para que la ficha y el PDF sean livianos.
-export function normalizarImagen(fuente, max = 1000) {
+export function normalizarImagen(fuente, max = 1000, formato = "image/jpeg") {
   return new Promise((ok, mal) => {
     const img = new Image();
     img.onload = () => {
       const k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
       const c = document.createElement("canvas"); c.width = Math.max(1, Math.round(img.naturalWidth * k)); c.height = Math.max(1, Math.round(img.naturalHeight * k));
       const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height);
-      ok(c.toDataURL("image/jpeg", 0.85));
+      ok(formato === "image/png" ? c.toDataURL("image/png") : c.toDataURL("image/jpeg", 0.85));
     };
     img.onerror = () => mal(new Error("La imagen no se pudo leer"));
     if (fuente instanceof Blob) { const f = new FileReader(); f.onload = () => { img.src = f.result; }; f.onerror = () => mal(new Error("No se pudo leer el archivo")); f.readAsDataURL(fuente); }

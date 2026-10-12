@@ -4,6 +4,7 @@ import { Field, Modal } from "../ui/Basicos";
 import { HojaLateral, Pestanas, PanelPestana, Tarjeta, Badge, AvisoLinea, BotonPrincipal, BotonSecundario, FilaDato, Desplegable, Seccion } from "../ui/Sistema";
 import { calcularCotizacion, estadoParaPDF, destinoDe, envioConfirmado, textoParaMercadoPublico, margenDeRecargo, itemVacio, envioVacio, proveedorDeEnlace, ESTADOS_COTIZACION, ESTADOS_ENVIO, FORMULA, RECARGO_SUGERIDO } from "../../lib/cotizaciones";
 import { consultarEnlace, traerImagen, logoBFK } from "../../lib/cotizacionesDatos";
+import { leerCapturas } from "../../lib/capturaLectura";
 import { extraerDeTexto } from "../../lib/extraerProducto";
 import { descargarPdfEETT, huellaPDF } from "../../lib/eettPdf";
 import { EditorFicha } from "./EditorFicha";
@@ -85,6 +86,21 @@ export function EditorCotizacion({ almacen, inicial, token, entidadesCatalogo = 
     prepararItem(captura, captura.enlace, "safari").then((item) => { abrirNuevo(item); onCapturaUsada?.(); }).finally(() => setConsultando(""));
   }, [captura]); // eslint-disable-line react-hooks/exhaustive-deps
   const manual = (conEnlace) => abrirNuevo({ ...itemVacio(), enlace: conEnlace || "", proveedor: proveedorDeEnlace(conEnlace || ""), origen_datos: "manual" });
+  // Capturas de pantalla de la publicación (universal: iPhone, Android o PC). Resultado = propuesta para revisar.
+  const [verCapturas, setVerCapturas] = useState(false); const [archivosCap, setArchivosCap] = useState([]); const [leyendoCap, setLeyendoCap] = useState(""); const [errorCap, setErrorCap] = useState("");
+  const vistasCap = useMemo(() => archivosCap.map((f) => URL.createObjectURL(f)), [archivosCap]);
+  useEffect(() => () => vistasCap.forEach((u) => URL.revokeObjectURL(u)), [vistasCap]);
+  const desdeCapturas = async () => {
+    setErrorCap(""); setLeyendoCap("Preparando…");
+    try {
+      const e = enlacePendiente || enlace.trim();
+      const r = await leerCapturas(token, archivosCap, { enlace: e, onProgreso: setLeyendoCap });
+      const item = await prepararItem({ ...r, enlace: e }, e, r.metodos?.[0] === "ia" ? "capturas-ia" : "capturas-ocr");
+      item.consulta.fuente = r.fuente; item.consulta.metodos = r.metodos;
+      setVerCapturas(false); setArchivosCap([]); setEnlacePendiente(""); setErrorEnlace(""); setEnlace("");
+      abrirNuevo(item);
+    } catch (err) { setErrorCap(err.message || "No se pudieron leer las capturas."); } finally { setLeyendoCap(""); }
+  };
   const desdeTexto = () => {
     const r = extraerDeTexto(texto); const e = enlacePendiente;
     abrirNuevo({ ...itemVacio(), enlace: e, proveedor: proveedorDeEnlace(e), ficha: r.ficha, origen_datos: "texto", fecha_consulta: new Date().toISOString(),
@@ -186,6 +202,7 @@ export function EditorCotizacion({ almacen, inicial, token, entidadesCatalogo = 
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
               <BotonSecundario data-desde-biblioteca onClick={() => setVerBib(true)}>Desde biblioteca{productosBib.length ? ` (${productosBib.length})` : ""}</BotonSecundario>
               <BotonSecundario data-ingreso-manual onClick={() => { manual(enlacePendiente); setErrorEnlace(""); setEnlace(""); setEnlacePendiente(""); }}>Ingresar manual</BotonSecundario>
+              <BotonSecundario data-desde-capturas onClick={() => { setErrorCap(""); setVerCapturas(true); }}>Desde capturas de pantalla</BotonSecundario>
               <BotonSecundario data-pegar-texto onClick={() => setVerTexto(true)}>Pegar texto de ficha</BotonSecundario>
             </div>
           </Tarjeta>
@@ -343,6 +360,20 @@ export function EditorCotizacion({ almacen, inicial, token, entidadesCatalogo = 
               </div>
             </Tarjeta>
           ))}
+        </Modal>
+      )}
+      {verCapturas && (
+        <Modal title="Producto desde capturas de pantalla" onClose={() => { if (!leyendoCap) setVerCapturas(false); }}>
+          <div data-ventana-capturas style={{ fontSize: T.sm, color: C.inkMuted, lineHeight: 1.5, marginBottom: 12 }}>
+            Toma capturas de la publicación (título, precio y la sección de características) y súbelas aquí. Se leerá su contenido para completar la ficha; luego la revisas y corriges antes de guardar.
+            {(enlacePendiente || enlace.trim()) && <div style={{ marginTop: 6 }}>El enlace del proveedor se conserva como dato interno.</div>}
+          </div>
+          <input data-archivos-capturas type="file" accept="image/*" multiple onChange={(e) => { setArchivosCap([...(e.target.files || [])].slice(0, 4)); e.target.value = ""; }} style={{ ...iStyle, padding: 8 }} />
+          {archivosCap.length > 0 && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", margin: "10px 0" }}>{vistasCap.map((u, i) => <img key={i} src={u} alt={`Captura ${i + 1}`} style={{ width: 64, height: 110, objectFit: "cover", borderRadius: R.sm, border: `1px solid ${C.border}` }} />)}</div>}
+          <div style={{ fontSize: T.small, color: C.inkFaint, margin: "6px 0 12px" }}>Hasta 4 imágenes. No se inventan datos: lo que no se lea queda vacío para completarlo, y si aparecen varios precios deberás indicar cuál corresponde.</div>
+          {leyendoCap && <div data-progreso-capturas style={{ fontSize: T.sm, color: C.tealDark, fontWeight: 700, marginBottom: 8 }}>{leyendoCap}</div>}
+          {errorCap && <AvisoLinea tono="danger">{errorCap}</AvisoLinea>}
+          <BotonPrincipal data-leer-capturas onClick={desdeCapturas} disabled={!archivosCap.length || !!leyendoCap} style={{ width: "100%", justifyContent: "center", opacity: !archivosCap.length || leyendoCap ? 0.6 : 1 }}>{leyendoCap ? "Leyendo…" : `Leer ${archivosCap.length || ""} captura${archivosCap.length === 1 ? "" : "s"}`}</BotonPrincipal>
         </Modal>
       )}
       {verTexto && (

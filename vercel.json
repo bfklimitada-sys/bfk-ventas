@@ -5,6 +5,9 @@
     },
     "api/producto.mjs": {
       "maxDuration": 30
+    },
+    "api/interpretar.mjs": {
+      "maxDuration": 60
     }
   }
 }

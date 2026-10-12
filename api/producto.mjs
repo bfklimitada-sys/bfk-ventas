@@ -67,7 +67,7 @@ export async function urlPermitida(texto) {
 
 // Páginas de verificación antibots / inicio de sesión: nunca se interpretan como producto.
 export const MURO_ANTIBOTS = /account-verification|captcha|challenge|\/gz\/|\/login|\/signin|cdn-cgi|px-captcha|validate\.perfdrive/i;
-const MSG_BLOQUEO = "El proveedor bloqueó la consulta automática (verificación antibots). Usa \u201cPegar texto de ficha\u201d o ingresa los datos manualmente; el enlace se conserva.";
+const MSG_BLOQUEO = "Esta tienda no permite la lectura automática. Sube capturas de pantalla de la publicación (se leerán para completar la ficha) o ingresa los datos manualmente; el enlace se conserva.";
 
 const CABECERAS = {
   "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36",
@@ -118,6 +118,6 @@ export default async function handler(req, res) {
   const datos = extraerProducto(html, d.final);
   // Sin ninguna señal de producto (precio, especificaciones, imágenes ni datos estructurados): no se propone una ficha vacía.
   if (!datos.precio_origen && !datos.ficha.especificaciones.length && !datos.ficha.imagenes.length && !datos.metodos.includes("json-ld"))
-    return res.status(422).json({ ok: false, error: "La página no entregó datos del producto (puede ser una verificación antibots o una página que no es de producto). Usa \u201cPegar texto de ficha\u201d o ingresa los datos manualmente.", bloqueo: true });
+    return res.status(422).json({ ok: false, error: "La página no entregó datos del producto (puede ser una verificación antibots o una página que no es de producto). Sube capturas de pantalla de la publicación o ingresa los datos manualmente.", bloqueo: true });
   return res.status(200).json({ ok: true, enlace: d.final, ...datos });
 }
