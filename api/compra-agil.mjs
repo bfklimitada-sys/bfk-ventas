@@ -83,11 +83,12 @@ async function diagnosticar(req, res) {
   const origen = (process.env.MP_TICKET_COMPRA_AGIL || "").trim() ? "MP_TICKET_COMPRA_AGIL" : (process.env.MP_TICKET || "").trim() ? "MP_TICKET" : null;
   if (!origen) return res.status(200).json({ ok: true, ticket_configurado: false });
   const codigo = codigoCompraAgil(req.query?.diagnostico) || "3390-246-COT26";
-  let estado = null;
-  try { const r = await fetch(`${API}/${encodeURIComponent(codigo)}`, { headers: { ticket: (process.env.MP_TICKET_COMPRA_AGIL || process.env.MP_TICKET).trim(), Accept: "application/json" }, signal: AbortSignal.timeout(20_000) }); estado = r.status; }
-  catch { estado = "sin_conexion"; }
+  let estado = null, falla = null;
+  try { const r = await fetch(`${API}/${encodeURIComponent(codigo)}`, { headers: { ticket: (process.env.MP_TICKET_COMPRA_AGIL || process.env.MP_TICKET).trim(), Accept: "application/json" }, signal: AbortSignal.timeout(25_000) }); estado = r.status; }
+  // Solo el tipo de error (nunca el mensaje, que podría incluir el valor de la cabecera).
+  catch (e) { estado = "sin_conexion"; falla = [e?.name, e?.cause?.code || e?.cause?.name].filter(Boolean).join(":") || "desconocida"; }
   res.setHeader("Cache-Control", "no-store");
-  return res.status(200).json({ ok: true, ticket_configurado: true, origen, codigo, http_chilecompra: estado, ticket_aceptado: estado === 200 || estado === 404 });
+  return res.status(200).json({ ok: true, ticket_configurado: true, origen, codigo, http_chilecompra: estado, ...(falla ? { falla } : {}), ticket_aceptado: estado === 200 || estado === 404 });
 }
 
 export default async function handler(req, res) {
