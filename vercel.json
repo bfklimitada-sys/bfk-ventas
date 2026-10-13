@@ -1,4 +1,8 @@
 {
+  "ignoreCommand": "[ \"$VERCEL_GIT_COMMIT_REF\" != \"compra-agil-gru1-vista-previa\" ]",
+  "regions": [
+    "gru1"
+  ],
   "functions": {
     "api/oc.mjs": {
       "maxDuration": 60
@@ -10,10 +14,7 @@
       "maxDuration": 60
     },
     "api/compra-agil.mjs": {
-      "maxDuration": 30,
-      "regions": [
-        "gru1"
-      ]
+      "maxDuration": 30
     }
   }
 }
