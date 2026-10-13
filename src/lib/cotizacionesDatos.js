@@ -243,7 +243,9 @@ export const normalNombre = (s) => String(s || "").normalize("NFD").replace(/[̀
 export function revisarEliminable(c, confirmacion) {
   if (c.estado === "adjudicada" || String(c.oc_codigo || "").trim()) throw new Error("Una cotización adjudicada o vinculada a una OC no se puede eliminar. Puedes dejarla como está o marcar otra como Descartada.");
   const t = normalNombre(confirmacion);
-  if (!t || (t !== normalNombre(c.id_externo) && t !== normalNombre(c.nombre))) throw new Error("La confirmación no coincide con el código ni con el nombre de la cotización.");
+  if (!normalNombre(c.id_externo) && !normalNombre(c.nombre)) {
+    if (t !== String(c.id || "").slice(0, 8).toUpperCase()) throw new Error("La confirmación no coincide con el identificador interno de la cotización.");
+  } else if (!t || (t !== normalNombre(c.id_externo) && t !== normalNombre(c.nombre))) throw new Error("La confirmación no coincide con el código ni con el nombre de la cotización.");
 }
 
 // ── Consulta de Compra Ágil (función /api/compra-agil; el ticket queda en el servidor) ──

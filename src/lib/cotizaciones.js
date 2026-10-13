@@ -222,6 +222,16 @@ export function codigoCompraAgil(entrada) {
   return m ? m[1] : "";
 }
 
+// Fecha/hora de ChileCompra → hora de Chile (America/Santiago) "AAAA-MM-DDTHH:MM", que es lo que muestra y guarda la
+// cotización. Si la fecha trae zona (Z u offset) se convierte; si no la trae, se respeta tal cual.
+export function fechaHoraChile(iso) {
+  const t = String(iso || "").trim(); if (!t) return "";
+  if (!/(Z|[+-]\d{2}:?\d{2})$/i.test(t)) return t.slice(0, 16);
+  const d = new Date(t); if (Number.isNaN(d.getTime())) return "";
+  const p = Object.fromEntries(new Intl.DateTimeFormat("en-CA", { timeZone: "America/Santiago", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(d).map((x) => [x.type, x.value]));
+  return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
+}
+
 // Campos de la cotización que propone una consulta de Compra Ágil (datos normalizados por /api/compra-agil).
 // Cada campo: { campo, etiqueta, valor, actual, cambia, sobrescribe }. Lo que no viene no se propone (no se inventa).
 // No toca la fecha de emisión de BFK, el estado ni precios: el presupuesto es del comprador y es solo referencial.
@@ -240,14 +250,16 @@ export function propuestaCompraAgil(cot, d) {
     ["region", "Región", d?.region],
     ["plazo", "Plazo de entrega", plazo],
     ["presupuesto_estimado", "Presupuesto del comprador (referencial)", pres],
-    ["fecha_publicacion", "Fecha de publicación", d?.fecha_publicacion],
-    ["fecha_cierre", "Fecha de cierre", d?.fecha_cierre],
+    ["fecha_publicacion", "Fecha de publicación", fechaHoraChile(d?.fecha_publicacion)],
+    ["fecha_cierre", "Fecha de cierre", fechaHoraChile(d?.fecha_cierre)],
     ["requerimientos", "Productos requeridos por el comprador", (d?.productos || []).filter((p) => p.nombre || p.descripcion)],
     ["documentos_mp", "Documentos adjuntos (referencia)", d?.documentos || []],
   ];
   return filas.filter(([, , v]) => !vacio(v)).map(([campo, etiqueta, valor]) => {
     const actual = cot?.[campo];
-    const cambia = JSON.stringify(actual ?? null) !== JSON.stringify(valor);
+    // Comparación normalizada: fechas a minuto, números como número, textos sin espacios sobrantes.
+    const norm = (v) => (campo.startsWith("fecha_") ? String(v ?? "").slice(0, 16) : campo === "presupuesto_estimado" ? (v == null || v === "" ? null : Number(v)) : typeof v === "string" ? v.trim() : v ?? null);
+    const cambia = JSON.stringify(norm(actual)) !== JSON.stringify(norm(valor));
     return { campo, etiqueta, valor, actual, cambia, sobrescribe: cambia && !vacio(actual) };
   }).filter((f) => f.cambia);
 }
