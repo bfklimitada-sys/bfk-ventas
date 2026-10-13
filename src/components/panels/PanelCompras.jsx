@@ -1032,19 +1032,12 @@ export function FilaOC({ correosOC = SIN_CORREOS, onMarcarCorreo, pagosVendedor,
               En móvil solo queda el índice: el resumen ya está en la tarjeta principal. */}
           <div data-ficha-cabecera style={{position:"sticky",top:0,zIndex:6,background:C.paper,padding:escritorio?"9px 14px 6px":"6px 14px 6px",borderBottom:`1px solid ${C.border}`,boxShadow:"0 2px 6px rgba(15,23,42,0.05)"}}>
             {escritorio&&<>
-            <div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"baseline",flexWrap:"wrap"}}>
-              <div style={{minWidth:0,flex:"1 1 200px"}}>
-                <span style={{fontFamily:MONO,fontWeight:800,fontSize:14,color:C.ink}}>{oc.numero_oc}</span>
-                <span style={{fontSize:13,color:C.inkMuted}}> · {oc.cliente||oc.entidad||"—"}</span>
-              </div>
-              <div style={{fontSize:13,color:C.inkMuted,whiteSpace:"nowrap"}}>
-                <b style={{fontFamily:MONO,color:C.ink,fontSize:14}}>{fmt.money(oc.monto_total)}</b> · <span data-cabecera-asignaciones>V: <b style={{color:faltaVendedor(oc)?C.warnText:C.ink}}>{primerNombre(nombreVendedor(oc,vendedores))}</b> · F: <b style={{color:faltaFinanciador(oc)?C.warnText:C.ink}}>{primerNombre(nombreFinanciador(oc,financiadores))}</b></span>
-              </div>
-            </div>
-            <div style={{display:"flex",gap:5,flexWrap:"wrap",marginTop:6,alignItems:"center"}}>
+            {/* La identificación (OC · institución · monto) va una sola vez, en el encabezado de la hoja. */}
+            <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}>
               <span style={{background:estadoOC.bg,color:estadoOC.color,padding:"2px 8px",borderRadius:999,fontSize:12,fontWeight:800}}>{estadoOC.icono} {estadoOC.texto}</span>
               {estadoChip(estaComprada(oc),"Compra")}{estadoChip(estaEntregada(oc),"Entrega")}{estadoChip(estaFacturada(oc),"Factura")}
               {estadoChip(estaCobrada(oc),"Cobro")}{estadoChip(financiamientoPagado(oc),"Financ.")}
+              <span data-cabecera-asignaciones style={{marginLeft:"auto",fontSize:13,color:C.inkMuted,whiteSpace:"nowrap"}}>V: <b style={{color:faltaVendedor(oc)?C.warnText:C.ink}}>{primerNombre(nombreVendedor(oc,vendedores))}</b> · F: <b style={{color:faltaFinanciador(oc)?C.warnText:C.ink}}>{primerNombre(nombreFinanciador(oc,financiadores))}</b></span>
             </div>
             </>}
             <IndiceFicha items={secciones} onIr={ir} envolver={!escritorio} />
