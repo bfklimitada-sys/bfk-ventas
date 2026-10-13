@@ -1,5 +1,42 @@
 # Módulo Cotizaciones y EETT — BFK Datos
 
+## 0. Actualización definitiva (octubre 2026) — rama `cotizaciones-definitiva`
+
+Flujo principal: **Datos → Productos → Precios → EETT**. Sin merge, despliegue ni migración sin autorización de Kevin.
+
+| Tema | Qué hace | Dónde |
+|---|---|---|
+| Compra Ágil | «Enlace o código de Compra Ágil» + «Consultar y completar». La API oficial se consulta desde el servidor; vista previa; lo que reemplazaría un dato ya escrito queda sin marcar; no toca fecha de emisión, estado, productos ni precios; los productos importados quedan como *requerimientos del comprador* | `api/compra-agil.mjs`, `ImportarCompraAgil.jsx`, `propuestaCompraAgil()` |
+| Productos | «Ingresar manual» es la acción principal; «Desde la biblioteca de fichas» se mantiene. Capturas/OCR, atajo de Safari, lectura de enlaces, IA y pegar texto quedan fuera del flujo (su código y sus datos se conservan). Sin campo Disponibilidad (el dato guardado no se borra) | `EditorCotizacion.jsx`, `EditorFicha.jsx` |
+| Enlace de compra | Se conserva toda la vida de la cotización: «Abrir publicación» / «Sin enlace registrado»; en adjudicadas, «Ir a comprar». Si se cambia, el primero queda como `enlace_original`. Nunca va al PDF | `EditorCotizacion.jsx` |
+| Despacho | En el mismo formulario del producto: individual, compartido (se ingresa una vez y se reparte según valor), «Sin costo (confirmado)», cómo se verificó y dirección verificada (si cambia, pide verificar de nuevo). Nunca se asume gratis ni se duplica | `EditorFicha.jsx` |
+| Precios | Tarjeta grande «VALOR UNITARIO NETO PARA MERCADO PÚBLICO» por producto con «Copiar valor» (solo dígitos). Resumen: costo total de adquisición, recargo, unitarios, total neto, total con IVA y ganancia neta. Sin IVA crédito/débito ni estimaciones de F29. Fórmulas sin cambios | `EditorCotizacion.jsx`, `calcularCotizacion()` |
+| Vendedor | Vendedor responsable en Datos: catálogo existente de BFK (solo lectura) + registro sin duplicados en `cotizacion_vendedores` (no toca comisiones) | `cz_registrar_vendedor` |
+| EETT | Reproduce la plantilla Excel «Pág.1» (banda azul, logo, tabla del proceso en la 1.ª página, franja gris del nombre, 2 fotos, CARACTERÍSTICAS, dos columnas con renglones, pie azul) + bloque discreto «Elaboración de especificaciones técnicas» (empresa, vendedor, elaborado por = cuenta autenticada, fecha, cotización, versión) | `src/lib/eettPdf.js` |
+| Vista previa | Mismo generador, todas las páginas (pdf.js bajo demanda), PC y celular; no guarda nada. Alternativa: visor del navegador | `VistaPreviaEETT.jsx` |
+| Generar y descargar | Valida → guarda (solo si hay cambios; sin versiones vacías; control de concurrencia) → genera desde lo guardado → descarga en el dispositivo → registra **solo metadatos**. Si la descarga falla, avisa que los datos sí quedaron guardados y permite reintentar | `EditorCotizacion.jsx` |
+| Adjudicadas | Lo ofertado (líneas, cantidades, unitarios) y el vínculo con la OC quedan protegidos (también en el servidor); se pueden actualizar enlaces y fichas y regenerar la EETT | `cz_guardar_cotizacion_v2` |
+| Rendimiento | Listado paginado (20) con búsqueda y filtros por código, nombre, institución, vendedor y estado; biblioteca paginada sin descargar imágenes; miniaturas progresivas; imágenes comprimidas (1000 px, JPEG 0,8) y nunca re-subidas | `cotizacionesDatos.js`, `ImagenFicha.jsx` |
+| Eliminar | Solo administradores; confirmación escrita (código o nombre); «Cancelar» / «Eliminar definitivamente»; bloqueado en adjudicadas o con OC; borra solo lo asociado; auditoría (quién/cuándo); no toca biblioteca, imágenes, PDF ni otros módulos | `EliminarCotizacion.jsx`, `cz_eliminar_cotizacion` |
+
+### Ticket de ChileCompra (API de Compra Ágil)
+La API oficial (Beta) es `GET https://api2.mercadopublico.cl/v2/compra-agil/{codigo}` con la cabecera `ticket`. Sin ticket responde 401.
+1. Solicitar el ticket en https://www.chilecompra.cl/api/ → «Pide tu ticket» (Clave Única). Llega por correo.
+2. Guardarlo en Vercel (proyecto `bfk-ventas`) como variable de entorno **`MP_TICKET_COMPRA_AGIL`** (si no existe, la función prueba con el `MP_TICKET` actual de las OC).
+3. Nunca se expone al navegador. Sin ticket válido, la pantalla lo informa y el ingreso manual sigue disponible. No hay respuestas simuladas.
+Comuna y ciudad no vienen en la API: se completan a mano.
+
+### Migración v2 (preparada, NO aplicada)
+`docs/migraciones/BORRADOR-2026-10-cotizaciones-v2.sql` (+ `-deshacer.sql`). Validada en PostgreSQL local con `docs/pruebas-cotizaciones/validar_sql_v2.sh` (37 comprobaciones).
+Hasta aplicarla, la app funciona con la base actual: guarda la cotización y registra cada EETT **sin subir el PDF**; avisa que el vendedor y los datos importados de Compra Ágil se guardarán cuando se instale; la eliminación no se muestra.
+
+### Pruebas
+`cotizaciones.test.mjs` (fórmulas + caso «Mesa plegable» 56.669), `pdf_eett.test.mjs` (formato y privacidad del PDF), `validar_sql_v2.sh` (migración) y `e2e_definitiva.mjs` (interfaz completa con servicios simulados; reemplaza a `e2e_cotizaciones.mjs`, que probaba el flujo anterior de capturas).
+
+---
+
+## Historial (versión inicial, octubre 2026)
+
 Rama `modulo-cotizaciones` (desde `main` 4cb5f92). Sin cambios en producción, sin migraciones aplicadas, sin merge ni despliegue sin autorización expresa.
 Fuente principal: *BFK Datos — Especificación inicial: Cotizaciones y EETT* (octubre 2026), con el formato de referencia `1525570-33-COT26.pdf` y el Excel histórico `Master_MercadoPublico2020250121.xlsx`.
 
@@ -68,7 +105,7 @@ El "modo prueba" (guardar solo en el dispositivo) se activa **únicamente** si S
 
 ## 6. Pendientes
 
-1. Diseño del PDF: se mantiene el actual, basado en la referencia 1525570-33-COT26 (la plantilla Excel no se requiere por ahora).
+1. Diseño del PDF: reemplazado por la plantilla Excel oficial (ver §0).
 2. Qué proveedores entregan costo de envío confiable por dirección: por ahora **todo envío se verifica manualmente** y queda "por verificar" hasta confirmarlo.
 3. Autorización para aplicar el SQL en Supabase (con respaldo cifrado previo) y para el merge/despliegue.
 

@@ -30,7 +30,8 @@ const items = [
   { ...comercial, ficha: { nombre: "Cable UTP Cat6 305 m", marca: "Nexxt", modelo: "AB360NXT12", especificaciones: [{ etiqueta: "Categoría", valor: "6" }], imagenes: [] } },
 ];
 
-const doc = crearPdfEETT(cot, items, { jsPDF, logo });
+const elaboracion = { vendedor: "Juan Pérez", elaborado_por: "Kevin Vergara", fecha: "2026-10-13", cotizacion: "1525570-33-COT26", version: 4 };
+const doc = crearPdfEETT(cot, items, { jsPDF, logo, elaboracion });
 const dir = process.env.SALIDA || mkdtempSync(join(tmpdir(), "eett-"));
 const ruta = join(dir, "EETT_prueba.pdf");
 writeFileSync(ruta, Buffer.from(doc.output("arraybuffer")));
@@ -45,10 +46,10 @@ ok("P3_ficha_2_empieza_en_pagina_nueva", pSilla === 1, pSilla);
 ok("P4_ficha_larga_continua_en_pagina_siguiente", /continuaci/i.test(porPagina[2] || "") && /Especificaci.n 46/.test(todo));
 const pCable = porPagina.findIndex((t) => /AB360NXT12/.test(t));
 ok("P5_ficha_3_en_su_propia_pagina", pCable > pSilla && !/SE-2000|Especificaci.n \d/.test(porPagina[pCable]), pCable);
-ok("P6_cabecera_en_cada_pagina", porPagina.every((t) => /INFORMACI.N T.CNICA DE/.test(t) && /1525570-33-COT26/.test(t) && /65\.229\.008-6/.test(t)));
+ok("P6_encabezado_en_cada_pagina_y_tabla_solo_en_la_primera", porPagina.every((t) => /INFORMACI.N\s+T.CNICA DE/.test(t)) && /ID LICITACI/.test(porPagina[0]) && /1525570-33-COT26/.test(porPagina[0]) && /65\.229\.008-6/.test(porPagina[0]) && porPagina.slice(1).every((t) => !/ID LICITACI|65\.229\.008-6/.test(t)));
 ok("P7_pie_contacto_en_cada_pagina", porPagina.every((t) => /bfklimitada@gmail\.com/.test(t)));
 ok("P8_marca_modelo_color", /HP/.test(porPagina[0]) && /SMART TANK 580/.test(porPagina[0]) && /BLANCO/.test(porPagina[0]));
-ok("P9_fecha_formato_chileno", /20-08-2026/.test(porPagina[0]));
+ok("P9_fecha_formato_chileno", /20\/08\/2026/.test(porPagina[0]));
 // Privacidad: nada comercial ni interno.
 const prohibidos = ["187654", "187.654", "45990", "45.990", "falabella.com", "mercadolibre", "Falabella", "Mercado Libre", "http", "Stock 7", "0.42", "42%", "confidencial", "Calle Interna", "$"];
 const encontrados = prohibidos.filter((p) => todo.includes(p));
@@ -56,6 +57,10 @@ ok("P10_sin_datos_comerciales_ni_internos", encontrados.length === 0, encontrado
 ok("P11_caracteres_especiales_sustituidos", /"EJECUTIVA"/.test(todo) && />= 120/.test(todo), (todo.match(/SILLA[^\n]*/) || [""])[0]);
 ok("P12_textoPDF_limpia", textoPDF("a “b” – c ≥ d ✓") === 'a "b" - c >= d');
 ok("P13_producto_sin_imagen_no_falla", pCable >= 0);
+const ultima = porPagina[paginas - 1];
+ok("P18_elaboracion_en_ultima_pagina", /ELABORACI.N DE ESPECIFICACIONES T.CNICAS/.test(ultima) && /Empresa: BFK Limitada/.test(ultima) && /Vendedor responsable: Juan P.rez/.test(ultima) && /Elaborado por: Kevin Vergara/.test(ultima) && /Fecha: 13\/10\/2026/.test(ultima) && /Cotizaci.n: 1525570-33-COT26/.test(ultima) && /Versi.n 4/.test(ultima), ultima.slice(-600));
+ok("P19_elaboracion_una_sola_vez", (todo.match(/ELABORACI.N DE ESPECIFICACIONES/g) || []).length === 1);
+ok("P20_nombre_archivo_con_version", nombreArchivoEETT(cot, 4) === "EETT_1525570-33-COT26_v4.pdf");
 const meta = execFileSync("pdfinfo", [ruta]).toString();
 ok("P14_tamano_A4", /595\.28 x 841\.89/.test(meta), meta.match(/Page size:.*/)?.[0]);
 
@@ -66,7 +71,7 @@ ok("P14_tamano_A4", /595\.28 x 841\.89/.test(meta), meta.match(/Page size:.*/)?.
   const r2 = join(dir, "EETT_sin_id.pdf"); writeFileSync(r2, Buffer.from(d2.output("arraybuffer")));
   const t2 = execFileSync("pdftotext", ["-layout", r2, "-"]).toString();
   ok("P15_sin_id_genera_pdf", d2.getNumberOfPages() === 1 && /AB360NXT12/.test(t2));
-  ok("P16_sin_id_omite_columna_id", !/ID LICITACI/.test(t2) && /NOMBRE LICITACI/.test(t2) && /20-08-2026/.test(t2) && /65\.229\.008-6/.test(t2) && !/undefined|null/.test(t2), t2.slice(0, 400));
+  ok("P16_sin_id_omite_columna_id", !/ID LICITACI/.test(t2) && /NOMBRE LICITACI/.test(t2) && /20\/08\/2026/.test(t2) && /65\.229\.008-6/.test(t2) && !/undefined|null/.test(t2), t2.slice(0, 400));
   ok("P17_nombre_archivo_sin_id", nombreArchivoEETT(sinId) === "EETT_2026-08-20_ASOCIACION_DE_MUNICIPIOS_PARA_LA_SEGURIDAD_COMUNI.pdf" && nombreArchivoEETT(cot) === "EETT_1525570-33-COT26.pdf" && nombreArchivoEETT({}) === "EETT_cotizacion.pdf", [nombreArchivoEETT(sinId), nombreArchivoEETT({})]);
 }
 console.log(`\nPDF: ${ruta} (${paginas} páginas)\n${nOk} OK · ${F.length} fallas`);

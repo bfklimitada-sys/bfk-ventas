@@ -1,6 +1,6 @@
 // Cálculo de cotizaciones (fórmula PROVISIONAL) y revisión de fichas. Datos simulados.
 // Uso: node docs/pruebas-cotizaciones/cotizaciones.test.mjs
-import { calcularCotizacion, repartirEnvios, revisarFicha, estadoParaPDF, fichaPublica, textoParaMercadoPublico, margenDeRecargo, paresDeTexto, textoDePares, FORMULA } from "../../src/lib/cotizaciones.js";
+import { digitosValor, codigoCompraAgil, propuestaCompraAgil, elaboracionPublica, cotizacionVacia, calcularCotizacion, repartirEnvios, revisarFicha, estadoParaPDF, fichaPublica, textoParaMercadoPublico, margenDeRecargo, paresDeTexto, textoDePares, FORMULA } from "../../src/lib/cotizaciones.js";
 
 const F = []; let nOk = 0;
 const ok = (k, v, d) => { if (!v) { F.push(k); console.log("FALLA " + k + (d !== undefined ? " :: " + JSON.stringify(d).slice(0, 400) : "")); } else { nOk++; console.log("OK    " + k); } };
@@ -115,6 +115,34 @@ const item = (key, cantidad, precio, envio_key, extra = {}) => ({ key, cantidad,
   ok("C11_misma_direccion_sin_importar_mayusculas_espacios", acentos.listo, acentos.pendientes);
   const gratisSinVerificar = calc({ ...base, envios: [env("e", 0, { estado: "pendiente" })] });
   ok("C11_monto_cero_sin_verificar_no_es_gratis", !gratisSinVerificar.listo);
+}
+
+// C12 (actualización definitiva, oct 2026): caso de referencia «Mesa plegable de camping», 50 u.
+// Precio de compra 51.800 c/IVA con factura + despacho confirmado 3.690 (incorporado), 30% → unitario 56.669.
+{
+  const c = calc({ recargo: 0.3, envios: [env("e", 3690)], items: [item("mesa", 50, 51800, "e")] });
+  const l = c.lineas[0], t = c.totales;
+  ok("C12_mesa_unitario_56669", l.unitario_neto === 56669, l);
+  ok("C12_mesa_subtotal_iva_total", t.neto === 2833450 && t.iva_debito === 538356 && t.total === 3371806 && t.despacho_mercado_publico === 0, t);
+  ok("C12_copiar_valor_solo_digitos", digitosValor(l.unitario_neto) === "56669" && digitosValor(1234567.4) === "1234567" && !/[.$,\s]/.test(digitosValor(l.unitario_neto)));
+  const txt = textoParaMercadoPublico({ items: [item("mesa", 50, 51800, "e", { ficha: { nombre: "Mesa plegable de camping" } })] }, c);
+  ok("C12_texto_mp_unitario_no_subtotal", /\t50\t56669\t2833450/.test(txt), txt);
+}
+// C13: Compra Ágil — código desde enlace o texto; propuesta sin inventar, sin tocar fecha de emisión ni precios.
+{
+  ok("C13_codigo_desde_enlace", codigoCompraAgil("https://buscador.mercadopublico.cl/ficha?code=3390-246-COT26") === "3390-246-COT26" && codigoCompraAgil(" 3390-246-cot26 ") === "3390-246-COT26" && codigoCompraAgil("1525570-1082-AG26") === "");
+  const datos = { codigo: "3390-246-COT26", nombre: "Congeladoras", institucion: "Ejército de Chile", unidad_compra: "Brigada Motorizada N°4", rut: "61.962.500-5", direccion_entrega: "Av. General Velásquez 1750, Arica", plazo_dias: 15,
+    presupuesto: { estimado: 6000000 }, fecha_publicacion: "2026-10-10T09:00:00", productos: [{ nombre: "Congeladora vertical", cantidad: 2, unidad: "EA", descripcion: "590 L brutos" }], documentos: [], region: "" };
+  const base = { ...cotizacionVacia(), fecha: "2026-10-13", institucion: "Otra institución", recargo: 0.3 };
+  const pr = propuestaCompraAgil(base, datos); const por = Object.fromEntries(pr.map((f) => [f.campo, f]));
+  ok("C13_propone_campos_publicados", por.id_externo?.valor === "3390-246-COT26" && por.plazo?.valor === "15 DÍAS" && por.presupuesto_estimado?.valor === 6000000 && por.requerimientos?.valor.length === 1, pr);
+  ok("C13_no_inventa_ni_toca_fecha_estado_precios", !por.region && !por.documentos_mp && !pr.some((f) => ["fecha", "estado", "recargo", "items", "envios", "comuna"].includes(f.campo)), pr.map((f) => f.campo));
+  ok("C13_marca_sobrescritura", por.institucion?.sobrescribe === true && por.nombre?.sobrescribe === false, por.institucion);
+}
+// C14: bloque de elaboración del PDF: solo nombres, fecha y código.
+{
+  const e = elaboracionPublica({ vendedor: "Juan", elaborado_por: "Kevin", fecha: "2026-10-13", cotizacion: "X", version: 3, precio: 999, enlace: "https://x" });
+  ok("C14_elaboracion_sin_datos_comerciales", JSON.stringify(e) === JSON.stringify({ empresa: "BFK Limitada", vendedor: "Juan", elaborado_por: "Kevin", fecha: "2026-10-13", cotizacion: "X", version: "3" }), e);
 }
 console.log(`\n${nOk} OK · ${F.length} fallas`);
 process.exit(F.length ? 1 : 0);

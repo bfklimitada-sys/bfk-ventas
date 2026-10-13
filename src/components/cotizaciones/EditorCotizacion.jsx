@@ -1,168 +1,178 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { C, T, R, iStyle, iMono, selStyle, fmt, MONO } from "../../lib/theme";
 import { Field, Modal } from "../ui/Basicos";
 import { HojaLateral, Pestanas, PanelPestana, Tarjeta, Badge, AvisoLinea, BotonPrincipal, BotonSecundario, FilaDato, Desplegable, Seccion } from "../ui/Sistema";
-import { calcularCotizacion, estadoParaPDF, destinoDe, envioConfirmado, textoParaMercadoPublico, margenDeRecargo, itemVacio, envioVacio, proveedorDeEnlace, ESTADOS_COTIZACION, ESTADOS_ENVIO, FORMULA, RECARGO_SUGERIDO } from "../../lib/cotizaciones";
-import { consultarEnlace, traerImagen, logoBFK } from "../../lib/cotizacionesDatos";
-import { leerCapturas } from "../../lib/capturaLectura";
-import { extraerDeTexto } from "../../lib/extraerProducto";
-import { descargarPdfEETT, huellaPDF } from "../../lib/eettPdf";
+import { calcularCotizacion, estadoParaPDF, destinoDe, envioConfirmado, textoParaMercadoPublico, itemVacio, envioVacio, nuevaClave, hoyISO, digitosValor, proveedorDeEnlace, ESTADOS_COTIZACION, ESTADOS_ENVIO, RECARGO_SUGERIDO } from "../../lib/cotizaciones";
+import { logoBFK } from "../../lib/cotizacionesDatos";
+import { generarPdfEETT, descargarBlob, huellaPDF } from "../../lib/eettPdf";
 import { EditorFicha } from "./EditorFicha";
+import { ImagenFicha } from "./ImagenFicha";
+import { ImportarCompraAgil } from "./ImportarCompraAgil";
+import { VistaPreviaEETT } from "./VistaPreviaEETT";
+import { EliminarCotizacion } from "./EliminarCotizacion";
 import logoUrl from "../../assets/bfk-logo.jpg";
 
-const pct = (x) => `${(Math.round(Number(x) * 1000) / 10).toLocaleString("es-CL")}%`;
 const m = (x) => fmt.money(Math.round(Number(x) || 0));
-const iguales = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const pct = (x) => `${(Math.round(Number(x) * 1000) / 10).toLocaleString("es-CL")}%`;
+const fechaHora = (iso) => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? "" : d.toLocaleString("es-CL", { dateStyle: "short", timeStyle: "short" }); };
+const enlaceValido = (u) => /^https?:\/\/\S+$/i.test(String(u || "").trim());
 
-export function EditorCotizacion({ almacen, inicial, token, entidadesCatalogo = [], productosBib = [], showToast, onGuardada, onBibliotecaCambio, onCerrar, captura, onCapturaUsada }) {
+// Copia texto al portapapeles (con alternativa para navegadores sin API de portapapeles).
+async function copiarTexto(t) {
+  try { await navigator.clipboard.writeText(t); return true; } catch { /* alternativa */ }
+  try { const a = document.createElement("textarea"); a.value = t; a.setAttribute("readonly", ""); a.style.position = "fixed"; a.style.opacity = "0"; document.body.appendChild(a); a.select(); const ok = document.execCommand("copy"); a.remove(); return ok; } catch { return false; }
+}
+
+// Quita los despachos que ya no usa ningún producto (evita costos duplicados o huérfanos).
+const limpiarEnvios = (c) => { c.envios = c.envios.filter((e) => c.items.some((it) => it.envio_key === e.key)); return c; };
+
+export function EditorCotizacion({ almacen, inicial, token, perfil, entidadesCatalogo = [], showToast, onGuardada, onEliminada, onBibliotecaCambio, onCerrar }) {
   const [cot, setCot] = useState(() => JSON.parse(JSON.stringify(inicial)));
   const [sucio, setSucio] = useState(!inicial.id);
+  const [estadoGuardado, setEstadoGuardado] = useState(inicial.id ? inicial.estado : null);
   const [pestana, setPestana] = useState(inicial.id ? "productos" : "datos");
   const [editor, setEditor] = useState(null);       // { item, esNuevo }
-  const [enlace, setEnlace] = useState(""); const [consultando, setConsultando] = useState(""); const [errorEnlace, setErrorEnlace] = useState(""); const [enlacePendiente, setEnlacePendiente] = useState("");
-  const [verBib, setVerBib] = useState(false); const [buscaBib, setBuscaBib] = useState("");
-  const [verTexto, setVerTexto] = useState(false); const [texto, setTexto] = useState("");
-  const [guardando, setGuardando] = useState(false); const [generando, setGenerando] = useState(false); const [generados, setGenerados] = useState([]);
+  const [verBib, setVerBib] = useState(false);
+  const [guardando, setGuardando] = useState(false); const [generando, setGenerando] = useState(""); const [falla, setFalla] = useState(null);
+  const [preview, setPreview] = useState(null);     // { blob, nombre, paginas }
+  const [historial, setHistorial] = useState([]); const [eliminar, setEliminar] = useState(false);
+  const [vendedores, setVendedores] = useState([]); const [nuevoVend, setNuevoVend] = useState(null);
 
+  const esAdmin = perfil?.rol === "admin";
+  const protegido = estadoGuardado === "adjudicada";
+  const cap = almacen.capacidades || {};
   const calc = useMemo(() => calcularCotizacion(cot), [cot]);
   const pdf = useMemo(() => estadoParaPDF(cot), [cot]);
   const cambiar = (fn) => { setCot((c) => fn(JSON.parse(JSON.stringify(c)))); setSucio(true); };
   const setCampo = (k, v) => cambiar((c) => { c[k] = v; return c; });
+  const destino = destinoDe(cot);
 
-  // ── Productos ──
-  const envioSugerido = (proveedor) => {
-    const p = String(proveedor || "").trim().toLowerCase();
-    return (p && cot.envios.find((e) => String(e.proveedor || "").trim().toLowerCase() === p)?.key) || "__nuevo";
-  };
-  const abrirNuevo = (item) => setEditor({ esNuevo: true, item: { ...item, envio_key: item.envio_key || envioSugerido(item.proveedor) } });
+  useEffect(() => { almacen.listarVendedores?.().then(setVendedores).catch(() => setVendedores([])); }, [almacen]);
+  const cargarHistorial = (id = cot.id) => { if (id) almacen.listarEETT?.(id).then(setHistorial).catch(() => {}); };
+  useEffect(() => { cargarHistorial(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const guardarItem = async (item, { guardarBiblioteca, actualizarBiblioteca }) => {
-    let it = { ...item }; const consulta = it.consulta; delete it.consulta;
+  // ── Productos (ingreso manual) ──
+  const abrirNuevo = (item) => setEditor({ esNuevo: true, item });
+  const manual = (extra = {}) => abrirNuevo({ ...itemVacio(), origen_datos: "manual", ...extra });
+  const guardarItem = async (item, { guardarBiblioteca, actualizarBiblioteca, envio }) => {
+    const it = { ...item }; delete it.consulta;
     try {
-      if (guardarBiblioteca) { it.producto_id = await almacen.guardarProducto(it.ficha, { fuente: consulta?.fuente || proveedorDeEnlace(it.enlace), fecha_verificacion: it.fecha_consulta }); onBibliotecaCambio?.(); }
+      if (guardarBiblioteca) { it.producto_id = await almacen.guardarProducto(it.ficha, { fuente: proveedorDeEnlace(it.enlace) || "", fecha_verificacion: null }); onBibliotecaCambio?.(); showToast?.("Ficha guardada en la biblioteca compartida"); }
       else if (actualizarBiblioteca && it.producto_id) { await almacen.guardarProducto(it.ficha, { id: it.producto_id }); onBibliotecaCambio?.(); }
     } catch (e) { showToast?.(`No se guardó en la biblioteca: ${e.message}`, "error"); }
     cambiar((c) => {
-      if (it.envio_key === "__nuevo") { const e = envioVacio(it.proveedor); c.envios.push(e); it.envio_key = e.key; }
+      if (envio) {
+        const { modo, ...datos } = envio; delete datos.modo;
+        const anterior = c.envios.find((e) => e.key === it.envio_key);
+        const exclusivoAnterior = anterior && !c.items.some((x) => x.key !== it.key && x.envio_key === anterior.key);
+        let key = datos.key;
+        if (modo === "propio") key = exclusivoAnterior ? anterior.key : null;
+        if (!key) { key = nuevaClave("e"); c.envios.push({ ...envioVacio(it.proveedor), key }); }
+        const e = c.envios.find((x) => x.key === key);
+        Object.assign(e, { proveedor: datos.proveedor || e.proveedor || it.proveedor, monto: datos.monto, estado: datos.estado, evidencia: datos.evidencia, con_factura: datos.con_factura, destino: datos.destino, fecha_cotizacion: datos.fecha_cotizacion || e.fecha_cotizacion });
+        if (modo === "propio" && !String(e.proveedor || "").trim()) e.proveedor = it.proveedor;
+        it.envio_key = key;
+      }
       const i = c.items.findIndex((x) => x.key === it.key);
-      if (i >= 0) { if (!iguales(c.items[i].ficha, it.ficha)) it.ficha_aprobada = false; c.items[i] = it; } else c.items.push(it);
-      return c;
+      if (i >= 0) { if (JSON.stringify(c.items[i].ficha) !== JSON.stringify(it.ficha)) it.ficha_aprobada = false; c.items[i] = it; } else c.items.push(it);
+      return limpiarEnvios(c);
     });
     setEditor(null);
-    if (guardarBiblioteca) showToast?.("Producto guardado en la biblioteca compartida");
-  };
-
-  // Resultado de una consulta de enlace o de una captura de Safari → producto para revisar (mismo tratamiento).
-  // Precio y disponibilidad quedan como datos internos; el envío nunca viene incluido y queda por verificar.
-  const prepararItem = async (r, enlaceBase, origen) => {
-    const e = r.enlace || enlaceBase;
-    const item = { ...itemVacio(), enlace: e, proveedor: proveedorDeEnlace(e) || r.fuente, precio_origen: r.precio_origen ?? "", precio_incluye_iva: r.precio_incluye_iva !== false,
-      disponibilidad: r.disponibilidad || "", fecha_consulta: r.fecha_consulta, origen_datos: origen || (r.metodos || []).join(",") || "enlace",
-      consulta: { fuente: origen === "safari" ? `${r.fuente || proveedorDeEnlace(e)} (capturado en Safari)` : r.fuente, fecha_consulta: r.fecha_consulta, metodos: r.metodos, advertencias: [...(r.advertencias || [])] },
-      ficha: { ...r.ficha, imagenes: [] } };
-    const urls = (r.ficha?.imagenes || []).slice(0, 4);
-    if (urls.length) {
-      setConsultando(`Trayendo ${urls.length} imagen${urls.length > 1 ? "es" : ""}…`);
-      const res = await Promise.allSettled(urls.map((x) => traerImagen(token, x)));
-      item.ficha.imagenes = res.filter((x) => x.status === "fulfilled").map((x) => x.value);
-      const fallas = res.length - item.ficha.imagenes.length; if (fallas) item.consulta.advertencias.push(`${fallas} imagen(es) no se pudieron traer: agrégalas con "Agregar foto" (por ejemplo, una captura de pantalla).`);
-    }
-    return item;
-  };
-  const consultar = async () => {
-    const u = enlace.trim(); if (!u) return;
-    setErrorEnlace(""); setConsultando("Consultando el enlace…");
-    try {
-      const r = await consultarEnlace(token, u);
-      const item = await prepararItem(r, u);
-      setEnlace(""); abrirNuevo(item);
-    } catch (e) { setErrorEnlace(e.message); setEnlacePendiente(u); } finally { setConsultando(""); }
-  };
-  // Captura recibida desde el atajo de Safari: se abre una sola vez como producto nuevo para revisión.
-  const capturaUsada = useRef(false);
-  useEffect(() => {
-    if (!captura || capturaUsada.current) return; capturaUsada.current = true;
-    setPestana("productos"); setConsultando("Preparando el producto capturado en Safari…");
-    prepararItem(captura, captura.enlace, "safari").then((item) => { abrirNuevo(item); onCapturaUsada?.(); }).finally(() => setConsultando(""));
-  }, [captura]); // eslint-disable-line react-hooks/exhaustive-deps
-  const manual = (conEnlace) => abrirNuevo({ ...itemVacio(), enlace: conEnlace || "", proveedor: proveedorDeEnlace(conEnlace || ""), origen_datos: "manual" });
-  // Capturas de pantalla de la publicación (universal: iPhone, Android o PC). Resultado = propuesta para revisar.
-  const [verCapturas, setVerCapturas] = useState(false); const [archivosCap, setArchivosCap] = useState([]); const [leyendoCap, setLeyendoCap] = useState(""); const [errorCap, setErrorCap] = useState("");
-  const vistasCap = useMemo(() => archivosCap.map((f) => URL.createObjectURL(f)), [archivosCap]);
-  useEffect(() => () => vistasCap.forEach((u) => URL.revokeObjectURL(u)), [vistasCap]);
-  const desdeCapturas = async () => {
-    setErrorCap(""); setLeyendoCap("Preparando…");
-    try {
-      const e = enlacePendiente || enlace.trim();
-      const r = await leerCapturas(token, archivosCap, { enlace: e, onProgreso: setLeyendoCap });
-      const item = await prepararItem({ ...r, enlace: e }, e, r.metodos?.[0] === "ia" ? "capturas-ia" : "capturas-ocr");
-      item.consulta.fuente = r.fuente; item.consulta.metodos = r.metodos;
-      setVerCapturas(false); setArchivosCap([]); setEnlacePendiente(""); setErrorEnlace(""); setEnlace("");
-      abrirNuevo(item);
-    } catch (err) { setErrorCap(err.message || "No se pudieron leer las capturas."); } finally { setLeyendoCap(""); }
-  };
-  const desdeTexto = () => {
-    const r = extraerDeTexto(texto); const e = enlacePendiente;
-    abrirNuevo({ ...itemVacio(), enlace: e, proveedor: proveedorDeEnlace(e), ficha: r.ficha, origen_datos: "texto", fecha_consulta: new Date().toISOString(),
-      consulta: { fuente: e ? `${proveedorDeEnlace(e)} (texto pegado)` : "texto pegado", fecha_consulta: new Date().toISOString(), metodos: ["texto"], advertencias: r.advertencias } });
-    setVerTexto(false); setTexto(""); setEnlacePendiente(""); setErrorEnlace(""); setEnlace("");
   };
   const desdeBiblioteca = (p) => {
-    abrirNuevo({ ...itemVacio(), producto_id: p.id, origen_datos: "biblioteca", fecha_consulta: null,
-      ficha: { nombre: p.nombre, marca: p.marca, modelo: p.modelo, color: p.color, descripcion: p.descripcion, generales: p.generales, especificaciones: p.especificaciones, imagenes: p.imagenes } });
-    setVerBib(false); setBuscaBib("");
+    manual({ producto_id: p.id, origen_datos: "biblioteca", ficha: { nombre: p.nombre, marca: p.marca, modelo: p.modelo, color: p.color, descripcion: p.descripcion, generales: p.generales, especificaciones: p.especificaciones, imagenes: p.imagenes } });
+    setVerBib(false);
   };
-  const quitar = (key) => { if (!window.confirm("¿Quitar este producto de la cotización? (La biblioteca no cambia.)")) return; cambiar((c) => { c.items = c.items.filter((x) => x.key !== key); return c; }); };
+  const quitar = (key) => { if (!window.confirm("¿Quitar este producto de la cotización? (La biblioteca no cambia.)")) return; cambiar((c) => { c.items = c.items.filter((x) => x.key !== key); return limpiarEnvios(c); }); };
   const mover = (i, d) => cambiar((c) => { const j = i + d; if (j < 0 || j >= c.items.length) return c; [c.items[i], c.items[j]] = [c.items[j], c.items[i]]; return c; });
 
-  // ── Envíos ──
-  const setEnvio = (key, k, v) => cambiar((c) => { const e = c.envios.find((x) => x.key === key); if (e) e[k] = v; return c; });
-  // Confirmar un envío lo deja registrado para la dirección ACTUAL del cliente; sin dirección no se puede confirmar.
-  const setEstadoEnvio = (key, estado) => {
-    const destino = destinoDe(cot);
-    if (envioConfirmado({ estado }) && !destino) { showToast?.("Primero ingresa la dirección de entrega del cliente (pestaña Datos): el envío se verifica para esa dirección.", "error"); return; }
-    cambiar((c) => { const e = c.envios.find((x) => x.key === key); if (e) { e.estado = estado; e.destino = envioConfirmado({ estado }) ? destino : ""; if (envioConfirmado({ estado })) e.fecha_cotizacion = new Date().toISOString().slice(0, 10); } return c; });
+  // ── Guardar ──
+  const guardarInterno = async () => {
+    const r = await almacen.guardarCotizacion(cot);
+    const nueva = { ...cot, id: r.id, version: r.version };
+    setCot(nueva); setSucio(false); setEstadoGuardado(nueva.estado); onGuardada?.(nueva);
+    return nueva;
   };
-  const quitarEnvio = (key) => cambiar((c) => { c.envios = c.envios.filter((e) => e.key !== key); c.items.forEach((it) => { if (it.envio_key === key) it.envio_key = null; }); return c; });
-  const asignar = (itemKey, envKey) => cambiar((c) => { const it = c.items.find((x) => x.key === itemKey); if (!it) return c; if (envKey === "__nuevo") { const e = envioVacio(it.proveedor); c.envios.push(e); envKey = e.key; } it.envio_key = envKey || null; return c; });
-
-  // ── Guardar / PDF ──
   const guardar = async () => {
     setGuardando(true);
-    try { const r = await almacen.guardarCotizacion(cot); const nueva = { ...cot, id: r.id, version: r.version }; setCot(nueva); setSucio(false); showToast?.("Cotización guardada"); onGuardada?.(nueva); }
-    catch (e) { showToast?.(e.message, "error"); } finally { setGuardando(false); }
+    try { await guardarInterno(); showToast?.("Cotización guardada"); }
+    catch (e) { showToast?.(`No se guardó: ${e.message}`, "error"); } finally { setGuardando(false); }
   };
-  const generarPDF = async () => {
-    if (!pdf.listo) return; setGenerando(true);
+
+  // ── EETT: mismo generador para vista previa y descarga ──
+  const construirPdf = async (base, { conVersion }) => {
+    const logo = await logoBFK(logoUrl);
+    const items = await Promise.all(base.items.map(async (it) => ({ ficha: { ...it.ficha, imagenes: await almacen.resolverImagenes(it.ficha?.imagenes || [], 2) } })));
+    const elaboracion = { vendedor: base.vendedor_nombre, elaborado_por: perfil?.nombre || "", fecha: hoyISO(), cotizacion: base.id_externo, version: conVersion ? base.version : null };
+    return generarPdfEETT(base, items, { logo, elaboracion, version: conVersion ? base.version : null });
+  };
+  const verPrevia = async () => {
+    if (!cot.items.length) return; setGenerando("previa");
+    try { setPreview(await construirPdf(cot, { conVersion: !sucio && !!cot.id })); } // no guarda nada
+    catch (e) { showToast?.(`No se pudo preparar la vista previa: ${e.message}`, "error"); } finally { setGenerando(""); }
+  };
+  const descargarDe = async (base) => {
+    const r = await construirPdf(base, { conVersion: true });
+    descargarBlob(r.blob, r.nombre);
     try {
-      const logo = await logoBFK(logoUrl);
-      const r = await descargarPdfEETT(cot, cot.items, { logo });
-      let registro = "Descargado en este dispositivo";
-      if (almacen.modo === "base") {
-        if (cot.id && !sucio) { await almacen.registrarEETT(cot, r.blob, await huellaPDF(r.blob), r.paginas); registro = `Guardado (versión ${cot.version})`; }
-        else registro = "Descargado · guarda la cotización para registrar el PDF";
-      }
-      setGenerados((g) => [{ nombre: r.nombre, paginas: r.paginas, cuando: new Date(), registro }, ...g]);
-      showToast?.(`PDF EETT generado: ${r.paginas} página${r.paginas > 1 ? "s" : ""}`);
-    } catch (e) { showToast?.(`No se pudo generar el PDF: ${e.message}`, "error"); } finally { setGenerando(false); }
+      await almacen.registrarEETT({ cotizacion_id: base.id, version: base.version, hash: await huellaPDF(r.blob), paginas: r.paginas, nombre_documento: r.nombre, vendedor_nombre: base.vendedor_nombre || "", generado_por_nombre: perfil?.nombre || "" });
+      cargarHistorial(base.id);
+    } catch (e) { showToast?.(`El PDF se descargó, pero no se pudo registrar la generación: ${e.message}`, "error"); }
+    return r;
+  };
+  // Generar y descargar: valida → guarda (solo si hay cambios) → genera desde lo guardado → descarga → registra metadatos.
+  const generarYDescargar = async () => {
+    if (!pdf.listo) { showToast?.("Revisa las fichas pendientes antes de generar la EETT.", "error"); return; }
+    setGenerando("descarga"); setFalla(null);
+    let base = cot;
+    try { if (!cot.id || sucio) base = await guardarInterno(); }
+    catch (e) { setGenerando(""); showToast?.(`No se guardó la cotización: ${e.message} No se generó la EETT.`, "error"); return; }
+    try {
+      const r = await descargarDe(base);
+      showToast?.(`Cotización guardada (versión ${base.version}) y EETT descargada: ${r.paginas} página${r.paginas === 1 ? "" : "s"}`);
+    } catch (e) {
+      setFalla({ base, mensaje: e.message });
+      showToast?.(`Los datos quedaron guardados (versión ${base.version}), pero la descarga falló: ${e.message}`, "error");
+    } finally { setGenerando(""); }
+  };
+  const reintentar = async () => {
+    if (!falla) return; setGenerando("descarga");
+    try { await descargarDe(falla.base); setFalla(null); showToast?.("EETT descargada"); }
+    catch (e) { setFalla({ ...falla, mensaje: e.message }); showToast?.(`La descarga volvió a fallar: ${e.message}`, "error"); } finally { setGenerando(""); }
+  };
+
+  // ── Precios ──
+  const copiarUno = async (i) => {
+    const l = calc.lineas[i];
+    if (l.avisos.length) { showToast?.("Este producto tiene costos o despachos pendientes: confírmalos antes de copiar su valor.", "error"); return; }
+    if (await copiarTexto(digitosValor(l.unitario_neto))) showToast?.(`Copiado: ${digitosValor(l.unitario_neto)}`); else showToast?.("No se pudo copiar en este navegador", "error");
   };
   const copiarMP = async () => {
     if (!calc.listo) { showToast?.("Hay costos o despachos pendientes: confírmalos antes de copiar precios.", "error"); return; }
-    try { await navigator.clipboard.writeText(textoParaMercadoPublico(cot, calc)); showToast?.("Valores copiados (tabulados)"); }
-    catch { showToast?.("No se pudo copiar en este navegador", "error"); }
+    showToast?.((await copiarTexto(textoParaMercadoPublico(cot, calc))) ? "Valores copiados (tabulados)" : "No se pudo copiar en este navegador");
   };
+
+  // ── Datos ──
   const cerrar = () => { if (sucio && !window.confirm("Hay cambios sin guardar. ¿Cerrar igual?")) return; onCerrar(); };
   const elegirEntidad = (nombre) => {
     const e = entidadesCatalogo.find((x) => String(x.nombre_entidad || "").toLowerCase() === String(nombre).toLowerCase());
     cambiar((c) => { c.institucion = nombre; if (e) { if (!c.rut) c.rut = e.rut || ""; if (!c.comuna) c.comuna = e.comuna || ""; } return c; });
   };
+  const aplicarCompraAgil = (cambios) => { if (!Object.keys(cambios).length) return; cambiar((c) => Object.assign(c, cambios)); showToast?.("Datos de la Compra Ágil aplicados: revísalos y guarda"); };
+  const elegirVendedor = (id) => { const v = vendedores.find((x) => x.id === id); cambiar((c) => { c.vendedor_id = v?.id || null; c.vendedor_nombre = v?.nombre || ""; return c; }); };
+  const registrarVendedor = async () => {
+    try { const v = await almacen.registrarVendedor(nuevoVend); setVendedores((l) => [...l, v].sort((a, b) => a.nombre.localeCompare(b.nombre))); cambiar((c) => { c.vendedor_id = v.id; c.vendedor_nombre = v.nombre; return c; }); setNuevoVend(null); showToast?.("Vendedor registrado"); }
+    catch (e) { showToast?.(e.message, "error"); }
+  };
+  const eliminarCot = async (confirmacion) => { await almacen.eliminarCotizacion(cot.id, confirmacion); showToast?.("Cotización eliminada"); setEliminar(false); onEliminada?.(cot.id); };
 
   const nPend = calc.pendientes.length; const nRev = pdf.porItem.filter((p) => !p.aprobado).length;
-  const filtradosBib = productosBib.filter((p) => !buscaBib.trim() || `${p.nombre} ${p.marca} ${p.modelo}`.toLowerCase().includes(buscaBib.trim().toLowerCase()));
-  const titulo = cot.id_externo || (cot.id ? (cot.nombre || cot.institucion || "Cotización sin ID") : "Nueva cotización");
+  const titulo = cot.id_externo || (cot.id ? (cot.nombre || cot.institucion || "Cotización sin código") : "Nueva cotización");
+  const vendedorBloqueado = protegido && !esAdmin;
+  const sinEsquema = !cap.datosCompraAgil && (cot.vendedor_nombre || cot.requerimientos?.length || cot.descripcion || cot.unidad_compra || cot.region);
 
   return (
-    <HojaLateral abierta onCerrar={cerrar} dato="cotizacion" titulo={titulo} subtitulo={[cot.institucion, ESTADOS_COTIZACION[cot.estado]?.label].filter(Boolean).join(" · ")}
+    <HojaLateral abierta onCerrar={cerrar} dato="cotizacion" titulo={titulo} subtitulo={[cot.institucion, ESTADOS_COTIZACION[cot.estado]?.label, cot.vendedor_nombre].filter(Boolean).join(" · ")}
       derecha={<BotonPrincipal data-guardar-cotizacion onClick={guardar} disabled={guardando} style={{ minHeight: 40, padding: "8px 14px", opacity: guardando ? 0.6 : 1 }}>{guardando ? "Guardando…" : sucio ? "Guardar •" : "Guardado"}</BotonPrincipal>}>
       <div style={{ padding: 16 }} data-editor-cotizacion>
         <Pestanas etiqueta="Cotización" activa={pestana} onCambiar={setPestana} items={[
@@ -171,67 +181,127 @@ export function EditorCotizacion({ almacen, inicial, token, entidadesCatalogo = 
           { key: "precios", label: "Precios", n: nPend || null, tono: nPend ? "warn" : null },
           { key: "eett", label: "EETT", n: nRev || null, tono: nRev ? "warn" : null },
         ]} />
+        {protegido && <AvisoLinea tono="info" icono="🔒" dato="cotizacion-protegida">Adjudicada: lo ofertado (productos, cantidades y precios) y el vínculo con la OC quedan protegidos. Puedes actualizar enlaces de compra y fichas técnicas y regenerar la EETT.</AvisoLinea>}
 
         <PanelPestana visible={pestana === "datos"} titulo="Datos">
-          <Field label="ID Mercado Público (opcional)" hint="Puedes agregarlo después: la cotización y la EETT funcionan sin él; si falta, se omite del encabezado del PDF."><input data-campo="id_externo" value={cot.id_externo} onChange={(e) => setCampo("id_externo", e.target.value.trim().toUpperCase())} style={iMono} placeholder="1525570-33-COT26" /></Field>
+          <ImportarCompraAgil cot={cot} token={token} onAplicar={aplicarCompraAgil} deshabilitado={protegido} />
+          {sinEsquema && <AvisoLinea tono="warn" dato="esquema-pendiente">El vendedor responsable y los datos importados de la Compra Ágil se guardarán cuando se instale la actualización de la base del módulo (pendiente de autorización). El resto de la cotización se guarda normalmente.</AvisoLinea>}
+
+          <Field label="Vendedor responsable" hint={cap.vendedores ? "Puede ser distinto de quien genera la EETT." : "Catálogo de vendedores de BFK (solo lectura)."}>
+            {nuevoVend === null ? (
+              <div style={{ display: "flex", gap: 6 }}>
+                <select data-campo="vendedor" value={cot.vendedor_id || ""} disabled={vendedorBloqueado} onChange={(e) => elegirVendedor(e.target.value)} style={{ ...selStyle, flex: 1 }}>
+                  <option value="">Sin asignar</option>
+                  {cot.vendedor_id && !vendedores.some((v) => v.id === cot.vendedor_id) && <option value={cot.vendedor_id}>{cot.vendedor_nombre}</option>}
+                  {vendedores.map((v) => <option key={v.id} value={v.id}>{v.nombre}</option>)}
+                </select>
+                {cap.vendedores && !vendedorBloqueado && <BotonSecundario data-nuevo-vendedor onClick={() => setNuevoVend("")}>+ Nuevo</BotonSecundario>}
+              </div>
+            ) : (
+              <div style={{ display: "flex", gap: 6 }}>
+                <input data-campo="nuevo-vendedor" value={nuevoVend} onChange={(e) => setNuevoVend(e.target.value)} placeholder="Nombre y apellido" style={{ ...iStyle, flex: 1 }} autoFocus />
+                <BotonPrincipal data-registrar-vendedor onClick={registrarVendedor} disabled={!nuevoVend.trim()}>Registrar</BotonPrincipal>
+                <BotonSecundario onClick={() => setNuevoVend(null)}>✕</BotonSecundario>
+              </div>
+            )}
+          </Field>
+
+          <Field label="Código Mercado Público (opcional)" hint="Puedes agregarlo después: si falta, se omite del encabezado del PDF. Un código COT no es una OC."><input data-campo="id_externo" value={cot.id_externo} onChange={(e) => setCampo("id_externo", e.target.value.trim().toUpperCase())} style={iMono} placeholder="3390-246-COT26" /></Field>
           <Field label="Nombre de la licitación / compra ágil"><input data-campo="nombre_licitacion" value={cot.nombre} onChange={(e) => setCampo("nombre", e.target.value)} style={iStyle} /></Field>
+          <Field label="Descripción (del comprador)"><textarea data-campo="descripcion" rows={2} value={cot.descripcion || ""} onChange={(e) => setCampo("descripcion", e.target.value)} style={{ ...iStyle, resize: "vertical" }} /></Field>
           <Field label="Institución" required><input data-campo="institucion" list="cz-entidades" value={cot.institucion} onChange={(e) => elegirEntidad(e.target.value)} style={iStyle} />
             <datalist id="cz-entidades">{entidadesCatalogo.slice(0, 400).map((e) => <option key={e.id || e.rut} value={e.nombre_entidad} />)}</datalist></Field>
+          <Field label="Unidad solicitante"><input data-campo="unidad_compra" value={cot.unidad_compra || ""} onChange={(e) => setCampo("unidad_compra", e.target.value)} style={iStyle} /></Field>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             <Field label="RUT"><input data-campo="rut" value={cot.rut} onChange={(e) => setCampo("rut", e.target.value)} style={iMono} /></Field>
-            <Field label="Fecha de emisión"><input type="date" value={cot.fecha || ""} onChange={(e) => setCampo("fecha", e.target.value)} style={iStyle} /></Field>
+            <Field label="Fecha de emisión (BFK)"><input data-campo="fecha" type="date" value={cot.fecha || ""} onChange={(e) => setCampo("fecha", e.target.value)} style={iStyle} /></Field>
           </div>
-          <Field label="Dirección de entrega" hint="Con ella se verifica el envío real de cada proveedor."><input data-campo="direccion" value={cot.direccion_entrega} onChange={(e) => setCampo("direccion_entrega", e.target.value)} style={iStyle} /></Field>
+          <Field label="Dirección de entrega" hint="Con ella se verifica el despacho real de cada proveedor."><input data-campo="direccion" value={cot.direccion_entrega} onChange={(e) => setCampo("direccion_entrega", e.target.value)} style={iStyle} /></Field>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            <Field label="Comuna"><input value={cot.comuna} onChange={(e) => setCampo("comuna", e.target.value)} style={iStyle} /></Field>
-            <Field label="Plazo de entrega"><input data-campo="plazo" value={cot.plazo} onChange={(e) => setCampo("plazo", e.target.value)} style={iStyle} placeholder="2 DIAS" /></Field>
+            <Field label="Comuna / ciudad"><input data-campo="comuna" value={cot.comuna} onChange={(e) => setCampo("comuna", e.target.value)} style={iStyle} /></Field>
+            <Field label="Región"><input data-campo="region" value={cot.region || ""} onChange={(e) => setCampo("region", e.target.value)} style={iStyle} /></Field>
           </div>
-          <Field label="Estado"><select data-campo="estado" value={cot.estado} onChange={(e) => setCampo("estado", e.target.value)} style={selStyle}>{Object.entries(ESTADOS_COTIZACION).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}</select></Field>
-          {cot.estado === "adjudicada" && <Field label="OC adjudicada (opcional)" hint="Solo deja el vínculo: no crea ni modifica la OC."><input value={cot.oc_codigo || ""} onChange={(e) => setCampo("oc_codigo", e.target.value.trim().toUpperCase())} style={iMono} placeholder="1525570-1082-AG26" /></Field>}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <Field label="Plazo de entrega"><input data-campo="plazo" value={cot.plazo} onChange={(e) => setCampo("plazo", e.target.value)} style={iStyle} placeholder="15 DÍAS" /></Field>
+            <Field label="Presupuesto del comprador" hint="Referencial. No es el precio de BFK."><input data-campo="presupuesto" type="number" inputMode="numeric" value={cot.presupuesto_estimado ?? ""} onChange={(e) => setCampo("presupuesto_estimado", e.target.value === "" ? null : Number(e.target.value))} style={iMono} /></Field>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <Field label="Publicación"><input data-campo="fecha_publicacion" type="datetime-local" value={String(cot.fecha_publicacion || "").slice(0, 16)} onChange={(e) => setCampo("fecha_publicacion", e.target.value || null)} style={iStyle} /></Field>
+            <Field label="Cierre"><input data-campo="fecha_cierre" type="datetime-local" value={String(cot.fecha_cierre || "").slice(0, 16)} onChange={(e) => setCampo("fecha_cierre", e.target.value || null)} style={iStyle} /></Field>
+          </div>
+          {cot.requerimientos?.length > 0 && (
+            <Seccion titulo="Productos requeridos por el comprador" nota="Requerimientos de la Compra Ágil (no son productos de proveedores). Cada producto ofrecido se ingresa en Productos.">
+              {cot.requerimientos.map((r, i) => (
+                <Tarjeta key={i} padding="8px 10px" data-requerimiento={i + 1}>
+                  <div style={{ fontSize: T.sm, color: C.ink }}><b>{r.cantidad ?? "?"} {r.unidad || ""}</b> · {r.nombre}</div>
+                  {r.descripcion && <div style={{ fontSize: T.small, color: C.inkMuted, marginTop: 2 }}>{r.descripcion}</div>}
+                </Tarjeta>
+              ))}
+            </Seccion>
+          )}
+          {cot.documentos_mp?.length > 0 && <div data-documentos-mp style={{ fontSize: T.small, color: C.inkMuted, marginBottom: 12 }}><b>Documentos adjuntos en Mercado Público:</b> {cot.documentos_mp.map((d) => d.nombre || d.id).join(", ")}</div>}
+          <Field label="Estado"><select data-campo="estado" value={cot.estado} onChange={(e) => setCampo("estado", e.target.value)} disabled={protegido && !esAdmin} style={selStyle}>{Object.entries(ESTADOS_COTIZACION).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}</select></Field>
+          {cot.estado === "adjudicada" && <Field label="OC adjudicada (opcional)" hint="Solo deja el vínculo: no crea ni modifica la OC."><input data-campo="oc_codigo" value={cot.oc_codigo || ""} disabled={protegido && !!inicial.oc_codigo && !esAdmin} onChange={(e) => setCampo("oc_codigo", e.target.value.trim().toUpperCase())} style={iMono} placeholder="1525570-1082-AG26" /></Field>}
           <Field label="Observaciones (internas)"><textarea rows={3} value={cot.observaciones} onChange={(e) => setCampo("observaciones", e.target.value)} style={{ ...iStyle, resize: "vertical" }} /></Field>
+          {esAdmin && cot.id && cap.eliminar && (
+            <div style={{ borderTop: `1px solid ${C.border}`, marginTop: 16, paddingTop: 12 }}>
+              <button type="button" data-eliminar-cotizacion onClick={() => setEliminar(true)} style={{ border: `1px solid ${C.danger}`, background: "#fff", color: C.dangerText, borderRadius: 10, padding: "8px 14px", minHeight: 40, fontWeight: 700, cursor: "pointer" }}>Eliminar cotización</button>
+              <div style={{ fontSize: T.small, color: C.inkFaint, marginTop: 4 }}>Solo administradores. Pide confirmación escrita; no se permite en adjudicadas.</div>
+            </div>
+          )}
         </PanelPestana>
 
         <PanelPestana visible={pestana === "productos"} titulo="Productos">
           <Tarjeta padding="12px">
-            <div style={{ display: "flex", gap: 6 }}>
-              <input data-enlace-proveedor value={enlace} onChange={(e) => { setEnlace(e.target.value); if (enlacePendiente) { setEnlacePendiente(""); setErrorEnlace(""); } }} onKeyDown={(e) => { if (e.key === "Enter") consultar(); }} inputMode="url" placeholder="Pega el enlace del proveedor (Falabella, Mercado Libre…)" style={{ ...iStyle, flex: 1 }} />
-              <BotonPrincipal data-consultar-enlace onClick={consultar} disabled={!!consultando || !enlace.trim()} style={{ opacity: consultando || !enlace.trim() ? 0.6 : 1, padding: "8px 14px" }}>{consultando ? "…" : "Consultar"}</BotonPrincipal>
-            </div>
-            {consultando && <div style={{ fontSize: T.small, color: C.inkMuted, marginTop: 6 }}>{consultando}</div>}
-            {errorEnlace && <AvisoLinea tono="warn" dato="error-enlace">{errorEnlace}</AvisoLinea>}
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
-              <BotonSecundario data-desde-biblioteca onClick={() => setVerBib(true)}>Desde biblioteca{productosBib.length ? ` (${productosBib.length})` : ""}</BotonSecundario>
-              <BotonSecundario data-ingreso-manual onClick={() => { manual(enlacePendiente); setErrorEnlace(""); setEnlace(""); setEnlacePendiente(""); }}>Ingresar manual</BotonSecundario>
-              <BotonSecundario data-desde-capturas onClick={() => { setErrorCap(""); setVerCapturas(true); }}>Desde capturas de pantalla</BotonSecundario>
-              <BotonSecundario data-pegar-texto onClick={() => setVerTexto(true)}>Pegar texto de ficha</BotonSecundario>
+            <BotonPrincipal data-ingreso-manual onClick={() => manual()} disabled={protegido} style={{ width: "100%", justifyContent: "center", minHeight: 52, fontSize: T.title, opacity: protegido ? 0.5 : 1 }}>＋ Ingresar manual</BotonPrincipal>
+            <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+              <BotonSecundario data-desde-biblioteca onClick={() => setVerBib(true)} disabled={protegido} style={{ flex: 1, justifyContent: "center" }}>Desde la biblioteca de fichas</BotonSecundario>
             </div>
           </Tarjeta>
-          {!cot.items.length && <div style={{ fontSize: T.sm, color: C.inkFaint, textAlign: "center", padding: 20 }}>Agrega el primer producto con un enlace, desde la biblioteca o manualmente.</div>}
+          {cot.requerimientos?.length > 0 && !protegido && (
+            <Desplegable dato="requerimientos-productos" titulo="Requerimientos del comprador" resumen={`${cot.requerimientos.length} producto(s) solicitados`}>
+              {cot.requerimientos.map((r, i) => (
+                <div key={i} style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "space-between", padding: "6px 0", borderBottom: `1px solid ${C.border}` }}>
+                  <div style={{ fontSize: T.small, color: C.ink, minWidth: 0 }}><b>{r.cantidad ?? "?"} {r.unidad || ""}</b> · {r.nombre}{r.descripcion ? <div style={{ color: C.inkMuted }}>{r.descripcion}</div> : null}</div>
+                  <BotonSecundario data-ingresar-requerimiento={i + 1} onClick={() => manual({ cantidad: Number(r.cantidad) > 0 ? Number(r.cantidad) : 1, consulta: { fuente: "Requerimiento del comprador (referencia)", advertencias: [`${r.nombre}${r.descripcion ? `: ${r.descripcion}` : ""}`] } })} style={{ minHeight: 34, padding: "4px 10px", flexShrink: 0 }}>Ingresar</BotonSecundario>
+                </div>
+              ))}
+            </Desplegable>
+          )}
+          {!cot.items.length && <div style={{ fontSize: T.sm, color: C.inkFaint, textAlign: "center", padding: 20 }}>Agrega el primer producto con «Ingresar manual».</div>}
           {cot.items.map((it, i) => {
             const l = calc.lineas[i]; const rv = pdf.porItem[i]; const env = cot.envios.find((e) => e.key === it.envio_key);
+            const nComp = env ? cot.items.filter((x) => x.envio_key === env.key).length : 0;
             return (
               <Tarjeta key={it.key} padding="10px 12px" data-item-cotizacion={i + 1}>
                 <div style={{ display: "flex", gap: 10 }}>
-                  <div style={{ width: 56, height: 56, flexShrink: 0, borderRadius: R.sm, border: `1px solid ${C.border}`, background: "#fff", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", color: C.inkFaint, fontSize: 11 }}>
-                    {it.ficha.imagenes?.[0] ? <img src={it.ficha.imagenes[0]} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} /> : "Sin foto"}
-                  </div>
+                  <ImagenFicha src={it.ficha.imagenes?.[0]} almacen={almacen} style={{ width: 56, height: 56, flexShrink: 0, borderRadius: R.sm, border: `1px solid ${C.border}` }} />
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <div style={{ fontSize: T.sm, fontWeight: 800, color: C.ink, lineHeight: 1.3, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{i + 1}. {it.ficha.nombre || "Sin nombre"}</div>
-                    <div style={{ fontSize: T.small, color: C.inkMuted, marginTop: 2 }}>{[it.ficha.marca, it.ficha.modelo].filter(Boolean).join(" · ") || "Sin marca/modelo"}{it.proveedor ? ` · ${it.proveedor}` : ""}</div>
-                    {Number(it.precio_origen) > 0
-                      ? <div style={{ fontSize: T.small, color: C.ink, marginTop: 2, fontFamily: MONO }}>{l.cantidad} × {m(it.precio_origen)}{it.precio_incluye_iva === false ? " + IVA" : ""} → <b>{m(l.unitario_neto)}</b> neto c/u</div>
-                      : <div style={{ fontSize: T.small, color: C.warnText, marginTop: 2, fontWeight: 700 }}>Falta el precio de compra · toca Editar</div>}
+                    <div data-resumen-item style={{ fontSize: T.small, color: C.inkMuted, marginTop: 3, lineHeight: 1.5 }}>
+                      <div>Proveedor: <b style={{ color: C.ink }}>{it.proveedor || "—"}</b> · Cantidad: <b style={{ color: C.ink }}>{l.cantidad}</b></div>
+                      {Number(it.precio_origen) > 0
+                        ? <div>Precio unitario de compra: <b style={{ color: C.ink, fontFamily: MONO }}>{m(it.precio_origen)}</b>{it.precio_incluye_iva === false ? " + IVA" : ""}</div>
+                        : <div style={{ color: C.warnText, fontWeight: 700 }}>Falta el precio de compra · toca Editar</div>}
+                      <div data-despacho-item>Despacho: {env ? <><b style={{ color: C.ink, fontFamily: MONO }}>{m(l.envio_asignado)}</b>{nComp > 1 ? ` (parte de ${m(env.monto)} compartido con ${nComp - 1} producto${nComp > 2 ? "s" : ""})` : ""} · <span style={{ color: envioConfirmado(env) ? C.okText : C.warnText, fontWeight: 700 }}>{ESTADOS_ENVIO[env.estado]?.label}</span></> : <span style={{ color: C.warnText, fontWeight: 700 }}>sin registrar</span>}</div>
+                      <div>Costo de adquisición: <b style={{ color: C.ink, fontFamily: MONO }}>{m(l.costo_bruto)}</b></div>
+                    </div>
                     <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>
                       {it.producto_id && <Badge tono="info">Biblioteca</Badge>}
-                      {!env ? <Badge tono="warn">Envío sin asignar</Badge> : !["confirmado", "sin_costo_confirmado"].includes(env.estado) && <Badge tono={ESTADOS_ENVIO[env.estado]?.tono}>Envío {ESTADOS_ENVIO[env.estado]?.label.toLowerCase()}</Badge>}
                       {rv.bloqueos.length > 0 && <Badge tono="danger">{rv.bloqueos.length} bloqueo</Badge>}
                       {rv.revisar.length > 0 && <Badge tono={it.ficha_aprobada ? "ok" : "warn"}>{it.ficha_aprobada ? "Ficha aprobada" : `${rv.revisar.length} por revisar`}</Badge>}
                     </div>
                   </div>
                 </div>
-                <div style={{ display: "flex", gap: 6, marginTop: 8, justifyContent: "flex-end" }}>
-                  {i > 0 && <BotonSecundario aria-label="Subir" onClick={() => mover(i, -1)} style={{ minHeight: 34, padding: "4px 10px" }}>↑</BotonSecundario>}
-                  <BotonSecundario onClick={() => quitar(it.key)} style={{ minHeight: 34, padding: "4px 10px", color: C.dangerText }}>Quitar</BotonSecundario>
+                <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap", alignItems: "center" }}>
+                  {enlaceValido(it.enlace)
+                    ? (protegido
+                      ? <a data-ir-a-comprar href={it.enlace.trim()} target="_blank" rel="noopener noreferrer" style={{ background: C.teal, color: "#fff", borderRadius: 10, padding: "8px 16px", fontWeight: 800, fontSize: T.sm, textDecoration: "none", minHeight: 40, display: "inline-flex", alignItems: "center" }}>🛒 Ir a comprar</a>
+                      : <a data-abrir-publicacion href={it.enlace.trim()} target="_blank" rel="noopener noreferrer" style={{ border: `1px solid ${C.teal}`, color: C.tealDark, borderRadius: 10, padding: "6px 12px", fontWeight: 700, fontSize: T.small, textDecoration: "none", minHeight: 34, display: "inline-flex", alignItems: "center" }}>Abrir publicación ↗</a>)
+                    : <span data-sin-enlace style={{ fontSize: T.small, color: C.warnText, fontWeight: 700 }}>Sin enlace registrado · <button type="button" onClick={() => setEditor({ esNuevo: false, item: it })} style={{ border: "none", background: "none", color: C.tealDark, textDecoration: "underline", cursor: "pointer", padding: 0, fontSize: T.small }}>Agregar enlace</button></span>}
+                  <div style={{ flex: 1 }} />
+                  {i > 0 && !protegido && <BotonSecundario aria-label="Subir" onClick={() => mover(i, -1)} style={{ minHeight: 34, padding: "4px 10px" }}>↑</BotonSecundario>}
+                  {!protegido && <BotonSecundario onClick={() => quitar(it.key)} style={{ minHeight: 34, padding: "4px 10px", color: C.dangerText }}>Quitar</BotonSecundario>}
                   <BotonSecundario data-editar-item onClick={() => setEditor({ esNuevo: false, item: it })} style={{ minHeight: 34, padding: "4px 12px" }}>Editar</BotonSecundario>
                 </div>
               </Tarjeta>
@@ -240,87 +310,51 @@ export function EditorCotizacion({ almacen, inicial, token, entidadesCatalogo = 
         </PanelPestana>
 
         <PanelPestana visible={pestana === "precios"} titulo="Precios">
-          {!FORMULA.confirmada && <AvisoLinea tono="info" icono="⚠" dato="formula-provisional">Fórmula provisional: recargo sobre costo neto real, unitario redondeado hacia arriba. Pendiente de confirmación.</AvisoLinea>}
-          <Tarjeta padding="12px 14px">
-            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-              <label htmlFor="cz-recargo" style={{ fontSize: T.sm, fontWeight: 800, color: C.ink }}>Recargo comercial</label>
-              <input id="cz-recargo" data-campo="recargo" type="number" inputMode="decimal" step="1" value={cot.recargo === "" || cot.recargo == null ? "" : Math.round(Number(cot.recargo) * 1000) / 10}
-                onChange={(e) => setCampo("recargo", e.target.value === "" ? "" : Number(e.target.value) / 100)} style={{ ...iMono, width: 90 }} />
-              <span style={{ fontSize: T.sm }}>%</span>
-              {Number(cot.recargo) !== RECARGO_SUGERIDO && <button type="button" onClick={() => setCampo("recargo", RECARGO_SUGERIDO)} style={{ border: "none", background: "none", color: C.tealDark, textDecoration: "underline", cursor: "pointer", fontSize: T.small, padding: 0, minHeight: 32 }}>Usar sugerido 30%</button>}
-            </div>
-            <div style={{ fontSize: T.small, color: C.inkMuted, marginTop: 4 }}>Sugerido 30% (no obligatorio). Equivale a un margen de {pct(margenDeRecargo(cot.recargo === "" ? RECARGO_SUGERIDO : cot.recargo))} sobre la venta neta. Cada producto puede tener su propio recargo.</div>
-          </Tarjeta>
+          {!cot.items.length && <div style={{ fontSize: T.sm, color: C.inkFaint }}>Agrega productos para ver sus precios.</div>}
+          {cot.items.map((it, i) => {
+            const l = calc.lineas[i];
+            return (
+              <Tarjeta key={it.key} padding="14px" data-precio-item={i + 1} style={{ borderColor: l.avisos.length ? C.warn : C.teal }}>
+                <div style={{ fontSize: T.sm, fontWeight: 800, color: C.ink, lineHeight: 1.3 }}>{i + 1}. {it.ficha.nombre || "Producto"}</div>
+                <div style={{ fontSize: T.small, fontWeight: 800, color: C.tealDark, letterSpacing: 0.4, marginTop: 10 }}>VALOR UNITARIO NETO PARA MERCADO PÚBLICO</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginTop: 2 }}>
+                  <span data-unitario={i + 1} style={{ fontSize: 34, fontWeight: 900, color: l.avisos.length ? C.inkMuted : C.ink, fontFamily: MONO, letterSpacing: -0.5 }}>{m(l.unitario_neto)}</span>
+                  <BotonPrincipal data-copiar-valor={i + 1} onClick={() => copiarUno(i)} disabled={!!l.avisos.length} style={{ minHeight: 40, opacity: l.avisos.length ? 0.5 : 1 }}>Copiar valor</BotonPrincipal>
+                </div>
+                <div style={{ fontSize: T.sm, color: C.inkMuted, marginTop: 6, lineHeight: 1.6 }}>
+                  Cantidad: <b style={{ color: C.ink }}>{l.cantidad}</b> · Subtotal neto: <b data-subtotal={i + 1} style={{ color: C.ink, fontFamily: MONO }}>{m(l.neto_linea)}</b><br />
+                  <span style={{ fontSize: T.small }}>El despacho ({m(l.envio_asignado)}) ya está incorporado en el valor unitario: el campo Despacho de Mercado Público va en $0.</span>
+                </div>
+                {l.avisos.map((a, j) => <AvisoLinea key={j} tono="warn" dato="pendiente-precio">{a}</AvisoLinea>)}
+              </Tarjeta>
+            );
+          })}
 
-          <Seccion titulo="Envíos por proveedor" nota="Modalidad A: el envío va dentro de los precios unitarios y el campo Despacho de Mercado Público queda en $0. Nunca se asume despacho gratis.">
-            {!cot.envios.length && <div style={{ fontSize: T.sm, color: C.inkFaint }}>Aún no hay envíos. Se crean al agregar productos.</div>}
-            {cot.envios.map((e) => {
-              const ls = cot.items.map((it, i) => ({ it, i })).filter((x) => x.it.envio_key === e.key);
-              return (
-                <Tarjeta key={e.key} padding="10px 12px" data-envio={e.proveedor}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                    <input value={e.proveedor} onChange={(ev) => setEnvio(e.key, "proveedor", ev.target.value)} placeholder="Proveedor / pedido" style={{ ...iStyle, fontWeight: 800, flex: 1 }} />
-                    <Badge tono={ESTADOS_ENVIO[e.estado]?.tono}>{ESTADOS_ENVIO[e.estado]?.label}</Badge>
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 8 }}>
-                    <Field label="Monto del envío (pagado)"><input data-campo="monto-envio" type="number" inputMode="numeric" min="0" value={e.monto} onChange={(ev) => setEnvio(e.key, "monto", ev.target.value)} style={iMono} /></Field>
-                    <Field label="Verificación"><select data-campo="estado-envio" value={e.estado} onChange={(ev) => setEstadoEnvio(e.key, ev.target.value)} style={selStyle}>{Object.entries(ESTADOS_ENVIO).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}</select></Field>
-                  </div>
-                  {envioConfirmado(e) && <div data-destino-envio style={{ fontSize: T.small, marginBottom: 8, color: e.destino && e.destino === destinoDe(cot) ? C.okText : C.warnText, fontWeight: 700 }}>
-                    {e.destino ? `Verificado para: ${e.destino}${e.destino === destinoDe(cot) ? "" : ` · la dirección cambió a "${destinoDe(cot) || "—"}": vuelve a verificar`}` : "Sin dirección verificada: vuelve a elegir el estado"}
-                  </div>}
-                  <Field label="Cómo se verificó (obligatorio para confirmar)"><input data-campo="evidencia-envio" value={e.evidencia} onChange={(ev) => setEnvio(e.key, "evidencia", ev.target.value)} placeholder={destinoDe(cot) ? `Simulación de compra a ${destinoDe(cot)}…` : "Ingresa primero la dirección de entrega"} style={iStyle} /></Field>
-                  <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: T.sm, minHeight: 32 }}><input type="checkbox" checked={e.con_factura !== false} onChange={(ev) => setEnvio(e.key, "con_factura", ev.target.checked)} /> Envío incluido en la factura (IVA recuperable)</label>
-                  <div style={{ fontSize: T.small, color: C.inkMuted, marginTop: 4 }}>
-                    {ls.length ? `Reparto según valor: ${ls.map(({ it, i }) => `${i + 1}. ${m(calc.lineas[i].envio_asignado)}`).join(" · ")}` : "No asignado a ningún producto."}
-                    {!ls.length && <button type="button" onClick={() => quitarEnvio(e.key)} style={{ marginLeft: 8, border: "none", background: "none", color: C.dangerText, textDecoration: "underline", cursor: "pointer", padding: 0 }}>Quitar</button>}
-                  </div>
-                </Tarjeta>
-              );
-            })}
-          </Seccion>
-
-          <Seccion titulo="Desglose por producto">
-            {cot.items.map((it, i) => {
-              const l = calc.lineas[i];
-              return (
-                <Desplegable key={it.key} dato={`linea-${i + 1}`} titulo={`${i + 1}. ${it.ficha.nombre || "Producto"}`} resumen={`${l.cantidad} u · ${m(l.unitario_neto)} neto c/u`} derecha={<span style={{ fontFamily: MONO, fontWeight: 800, fontSize: 13 }}>{m(l.neto_linea)}</span>}>
-                  <FilaDato k="Productos (desembolso con IVA)" v={m(l.costo_producto_bruto)} />
-                  <FilaDato k="Envío asignado" signo="+" v={m(l.envio_asignado)} />
-                  <FilaDato k="Costo bruto desembolsado" signo="=" v={m(l.costo_bruto)} fuerte />
-                  <FilaDato k="IVA crédito recuperable" signo="−" v={m(l.iva_credito)} nota={it.con_factura === false ? "Compra sin factura: el IVA es costo." : null} />
-                  <FilaDato k="Costo neto" signo="=" v={m(l.costo_neto)} fuerte />
-                  <FilaDato k={`Recargo ${pct(l.recargo)}`} signo="+" v={m(l.neto_linea - l.costo_neto)} />
-                  <FilaDato k="Precio unitario neto para Mercado Público" v={m(l.unitario_neto)} fuerte tono="ok" dato={`unitario-${i + 1}`} />
-                  <FilaDato k={`Total neto línea (${l.cantidad} u)`} v={m(l.neto_linea)} />
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, fontSize: T.small }}>
-                    <span>Recargo propio de esta línea:</span>
-                    <input type="number" inputMode="decimal" value={it.recargo == null || it.recargo === "" ? "" : Math.round(Number(it.recargo) * 1000) / 10} placeholder={String(Math.round(Number(cot.recargo === "" ? RECARGO_SUGERIDO : cot.recargo) * 1000) / 10)}
-                      onChange={(e) => cambiar((c) => { c.items[i].recargo = e.target.value === "" ? null : Number(e.target.value) / 100; return c; })} style={{ ...iMono, width: 80, minHeight: 34, padding: "4px 8px" }} /> %
-                  </div>
-                </Desplegable>
-              );
-            })}
-          </Seccion>
-
-          <Tarjeta padding="12px 14px" data-totales-cotizacion>
-            <FilaDato k="Costo bruto desembolsado" v={m(calc.totales.costo_bruto)} dato="costo-bruto" />
-            <FilaDato k="IVA crédito recuperable" signo="−" v={m(calc.totales.iva_credito)} dato="iva-credito" />
-            <FilaDato k="Costo neto" signo="=" v={m(calc.totales.costo_neto)} fuerte dato="costo-neto" />
-            <FilaDato k="Venta neta ofertada" v={m(calc.totales.neto)} fuerte dato="neto" />
-            <FilaDato k="IVA débito (19%)" signo="+" v={m(calc.totales.iva_debito)} dato="iva-debito" />
-            <FilaDato k="Total con IVA" signo="=" v={m(calc.totales.total)} fuerte dato="total" />
-            <FilaDato k="Despacho en Mercado Público (modalidad A)" v={m(0)} dato="despacho-mp" />
-            <FilaDato k="Utilidad neta (venta neta − costo neto)" v={m(calc.totales.utilidad_neta)} tono={calc.totales.utilidad_neta >= 0 ? "ok" : "danger"} fuerte dato="utilidad" nota={`Margen ${pct(calc.totales.margen_sobre_venta)} sobre venta · recargo efectivo ${pct(calc.totales.recargo_efectivo)}`} />
-            <FilaDato k="IVA neto estimado de esta operación (débito − crédito)" v={m(calc.totales.iva_a_pagar)} dato="iva-pagar" nota="Estimación referencial de esta cotización. No es el F29 ni el IVA a pagar del mes: ese se determina con todas las compras y ventas del período." />
-          </Tarjeta>
-          {calc.pendientes.map((p, i) => <AvisoLinea key={i} tono="warn" dato="pendiente-precio">{p}</AvisoLinea>)}
+          {cot.items.length > 0 && (
+            <Tarjeta padding="12px 14px" data-totales-cotizacion>
+              <FilaDato k="Costo total de adquisición (productos + despachos)" v={m(calc.totales.costo_bruto)} dato="costo-adquisicion" />
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "8px 0", borderBottom: `1px solid ${C.border}` }}>
+                <label htmlFor="cz-recargo" style={{ fontSize: T.sm, color: C.inkMuted, flex: 1 }}>Recargo comercial</label>
+                <input id="cz-recargo" data-campo="recargo" type="number" inputMode="decimal" step="1" disabled={protegido} value={cot.recargo === "" || cot.recargo == null ? "" : Math.round(Number(cot.recargo) * 1000) / 10}
+                  onChange={(e) => setCampo("recargo", e.target.value === "" ? "" : Number(e.target.value) / 100)} style={{ ...iMono, width: 80 }} />
+                <span style={{ fontSize: T.sm }}>%</span>
+                {Number(cot.recargo) !== RECARGO_SUGERIDO && !protegido && <button type="button" onClick={() => setCampo("recargo", RECARGO_SUGERIDO)} style={{ border: "none", background: "none", color: C.tealDark, textDecoration: "underline", cursor: "pointer", fontSize: T.small, padding: 0, minHeight: 32 }}>Usar sugerido 30%</button>}
+              </div>
+              <div style={{ padding: "8px 0", borderBottom: `1px solid ${C.border}` }}>
+                <div style={{ fontSize: T.sm, color: C.inkMuted, marginBottom: 4 }}>Precio unitario neto de cada producto</div>
+                {cot.items.map((it, i) => <div key={it.key} style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: T.sm }}><span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{i + 1}. {it.ficha.nombre || "Producto"}{calc.lineas[i].recargo !== (cot.recargo === "" ? RECARGO_SUGERIDO : Number(cot.recargo)) ? ` (recargo ${pct(calc.lineas[i].recargo)})` : ""}</span><b style={{ fontFamily: MONO }}>{m(calc.lineas[i].unitario_neto)}</b></div>)}
+              </div>
+              <FilaDato k="Total neto de la oferta" v={m(calc.totales.neto)} fuerte dato="neto" />
+              <FilaDato k="Total con IVA (19%)" v={m(calc.totales.total)} fuerte dato="total" />
+              <FilaDato k="Ganancia neta estimada" v={m(calc.totales.utilidad_neta)} tono={calc.totales.utilidad_neta >= 0 ? "ok" : "danger"} fuerte dato="utilidad" />
+            </Tarjeta>
+          )}
           <BotonSecundario data-copiar-mp onClick={copiarMP} disabled={!cot.items.length || !calc.listo} style={{ width: "100%", justifyContent: "center", minHeight: 44 }}>Copiar valores para Mercado Público</BotonSecundario>
           {cot.items.length > 0 && !calc.listo && <div data-copiar-bloqueado style={{ fontSize: T.small, color: C.warnText, textAlign: "center", marginTop: 6 }}>Bloqueado: confirma los costos y despachos pendientes ({calc.pendientes.length}) antes de copiar precios a Mercado Público.</div>}
         </PanelPestana>
 
         <PanelPestana visible={pestana === "eett"} titulo="EETT">
-          <AvisoLinea tono="info" icono="🔒">El PDF contiene solo información técnica: nunca precios, envíos, enlaces, proveedores ni utilidades.</AvisoLinea>
+          <AvisoLinea tono="info" icono="🔒">El PDF contiene solo información técnica: nunca precios, despachos, enlaces, proveedores, recargos, ganancias ni IVA. Se descarga en este dispositivo y no se guarda en el servidor.</AvisoLinea>
           {pdf.faltan.length > 0 && <AvisoLinea tono="warn" dato="faltan-datos" accion="Completar" onClick={() => setPestana("datos")}>Falta: {pdf.faltan.join(" y ")}.</AvisoLinea>}
           {!cot.items.length && <div style={{ fontSize: T.sm, color: C.inkFaint }}>Agrega productos para generar la EETT.</div>}
           {pdf.porItem.map((p, i) => {
@@ -342,48 +376,54 @@ export function EditorCotizacion({ almacen, inicial, token, entidadesCatalogo = 
               </Tarjeta>
             );
           })}
-          <BotonPrincipal data-generar-eett onClick={generarPDF} disabled={!pdf.listo || generando} style={{ width: "100%", justifyContent: "center", marginTop: 4, opacity: !pdf.listo || generando ? 0.55 : 1 }}>{generando ? "Generando…" : `Generar PDF EETT (${cot.items.length} ficha${cot.items.length === 1 ? "" : "s"})`}</BotonPrincipal>
-          {generados.map((g, i) => <div key={i} data-eett-generado style={{ fontSize: T.small, color: C.inkMuted, marginTop: 8 }}>✓ {g.nombre} · {g.paginas} pág. · {g.cuando.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" })} · {g.registro}</div>)}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
+            <BotonSecundario data-vista-previa-eett onClick={verPrevia} disabled={!cot.items.length || !!generando} style={{ flex: "1 1 160px", justifyContent: "center", minHeight: 48 }}>{generando === "previa" ? "Preparando…" : "Vista previa de EETT"}</BotonSecundario>
+            <BotonPrincipal data-generar-eett onClick={generarYDescargar} disabled={!pdf.listo || !!generando} style={{ flex: "2 1 220px", justifyContent: "center", minHeight: 48, opacity: !pdf.listo || generando ? 0.55 : 1 }}>{generando === "descarga" ? "Guardando y generando…" : "Generar y descargar EETT"}</BotonPrincipal>
+          </div>
+          <div style={{ fontSize: T.small, color: C.inkFaint, marginTop: 6 }}>Al generar, la cotización se guarda automáticamente (solo si hay cambios) y el PDF se crea con los datos recién guardados. La vista previa no guarda nada.</div>
+          {falla && <AvisoLinea tono="danger" dato="falla-descarga" accion="Reintentar descarga" onClick={reintentar}>Los datos quedaron guardados (versión {falla.base.version}), pero la descarga falló: {falla.mensaje}</AvisoLinea>}
+          {historial.length > 0 && (
+            <Seccion titulo="EETT generadas" nota="Registro de cada generación (los PDF quedan en el dispositivo donde se descargaron).">
+              {historial.map((h) => (
+                <div key={h.id} data-eett-generado style={{ fontSize: T.small, color: C.inkMuted, padding: "4px 0", borderBottom: `1px solid ${C.border}` }}>
+                  {fechaHora(h.fecha)} · versión {h.version}{h.paginas ? ` · ${h.paginas} pág.` : ""}{h.generado_por_nombre ? ` · ${h.generado_por_nombre}` : ""}{h.nombre_documento ? ` · ${h.nombre_documento}` : ""}
+                </div>
+              ))}
+            </Seccion>
+          )}
         </PanelPestana>
       </div>
 
-      {editor && <EditorFicha key={editor.item.key} inicial={editor.item} esNuevo={editor.esNuevo} envios={cot.envios} token={token} onGuardar={guardarItem} onCerrar={() => setEditor(null)} />}
-      {verBib && (
-        <Modal title="Biblioteca de productos" onClose={() => setVerBib(false)}>
-          <input value={buscaBib} onChange={(e) => setBuscaBib(e.target.value)} placeholder="Buscar por nombre, marca o modelo" style={{ ...iStyle, marginBottom: 10 }} autoFocus />
-          {!productosBib.length && <div style={{ fontSize: T.sm, color: C.inkFaint }}>La biblioteca está vacía. Los productos aprobados en tus cotizaciones aparecerán aquí.</div>}
-          {filtradosBib.slice(0, 60).map((p) => (
-            <Tarjeta key={p.id} onClick={() => desdeBiblioteca(p)} padding="8px 10px" data-producto-biblioteca={p.nombre}>
-              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                <div style={{ width: 44, height: 44, flexShrink: 0, background: "#fff", border: `1px solid ${C.border}`, borderRadius: R.sm, overflow: "hidden" }}>{p.imagenes?.[0] && <img src={p.imagenes[0]} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} />}</div>
-                <div style={{ minWidth: 0 }}><div style={{ fontSize: T.sm, fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.nombre}</div><div style={{ fontSize: T.small, color: C.inkMuted }}>{[p.marca, p.modelo].filter(Boolean).join(" · ")}</div></div>
-              </div>
-            </Tarjeta>
-          ))}
-        </Modal>
-      )}
-      {verCapturas && (
-        <Modal title="Producto desde capturas de pantalla" onClose={() => { if (!leyendoCap) setVerCapturas(false); }}>
-          <div data-ventana-capturas style={{ fontSize: T.sm, color: C.inkMuted, lineHeight: 1.5, marginBottom: 12 }}>
-            Toma capturas de la publicación (título, precio y la sección de características) y súbelas aquí. Se leerá su contenido para completar la ficha; luego la revisas y corriges antes de guardar.
-            {(enlacePendiente || enlace.trim()) && <div style={{ marginTop: 6 }}>El enlace del proveedor se conserva como dato interno.</div>}
-          </div>
-          <input data-archivos-capturas type="file" accept="image/*" multiple onChange={(e) => { setArchivosCap([...(e.target.files || [])].slice(0, 4)); e.target.value = ""; }} style={{ ...iStyle, padding: 8 }} />
-          {archivosCap.length > 0 && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", margin: "10px 0" }}>{vistasCap.map((u, i) => <img key={i} src={u} alt={`Captura ${i + 1}`} style={{ width: 64, height: 110, objectFit: "cover", borderRadius: R.sm, border: `1px solid ${C.border}` }} />)}</div>}
-          <div style={{ fontSize: T.small, color: C.inkFaint, margin: "6px 0 12px" }}>Hasta 4 imágenes. No se inventan datos: lo que no se lea queda vacío para completarlo, y si aparecen varios precios deberás indicar cuál corresponde.</div>
-          {leyendoCap && <div data-progreso-capturas style={{ fontSize: T.sm, color: C.tealDark, fontWeight: 700, marginBottom: 8 }}>{leyendoCap}</div>}
-          {errorCap && <AvisoLinea tono="danger">{errorCap}</AvisoLinea>}
-          <BotonPrincipal data-leer-capturas onClick={desdeCapturas} disabled={!archivosCap.length || !!leyendoCap} style={{ width: "100%", justifyContent: "center", opacity: !archivosCap.length || leyendoCap ? 0.6 : 1 }}>{leyendoCap ? "Leyendo…" : `Leer ${archivosCap.length || ""} captura${archivosCap.length === 1 ? "" : "s"}`}</BotonPrincipal>
-        </Modal>
-      )}
-      {verTexto && (
-        <Modal title="Pegar texto de la ficha" onClose={() => setVerTexto(false)}>
-          <Field label="Texto copiado de la página del proveedor" hint={`Copia desde tu teléfono la sección de características (una por línea: Etiqueta: valor, o tabulado). Luego revisas y completas la ficha.${enlacePendiente ? " El enlace se guarda como dato interno." : ""}`}>
-            <textarea data-texto-ficha rows={10} value={texto} onChange={(e) => setTexto(e.target.value)} style={{ ...iStyle, resize: "vertical" }} />
-          </Field>
-          <BotonPrincipal onClick={desdeTexto} disabled={!texto.trim()} style={{ width: "100%", justifyContent: "center" }}>Continuar</BotonPrincipal>
-        </Modal>
-      )}
+      {editor && <EditorFicha key={editor.item.key} inicial={editor.item} esNuevo={editor.esNuevo} envios={cot.envios} items={cot.items} destino={destino} almacen={almacen} token={token} protegido={protegido && !editor.esNuevo} onGuardar={guardarItem} onCerrar={() => setEditor(null)} />}
+      {verBib && <SelectorBiblioteca almacen={almacen} onElegir={desdeBiblioteca} onCerrar={() => setVerBib(false)} />}
+      {preview && <VistaPreviaEETT {...preview} onCerrar={() => setPreview(null)} onDescargar={pdf.listo ? () => { setPreview(null); generarYDescargar(); } : null} />}
+      {eliminar && <EliminarCotizacion cot={{ ...cot, estado: estadoGuardado || cot.estado, oc_codigo: inicial.oc_codigo || cot.oc_codigo }} nEett={historial.length} onCancelar={() => setEliminar(false)} onEliminar={eliminarCot} />}
     </HojaLateral>
+  );
+}
+
+// Biblioteca compartida: búsqueda en el servidor, páginas de 30 y miniaturas que se cargan al mostrarse.
+export function SelectorBiblioteca({ almacen, onElegir, onCerrar }) {
+  const [q, setQ] = useState(""); const [filas, setFilas] = useState([]); const [total, setTotal] = useState(0); const [pagina, setPagina] = useState(0); const [cargando, setCargando] = useState(false);
+  useEffect(() => {
+    let vivo = true; setCargando(true);
+    const t = setTimeout(() => almacen.listarProductos({ q, pagina }).then((r) => { if (!vivo) return; setTotal(r.total); setFilas((f) => (pagina ? [...f, ...r.filas] : r.filas)); }).catch(() => {}).finally(() => vivo && setCargando(false)), 250);
+    return () => { vivo = false; clearTimeout(t); };
+  }, [almacen, q, pagina]);
+  return (
+    <Modal title="Biblioteca de fichas técnicas" onClose={onCerrar}>
+      <input value={q} onChange={(e) => { setQ(e.target.value); setPagina(0); }} placeholder="Buscar por nombre, marca o modelo" style={{ ...iStyle, marginBottom: 10 }} autoFocus />
+      {!cargando && !filas.length && <div style={{ fontSize: T.sm, color: C.inkFaint }}>{q ? "Sin resultados." : "La biblioteca está vacía. Las fichas que guardes al ingresar productos aparecerán aquí."}</div>}
+      {filas.map((p) => (
+        <Tarjeta key={p.id} onClick={() => onElegir(p)} padding="8px 10px" data-producto-biblioteca={p.nombre}>
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <ImagenFicha src={p.imagenes?.[0]} almacen={almacen} style={{ width: 44, height: 44, flexShrink: 0, border: `1px solid ${C.border}`, borderRadius: R.sm }} />
+            <div style={{ minWidth: 0 }}><div style={{ fontSize: T.sm, fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.nombre}</div><div style={{ fontSize: T.small, color: C.inkMuted }}>{[p.marca, p.modelo].filter(Boolean).join(" · ")}</div></div>
+          </div>
+        </Tarjeta>
+      ))}
+      {cargando && <div style={{ fontSize: T.small, color: C.inkFaint, textAlign: "center", padding: 8 }}>Cargando…</div>}
+      {!cargando && filas.length < total && <BotonSecundario onClick={() => setPagina((p) => p + 1)} style={{ width: "100%", justifyContent: "center" }}>Ver más ({total - filas.length})</BotonSecundario>}
+    </Modal>
   );
 }

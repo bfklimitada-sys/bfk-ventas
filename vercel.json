@@ -8,6 +8,9 @@
     },
     "api/interpretar.mjs": {
       "maxDuration": 60
+    },
+    "api/compra-agil.mjs": {
+      "maxDuration": 30
     }
   }
 }

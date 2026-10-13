@@ -169,7 +169,8 @@ export function revisarFicha(ficha) {
   if (!f.nombre) av.push({ tipo: "nombre", nivel: "bloqueo", mensaje: "Falta el nombre exacto del producto." });
   if (!f.marca) av.push({ tipo: "marca", nivel: "revisar", mensaje: "Falta la marca." });
   if (!f.modelo) av.push({ tipo: "modelo", nivel: "revisar", mensaje: "Falta el modelo." });
-  if (!f.imagenes.length) av.push({ tipo: "imagenes", nivel: "revisar", mensaje: "El producto no tiene imágenes." });
+  // Cuenta también las imágenes guardadas que aún no se han cargado en pantalla (rutas del depósito).
+  if (!(ficha?.imagenes || []).filter(Boolean).length) av.push({ tipo: "imagenes", nivel: "revisar", mensaje: "El producto no tiene imágenes." });
   if (!f.especificaciones.length && !f.generales.length) av.push({ tipo: "especificaciones", nivel: "revisar", mensaje: "No hay características ni especificaciones." });
   // Modelo del encabezado vs modelo de características (caso de referencia: Smart Tank 520 vs 580).
   const enNombre = tokensModelo(f.nombre); const enModelo = tokensModelo(f.modelo);
@@ -203,6 +204,54 @@ export function estadoParaPDF(cot) {
   return { porItem, faltan, listo: items.length > 0 && !faltan.length && porItem.every((p) => p.aprobado) };
 }
 
+// Bloque «Elaboración de especificaciones técnicas» del PDF: solo nombres, fecha y código (nunca montos).
+// elaborado_por debe venir de la cuenta autenticada (perfil de la sesión), no de un campo editable.
+export const elaboracionPublica = (e) => ({
+  empresa: "BFK Limitada", vendedor: String(e?.vendedor || "").trim(), elaborado_por: String(e?.elaborado_por || "").trim(),
+  fecha: String(e?.fecha || "").trim(), cotizacion: String(e?.cotizacion || "").trim(), version: Number(e?.version) > 0 ? String(Math.trunc(Number(e.version))) : "",
+});
+
+// Valor para pegar en Mercado Público: solo dígitos (sin signo peso ni separadores de miles).
+export const digitosValor = (n) => String(Math.max(0, Math.round(Number(n) || 0)));
+
+// Código de Compra Ágil desde un código o un enlace de Mercado Público (p. ej. 3390-246-COT26).
+export function codigoCompraAgil(entrada) {
+  let s = String(entrada || "").trim();
+  try { s = decodeURIComponent(s); } catch { /* texto tal cual */ }
+  const m = s.toUpperCase().match(/\b(\d{1,10}-\d{1,6}-COT\d{2})\b/);
+  return m ? m[1] : "";
+}
+
+// Campos de la cotización que propone una consulta de Compra Ágil (datos normalizados por /api/compra-agil).
+// Cada campo: { campo, etiqueta, valor, actual, cambia, sobrescribe }. Lo que no viene no se propone (no se inventa).
+// No toca la fecha de emisión de BFK, el estado ni precios: el presupuesto es del comprador y es solo referencial.
+export function propuestaCompraAgil(cot, d) {
+  const vacio = (v) => v == null || (typeof v === "string" && !v.trim()) || (Array.isArray(v) && !v.length);
+  const plazo = d?.plazo_dias != null ? `${d.plazo_dias} DÍAS` : "";
+  const pres = d?.presupuesto?.estimado ?? d?.presupuesto?.disponible ?? null;
+  const filas = [
+    ["id_externo", "Código Compra Ágil", d?.codigo],
+    ["nombre", "Nombre", d?.nombre],
+    ["descripcion", "Descripción", d?.descripcion],
+    ["institucion", "Institución compradora", d?.institucion],
+    ["unidad_compra", "Unidad solicitante", d?.unidad_compra],
+    ["rut", "RUT", d?.rut],
+    ["direccion_entrega", "Dirección de entrega", d?.direccion_entrega],
+    ["region", "Región", d?.region],
+    ["plazo", "Plazo de entrega", plazo],
+    ["presupuesto_estimado", "Presupuesto del comprador (referencial)", pres],
+    ["fecha_publicacion", "Fecha de publicación", d?.fecha_publicacion],
+    ["fecha_cierre", "Fecha de cierre", d?.fecha_cierre],
+    ["requerimientos", "Productos requeridos por el comprador", (d?.productos || []).filter((p) => p.nombre || p.descripcion)],
+    ["documentos_mp", "Documentos adjuntos (referencia)", d?.documentos || []],
+  ];
+  return filas.filter(([, , v]) => !vacio(v)).map(([campo, etiqueta, valor]) => {
+    const actual = cot?.[campo];
+    const cambia = JSON.stringify(actual ?? null) !== JSON.stringify(valor);
+    return { campo, etiqueta, valor, actual, cambia, sobrescribe: cambia && !vacio(actual) };
+  }).filter((f) => f.cambia);
+}
+
 // Datos de la cabecera del PDF: solo identificación del proceso (nunca montos).
 export const cabeceraPublica = (cot) => ({
   id_externo: String(cot?.id_externo || "").trim(), nombre: String(cot?.nombre || "").trim(),
@@ -214,9 +263,12 @@ export const cabeceraPublica = (cot) => ({
 let sec = 0;
 export const nuevaClave = (p = "k") => `${p}${Date.now().toString(36)}${(sec++).toString(36)}`;
 export const hoyISO = () => { const d = new Date(); const z = (n) => String(n).padStart(2, "0"); return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`; };
-export const cotizacionVacia = () => ({ id: null, id_externo: "", nombre: "", institucion: "", rut: "", direccion_entrega: "", comuna: "", fecha: hoyISO(), plazo: "", observaciones: "", estado: "borrador", recargo: RECARGO_SUGERIDO, version: 0, items: [], envios: [] });
+export const cotizacionVacia = () => ({ id: null, id_externo: "", nombre: "", institucion: "", rut: "", direccion_entrega: "", comuna: "", fecha: hoyISO(), plazo: "", observaciones: "", estado: "borrador", recargo: RECARGO_SUGERIDO, version: 0, items: [], envios: [],
+  // Datos de la Compra Ágil (requerimientos del comprador; opcionales y editables) y vendedor responsable.
+  descripcion: "", unidad_compra: "", region: "", presupuesto_estimado: null, fecha_publicacion: null, fecha_cierre: null, requerimientos: [], documentos_mp: [], mp_consultado_en: null,
+  vendedor_id: null, vendedor_nombre: "" });
 export const fichaVacia = () => ({ nombre: "", marca: "", modelo: "", color: "", generales: [], especificaciones: [], descripcion: "", imagenes: [] });
-export const itemVacio = () => ({ key: nuevaClave("i"), producto_id: null, ficha: fichaVacia(), ficha_aprobada: false, enlace: "", proveedor: "", cantidad: 1, precio_origen: "", precio_incluye_iva: true, con_factura: true, envio_key: null, recargo: null, disponibilidad: "", fecha_consulta: null, origen_datos: "manual" });
+export const itemVacio = () => ({ key: nuevaClave("i"), producto_id: null, ficha: fichaVacia(), ficha_aprobada: false, enlace: "", proveedor: "", cantidad: 1, precio_origen: "", precio_incluye_iva: true, con_factura: true, envio_key: null, recargo: null, disponibilidad: "", fecha_consulta: null, origen_datos: "manual", enlace_original: "" });
 export const envioVacio = (proveedor = "") => ({ key: nuevaClave("e"), proveedor, monto: "", con_factura: true, estado: "pendiente", destino: "", evidencia: "", fecha_cotizacion: hoyISO() });
 
 // Dominio legible del proveedor a partir del enlace.

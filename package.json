@@ -9,13 +9,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@tesseract.js-data/spa": "^1.0.0",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
+    "pdfjs-dist": "3.11.174",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "tesseract.js": "^7.0.0",
-    "xlsx": "^0.18.5",
-    "@tesseract.js-data/spa": "^1.0.0"
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.1",
