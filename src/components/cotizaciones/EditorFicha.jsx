@@ -13,30 +13,44 @@ const mismoTexto = (a, b) => String(a || "").trim().toLowerCase() === String(b |
 // que se registra aquí mismo sin pasar por la pestaña Precios.
 // modo: "item" (línea de cotización) | "biblioteca" (solo ficha técnica).
 // protegido: cotización adjudicada → lo ofertado no se modifica (solo enlace, proveedor y ficha técnica).
-export function EditorFicha({ inicial, envios = [], items = [], destino = "", destinoValido = !!destino, dirCliente = null, onDireccion, modo = "item", almacen, token, onGuardar, onCerrar, esNuevo, protegido = false }) {
-  const [it, setIt] = useState(() => JSON.parse(JSON.stringify(inicial)));
-  const [txtGen, setTxtGen] = useState(() => textoDePares(inicial.ficha?.generales));
-  const [txtEsp, setTxtEsp] = useState(() => textoDePares(inicial.ficha?.especificaciones));
-  const [guardarBib, setGuardarBib] = useState(modo === "item" && !inicial.producto_id);
-  const [actualizarBib, setActualizarBib] = useState(false);
-  const [urlImg, setUrlImg] = useState(""); const [cargandoImg, setCargandoImg] = useState(false); const [error, setError] = useState("");
+export function EditorFicha({ inicial, envios = [], items = [], destino = "", destinoValido = !!destino, dirCliente = null, onDireccion, modo = "item", almacen, token, onGuardar, onCerrar, esNuevo, protegido = false, respaldo = null, onBorrador }) {
+  // respaldo: estado recuperado del borrador local (recarga o cierre inesperado). onBorrador: informa cada cambio
+  // para la copia local de recuperación (aunque aún no se presione «Agregar a la cotización»).
+  const R0 = respaldo || {};
+  const [it, setIt] = useState(() => JSON.parse(JSON.stringify(R0.it || inicial)));
+  const [txtGen, setTxtGen] = useState(() => R0.txtGen ?? textoDePares(inicial.ficha?.generales));
+  const [txtEsp, setTxtEsp] = useState(() => R0.txtEsp ?? textoDePares(inicial.ficha?.especificaciones));
+  const [guardarBib, setGuardarBib] = useState(() => R0.guardarBib ?? (modo === "item" && !inicial.producto_id));
+  const [actualizarBib, setActualizarBib] = useState(() => R0.actualizarBib ?? false);
+  const [urlImg, setUrlImg] = useState(R0.urlImg || ""); const [cargandoImg, setCargandoImg] = useState(false); const [error, setError] = useState("");
   const archivo = useRef(null);
 
   // Imágenes guardadas (rutas del depósito) → visibles para editarlas.
   useEffect(() => {
-    const rutas = (inicial.ficha?.imagenes || []).filter((x) => typeof x === "string" && !x.startsWith("data:"));
+    const origen = (R0.it || inicial).ficha?.imagenes || [];
+    const rutas = origen.filter((x) => typeof x === "string" && !x.startsWith("data:"));
     if (!rutas.length || !almacen) return;
     let vivo = true; setCargandoImg(true);
-    almacen.resolverImagenes(inicial.ficha.imagenes, 4).then((imgs) => { if (vivo) setIt((x) => ({ ...x, ficha: { ...x.ficha, imagenes: imgs } })); }).finally(() => { if (vivo) setCargandoImg(false); });
+    almacen.resolverImagenes(origen, 4).then((imgs) => { if (vivo) setIt((x) => ({ ...x, ficha: { ...x.ficha, imagenes: imgs } })); }).finally(() => { if (vivo) setCargandoImg(false); });
     return () => { vivo = false; };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Despacho ──
   const otrosDe = (key) => items.filter((x) => x.key !== inicial.key && x.envio_key === key);
   const envioActual = envios.find((e) => e.key === inicial.envio_key) || null;
-  const [despMod, setDespMod] = useState(() => (envioActual && otrosDe(envioActual.key).length ? "existente" : "propio"));
-  const [desp, setDesp] = useState(() => (envioActual ? { ...envioActual } : { ...envioVacio(inicial.proveedor), key: null }));
-  const [reverificado, setReverificado] = useState(false);
+  const [despMod, setDespMod] = useState(() => R0.despMod || (envioActual && otrosDe(envioActual.key).length ? "existente" : "propio"));
+  const [desp, setDesp] = useState(() => (R0.desp ? { ...R0.desp } : envioActual ? { ...envioActual } : { ...envioVacio(inicial.proveedor), key: null }));
+  const [reverificado, setReverificado] = useState(() => !!R0.reverificado);
+  // Copia de recuperación de TODO lo escrito en esta ventana (las imágenes ya guardadas se registran por su ruta).
+  const estadoActual = () => ({ it: { ...it, ficha: { ...it.ficha, imagenes: (it.ficha.imagenes || []).map(rutaConocida) } }, txtGen, txtEsp, guardarBib, actualizarBib, urlImg, despMod, desp, reverificado });
+  const inicio = useRef(null);
+  useEffect(() => { if (inicio.current === null) inicio.current = JSON.stringify(estadoActual()); onBorrador?.(estadoActual()); }, [it, txtGen, txtEsp, guardarBib, actualizarBib, urlImg, despMod, desp, reverificado]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Cerrar sin agregar: si hay datos escritos, se pide confirmación (evita perderlos por un toque accidental fuera de la ventana).
+  const cerrar = () => {
+    const cambiado = !!respaldo || (inicio.current !== null && JSON.stringify(estadoActual()) !== inicio.current);
+    if (cambiado && !window.confirm("Este producto tiene datos sin agregar a la cotización. ¿Descartarlos?")) return;
+    onCerrar();
+  };
   // Si falta la dirección del cliente, se puede completar aquí mismo (se sincroniza con la pestaña Datos)
   // sin cerrar la ventana ni perder lo escrito. El bloque queda visible mientras se escribe.
   const [mostrarDir] = useState(() => modo === "item" && !protegido && !destinoValido && !!onDireccion);
@@ -94,8 +108,9 @@ export function EditorFicha({ inicial, envios = [], items = [], destino = "", de
   const consulta = it.consulta;
   const bloq = { disabled: protegido, style: protegido ? { opacity: 0.6 } : undefined };
   return (
-    <Modal title={modo === "biblioteca" ? "Ficha de la biblioteca" : esNuevo ? "Ingresar producto" : "Editar producto"} onClose={onCerrar}>
+    <Modal title={modo === "biblioteca" ? "Ficha de la biblioteca" : esNuevo ? "Ingresar producto" : "Editar producto"} onClose={cerrar}>
       <div data-editor-ficha>
+        {respaldo && <AvisoLinea tono="warn" icono="↺" dato="ficha-recuperada">Producto recuperado localmente: estos datos aún no se han agregado a la cotización ni guardado en BFK.</AvisoLinea>}
         {consulta && (
           <div data-origen-consulta style={{ fontSize: T.small, color: C.inkMuted, background: C.paper, border: `1px solid ${C.border}`, borderRadius: R.sm, padding: "8px 10px", marginBottom: 12 }}>
             <div><b>Origen:</b> {consulta.fuente || "—"}{consulta.fecha_consulta ? ` · ${new Date(consulta.fecha_consulta).toLocaleString("es-CL", { dateStyle: "short", timeStyle: "short" })}` : ""}</div>
@@ -214,7 +229,7 @@ export function EditorFicha({ inicial, envios = [], items = [], destino = "", de
         )}
         {error && <AvisoLinea tono="danger" dato="error-ficha">{error}</AvisoLinea>}
         <div style={{ display: "flex", gap: 8, marginTop: 8, position: "sticky", bottom: -20, background: C.card, padding: "10px 0" }}>
-          <BotonSecundario onClick={onCerrar} style={{ flex: 1, justifyContent: "center", minHeight: 44 }}>Cancelar</BotonSecundario>
+          <BotonSecundario onClick={cerrar} style={{ flex: 1, justifyContent: "center", minHeight: 44 }}>Cancelar</BotonSecundario>
           <BotonPrincipal data-guardar-ficha onClick={guardar} style={{ flex: 2, justifyContent: "center" }}>{modo === "biblioteca" ? "Guardar ficha" : esNuevo ? "Agregar a la cotización" : "Guardar cambios"}</BotonPrincipal>
         </div>
         {avisos.some((a) => a.nivel === "revisar") && modo === "item" && <div style={{ fontSize: T.small, color: C.inkFaint, textAlign: "center" }}><Badge tono="warn">Revisar</Badge> Los avisos no impiden guardar; se aprueban antes de generar la EETT.</div>}

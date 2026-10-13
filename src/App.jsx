@@ -42,6 +42,7 @@ import { PanelImpuestos } from "./components/panels/PanelImpuestos";
 import { PanelBanco } from "./components/panels/PanelBanco";
 import { PanelResumenFinanzas } from "./components/panels/PanelResumenFinanzas";
 import { PanelCotizaciones } from "./components/panels/PanelCotizaciones";
+import { listarBorradores } from "./lib/borradoresCotizacion";
 import { BarraInferior, BarraLateral, MenuMas, contarAlertas, useEsEscritorio } from "./components/ui/Navegacion";
 
 // Pantallas, grupos, direcciones (#/ruta) y permisos: una sola definición en lib/navegacion.js.
@@ -191,6 +192,15 @@ export default function App() {
     document.addEventListener("visibilitychange",alVolver);
     return ()=>document.removeEventListener("visibilitychange",alVolver);
   },[session?.refresh_token]);
+
+  // Si la pestaña se recargó o el sistema la cerró con una cotización sin guardar, al volver el MISMO usuario
+  // se abre Cotizaciones, que restaura el borrador local (marcado como «recuperado», no guardado en BFK).
+  const revisoBorradores=useRef(false);
+  useEffect(()=>{
+    const uid=session?.user?.id; if(!uid||revisoBorradores.current) return;
+    revisoBorradores.current=true;
+    listarBorradores(uid).then(l=>{ if(l.length){ setTab("cotizaciones"); showToast("Se recuperaron cambios de cotización no guardados en este dispositivo (aún no están guardados en BFK)."); } }).catch(()=>{});
+  },[session?.user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reintenta una función asíncrona hasta 2 veces antes de rendirse.
   // Para datos críticos (OCs, perfiles) que no queremos dejar vacíos

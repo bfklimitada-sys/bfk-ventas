@@ -90,22 +90,24 @@ const limpiarQ = (q) => String(q || "").replace(/[,()*%\\:"']/g, " ").replace(/\
 const rango = (r) => { const m = String(r.headers.get("content-range") || "").match(/\/(\d+)$/); return m ? Number(m[1]) : null; };
 
 export function crearAlmacen(token, modo, esquema = 1) {
+  // token: texto o función que entrega el token VIGENTE (la renovación de sesión no recrea el almacén ni cierra el editor).
+  const tk = () => (typeof token === "function" ? token() : token);
   const rpc = async (fn, body) => {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, { method: "POST", headers: cab(token, { "Content-Type": "application/json" }), body: JSON.stringify(body) });
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, { method: "POST", headers: cab(tk(), { "Content-Type": "application/json" }), body: JSON.stringify(body) });
     const c = await json(r); if (!r.ok) throw errorDe(r, c, "No se pudo guardar"); return c;
   };
   const leer = async (tabla, q, { contar = false } = {}) => {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/${tabla}?${q}`, { headers: cab(token, contar ? { Prefer: "count=exact" } : {}) });
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/${tabla}?${q}`, { headers: cab(tk(), contar ? { Prefer: "count=exact" } : {}) });
     const c = await json(r); if (!r.ok) throw errorDe(r, c, `No se pudo leer ${tabla}`);
     return contar ? { filas: c || [], total: rango(r) ?? (c || []).length } : (c || []);
   };
-  const resolver = async (imgs, max = 4) => (await Promise.all((imgs || []).slice(0, max).map((x) => bajarImagen(token, x)))).filter(Boolean);
+  const resolver = async (imgs, max = 4) => (await Promise.all((imgs || []).slice(0, max).map((x) => bajarImagen(tk(), x)))).filter(Boolean);
 
   if (modo !== "base" && modo !== "prueba") return null; // modo "error": sin almacén (no se guarda nada)
   const comunes = {
     // Convierte las rutas de imágenes de una ficha en imágenes visibles (para el editor, la vista previa y el PDF).
     async resolverImagenes(imgs, max = 4) { return resolver(imgs, max); },
-    async miniatura(ruta) { return bajarImagen(token, ruta); },
+    async miniatura(ruta) { return bajarImagen(tk(), ruta); },
   };
 
   if (modo === "prueba") return {
@@ -185,7 +187,7 @@ export function crearAlmacen(token, modo, esquema = 1) {
     async guardarCotizacion(cot) {
       const calc = calcularCotizacion(cot);
       const items = await Promise.all(cot.items.map(async (it, i) => {
-        const l = calc.lineas[i]; const ficha = { ...fichaPublica(it.ficha), imagenes: await subirImagenes(token, (it.ficha?.imagenes || []).slice(0, 4)) };
+        const l = calc.lineas[i]; const ficha = { ...fichaPublica(it.ficha), imagenes: await subirImagenes(tk(), (it.ficha?.imagenes || []).slice(0, 4)) };
         return { ...it, ficha, iva_compra: Math.round(l.iva_credito), envio_asignado: l.envio_asignado, costo_bruto: Math.round(l.costo_bruto), costo_neto: Math.round(l.costo_neto), unitario_venta_neto: l.unitario_neto };
       }));
       return rpc(v2 ? "cz_guardar_cotizacion_v2" : "cz_guardar_cotizacion", { p: { ...cot, items, formula: FORMULA, subtotal_neto: calc.totales.neto, impuestos: calc.totales.iva_debito, total: calc.totales.total,
@@ -201,7 +203,7 @@ export function crearAlmacen(token, modo, esquema = 1) {
     },
     async contarProductos() { return (await leer("productos_catalogo", "select=id&estado=eq.aprobado&limit=1", { contar: true })).total; },
     async guardarProducto(ficha, { id, fuente, fecha_verificacion } = {}) {
-      const f = fichaPublica(ficha); f.imagenes = await subirImagenes(token, (ficha?.imagenes || []).slice(0, 4));
+      const f = fichaPublica(ficha); f.imagenes = await subirImagenes(tk(), (ficha?.imagenes || []).slice(0, 4));
       return rpc("cz_guardar_producto", { p: { ...f, id: id || null, fuente: fuente || null, fecha_verificacion: fecha_verificacion || null } });
     },
     // Solo metadatos del PDF generado (el archivo queda en el dispositivo; no se sube al depósito).

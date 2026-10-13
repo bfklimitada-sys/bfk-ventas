@@ -306,13 +306,21 @@ export function crearBase(inicial, { mp = {}, borrado = {} } = {}) {
   return { db, escr, llamadasMP, leer, escribir, rpc, respuestaMP, difs };
 }
 
-export async function abrir(browser, base, { url, usuario = "u1", ancho = 390, alto = 844, movil = true, espera = 1800, dialogos = "aceptar", prompt = "" } = {}) {
+export async function abrir(browser, base, { url, usuario = "u1", ancho = 390, alto = 844, movil = true, espera = 1800, dialogos = "aceptar", prompt = "", ua } = {}) {
   const yo = usuario;
-  const ctx = await browser.newContext({ viewport: { width: ancho, height: alto }, deviceScaleFactor: 1, isMobile: movil, hasTouch: movil, timezoneId: "America/Santiago" });
+  const ctx = await browser.newContext({ viewport: { width: ancho, height: alto }, deviceScaleFactor: 1, isMobile: movil, hasTouch: movil, timezoneId: "America/Santiago", ...(ua ? { userAgent: ua } : {}) });
   const page = await ctx.newPage(); const errs = []; const dlg = [];
   page.on("pageerror", (e) => errs.push(e.message));
   page.on("console", (m) => { if (m.type() === "error" && /Warning|Each child|unique "key"/i.test(m.text())) errs.push("consola: " + m.text().slice(0, 160)); });
   page.on("dialog", (d) => { dlg.push(d.type() + ": " + d.message().slice(0, 90)); if (dialogos === "aceptar") d.type() === "prompt" ? d.accept(prompt) : d.accept(); else d.dismiss(); });
+  await instalarRutas(page, base, yo);
+  await page.addInitScript((id) => { try { if (location.protocol.startsWith("http")) localStorage.setItem("bfk_supabase_session_v2", JSON.stringify({ access_token: "t" + id, refresh_token: "r", user: { id, email: id + "@prueba.cl" } })); } catch {} }, yo);
+  await page.goto(url, { waitUntil: "load" }); await page.waitForTimeout(espera);
+  return { page, ctx, errs, dlg };
+}
+
+// Rutas simuladas de una página (reutilizable para abrir otra pestaña en el mismo contexto).
+export async function instalarRutas(page, base, yo) {
   await page.route("**/*", async (route) => {
     const req = route.request(); const u = new URL(req.url()); const m = req.method();
     if ((u.hostname === "127.0.0.1" || u.hostname === "localhost") && u.pathname.startsWith("/api/oc")) {
@@ -332,7 +340,4 @@ export async function abrir(browser, base, { url, usuario = "u1", ancho = 390, a
     }
     return route.abort();
   });
-  await page.addInitScript((id) => { try { if (location.protocol.startsWith("http")) localStorage.setItem("bfk_supabase_session_v2", JSON.stringify({ access_token: "t" + id, refresh_token: "r", user: { id, email: id + "@prueba.cl" } })); } catch {} }, yo);
-  await page.goto(url, { waitUntil: "load" }); await page.waitForTimeout(espera);
-  return { page, ctx, errs, dlg };
 }

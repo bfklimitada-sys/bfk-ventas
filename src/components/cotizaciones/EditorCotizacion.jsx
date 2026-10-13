@@ -11,6 +11,7 @@ import { ImportarCompraAgil } from "./ImportarCompraAgil";
 import { VistaPreviaEETT } from "./VistaPreviaEETT";
 import { EliminarCotizacion } from "./EliminarCotizacion";
 import logoUrl from "../../assets/bfk-logo.jpg";
+import { guardarBorrador, borrarBorrador, idLocalDe } from "../../lib/borradoresCotizacion";
 
 const m = (x) => fmt.money(Math.round(Number(x) || 0));
 const pct = (x) => `${(Math.round(Number(x) * 1000) / 10).toLocaleString("es-CL")}%`;
@@ -26,12 +27,15 @@ async function copiarTexto(t) {
 // Quita los despachos que ya no usa ningún producto (evita costos duplicados o huérfanos).
 const limpiarEnvios = (c) => { c.envios = c.envios.filter((e) => c.items.some((it) => it.envio_key === e.key)); return c; };
 
-export function EditorCotizacion({ almacen, inicial, token, perfil, entidadesCatalogo = [], showToast, onGuardada, onEliminada, onBibliotecaCambio, onCerrar }) {
+// recuperado: { actualizado, versionBFK } cuando se abre desde un borrador local (cambios NO guardados en BFK).
+// fichaRecuperada: { esNuevo, item, estado } de la ventana «Ingresar/Editar producto» que estaba abierta.
+export function EditorCotizacion({ almacen, inicial, token, perfil, entidadesCatalogo = [], showToast, onGuardada, onEliminada, onBibliotecaCambio, onCerrar, usuarioId, recuperado = null, pestanaInicial, fichaRecuperada = null, onDescartarBorrador }) {
   const [cot, setCot] = useState(() => JSON.parse(JSON.stringify(inicial)));
-  const [sucio, setSucio] = useState(!inicial.id);
+  const [sucio, setSucio] = useState(!inicial.id || !!recuperado);
   const [estadoGuardado, setEstadoGuardado] = useState(inicial.id ? inicial.estado : null);
-  const [pestana, setPestana] = useState(inicial.id ? "productos" : "datos");
-  const [editor, setEditor] = useState(null);       // { item, esNuevo }
+  const [pestana, setPestana] = useState(pestanaInicial || (inicial.id ? "productos" : "datos"));
+  const [editor, setEditor] = useState(() => (fichaRecuperada?.item ? { item: fichaRecuperada.item, esNuevo: !!fichaRecuperada.esNuevo, respaldo: fichaRecuperada.estado || null } : null)); // { item, esNuevo, respaldo }
+  const [aviso, setAviso] = useState(recuperado); // banner «Borrador recuperado localmente»
   const [verBib, setVerBib] = useState(false);
   const [guardando, setGuardando] = useState(false); const [generando, setGenerando] = useState(""); const [falla, setFalla] = useState(null);
   const [preview, setPreview] = useState(null);     // { blob, nombre, paginas }
@@ -54,6 +58,32 @@ export function EditorCotizacion({ almacen, inicial, token, perfil, entidadesCat
     cambiar((c) => { Object.assign(c, campos); if ("direccion_entrega" in campos || "comuna" in campos) n = invalidarDespachosPorDireccion(c); return c; });
     setTimeout(() => { if (n && Date.now() - avisoInvalidados.current > 4000) { avisoInvalidados.current = Date.now(); showToast?.(`La dirección cambió: ${n} despacho${n === 1 ? "" : "s"} vuelve${n === 1 ? "" : "n"} a «Por verificar».`, "error"); } }, 0);
   };
+  // ── Copia local de recuperación (IndexedDB, este dispositivo) ──
+  // Mientras haya cambios sin guardar (o una ventana de producto abierta) se respalda TODO: datos, dirección, productos,
+  // proveedores, enlaces, cantidades, precios, fotos, características, despachos, recargos y pestaña.
+  // No crea ni modifica nada en BFK/Supabase. Al guardar o descartar expresamente se limpia.
+  const idLocal = useRef(idLocalDe(inicial));
+  const fichaEstado = useRef(fichaRecuperada?.estado || null);
+  const vivo = useRef({}); vivo.current = { cot, sucio, pestana, editor };
+  const [tickFicha, setTickFicha] = useState(0);
+  const respaldar = () => {
+    const { cot: c, sucio: s, pestana: p, editor: e } = vivo.current;
+    if (!usuarioId || !idLocal.current) return Promise.resolve();
+    if (!s && !e) return borrarBorrador(usuarioId, idLocal.current);
+    const ficha = e ? { esNuevo: e.esNuevo, item: e.item, estado: fichaEstado.current } : null;
+    return guardarBorrador({ usuario: usuarioId, idLocal: idLocal.current, cotId: c.id || null, versionBase: c.version || 0, titulo: c.id_externo || c.nombre || c.institucion || "Nueva cotización", cot: c, pestana: p, ficha });
+  };
+  useEffect(() => { const t = setTimeout(respaldar, 400); return () => clearTimeout(t); }, [cot, sucio, pestana, editor, tickFicha]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { // al cambiar de app/pestaña, bloquear el teléfono o cerrar: respaldo inmediato
+    const ya = () => { respaldar(); };
+    const alOcultar = () => { if (document.visibilityState === "hidden") ya(); };
+    document.addEventListener("visibilitychange", alOcultar); window.addEventListener("pagehide", ya);
+    return () => { document.removeEventListener("visibilitychange", alOcultar); window.removeEventListener("pagehide", ya); if (!cerrandoAdrede.current) ya(); }; // al desmontar (p. ej. cambio de pantalla) también
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const cerrandoAdrede = useRef(false);
+  const alCambiarFicha = (estado) => { fichaEstado.current = estado; setTickFicha((n) => n + 1); };
+  const cerrarFicha = () => { fichaEstado.current = null; setEditor(null); };
+
   const irADireccion = () => { setPestana("datos"); setTimeout(() => document.querySelector('[data-campo="direccion"]')?.focus(), 50); };
 
   useEffect(() => { almacen.listarVendedores?.().then(setVendedores).catch(() => setVendedores([])); }, [almacen]);
@@ -61,7 +91,8 @@ export function EditorCotizacion({ almacen, inicial, token, perfil, entidadesCat
   useEffect(() => { cargarHistorial(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Productos (ingreso manual) ──
-  const abrirNuevo = (item) => setEditor({ esNuevo: true, item });
+  const abrirNuevo = (item) => { fichaEstado.current = null; setEditor({ esNuevo: true, item }); };
+  const abrirEditar = (item) => { fichaEstado.current = null; setEditor({ esNuevo: false, item }); };
   const manual = (extra = {}) => abrirNuevo({ ...itemVacio(), origen_datos: "manual", ...extra });
   const guardarItem = async (item, { guardarBiblioteca, actualizarBiblioteca, envio }) => {
     const it = { ...item }; delete it.consulta;
@@ -88,7 +119,7 @@ export function EditorCotizacion({ almacen, inicial, token, perfil, entidadesCat
       if (i >= 0) { if (JSON.stringify(c.items[i].ficha) !== JSON.stringify(it.ficha)) it.ficha_aprobada = false; c.items[i] = it; } else c.items.push(it);
       return limpiarEnvios(c);
     });
-    setEditor(null);
+    cerrarFicha();
     if (envio && envio.estado === "pendiente" && !dirOk) showToast?.("Producto guardado. El despacho queda «Por verificar» hasta registrar la dirección de entrega.");
   };
   const desdeBiblioteca = (p) => {
@@ -100,9 +131,15 @@ export function EditorCotizacion({ almacen, inicial, token, perfil, entidadesCat
 
   // ── Guardar ──
   const guardarInterno = async () => {
-    const r = await almacen.guardarCotizacion(cot);
-    const nueva = { ...cot, id: r.id, version: r.version };
-    setCot(nueva); setSucio(false); setEstadoGuardado(nueva.estado); onGuardada?.(nueva);
+    const enviada = cot; const { _idLocal, ...paraBFK } = enviada; // eslint-disable-line no-unused-vars
+    const r = await almacen.guardarCotizacion(paraBFK);
+    const nueva = { ...enviada, id: r.id, version: r.version };
+    // Lo escrito DURANTE el guardado se conserva (y sigue marcado como pendiente de guardar).
+    const posterior = vivo.current.cot !== enviada;
+    setCot((c) => ({ ...c, id: r.id, version: r.version })); setSucio(posterior); setEstadoGuardado(nueva.estado); onGuardada?.(nueva);
+    const anterior = idLocal.current; idLocal.current = r.id;
+    if (usuarioId && anterior && anterior !== r.id) borrarBorrador(usuarioId, anterior).catch(() => {});
+    setAviso(null);
     return nueva;
   };
   const guardar = async () => {
@@ -165,7 +202,19 @@ export function EditorCotizacion({ almacen, inicial, token, perfil, entidadesCat
   };
 
   // ── Datos ──
-  const cerrar = () => { if (sucio && !window.confirm("Hay cambios sin guardar. ¿Cerrar igual?")) return; onCerrar(); };
+  // Cerrar = descartar expresamente: con cambios sin guardar se pide confirmación y se borra SOLO el borrador local de esta cotización.
+  const cerrar = () => {
+    if (sucio && !window.confirm("Hay cambios sin guardar en BFK. ¿Descartarlos y cerrar? Se borrará la copia local de recuperación de esta cotización.")) return;
+    cerrandoAdrede.current = true;
+    if (usuarioId && idLocal.current) borrarBorrador(usuarioId, idLocal.current).catch(() => {});
+    onCerrar();
+  };
+  const descartarYAbrirBFK = () => {
+    if (!window.confirm("¿Descartar los cambios recuperados en este dispositivo y abrir la versión guardada en BFK?")) return;
+    cerrandoAdrede.current = true;
+    if (usuarioId && idLocal.current) borrarBorrador(usuarioId, idLocal.current).catch(() => {});
+    onDescartarBorrador?.(cot.id);
+  };
   const elegirEntidad = (nombre) => {
     const e = entidadesCatalogo.find((x) => String(x.nombre_entidad || "").toLowerCase() === String(nombre).toLowerCase());
     cambiar((c) => { c.institucion = nombre; if (e) { if (!c.rut) c.rut = e.rut || ""; if (!c.comuna) c.comuna = e.comuna || ""; } return c; });
@@ -176,7 +225,7 @@ export function EditorCotizacion({ almacen, inicial, token, perfil, entidadesCat
     try { const v = await almacen.registrarVendedor(nuevoVend); setVendedores((l) => [...l, v].sort((a, b) => a.nombre.localeCompare(b.nombre))); cambiar((c) => { c.vendedor_id = v.id; c.vendedor_nombre = v.nombre; return c; }); setNuevoVend(null); showToast?.("Vendedor registrado"); }
     catch (e) { showToast?.(e.message, "error"); }
   };
-  const eliminarCot = async (confirmacion) => { await almacen.eliminarCotizacion(cot.id, confirmacion); showToast?.("Cotización eliminada"); setEliminar(false); onEliminada?.(cot.id); };
+  const eliminarCot = async (confirmacion) => { await almacen.eliminarCotizacion(cot.id, confirmacion); cerrandoAdrede.current = true; showToast?.("Cotización eliminada"); setEliminar(false); onEliminada?.(cot.id); };
 
   const nPend = calc.pendientes.length; const nRev = pdf.porItem.filter((p) => !p.aprobado).length;
   const titulo = cot.id_externo || (cot.id ? (cot.nombre || cot.institucion || "Cotización sin código") : "Nueva cotización");
@@ -187,6 +236,15 @@ export function EditorCotizacion({ almacen, inicial, token, perfil, entidadesCat
     <HojaLateral abierta onCerrar={cerrar} dato="cotizacion" titulo={titulo} subtitulo={[cot.institucion, ESTADOS_COTIZACION[cot.estado]?.label, cot.vendedor_nombre].filter(Boolean).join(" · ")}
       derecha={<BotonPrincipal data-guardar-cotizacion onClick={guardar} disabled={guardando} style={{ minHeight: 40, padding: "8px 14px", opacity: guardando ? 0.6 : 1 }}>{guardando ? "Guardando…" : sucio ? "Guardar •" : "Guardado"}</BotonPrincipal>}>
       <div style={{ padding: 16 }} data-editor-cotizacion>
+        {aviso && (
+          <AvisoLinea tono="warn" icono="↺" dato="borrador-recuperado" {...(aviso.versionBFK && cot.id ? { accion: "Descartar y abrir la versión de BFK", onClick: descartarYAbrirBFK } : {})}>
+            <b>Borrador recuperado localmente</b> ({fechaHora(aviso.actualizado)}): estos cambios están solo en este dispositivo y <b>aún no se han guardado en BFK</b>. Revísalos y presiona «Guardar».
+            {aviso.versionBFK ? <> En BFK hay una versión más reciente (versión {aviso.versionBFK}) guardada después de este borrador: no se sobrescribirá; al guardar, BFK lo rechazará para que puedas revisar.</> : null}
+          </AvisoLinea>
+        )}
+        <div data-estado-guardado={sucio ? "local" : "bfk"} style={{ fontSize: T.small, color: sucio ? C.warnText : C.inkMuted, marginBottom: 6 }}>
+          {sucio ? "● Cambios sin guardar en BFK · copia de recuperación solo en este dispositivo" : `✓ Cotización guardada en BFK${cot.version ? ` (versión ${cot.version})` : ""}`}
+        </div>
         <Pestanas etiqueta="Cotización" activa={pestana} onCambiar={setPestana} items={[
           { key: "datos", label: "Datos" },
           { key: "productos", label: "Productos", n: cot.items.length || null },
@@ -325,11 +383,11 @@ export function EditorCotizacion({ almacen, inicial, token, perfil, entidadesCat
                     ? (protegido
                       ? <a data-ir-a-comprar href={it.enlace.trim()} target="_blank" rel="noopener noreferrer" style={{ background: C.teal, color: "#fff", borderRadius: 10, padding: "8px 16px", fontWeight: 800, fontSize: T.sm, textDecoration: "none", minHeight: 40, display: "inline-flex", alignItems: "center" }}>🛒 Ir a comprar</a>
                       : <a data-abrir-publicacion href={it.enlace.trim()} target="_blank" rel="noopener noreferrer" style={{ border: `1px solid ${C.teal}`, color: C.tealDark, borderRadius: 10, padding: "6px 12px", fontWeight: 700, fontSize: T.small, textDecoration: "none", minHeight: 34, display: "inline-flex", alignItems: "center" }}>Abrir publicación ↗</a>)
-                    : <span data-sin-enlace style={{ fontSize: T.small, color: C.warnText, fontWeight: 700 }}>Sin enlace registrado · <button type="button" onClick={() => setEditor({ esNuevo: false, item: it })} style={{ border: "none", background: "none", color: C.tealDark, textDecoration: "underline", cursor: "pointer", padding: 0, fontSize: T.small }}>Agregar enlace</button></span>}
+                    : <span data-sin-enlace style={{ fontSize: T.small, color: C.warnText, fontWeight: 700 }}>Sin enlace registrado · <button type="button" onClick={() => abrirEditar(it)} style={{ border: "none", background: "none", color: C.tealDark, textDecoration: "underline", cursor: "pointer", padding: 0, fontSize: T.small }}>Agregar enlace</button></span>}
                   <div style={{ flex: 1 }} />
                   {i > 0 && !protegido && <BotonSecundario aria-label="Subir" onClick={() => mover(i, -1)} style={{ minHeight: 34, padding: "4px 10px" }}>↑</BotonSecundario>}
                   {!protegido && <BotonSecundario onClick={() => quitar(it.key)} style={{ minHeight: 34, padding: "4px 10px", color: C.dangerText }}>Quitar</BotonSecundario>}
-                  <BotonSecundario data-editar-item onClick={() => setEditor({ esNuevo: false, item: it })} style={{ minHeight: 34, padding: "4px 12px" }}>Editar</BotonSecundario>
+                  <BotonSecundario data-editar-item onClick={() => abrirEditar(it)} style={{ minHeight: 34, padding: "4px 12px" }}>Editar</BotonSecundario>
                 </div>
               </Tarjeta>
             );
@@ -401,7 +459,7 @@ export function EditorCotizacion({ almacen, inicial, token, perfil, entidadesCat
                     Revisé estos avisos y apruebo la ficha tal como está
                   </label>
                 )}
-                <div style={{ marginTop: 6 }}><button type="button" onClick={() => setEditor({ esNuevo: false, item: it })} style={{ border: "none", background: "none", color: C.tealDark, textDecoration: "underline", cursor: "pointer", fontSize: T.small, padding: 0, minHeight: 30 }}>Corregir ficha</button></div>
+                <div style={{ marginTop: 6 }}><button type="button" onClick={() => abrirEditar(it)} style={{ border: "none", background: "none", color: C.tealDark, textDecoration: "underline", cursor: "pointer", fontSize: T.small, padding: 0, minHeight: 30 }}>Corregir ficha</button></div>
               </Tarjeta>
             );
           })}
@@ -423,7 +481,7 @@ export function EditorCotizacion({ almacen, inicial, token, perfil, entidadesCat
         </PanelPestana>
       </div>
 
-      {editor && <EditorFicha key={editor.item.key} inicial={editor.item} esNuevo={editor.esNuevo} envios={cot.envios} items={cot.items} destino={destino} destinoValido={dirOk} dirCliente={{ direccion_entrega: cot.direccion_entrega, comuna: cot.comuna, region: cot.region }} onDireccion={setDireccion} almacen={almacen} token={token} protegido={protegido && !editor.esNuevo} onGuardar={guardarItem} onCerrar={() => setEditor(null)} />}
+      {editor && <EditorFicha key={editor.item.key} inicial={editor.item} esNuevo={editor.esNuevo} envios={cot.envios} items={cot.items} destino={destino} destinoValido={dirOk} dirCliente={{ direccion_entrega: cot.direccion_entrega, comuna: cot.comuna, region: cot.region }} onDireccion={setDireccion} almacen={almacen} token={token} protegido={protegido && !editor.esNuevo} onGuardar={guardarItem} onCerrar={cerrarFicha} respaldo={editor.respaldo} onBorrador={alCambiarFicha} />}
       {verBib && <SelectorBiblioteca almacen={almacen} onElegir={desdeBiblioteca} onCerrar={() => setVerBib(false)} />}
       {preview && <VistaPreviaEETT {...preview} onCerrar={() => setPreview(null)} onDescargar={pdf.listo ? () => { setPreview(null); generarYDescargar(); } : null} />}
       {eliminar && <EliminarCotizacion cot={{ ...cot, estado: estadoGuardado || cot.estado, oc_codigo: inicial.oc_codigo || cot.oc_codigo }} nEett={historial.length} onCancelar={() => setEliminar(false)} onEliminar={eliminarCot} />}
