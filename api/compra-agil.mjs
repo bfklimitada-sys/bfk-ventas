@@ -43,10 +43,10 @@ async function validarSesion(req) {
     if (!r.ok) return { error: "Sesión inválida o vencida. Vuelva a iniciar sesión.", status: 401 };
     const u = await r.json();
     if (!u?.id) return { error: "Sesión inválida.", status: 401 };
-    const p = await fetch(`${SUPABASE_URL}/rest/v1/perfiles?id=eq.${encodeURIComponent(u.id)}&select=id`, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` } });
+    const p = await fetch(`${SUPABASE_URL}/rest/v1/perfiles?id=eq.${encodeURIComponent(u.id)}&select=id,rol`, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` } });
     const filas = p.ok ? await p.json() : [];
     if (!Array.isArray(filas) || !filas.length) return { error: "Usuario sin perfil autorizado en BFK.", status: 403 };
-    return { uid: u.id };
+    return { uid: u.id, admin: filas[0]?.rol === "admin" };
   } catch { return { error: "No se pudo validar la sesión. Intente de nuevo.", status: 503 }; }
 }
 
@@ -76,51 +76,66 @@ export function normalizarCompraAgil(p) {
 
 const COMO_OBTENER = "Solicítalo en https://www.chilecompra.cl/api/ («Pide tu ticket», con Clave Única; llega por correo) y configúralo en Vercel como MP_TICKET_COMPRA_AGIL.";
 
-// Diagnóstico por etapas SIN sesión (sin datos ni credenciales en la respuesta). Máximo 3 por minuto.
-// Distingue: DNS → conexión TCP → TLS → API sin ticket (espera 400) → ticket inválido de control (espera 401)
-// → ticket configurado (200/404 = aceptado; 401/403 = rechazado). Informa la región real de ejecución.
-// Los tiempos de espera NO se amplían (ticket real: 20 s, igual que la consulta normal); si una etapa falla, las siguientes se omiten.
-// Peor caso total < 30 s (maxDuration).
+// Diagnóstico por etapas. SOLO administradores de BFK con sesión válida; a cualquier otro se le responde 401/403
+// sin ninguna información. Nunca devuelve el ticket ni datos de una compra.
+// Etapas: DNS → conexión TCP → TLS → API sin ticket (espera 400) → ticket inválido de control (espera 401).
+// El ticket configurado SOLO se prueba si se pide expresamente (&ticket=1), si la red respondió, y como máximo
+// 1 vez cada 10 minutos por instancia (cuida la cuota diaria de ChileCompra).
+// Plazo total: 25 s, siempre bajo maxDuration (30 s); cada etapa usa como máximo el tiempo que queda.
 const HOST = "api2.mercadopublico.cl";
 const TICKET_CONTROL = "00000000-0000-0000-0000-000000000000"; // ticket inexistente: solo para comprobar la respuesta 401
+const PLAZO_TOTAL_MS = 25_000;
 const conLimite = (ms, fn) => new Promise((ok) => {
+  if (ms < 500) return ok({ ok: false, ms: 0, falla: "sin_tiempo" });
   const t0 = Date.now(); const fin = setTimeout(() => ok({ ok: false, ms: Date.now() - t0, falla: "demora" }), ms);
-  fn().then((r) => { clearTimeout(fin); ok({ ok: true, ms: Date.now() - t0, ...r }); }, (e) => { clearTimeout(fin); ok({ ok: false, ms: Date.now() - t0, falla: [e?.name, e?.code || e?.cause?.code].filter(Boolean).join(":") || "error" }); });
+  fn(ms).then((r) => { clearTimeout(fin); ok({ ok: true, ms: Date.now() - t0, ...r }); }, (e) => { clearTimeout(fin); ok({ ok: false, ms: Date.now() - t0, falla: [e?.name, e?.code || e?.cause?.code].filter(Boolean).join(":") || "error" }); });
 });
-const socket = (seguro) => new Promise((ok, mal) => {
+const socket = (seguro) => (ms) => new Promise((ok, mal) => {
   const o = { host: HOST, port: 443, servername: HOST };
   const s = seguro ? tlsConnect(o, () => { s.end(); ok({}); }) : netConnect(o, () => { s.end(); ok({}); });
-  s.setTimeout(5_200, () => s.destroy(new Error("demora")));
+  s.setTimeout(ms, () => s.destroy(new Error("demora")));
   s.on("error", mal);
 });
-const pedir = (ticket, ms) => async () => {
-  const r = await fetch(`${API}/3390-246-COT26`, { headers: { ...(ticket ? { ticket } : {}), Accept: "application/json" }, signal: AbortSignal.timeout(ms + 200) });
+const pedir = (ticket) => async (ms) => {
+  const r = await fetch(`${API}/3390-246-COT26`, { headers: { ...(ticket ? { ticket } : {}), Accept: "application/json" }, signal: AbortSignal.timeout(ms) });
   const c = await r.json().catch(() => null);
   return { http: r.status, codigo_api: (c?.errors || c?.errores)?.[0]?.codigo ?? null }; // nunca el contenido
 };
-let diagnosticos = [];
+let diagnosticos = []; let ultimaPruebaTicket = 0;
 async function diagnosticar(req, res) {
+  res.setHeader("Cache-Control", "no-store");
+  const ses = await validarSesion(req);
+  if (ses.error) return res.status(ses.status).json({ ok: false });
+  if (!ses.admin) return res.status(403).json({ ok: false });
   const ahora = Date.now(); diagnosticos = diagnosticos.filter((t) => ahora - t < VENTANA_MS);
   if (diagnosticos.length >= 3) return res.status(429).json({ ok: false, error: "Espera un minuto." });
   diagnosticos.push(ahora);
+  const limite = ahora + PLAZO_TOTAL_MS; const queda = (max) => Math.min(max, limite - Date.now());
   const ticket = (process.env.MP_TICKET_COMPRA_AGIL || process.env.MP_TICKET || "").trim();
-  const origen = (process.env.MP_TICKET_COMPRA_AGIL || "").trim() ? "MP_TICKET_COMPRA_AGIL" : ticket ? "MP_TICKET" : null;
+  const omitido = { ok: false, falla: "omitido" };
   const e = {};
-  e.dns = await conLimite(3_000, async () => ({ direcciones: (await lookup(HOST, { all: true })).length }));
-  e.tcp = e.dns.ok ? await conLimite(5_000, () => socket(false)) : { ok: false, falla: "omitido" };
-  e.tls = e.tcp.ok ? await conLimite(5_000, () => socket(true)) : { ok: false, falla: "omitido" };
-  e.api_sin_ticket = e.tls.ok ? await conLimite(6_000, pedir(null, 6_000)) : { ok: false, falla: "omitido" };
-  e.ticket_control = e.api_sin_ticket.ok ? await conLimite(6_000, pedir(TICKET_CONTROL, 6_000)) : { ok: false, falla: "omitido" };
-  e.ticket_configurado = !ticket ? { ok: false, falla: "sin_ticket" } : e.ticket_control.ok ? await conLimite(20_000, pedir(ticket, 20_000)) : { ok: false, falla: "omitido" };
+  e.dns = await conLimite(queda(3_000), async () => ({ direcciones: (await lookup(HOST, { all: true })).length }));
+  e.tcp = e.dns.ok ? await conLimite(queda(5_000), socket(false)) : omitido;
+  e.tls = e.tcp.ok ? await conLimite(queda(5_000), socket(true)) : omitido;
+  e.api_sin_ticket = e.tls.ok ? await conLimite(queda(6_000), pedir(null)) : omitido;
+  e.ticket_control = e.api_sin_ticket.ok ? await conLimite(queda(6_000), pedir(TICKET_CONTROL)) : omitido;
+  const pedido = req.query?.ticket === "1";
+  const permitido = Date.now() - ultimaPruebaTicket > 10 * 60_000;
+  if (!pedido) e.ticket_configurado = { ok: false, falla: "no_solicitado" };
+  else if (!ticket) e.ticket_configurado = { ok: false, falla: "no_disponible_en_este_entorno" };
+  else if (!e.ticket_control.ok) e.ticket_configurado = omitido;
+  else if (!permitido) e.ticket_configurado = { ok: false, falla: "espera_10_minutos" };
+  else { ultimaPruebaTicket = Date.now(); e.ticket_configurado = await conLimite(queda(20_000), pedir(ticket)); }
   const h = e.ticket_configurado.http;
   const conclusion = !e.dns.ok ? "falla_dns" : !e.tcp.ok ? "conexion_bloqueada_o_sin_ruta" : !e.tls.ok ? "falla_tls"
     : !e.api_sin_ticket.ok ? "la_api_no_responde_a_esta_region"
-    : !ticket ? "ticket_no_configurado"
     : !e.ticket_control.ok ? "la_api_no_responde_con_ticket"
+    : !pedido ? "red_ok_ticket_no_probado"
+    : !ticket ? "red_ok_ticket_no_disponible_en_este_entorno"
+    : !permitido ? "red_ok_espera_10_minutos_para_probar_el_ticket"
     : !e.ticket_configurado.ok ? "demora_solo_con_ticket_real"
     : h === 200 || h === 404 ? "ticket_aceptado" : h === 401 || h === 403 ? "ticket_rechazado" : h === 429 ? "cuota_agotada" : "error_api";
-  res.setHeader("Cache-Control", "no-store");
-  return res.status(200).json({ ok: true, region: process.env.VERCEL_REGION || null, ticket_configurado: !!ticket, origen, etapas: e, conclusion });
+  return res.status(200).json({ ok: true, region: process.env.VERCEL_REGION || null, entorno: process.env.VERCEL_ENV || null, etapas: e, conclusion, duracion_ms: Date.now() - ahora });
 }
 
 export default async function handler(req, res) {
