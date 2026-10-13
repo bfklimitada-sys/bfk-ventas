@@ -15,7 +15,7 @@ Flujo principal: **Datos → Productos → Precios → EETT**. Sin merge, despli
 | EETT | Reproduce la plantilla Excel «Pág.1» (banda azul, logo, tabla del proceso en la 1.ª página, franja gris del nombre, 2 fotos, CARACTERÍSTICAS, dos columnas con renglones, pie azul) + bloque discreto «Elaboración de especificaciones técnicas» (empresa, vendedor, elaborado por = cuenta autenticada, fecha, cotización, versión) | `src/lib/eettPdf.js` |
 | Vista previa | Mismo generador, todas las páginas (pdf.js bajo demanda), PC y celular; no guarda nada. Alternativa: visor del navegador | `VistaPreviaEETT.jsx` |
 | Generar y descargar | Valida → guarda (solo si hay cambios; sin versiones vacías; control de concurrencia) → genera desde lo guardado → descarga en el dispositivo → registra **solo metadatos**. Si la descarga falla, avisa que los datos sí quedaron guardados y permite reintentar | `EditorCotizacion.jsx` |
-| Adjudicadas | Lo ofertado (líneas, cantidades, unitarios) y el vínculo con la OC quedan protegidos (también en el servidor); se pueden actualizar enlaces y fichas y regenerar la EETT | `cz_guardar_cotizacion_v2` |
+| Adjudicadas | Lo ofertado queda protegido también en el servidor: cada línea conserva su identificador y no se puede quitar, agregar ni sustituir (marca y modelo bloqueados), ni cambiar cantidad o unitario; el vínculo con la OC solo lo cambia un administrador. Se pueden corregir datos técnicos, actualizar enlaces de compra y regenerar la EETT | `cz_guardar_cotizacion_v2` |
 | Rendimiento | Listado paginado (20) con búsqueda y filtros por código, nombre, institución, vendedor y estado; biblioteca paginada sin descargar imágenes; miniaturas progresivas; imágenes comprimidas (1000 px, JPEG 0,8) y nunca re-subidas | `cotizacionesDatos.js`, `ImagenFicha.jsx` |
 | Eliminar | Solo administradores; confirmación escrita (código o nombre); «Cancelar» / «Eliminar definitivamente»; bloqueado en adjudicadas o con OC; borra solo lo asociado; auditoría (quién/cuándo); no toca biblioteca, imágenes, PDF ni otros módulos | `EliminarCotizacion.jsx`, `cz_eliminar_cotizacion` |
 
@@ -23,11 +23,12 @@ Flujo principal: **Datos → Productos → Precios → EETT**. Sin merge, despli
 La API oficial (Beta) es `GET https://api2.mercadopublico.cl/v2/compra-agil/{codigo}` con la cabecera `ticket`. Sin ticket responde 401.
 1. Solicitar el ticket en https://www.chilecompra.cl/api/ → «Pide tu ticket» (Clave Única). Llega por correo.
 2. Guardarlo en Vercel (proyecto `bfk-ventas`) como variable de entorno **`MP_TICKET_COMPRA_AGIL`** (si no existe, la función prueba con el `MP_TICKET` actual de las OC).
-3. Nunca se expone al navegador. Sin ticket válido, la pantalla lo informa y el ingreso manual sigue disponible. No hay respuestas simuladas.
+3. Diagnóstico sin sesión: `GET /api/compra-agil?diagnostico=1` responde solo si hay ticket y el código HTTP de ChileCompra (nunca el ticket ni datos).
+4. Nunca se expone al navegador. Sin ticket válido, la pantalla lo informa y el ingreso manual sigue disponible. No hay respuestas simuladas.
 Comuna y ciudad no vienen en la API: se completan a mano.
 
 ### Migración v2 (preparada, NO aplicada)
-`docs/migraciones/BORRADOR-2026-10-cotizaciones-v2.sql` (+ `-deshacer.sql`). Validada en PostgreSQL local con `docs/pruebas-cotizaciones/validar_sql_v2.sh` (37 comprobaciones).
+`docs/migraciones/BORRADOR-2026-10-cotizaciones-v2.sql` (+ `-deshacer.sql`). Validada en PostgreSQL local con `docs/pruebas-cotizaciones/validar_sql_v2.sh` (39 comprobaciones).
 Hasta aplicarla, la app funciona con la base actual: guarda la cotización y registra cada EETT **sin subir el PDF**; avisa que el vendedor y los datos importados de Compra Ágil se guardarán cuando se instale; la eliminación no se muestra.
 
 ### Pruebas

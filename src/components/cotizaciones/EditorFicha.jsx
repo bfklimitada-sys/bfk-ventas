@@ -97,13 +97,13 @@ export function EditorFicha({ inicial, envios = [], items = [], destino = "", mo
             {consulta.advertencias?.map((a, i) => <div key={i} style={{ marginTop: 3, color: C.warnText }}>• {a}</div>)}
           </div>
         )}
-        {protegido && <AvisoLinea tono="info" icono="🔒" dato="item-protegido">Cotización adjudicada: cantidad, precios y despacho ofertados quedan protegidos. Puedes actualizar el enlace de compra, el proveedor y la ficha técnica.</AvisoLinea>}
+        {protegido && <AvisoLinea tono="info" icono="🔒" dato="item-protegido">Cotización adjudicada: el producto ofertado (marca y modelo), la cantidad, los precios y el despacho quedan protegidos. Puedes actualizar el enlace de compra, el proveedor y corregir la ficha técnica.</AvisoLinea>}
 
         <div style={{ fontSize: T.small, fontWeight: 800, color: C.tealDark, textTransform: "uppercase", letterSpacing: 0.5, margin: "4px 0 8px" }}>Ficha técnica · va en la EETT</div>
         <Field label="Nombre exacto del producto" required><textarea data-campo="nombre" rows={2} value={it.ficha.nombre || ""} onChange={(e) => setF("nombre", e.target.value)} style={{ ...iStyle, resize: "vertical" }} /></Field>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-          <Field label="Marca"><input data-campo="marca" value={it.ficha.marca || ""} onChange={(e) => setF("marca", e.target.value)} style={iStyle} /></Field>
-          <Field label="Modelo"><input data-campo="modelo" value={it.ficha.modelo || ""} onChange={(e) => setF("modelo", e.target.value)} style={iStyle} /></Field>
+          <Field label="Marca"><input data-campo="marca" value={it.ficha.marca || ""} onChange={(e) => setF("marca", e.target.value)} style={iStyle} disabled={protegido} /></Field>
+          <Field label="Modelo"><input data-campo="modelo" value={it.ficha.modelo || ""} onChange={(e) => setF("modelo", e.target.value)} style={iStyle} disabled={protegido} /></Field>
         </div>
         <Field label="Color"><input data-campo="color" value={it.ficha.color || ""} onChange={(e) => setF("color", e.target.value)} style={iStyle} /></Field>
         <Field label="Características generales" hint="Una por línea: Etiqueta: valor (marca, modelo y color van arriba)."><textarea data-campo="generales" rows={3} value={txtGen} onChange={(e) => setTxtGen(e.target.value)} style={{ ...iStyle, resize: "vertical" }} placeholder={"Material: Acero\nGarantía: 12 meses"} /></Field>

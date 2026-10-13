@@ -41,7 +41,7 @@ AJ0=$(AJENOS); FV1=$(DEF_V1); POL1=$(POL)
 # Datos guardados con la v1 (como en producción).
 P='{"id_externo":"3390-246-COT26","nombre":"Congeladoras","institucion":"Ejército","recargo":0.3,"estado":"borrador",
  "envios":[{"key":"e1","proveedor":"Tienda","monto":"0","estado":"sin_costo_confirmado","destino":"Av. X 1, Arica","evidencia":"simulación"}],
- "items":[{"key":"i1","envio_key":"e1","enlace":"https://tienda.cl/a","proveedor":"Tienda","cantidad":2,"precio_origen":500000,"unitario_venta_neto":546219,"ficha":{"nombre":"Congeladora","imagenes":["img/abc.jpg"]}}]}'
+ "items":[{"key":"i1","envio_key":"e1","enlace":"https://tienda.cl/a","proveedor":"Tienda","cantidad":2,"precio_origen":500000,"unitario_venta_neto":546219,"ficha":{"nombre":"Congeladora","marca":"Fensa","modelo":"CV-590","imagenes":["img/abc.jpg"]}}]}'
 ID=$(COMO $USR "select cz_guardar_cotizacion('$P'::jsonb)->>'id'")
 Q -c "insert into storage.objects (bucket_id,name) values ('cz-eett','$ID/v1-historico.pdf'), ('cz-productos','img/abc.jpg')"
 COMO $USR "select cz_registrar_eett('$ID', 1, 'cz-eett/$ID/v1-historico.pdf', null, 2)" >/dev/null
@@ -61,10 +61,16 @@ ok "V6_concurrencia_sigue_rechazada" "$(COMO $ADM "select cz_guardar_cotizacion_
 # Adjudicada con OC vinculada.
 PA=$(echo "$P" | sed "s/\"id_externo\"/\"id\":\"$ID\",\"version\":3,\"oc_codigo\":\"1-2-AG26\",\"id_externo\"/; s/\"estado\":\"borrador\"/\"estado\":\"adjudicada\"/")
 COMO $USR "select cz_guardar_cotizacion_v2('$PA'::jsonb)" >/dev/null
+IID=$(Q -c "select id from cotizacion_items where cotizacion_id='$ID'")
+PA=$(echo "$PA" | sed "s/\"key\":\"i1\"/\"key\":\"$IID\"/")
 PB=$(echo "$PA" | sed 's/"version":3/"version":4/; s/"cantidad":2/"cantidad":3/')
 ok "V7_adjudicada_protege_lo_ofertado" "$(COMO $USR "select cz_guardar_cotizacion_v2('$PB'::jsonb)" | grep -c 'CZ423')" 1
-PC=$(echo "$PA" | sed 's/"version":3/"version":4/; s#https://tienda.cl/a#https://tienda.cl/nuevo", "enlace_original":"https://tienda.cl/a#')
-ok "V7b_adjudicada_permite_actualizar_enlace" "$(COMO $USR "select cz_guardar_cotizacion_v2('$PC'::jsonb)->>'version'")|$(Q -c "select enlace||' '||enlace_original from cotizacion_items where cotizacion_id='$ID'")" "5|https://tienda.cl/nuevo https://tienda.cl/a"
+PS=$(echo "$PA" | sed 's/"version":3/"version":4/; s/"marca":"Fensa"/"marca":"Mademsa"/')
+ok "V7c_adjudicada_no_sustituye_producto_misma_cantidad_y_precio" "$(COMO $USR "select cz_guardar_cotizacion_v2('$PS'::jsonb)" | grep -c 'CZ423')" 1
+PN=$(echo "$PA" | sed "s/\"version\":3/\"version\":4/; s/$IID/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/")
+ok "V7d_adjudicada_no_reemplaza_la_linea" "$(COMO $USR "select cz_guardar_cotizacion_v2('$PN'::jsonb)" | grep -c 'CZ423')" 1
+PC=$(echo "$PA" | sed 's/"version":3/"version":4/; s/"nombre":"Congeladora"/"nombre":"Congeladora vertical 590 L"/; s#https://tienda.cl/a#https://tienda.cl/nuevo", "enlace_original":"https://tienda.cl/a#')
+ok "V7b_adjudicada_permite_enlace_y_correccion_tecnica" "$(COMO $USR "select cz_guardar_cotizacion_v2('$PC'::jsonb)->>'version'")|$(Q -c "select enlace||' '||enlace_original||' '||(id='$IID')||' '||(especificaciones_aprobadas->>'nombre') from cotizacion_items where cotizacion_id='$ID'")" "5|https://tienda.cl/nuevo https://tienda.cl/a true Congeladora vertical 590 L"
 PD=$(echo "$PC" | sed 's/"version":4/"version":5/; s/1-2-AG26/9-9-AG26/')
 ok "V8_oc_vinculada_solo_admin" "$(COMO $USR "select cz_guardar_cotizacion_v2('$PD'::jsonb)" | grep -c 'CZ423')" 1
 PE=$(echo "$PC" | sed 's/"version":4/"version":5/; s/"estado":"adjudicada"/"estado":"borrador"/')

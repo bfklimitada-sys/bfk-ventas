@@ -105,11 +105,17 @@ begin
         raise exception 'CZ423: solo un administrador puede cambiar el estado de una cotización adjudicada.' using errcode = '42501'; end if;
       if c.oc_codigo is not null and coalesce(nullif(p->>'oc_codigo',''), '') <> c.oc_codigo and not public.cz_es_admin() then
         raise exception 'CZ423: el vínculo con la OC de una cotización adjudicada solo lo cambia un administrador.' using errcode = '42501'; end if;
-      select coalesce(jsonb_agg(jsonb_build_array(cantidad, unitario_venta_neto) order by orden), '[]') into v_ofertado from public.cotizacion_items where cotizacion_id = v_id;
-      select coalesce(jsonb_agg(jsonb_build_array((x->>'cantidad')::numeric, coalesce((x->>'unitario_venta_neto')::numeric,0)) order by o), '[]') into v_nuevo
-        from jsonb_array_elements(p->'items') with ordinality as t(x, o);
+      -- Lo ofertado = misma línea (identificador estable), mismo producto (marca y modelo), misma cantidad y mismo
+      -- unitario, en el mismo orden. Así no se puede sustituir un producto aunque coincidan cantidades y precios.
+      -- Siguen permitidas las correcciones técnicas (nombre, características, imágenes) y el enlace de compra.
+      select coalesce(jsonb_agg(jsonb_build_array(lower(id::text), cantidad, unitario_venta_neto,
+          public.cz_clave_nombre(especificaciones_aprobadas->>'marca'), public.cz_clave_nombre(especificaciones_aprobadas->>'modelo')) order by orden), '[]')
+        into v_ofertado from public.cotizacion_items where cotizacion_id = v_id;
+      select coalesce(jsonb_agg(jsonb_build_array(lower(coalesce(x->>'key','')), (x->>'cantidad')::numeric, coalesce((x->>'unitario_venta_neto')::numeric,0),
+          public.cz_clave_nombre(x->'ficha'->>'marca'), public.cz_clave_nombre(x->'ficha'->>'modelo')) order by o), '[]')
+        into v_nuevo from jsonb_array_elements(p->'items') with ordinality as t(x, o);
       if v_ofertado <> v_nuevo then
-        raise exception 'CZ423: la cotización está adjudicada: los productos, cantidades y precios ofertados no se pueden modificar.' using errcode = '42501'; end if;
+        raise exception 'CZ423: la cotización está adjudicada: los productos ofertados (líneas, marca, modelo), sus cantidades y precios no se pueden modificar ni sustituir.' using errcode = '42501'; end if;
     end if;
     update public.cotizaciones set id_externo = p->>'id_externo', nombre = p->>'nombre', institucion = p->>'institucion', rut = p->>'rut',
       direccion_entrega = p->>'direccion_entrega', comuna = p->>'comuna', fecha = coalesce(nullif(p->>'fecha','')::date, fecha), plazo = p->>'plazo',
@@ -139,9 +145,12 @@ begin
   end loop;
   for it in select * from jsonb_array_elements(p->'items') loop
     n := n + 1;
-    insert into public.cotizacion_items (cotizacion_id, orden, producto_id, envio_clave, enlace, enlace_original, proveedor, disponibilidad, fecha_consulta, origen_datos, cantidad, precio_origen,
+    -- La línea conserva su identificador entre guardados (la app usa el id leído como clave), lo que permite
+    -- reconocer el producto originalmente ofertado en una cotización adjudicada.
+    insert into public.cotizacion_items (id, cotizacion_id, orden, producto_id, envio_clave, enlace, enlace_original, proveedor, disponibilidad, fecha_consulta, origen_datos, cantidad, precio_origen,
       precio_incluye_iva, con_factura, iva_compra, envio_asignado, costo_bruto, costo_neto, recargo, unitario_venta_neto, especificaciones_aprobadas, ficha_aprobada)
-    values (v_id, n, nullif(it->>'producto_id','')::uuid, nullif(it->>'envio_key',''), it->>'enlace', nullif(it->>'enlace_original',''), it->>'proveedor', it->>'disponibilidad', nullif(it->>'fecha_consulta','')::timestamptz,
+    values (case when coalesce(it->>'key','') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then (it->>'key')::uuid else gen_random_uuid() end,
+      v_id, n, nullif(it->>'producto_id','')::uuid, nullif(it->>'envio_key',''), it->>'enlace', nullif(it->>'enlace_original',''), it->>'proveedor', it->>'disponibilidad', nullif(it->>'fecha_consulta','')::timestamptz,
       it->>'origen_datos', (it->>'cantidad')::numeric, coalesce(nullif(it->>'precio_origen','')::numeric,0), coalesce((it->>'precio_incluye_iva')::boolean, true),
       coalesce((it->>'con_factura')::boolean, true), coalesce((it->>'iva_compra')::numeric,0), coalesce((it->>'envio_asignado')::numeric,0),
       coalesce((it->>'costo_bruto')::numeric,0), coalesce((it->>'costo_neto')::numeric,0), nullif(it->>'recargo','')::numeric,

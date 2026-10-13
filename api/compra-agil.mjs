@@ -73,7 +73,25 @@ export function normalizarCompraAgil(p) {
 
 const COMO_OBTENER = "Solicítalo en https://www.chilecompra.cl/api/ («Pide tu ticket», con Clave Única; llega por correo) y configúralo en Vercel como MP_TICKET_COMPRA_AGIL.";
 
+// Diagnóstico mínimo SIN sesión: ¿el ticket configurado en el servidor es aceptado por la API de Compra Ágil?
+// Solo devuelve el código HTTP de ChileCompra (nunca el ticket ni datos de la compra). Máximo 3 consultas por minuto.
+let diagnosticos = [];
+async function diagnosticar(req, res) {
+  const ahora = Date.now(); diagnosticos = diagnosticos.filter((t) => ahora - t < VENTANA_MS);
+  if (diagnosticos.length >= 3) return res.status(429).json({ ok: false, error: "Espera un minuto." });
+  diagnosticos.push(ahora);
+  const origen = (process.env.MP_TICKET_COMPRA_AGIL || "").trim() ? "MP_TICKET_COMPRA_AGIL" : (process.env.MP_TICKET || "").trim() ? "MP_TICKET" : null;
+  if (!origen) return res.status(200).json({ ok: true, ticket_configurado: false });
+  const codigo = codigoCompraAgil(req.query?.diagnostico) || "3390-246-COT26";
+  let estado = null;
+  try { const r = await fetch(`${API}/${encodeURIComponent(codigo)}`, { headers: { ticket: (process.env.MP_TICKET_COMPRA_AGIL || process.env.MP_TICKET).trim(), Accept: "application/json" }, signal: AbortSignal.timeout(20_000) }); estado = r.status; }
+  catch { estado = "sin_conexion"; }
+  res.setHeader("Cache-Control", "no-store");
+  return res.status(200).json({ ok: true, ticket_configurado: true, origen, codigo, http_chilecompra: estado, ticket_aceptado: estado === 200 || estado === 404 });
+}
+
 export default async function handler(req, res) {
+  if (req.query?.diagnostico !== undefined) return diagnosticar(req, res);
   const ses = await validarSesion(req);
   if (ses.error) return res.status(ses.status).json({ ok: false, error: ses.error });
   const codigo = codigoCompraAgil(req.query?.codigo || req.query?.q);
