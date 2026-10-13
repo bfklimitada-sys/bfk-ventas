@@ -6,21 +6,21 @@
 <h2>Diagnóstico Compra Ágil (vista previa temporal)</h2>
 <p>Solo administradores. Primero inicia sesión en BFK Datos en esta misma vista previa; luego vuelve a esta página. No guarda nada.</p>
 <button id="red">1. Probar red (DNS, TCP, TLS, API sin ticket)</button>
-<button id="tic" class="sec">2. Probar red + ticket configurado (usa 1 consulta de la cuota)</button>
+<button id="cmp">3. Comparar listado y detalle con el ticket (usa 2 consultas de la cuota)</button>
 <pre id="out">Sin resultados.</pre>
 <script>
 const out = document.getElementById("out");
-async function correr(conTicket) {
+async function correr(modo) {
   let token = ""; try { token = JSON.parse(localStorage.getItem("bfk_supabase_session_v2") || "null")?.access_token || ""; } catch {}
   if (!token) { out.textContent = "No hay sesión: abre la aplicación en esta vista previa, inicia sesión y vuelve."; return; }
   out.textContent = "Probando… (máximo 25 segundos)";
   try {
-    const r = await fetch("/api/compra-agil?diagnostico=1" + (conTicket ? "&ticket=1" : ""), { headers: { Authorization: "Bearer " + token } });
+    const r = await fetch("/api/compra-agil?diagnostico=1" + (modo ? "&ticket=" + modo : ""), { headers: { Authorization: "Bearer " + token } });
     const j = await r.json().catch(() => ({}));
     out.textContent = "HTTP " + r.status + "\n" + JSON.stringify(j, null, 2);
   } catch (e) { out.textContent = "Error: " + e.message; }
 }
-document.getElementById("red").onclick = () => correr(false);
-document.getElementById("tic").onclick = () => correr(true);
+document.getElementById("red").onclick = () => correr("");
+document.getElementById("cmp").onclick = () => correr("comparar");
 </script>
 </body></html>
