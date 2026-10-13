@@ -320,6 +320,54 @@ async function ingresarProducto(p, d) {
   await ctx.close();
 }
 
+// ═════ D. Orden de ingreso: producto sin dirección → dirección dentro de la ficha → despacho confirmado; cambio de dirección ═════
+{
+  const { p, ctx, errs } = await preparar({ esquema: 2 });
+  await irCotizaciones(p, false);
+  await p.locator("[data-nueva-cotizacion]").click(); await espera(p, 600);
+  ok("D01_datos_empieza_por_direccion", (await H(p).locator("[data-bloque-direccion]").count()) === 1 && /Complétala antes de confirmar despachos/.test(await H(p).locator("[data-bloque-direccion]").innerText()));
+  await llenar(H(p).locator('[data-campo="institucion"]'), "Municipalidad de Prueba");
+  await tab(p, "productos");
+  ok("D02_aviso_anticipado_falta_direccion", (await H(p).locator('[data-aviso-linea="falta-direccion"]').count()) === 1);
+  // Producto A sin dirección: se guarda con el despacho «Por verificar».
+  await H(p).locator("[data-ingreso-manual]").click(); await espera(p);
+  let f = fichaModal(p);
+  await llenar(f.locator('[data-campo="nombre"]'), "Silla A"); await llenar(f.locator('[data-campo="especificaciones"]'), "Peso: 3 kg");
+  await llenar(f.locator('[data-campo="proveedor"]'), "Tienda A"); await llenar(f.locator('[data-campo="cantidad"]'), 2); await llenar(f.locator('[data-campo="precio"]'), 10000);
+  await llenar(f.locator('[data-campo="monto-despacho"]'), 3000);
+  const opc = await f.locator('[data-campo="estado-despacho"] option').evaluateAll((os) => os.map((o) => ({ v: o.value, d: o.disabled })));
+  ok("D03_sin_direccion_no_permite_confirmar", opc.find((o) => o.v === "confirmado").d && opc.find((o) => o.v === "sin_costo_confirmado").d && !opc.find((o) => o.v === "pendiente").d, opc);
+  await f.locator("[data-guardar-ficha]").click(); await espera(p, 500);
+  ok("D04_guardado_por_verificar_sin_bloquear", (await fichaModal(p).count()) === 0 && /Por verificar/.test(await H(p).locator('[data-item-cotizacion="1"] [data-despacho-item]').innerText()));
+  // Producto B: características y precio primero; dirección dentro de la ventana; luego confirmar.
+  await H(p).locator("[data-ingreso-manual]").click(); await espera(p);
+  f = fichaModal(p);
+  await llenar(f.locator('[data-campo="nombre"]'), "Mesa B"); await llenar(f.locator('[data-campo="especificaciones"]'), "Largo: 180 cm\nMaterial: Aluminio");
+  await llenar(f.locator('[data-campo="proveedor"]'), "Tienda B"); await llenar(f.locator('[data-campo="cantidad"]'), 5); await llenar(f.locator('[data-campo="precio"]'), 20000);
+  await llenar(f.locator('[data-campo="monto-despacho"]'), 5000);
+  ok("D05_direccion_dentro_de_la_ficha", (await f.locator("[data-direccion-en-ficha]").count()) === 1);
+  await f.locator('[data-campo="direccion-ficha"]').fill("Av. Siempre Viva 742"); await f.locator('[data-campo="comuna-ficha"]').fill("Laja"); await f.locator('[data-campo="region-ficha"]').fill("Biobío"); await espera(p, 300);
+  ok("D06_no_pierde_lo_escrito", (await f.locator('[data-campo="nombre"]').inputValue()) === "Mesa B" && /Aluminio/.test(await f.locator('[data-campo="especificaciones"]').inputValue()) && (await f.locator('[data-campo="precio"]').inputValue()) === "20000" && (await f.locator('[data-campo="monto-despacho"]').inputValue()) === "5000");
+  await f.locator('[data-campo="estado-despacho"]').selectOption("confirmado");
+  await f.locator("[data-guardar-ficha]").click(); await espera(p, 300);
+  ok("D07_confirmar_exige_verificacion_real", (await fichaModal(p).count()) === 1 && /cómo se verificó/i.test(await f.locator('[data-aviso-linea="error-ficha"]').innerText()));
+  await llenar(f.locator('[data-campo="evidencia-despacho"]'), "Simulación de compra a la dirección del cliente");
+  await f.locator("[data-guardar-ficha]").click(); await espera(p, 500);
+  const dB = await H(p).locator('[data-item-cotizacion="2"] [data-despacho-item]').innerText();
+  ok("D08_despacho_confirmado_con_direccion", (await fichaModal(p).count()) === 0 && /Confirmado/.test(dB), dB);
+  ok("D09_direccion_sincronizada_en_datos", /Av\. Siempre Viva 742, Laja, Biobío/.test(await H(p).locator("[data-direccion-productos]").innerText()));
+  await tab(p, "datos");
+  ok("D10_datos_muestra_la_misma_direccion", (await H(p).locator('[data-campo="direccion"]').inputValue()) === "Av. Siempre Viva 742" && (await H(p).locator('[data-campo="comuna"]').inputValue()) === "Laja");
+  // Cambio de dirección: el despacho confirmado vuelve a «Por verificar».
+  await llenar(H(p).locator('[data-campo="direccion"]'), "Calle Nueva 100"); await espera(p, 400);
+  await tab(p, "productos");
+  ok("D11_cambio_de_direccion_exige_nueva_verificacion", /Por verificar/.test(await H(p).locator('[data-item-cotizacion="2"] [data-despacho-item]').innerText()));
+  await tab(p, "precios");
+  ok("D12_precios_bloqueados_hasta_verificar", (await H(p).locator("[data-copiar-bloqueado]").count()) === 1);
+  ok("D_sin_errores_de_consola", errs.length === 0, errs);
+  await ctx.close();
+}
+
 await browser.close();
 writeFileSync(join(SALIDA, "resultado.txt"), `${nOk} OK · ${F.length} fallas\n${F.join("\n")}`);
 console.log(`\n${nOk} OK · ${F.length} fallas  (salida: ${SALIDA})`);

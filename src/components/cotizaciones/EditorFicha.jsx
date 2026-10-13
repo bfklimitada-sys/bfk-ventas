@@ -13,7 +13,7 @@ const mismoTexto = (a, b) => String(a || "").trim().toLowerCase() === String(b |
 // que se registra aquí mismo sin pasar por la pestaña Precios.
 // modo: "item" (línea de cotización) | "biblioteca" (solo ficha técnica).
 // protegido: cotización adjudicada → lo ofertado no se modifica (solo enlace, proveedor y ficha técnica).
-export function EditorFicha({ inicial, envios = [], items = [], destino = "", modo = "item", almacen, token, onGuardar, onCerrar, esNuevo, protegido = false }) {
+export function EditorFicha({ inicial, envios = [], items = [], destino = "", destinoValido = !!destino, dirCliente = null, onDireccion, modo = "item", almacen, token, onGuardar, onCerrar, esNuevo, protegido = false }) {
   const [it, setIt] = useState(() => JSON.parse(JSON.stringify(inicial)));
   const [txtGen, setTxtGen] = useState(() => textoDePares(inicial.ficha?.generales));
   const [txtEsp, setTxtEsp] = useState(() => textoDePares(inicial.ficha?.especificaciones));
@@ -37,6 +37,9 @@ export function EditorFicha({ inicial, envios = [], items = [], destino = "", mo
   const [despMod, setDespMod] = useState(() => (envioActual && otrosDe(envioActual.key).length ? "existente" : "propio"));
   const [desp, setDesp] = useState(() => (envioActual ? { ...envioActual } : { ...envioVacio(inicial.proveedor), key: null }));
   const [reverificado, setReverificado] = useState(false);
+  // Si falta la dirección del cliente, se puede completar aquí mismo (se sincroniza con la pestaña Datos)
+  // sin cerrar la ventana ni perder lo escrito. El bloque queda visible mientras se escribe.
+  const [mostrarDir] = useState(() => modo === "item" && !protegido && !destinoValido && !!onDireccion);
   const elegibles = envios.filter((e) => !(envioActual && e.key === envioActual.key && !otrosDe(e.key).length));
   const setD = (k, v) => setDesp((d) => ({ ...d, [k]: v }));
   const elegirExistente = (key) => { const e = envios.find((x) => x.key === key); if (e) { setDesp({ ...e }); setReverificado(false); } };
@@ -74,15 +77,17 @@ export function EditorFicha({ inicial, envios = [], items = [], destino = "", mo
     if (modo === "item" && !protegido) {
       if (!(Number(it.cantidad) > 0)) { setError("La cantidad debe ser mayor que cero."); return; }
       if (despMod === "existente" && !desp.key) { setError("Elige el despacho ya registrado que comparte este producto."); return; }
-      if (envioConfirmado(desp) && reverificado && !destino) { setError("Para confirmar el despacho, primero ingresa la dirección de entrega del cliente en la pestaña Datos."); return; }
-      if (envioConfirmado(desp) && !String(desp.evidencia || "").trim()) { setError("Registra brevemente cómo se verificó el despacho (simulación de compra, cotización del proveedor, captura…)."); return; }
+      if (envioConfirmado(desp) && destinoValido && !String(desp.evidencia || "").trim()) { setError("Registra brevemente cómo se verificó el despacho (simulación de compra, cotización del proveedor, captura…)."); return; }
       if (Number(desp.monto) < 0) { setError("El costo del despacho no puede ser negativo."); return; }
     }
     const fichaFinal = { ...ficha, imagenes: (ficha.imagenes || []).map(rutaConocida) };
     let item = { ...it, ficha: fichaFinal };
     // El primer enlace registrado se conserva como referencia si luego se cambia por otro.
     if (modo === "item" && inicial.enlace && !mismoTexto(inicial.enlace, it.enlace) && !inicial.enlace_original) item.enlace_original = inicial.enlace;
-    const envio = modo === "item" && !protegido ? { modo: despMod, ...desp, destino: envioConfirmado(desp) ? (reverificado ? destino : desp.destino) : "", fecha_cotizacion: reverificado ? new Date().toISOString().slice(0, 10) : desp.fecha_cotizacion } : null;
+    // Sin dirección válida el producto se guarda igual, con el despacho «Por verificar» (nunca confirmado).
+    const sinDireccion = envioConfirmado(desp) && !destinoValido;
+    const envio = modo === "item" && !protegido ? (sinDireccion ? { modo: despMod, ...desp, estado: "pendiente", destino: "" }
+      : { modo: despMod, ...desp, destino: envioConfirmado(desp) ? (reverificado ? destino : desp.destino) : "", fecha_cotizacion: reverificado ? new Date().toISOString().slice(0, 10) : desp.fecha_cotizacion }) : null;
     onGuardar(item, { guardarBiblioteca: guardarBib, actualizarBiblioteca: actualizarBib, envio });
   };
 
@@ -156,6 +161,17 @@ export function EditorFicha({ inicial, envios = [], items = [], destino = "", mo
 
             <div data-despacho-ficha style={{ border: `1px solid ${C.border}`, borderRadius: R.md, padding: "10px 12px", marginBottom: 12, background: C.paper, opacity: protegido ? 0.7 : 1 }}>
               <div style={{ fontSize: T.sm, fontWeight: 800, color: C.ink, marginBottom: 6 }}>Despacho</div>
+              {mostrarDir && dirCliente && (
+                <div data-direccion-en-ficha style={{ border: `1px solid ${destinoValido ? C.ok : C.warn}`, background: destinoValido ? C.okLight : C.warnLight, borderRadius: R.sm, padding: "8px 10px", marginBottom: 10 }}>
+                  <div style={{ fontSize: T.small, fontWeight: 800, color: destinoValido ? C.okText : C.warnText, marginBottom: 6 }}>{destinoValido ? "✓ Dirección de entrega registrada (también en Datos)" : "Falta la dirección de entrega del cliente: complétala aquí para poder confirmar el despacho"}</div>
+                  <Field label="Dirección de entrega"><input data-campo="direccion-ficha" value={dirCliente.direccion_entrega || ""} onChange={(e) => onDireccion({ direccion_entrega: e.target.value })} style={iStyle} placeholder="Calle, número, oficina/bodega" /></Field>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                    <Field label="Comuna / ciudad"><input data-campo="comuna-ficha" value={dirCliente.comuna || ""} onChange={(e) => onDireccion({ comuna: e.target.value })} style={iStyle} /></Field>
+                    <Field label="Región"><input data-campo="region-ficha" value={dirCliente.region || ""} onChange={(e) => onDireccion({ region: e.target.value })} style={iStyle} /></Field>
+                  </div>
+                  <div style={{ fontSize: T.small, color: C.inkMuted }}>Si prefieres completarla después, el producto se guarda igual con el despacho «Por verificar».</div>
+                </div>
+              )}
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
                 <BotonSecundario data-despacho-modo="propio" activo={despMod === "propio"} disabled={protegido} onClick={() => cambiarModo("propio")}>Despacho de este producto</BotonSecundario>
                 {elegibles.length > 0 && <BotonSecundario data-despacho-modo="existente" activo={despMod === "existente"} disabled={protegido} onClick={() => cambiarModo("existente")}>Usar un despacho ya registrado</BotonSecundario>}
@@ -173,13 +189,13 @@ export function EditorFicha({ inicial, envios = [], items = [], destino = "", mo
                   <input data-campo="monto-despacho" type="number" inputMode="numeric" min="0" value={desp.monto ?? ""} onChange={(e) => setD("monto", e.target.value)} style={iMono} disabled={protegido} placeholder="0" />
                 </Field>
                 <Field label="Verificación">
-                  <select data-campo="estado-despacho" value={desp.estado} disabled={protegido} onChange={(e) => cambiarEstado(e.target.value)} style={selStyle}>{Object.entries(ESTADOS_ENVIO).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}</select>
+                  <select data-campo="estado-despacho" value={desp.estado} disabled={protegido} onChange={(e) => cambiarEstado(e.target.value)} style={selStyle}>{Object.entries(ESTADOS_ENVIO).map(([k, v]) => { const req = !destinoValido && envioConfirmado({ estado: k }); return <option key={k} value={k} disabled={req}>{v.label}{req ? " (requiere dirección)" : ""}</option>; })}</select>
                 </Field>
               </div>
-              <Field label="Cómo se verificó"><input data-campo="evidencia-despacho" value={desp.evidencia || ""} disabled={protegido} onChange={(e) => setD("evidencia", e.target.value)} placeholder={destino ? `Simulación de compra a ${destino}…` : "Ingresa primero la dirección de entrega (Datos)"} style={iStyle} /></Field>
+              <Field label="Cómo se verificó"><input data-campo="evidencia-despacho" value={desp.evidencia || ""} disabled={protegido} onChange={(e) => setD("evidencia", e.target.value)} placeholder={destinoValido ? `Simulación de compra a ${destino}…` : "Primero la dirección de entrega del cliente"} style={iStyle} /></Field>
               <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: T.sm, minHeight: 32 }}><input type="checkbox" disabled={protegido} checked={desp.con_factura !== false} onChange={(e) => setD("con_factura", e.target.checked)} /> Despacho incluido en la factura</label>
               <div data-despacho-destino style={{ fontSize: T.small, marginTop: 4, color: destinoDistinto ? C.warnText : C.inkMuted, fontWeight: destinoDistinto ? 700 : 400 }}>
-                {!destino ? "Falta la dirección de entrega del cliente: el despacho se verifica para esa dirección." :
+                {!destinoValido ? "Sin dirección de entrega válida: el despacho queda «Por verificar» (se confirma contra la dirección real del cliente)." :
                   !envioConfirmado(desp) ? `Por verificar para: ${destino}. Nunca se asume despacho gratis.` :
                   destinoDistinto ? <>Verificado para «{desp.destino || "otra dirección"}»; la entrega ahora es «{destino}». <button type="button" data-reverificar onClick={() => setReverificado(true)} disabled={protegido} style={{ border: "none", background: "none", color: C.tealDark, textDecoration: "underline", cursor: "pointer", padding: 0, fontWeight: 700 }}>Lo verifiqué para la dirección actual</button></> :
                   `Verificado para: ${verificadoPara}`}

@@ -37,8 +37,24 @@ const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
 
 // Dirección real del cliente a la que debe verificarse cada envío (dirección + comuna de la cotización).
 export const destinoDe = (cot) => [cot?.direccion_entrega, cot?.comuna].map((x) => String(x || "").trim()).filter(Boolean).join(", ");
-const mismoDestino = (a, b) => String(a || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()
+export const mismoDestino = (a, b) => String(a || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()
   === String(b || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+// Dirección de entrega utilizable para verificar despachos (no basta con un texto vacío o mínimo).
+export const direccionValida = (cot) => String(cot?.direccion_entrega || "").trim().length >= 5;
+
+// Si cambia la dirección del cliente, los despachos confirmados para OTRA dirección dejan de ser válidos:
+// vuelven a «Por verificar» (sin destino ni evidencia anterior) para exigir una nueva verificación real.
+// Devuelve cuántos se invalidaron. Muta la cotización recibida (usar sobre una copia). No toca montos.
+export function invalidarDespachosPorDireccion(cot) {
+  const destino = destinoDe(cot); let n = 0;
+  for (const e of cot?.envios || []) {
+    if ((e.estado === "confirmado" || e.estado === "sin_costo_confirmado") && !(destino && mismoDestino(e.destino, destino))) {
+      e.estado = "pendiente"; e.destino = ""; e.evidencia = ""; n++;
+    }
+  }
+  return n;
+}
+
 export const envioConfirmado = (e) => e?.estado === "confirmado" || e?.estado === "sin_costo_confirmado";
 const EPS = 1e-7;
 const redondear = (x, modo) => (modo === "arriba" ? Math.ceil(x - EPS) : Math.round(x));

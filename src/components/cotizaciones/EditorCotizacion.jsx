@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { C, T, R, iStyle, iMono, selStyle, fmt, MONO } from "../../lib/theme";
 import { Field, Modal } from "../ui/Basicos";
 import { HojaLateral, Pestanas, PanelPestana, Tarjeta, Badge, AvisoLinea, BotonPrincipal, BotonSecundario, FilaDato, Desplegable, Seccion } from "../ui/Sistema";
-import { calcularCotizacion, estadoParaPDF, destinoDe, envioConfirmado, textoParaMercadoPublico, itemVacio, envioVacio, nuevaClave, hoyISO, digitosValor, proveedorDeEnlace, ESTADOS_COTIZACION, ESTADOS_ENVIO, RECARGO_SUGERIDO } from "../../lib/cotizaciones";
+import { calcularCotizacion, estadoParaPDF, destinoDe, direccionValida, invalidarDespachosPorDireccion, envioConfirmado, textoParaMercadoPublico, itemVacio, envioVacio, nuevaClave, hoyISO, digitosValor, proveedorDeEnlace, ESTADOS_COTIZACION, ESTADOS_ENVIO, RECARGO_SUGERIDO } from "../../lib/cotizaciones";
 import { logoBFK } from "../../lib/cotizacionesDatos";
 import { generarPdfEETT, descargarBlob, huellaPDF } from "../../lib/eettPdf";
 import { EditorFicha } from "./EditorFicha";
@@ -45,7 +45,16 @@ export function EditorCotizacion({ almacen, inicial, token, perfil, entidadesCat
   const pdf = useMemo(() => estadoParaPDF(cot), [cot]);
   const cambiar = (fn) => { setCot((c) => fn(JSON.parse(JSON.stringify(c)))); setSucio(true); };
   const setCampo = (k, v) => cambiar((c) => { c[k] = v; return c; });
-  const destino = destinoDe(cot);
+  const destino = destinoDe(cot); const dirOk = direccionValida(cot);
+  // Dirección del cliente (desde Datos o desde la ventana del producto). Si cambia, los despachos confirmados
+  // para otra dirección vuelven a «Por verificar»: nunca quedan válidos para un destino distinto.
+  const avisoInvalidados = useRef(0);
+  const setDireccion = (campos) => {
+    let n = 0;
+    cambiar((c) => { Object.assign(c, campos); if ("direccion_entrega" in campos || "comuna" in campos) n = invalidarDespachosPorDireccion(c); return c; });
+    setTimeout(() => { if (n && Date.now() - avisoInvalidados.current > 4000) { avisoInvalidados.current = Date.now(); showToast?.(`La dirección cambió: ${n} despacho${n === 1 ? "" : "s"} vuelve${n === 1 ? "" : "n"} a «Por verificar».`, "error"); } }, 0);
+  };
+  const irADireccion = () => { setPestana("datos"); setTimeout(() => document.querySelector('[data-campo="direccion"]')?.focus(), 50); };
 
   useEffect(() => { almacen.listarVendedores?.().then(setVendedores).catch(() => setVendedores([])); }, [almacen]);
   const cargarHistorial = (id = cot.id) => { if (id) almacen.listarEETT?.(id).then(setHistorial).catch(() => {}); };
@@ -69,7 +78,9 @@ export function EditorCotizacion({ almacen, inicial, token, perfil, entidadesCat
         if (modo === "propio") key = exclusivoAnterior ? anterior.key : null;
         if (!key) { key = nuevaClave("e"); c.envios.push({ ...envioVacio(it.proveedor), key }); }
         const e = c.envios.find((x) => x.key === key);
-        Object.assign(e, { proveedor: datos.proveedor || e.proveedor || it.proveedor, monto: datos.monto, estado: datos.estado, evidencia: datos.evidencia, con_factura: datos.con_factura, destino: datos.destino, fecha_cotizacion: datos.fecha_cotizacion || e.fecha_cotizacion });
+        // Sin dirección válida nunca se guarda un despacho confirmado: queda «Por verificar».
+        const sinDir = envioConfirmado(datos) && !direccionValida(c);
+        Object.assign(e, { proveedor: datos.proveedor || e.proveedor || it.proveedor, monto: datos.monto, estado: sinDir ? "pendiente" : datos.estado, evidencia: datos.evidencia, con_factura: datos.con_factura, destino: sinDir ? "" : datos.destino, fecha_cotizacion: datos.fecha_cotizacion || e.fecha_cotizacion });
         if (modo === "propio" && !String(e.proveedor || "").trim()) e.proveedor = it.proveedor;
         it.envio_key = key;
       }
@@ -78,6 +89,7 @@ export function EditorCotizacion({ almacen, inicial, token, perfil, entidadesCat
       return limpiarEnvios(c);
     });
     setEditor(null);
+    if (envio && envio.estado === "pendiente" && !dirOk) showToast?.("Producto guardado. El despacho queda «Por verificar» hasta registrar la dirección de entrega.");
   };
   const desdeBiblioteca = (p) => {
     manual({ producto_id: p.id, origen_datos: "biblioteca", ficha: { nombre: p.nombre, marca: p.marca, modelo: p.modelo, color: p.color, descripcion: p.descripcion, generales: p.generales, especificaciones: p.especificaciones, imagenes: p.imagenes } });
@@ -158,7 +170,7 @@ export function EditorCotizacion({ almacen, inicial, token, perfil, entidadesCat
     const e = entidadesCatalogo.find((x) => String(x.nombre_entidad || "").toLowerCase() === String(nombre).toLowerCase());
     cambiar((c) => { c.institucion = nombre; if (e) { if (!c.rut) c.rut = e.rut || ""; if (!c.comuna) c.comuna = e.comuna || ""; } return c; });
   };
-  const aplicarCompraAgil = (cambios) => { if (!Object.keys(cambios).length) return; cambiar((c) => Object.assign(c, cambios)); showToast?.("Datos de la Compra Ágil aplicados: revísalos y guarda"); };
+  const aplicarCompraAgil = (cambios) => { if (!Object.keys(cambios).length) return; setDireccion(cambios); showToast?.("Datos de la Compra Ágil aplicados: revísalos y guarda"); };
   const elegirVendedor = (id) => { const v = vendedores.find((x) => x.id === id); cambiar((c) => { c.vendedor_id = v?.id || null; c.vendedor_nombre = v?.nombre || ""; return c; }); };
   const registrarVendedor = async () => {
     try { const v = await almacen.registrarVendedor(nuevoVend); setVendedores((l) => [...l, v].sort((a, b) => a.nombre.localeCompare(b.nombre))); cambiar((c) => { c.vendedor_id = v.id; c.vendedor_nombre = v.nombre; return c; }); setNuevoVend(null); showToast?.("Vendedor registrado"); }
@@ -181,9 +193,26 @@ export function EditorCotizacion({ almacen, inicial, token, perfil, entidadesCat
           { key: "precios", label: "Precios", n: nPend || null, tono: nPend ? "warn" : null },
           { key: "eett", label: "EETT", n: nRev || null, tono: nRev ? "warn" : null },
         ]} />
+        {(() => {
+          const despOk = cot.items.length > 0 && cot.items.every((it) => envioConfirmado(cot.envios.find((e) => e.key === it.envio_key) || {}));
+          const pasos = [["Datos del cliente", !!String(cot.institucion || "").trim(), "datos"], ["Dirección", dirOk, "datos"], ["Productos", cot.items.length > 0, "productos"],
+            ["Verificación de despacho", despOk && calc.listo, "productos"], ["Precios", calc.listo && cot.items.length > 0, "precios"], ["EETT", pdf.listo, "eett"]];
+          return <div data-pasos-cotizacion style={{ display: "flex", flexWrap: "wrap", gap: 4, margin: "8px 0 12px", fontSize: T.small }}>
+            {pasos.map(([t, ok, tab], i) => <button key={t} type="button" onClick={() => setPestana(tab)} style={{ border: `1px solid ${ok ? C.ok : C.border}`, background: ok ? C.okLight : C.card, color: ok ? C.okText : C.inkMuted, borderRadius: 999, padding: "3px 9px", cursor: "pointer", fontWeight: 700 }}>{ok ? "✓" : i + 1} {t}</button>)}
+          </div>;
+        })()}
         {protegido && <AvisoLinea tono="info" icono="🔒" dato="cotizacion-protegida">Adjudicada: lo ofertado (productos, cantidades y precios) y el vínculo con la OC quedan protegidos. Puedes actualizar enlaces de compra y fichas técnicas y regenerar la EETT.</AvisoLinea>}
 
         <PanelPestana visible={pestana === "datos"} titulo="Datos">
+          <Tarjeta padding="12px" data-bloque-direccion style={{ borderColor: dirOk ? C.ok : C.warn, background: dirOk ? C.card : C.warnLight }}>
+            <div style={{ fontSize: T.sm, fontWeight: 800, color: C.ink }}>Dirección de entrega del cliente</div>
+            <div style={{ fontSize: T.small, color: dirOk ? C.okText : C.warnText, fontWeight: 700, margin: "2px 0 8px" }}>{dirOk ? "✓ Registrada: los despachos se verifican contra esta dirección." : "Complétala antes de confirmar despachos (los productos se pueden ingresar igual; su despacho quedará «Por verificar»)."}</div>
+            <Field label="Dirección de entrega"><input data-campo="direccion" value={cot.direccion_entrega} onChange={(e) => setDireccion({ direccion_entrega: e.target.value })} style={iStyle} placeholder="Calle, número, oficina/bodega" /></Field>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              <Field label="Comuna / ciudad"><input data-campo="comuna" value={cot.comuna} onChange={(e) => setDireccion({ comuna: e.target.value })} style={iStyle} /></Field>
+              <Field label="Región"><input data-campo="region" value={cot.region || ""} onChange={(e) => setDireccion({ region: e.target.value })} style={iStyle} /></Field>
+            </div>
+          </Tarjeta>
           <ImportarCompraAgil cot={cot} token={token} onAplicar={aplicarCompraAgil} deshabilitado={protegido} />
           {sinEsquema && <AvisoLinea tono="warn" dato="esquema-pendiente">El vendedor responsable y los datos importados de la Compra Ágil se guardarán cuando se instale la actualización de la base del módulo (pendiente de autorización). El resto de la cotización se guarda normalmente.</AvisoLinea>}
 
@@ -216,11 +245,6 @@ export function EditorCotizacion({ almacen, inicial, token, perfil, entidadesCat
             <Field label="RUT"><input data-campo="rut" value={cot.rut} onChange={(e) => setCampo("rut", e.target.value)} style={iMono} /></Field>
             <Field label="Fecha de emisión (BFK)"><input data-campo="fecha" type="date" value={cot.fecha || ""} onChange={(e) => setCampo("fecha", e.target.value)} style={iStyle} /></Field>
           </div>
-          <Field label="Dirección de entrega" hint="Con ella se verifica el despacho real de cada proveedor."><input data-campo="direccion" value={cot.direccion_entrega} onChange={(e) => setCampo("direccion_entrega", e.target.value)} style={iStyle} /></Field>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            <Field label="Comuna / ciudad"><input data-campo="comuna" value={cot.comuna} onChange={(e) => setCampo("comuna", e.target.value)} style={iStyle} /></Field>
-            <Field label="Región"><input data-campo="region" value={cot.region || ""} onChange={(e) => setCampo("region", e.target.value)} style={iStyle} /></Field>
-          </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             <Field label="Plazo de entrega"><input data-campo="plazo" value={cot.plazo} onChange={(e) => setCampo("plazo", e.target.value)} style={iStyle} placeholder="15 DÍAS" /></Field>
             <Field label="Presupuesto del comprador" hint="Referencial. No es el precio de BFK."><input data-campo="presupuesto" type="number" inputMode="numeric" value={cot.presupuesto_estimado ?? ""} onChange={(e) => setCampo("presupuesto_estimado", e.target.value === "" ? null : Number(e.target.value))} style={iMono} /></Field>
@@ -252,6 +276,9 @@ export function EditorCotizacion({ almacen, inicial, token, perfil, entidadesCat
         </PanelPestana>
 
         <PanelPestana visible={pestana === "productos"} titulo="Productos">
+          {dirOk
+            ? <div data-direccion-productos style={{ fontSize: T.small, color: C.inkMuted, marginBottom: 8 }}>Entrega en: <b style={{ color: C.ink }}>{[cot.direccion_entrega, cot.comuna, cot.region].filter((x) => String(x || "").trim()).join(", ")}</b> · <button type="button" onClick={irADireccion} style={{ border: "none", background: "none", color: C.tealDark, textDecoration: "underline", cursor: "pointer", padding: 0, fontSize: T.small }}>Cambiar</button></div>
+            : <AvisoLinea tono="warn" dato="falta-direccion" accion="Completar dirección" onClick={irADireccion}>Falta la dirección de entrega del cliente. Puedes ingresar productos; sus despachos quedarán «Por verificar» hasta completarla.</AvisoLinea>}
           <Tarjeta padding="12px">
             <BotonPrincipal data-ingreso-manual onClick={() => manual()} disabled={protegido} style={{ width: "100%", justifyContent: "center", minHeight: 52, fontSize: T.title, opacity: protegido ? 0.5 : 1 }}>＋ Ingresar manual</BotonPrincipal>
             <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
@@ -394,7 +421,7 @@ export function EditorCotizacion({ almacen, inicial, token, perfil, entidadesCat
         </PanelPestana>
       </div>
 
-      {editor && <EditorFicha key={editor.item.key} inicial={editor.item} esNuevo={editor.esNuevo} envios={cot.envios} items={cot.items} destino={destino} almacen={almacen} token={token} protegido={protegido && !editor.esNuevo} onGuardar={guardarItem} onCerrar={() => setEditor(null)} />}
+      {editor && <EditorFicha key={editor.item.key} inicial={editor.item} esNuevo={editor.esNuevo} envios={cot.envios} items={cot.items} destino={destino} destinoValido={dirOk} dirCliente={{ direccion_entrega: cot.direccion_entrega, comuna: cot.comuna, region: cot.region }} onDireccion={setDireccion} almacen={almacen} token={token} protegido={protegido && !editor.esNuevo} onGuardar={guardarItem} onCerrar={() => setEditor(null)} />}
       {verBib && <SelectorBiblioteca almacen={almacen} onElegir={desdeBiblioteca} onCerrar={() => setVerBib(false)} />}
       {preview && <VistaPreviaEETT {...preview} onCerrar={() => setPreview(null)} onDescargar={pdf.listo ? () => { setPreview(null); generarYDescargar(); } : null} />}
       {eliminar && <EliminarCotizacion cot={{ ...cot, estado: estadoGuardado || cot.estado, oc_codigo: inicial.oc_codigo || cot.oc_codigo }} nEett={historial.length} onCancelar={() => setEliminar(false)} onEliminar={eliminarCot} />}
