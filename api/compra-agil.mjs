@@ -101,6 +101,27 @@ const pedir = (ticket) => async (ms) => {
   const c = await r.json().catch(() => null);
   return { http: r.status, codigo_api: (c?.errors || c?.errores)?.[0]?.codigo ?? null }; // nunca el contenido
 };
+// Consulta real medida por partes: tiempo hasta las cabeceras y hasta el cuerpo completo. Solo devuelve
+// códigos, tiempos, tamaño y conteos; nunca el contenido ni el ticket.
+async function medir(url, ticket, ms) {
+  const t0 = Date.now(); const out = { url_tipo: url.includes("?") ? "listado" : "detalle" };
+  if (ms < 500) return { ...out, ok: false, falla: "sin_tiempo" };
+  const ctrl = new AbortController(); const fin = setTimeout(() => ctrl.abort(), ms);
+  try {
+    const r = await fetch(url, { headers: { ticket, Accept: "application/json" }, signal: ctrl.signal });
+    out.http = r.status; out.ms_cabeceras = Date.now() - t0;
+    const texto = await r.text(); out.ms_total = Date.now() - t0; out.bytes = texto.length;
+    let c = null; try { c = JSON.parse(texto); } catch { /* no JSON */ }
+    out.codigo_api = (c?.errors || c?.errores)?.[0]?.codigo ?? null;
+    if (out.url_tipo === "listado") { out.total_resultados = c?.payload?.paginacion?.total_resultados ?? null; out.items = Array.isArray(c?.payload?.items) ? c.payload.items.length : null; }
+    else out.con_payload = !!c?.payload;
+    out.ok = true;
+  } catch (e) {
+    out.ok = false; out.ms_total = Date.now() - t0;
+    out.falla = e?.name === "AbortError" ? (out.http ? "cuerpo_demora" : "sin_cabeceras_demora") : [e?.name, e?.cause?.code].filter(Boolean).join(":") || "error";
+  } finally { clearTimeout(fin); }
+  return out;
+}
 let diagnosticos = []; let ultimaPruebaTicket = 0;
 async function diagnosticar(req, res) {
   res.setHeader("Cache-Control", "no-store");
@@ -119,20 +140,39 @@ async function diagnosticar(req, res) {
   e.tls = e.tcp.ok ? await conLimite(queda(5_000), socket(true)) : omitido;
   e.api_sin_ticket = e.tls.ok ? await conLimite(queda(6_000), pedir(null)) : omitido;
   e.ticket_control = e.api_sin_ticket.ok ? await conLimite(queda(6_000), pedir(TICKET_CONTROL)) : omitido;
-  const pedido = req.query?.ticket === "1";
+  const comparar = req.query?.ticket === "comparar";
+  const pedido = req.query?.ticket === "1" || comparar;
   const permitido = Date.now() - ultimaPruebaTicket > 10 * 60_000;
   if (!pedido) e.ticket_configurado = { ok: false, falla: "no_solicitado" };
   else if (!ticket) e.ticket_configurado = { ok: false, falla: "no_disponible_en_este_entorno" };
   else if (!e.ticket_control.ok) e.ticket_configurado = omitido;
   else if (!permitido) e.ticket_configurado = { ok: false, falla: "espera_10_minutos" };
+  else if (comparar) {
+    // Misma Compra Ágil por las dos vías oficiales, en paralelo (2 consultas de la cuota): listado filtrado por id
+    // (1 resultado) y detalle. Ambas con el mismo plazo, dentro del límite total.
+    ultimaPruebaTicket = Date.now(); const ms = queda(20_000);
+    const [listado, detalle] = await Promise.all([medir(`${API}?id=3390-246-COT26&tamano_pagina=1`, ticket, ms), medir(`${API}/3390-246-COT26`, ticket, ms)]);
+    e.ticket_configurado = { comparacion: true, listado, detalle };
+  }
   else { ultimaPruebaTicket = Date.now(); e.ticket_configurado = await conLimite(queda(20_000), pedir(ticket)); }
   const h = e.ticket_configurado.http;
+  const L = e.ticket_configurado.listado, D = e.ticket_configurado.detalle;
+  const rech = (x) => x?.http === 401 || x?.http === 403;
+  const conclusionComparar = !L ? null
+    : L.http === 429 || D.http === 429 ? "cuota_agotada"
+    : rech(L) || rech(D) ? "ticket_rechazado"
+    : L.ok && D.ok && L.http === 200 && (D.http === 200 || D.http === 404) ? "ticket_aceptado_listado_y_detalle"
+    : L.ok && L.http === 200 && !D.ok ? "listado_ok_detalle_espera"
+    : !L.ok && D.ok ? "detalle_ok_listado_espera"
+    : !L.ok && !D.ok ? "ambas_consultas_esperan_sin_aislar"
+    : "error_api";
   const conclusion = !e.dns.ok ? "falla_dns" : !e.tcp.ok ? "conexion_bloqueada_o_sin_ruta" : !e.tls.ok ? "falla_tls"
     : !e.api_sin_ticket.ok ? "la_api_no_responde_a_esta_region"
     : !e.ticket_control.ok ? "la_api_no_responde_con_ticket"
     : !pedido ? "red_ok_ticket_no_probado"
     : !ticket ? "red_ok_ticket_no_disponible_en_este_entorno"
     : !permitido ? "red_ok_espera_10_minutos_para_probar_el_ticket"
+    : conclusionComparar ? conclusionComparar
     : !e.ticket_configurado.ok ? "demora_solo_con_ticket_real"
     : h === 200 || h === 404 ? "ticket_aceptado" : h === 401 || h === 403 ? "ticket_rechazado" : h === 429 ? "cuota_agotada" : "error_api";
   return res.status(200).json({ ok: true, region: process.env.VERCEL_REGION || null, entorno: process.env.VERCEL_ENV || null, etapas: e, conclusion, duracion_ms: Date.now() - ahora });
