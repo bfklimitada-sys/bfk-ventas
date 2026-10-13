@@ -206,7 +206,9 @@ export default async function handler(req, res) {
   const ses = await validarSesion(req);
   if (ses.error) return res.status(ses.status).json({ ok: false, error: ses.error });
 
-  const ticket = (process.env.MP_TICKET || "").trim();
+  // TEMPORAL (solo rama compra-agil-gru1-vista-previa): en Preview, si no existe MP_TICKET, usa MP_TICKET_COMPRA_AGIL.
+  // En Production VERCEL_ENV es "production" y el comportamiento es idéntico al de main.
+  const ticket = (process.env.MP_TICKET || (process.env.VERCEL_ENV === "preview" ? process.env.MP_TICKET_COMPRA_AGIL : "") || "").trim();
   if (!ticket) {
     return res.status(500).json({ ok: false, error: "Falta configurar MP_TICKET en el servidor (Vercel → Environment Variables)." });
   }
