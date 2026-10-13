@@ -20,7 +20,7 @@ const mostrar = (campo, v) => {
 // hasta que el usuario lo confirme. No toca la fecha de emisión de BFK, el estado, los productos ni los precios.
 export function ImportarCompraAgil({ cot, token, onAplicar, deshabilitado }) {
   const [entrada, setEntrada] = useState(""); const [consultando, setConsultando] = useState(false); const [error, setError] = useState("");
-  const [vista, setVista] = useState(null); // { fuente, consultado_en, datos, filas, marcados }
+  const [vista, setVista] = useState(null); // { fuente, consultado_en, datos, marcados }
 
   const consultar = async () => {
     setError("");
@@ -28,12 +28,13 @@ export function ImportarCompraAgil({ cot, token, onAplicar, deshabilitado }) {
     setConsultando(true);
     try {
       const r = await consultarCompraAgil(token, entrada.trim());
-      const filas = propuestaCompraAgil(cot, r.datos);
-      setVista({ ...r, filas, marcados: Object.fromEntries(filas.map((f) => [f.campo, !f.sobrescribe])) });
+      setVista({ ...r, marcados: {} }); // la propuesta se calcula contra los datos ACTUALES (pudieron cambiar mientras se consultaba)
     } catch (e) { setError(e.message); } finally { setConsultando(false); }
   };
+  const filas = vista ? propuestaCompraAgil(cot, vista.datos) : [];
+  const marcado = (f) => (vista.marcados[f.campo] ?? !f.sobrescribe);
   const aplicar = () => {
-    const cambios = {}; vista.filas.forEach((f) => { if (vista.marcados[f.campo]) cambios[f.campo] = f.valor; });
+    const cambios = {}; filas.forEach((f) => { if (marcado(f)) cambios[f.campo] = f.valor; });
     if (Object.keys(cambios).length) cambios.mp_consultado_en = vista.consultado_en;
     onAplicar(cambios, vista.datos); setVista(null); setEntrada("");
   };
@@ -46,6 +47,7 @@ export function ImportarCompraAgil({ cot, token, onAplicar, deshabilitado }) {
           placeholder="https://… o 3390-246-COT26" style={{ ...iStyle, flex: "1 1 220px", width: "auto" }} />
         <BotonPrincipal data-consultar-compra-agil onClick={consultar} disabled={consultando || !entrada.trim() || deshabilitado} style={{ opacity: consultando || !entrada.trim() ? 0.6 : 1 }}>{consultando ? "Consultando…" : "Consultar y completar"}</BotonPrincipal>
       </div>
+      {consultando && <div data-consultando-compra-agil style={{ fontSize: T.small, color: C.inkMuted, marginTop: 6 }}>Consultando ChileCompra (puede tardar algunos segundos). Mientras tanto puedes seguir completando los datos a mano.</div>}
       <div style={{ fontSize: T.small, color: C.inkFaint, marginTop: 6 }}>Consulta la API oficial de ChileCompra. Verás los datos antes de aplicarlos; todo queda editable y el ingreso manual sigue disponible.</div>
       {error && <AvisoLinea tono="warn" dato="error-compra-agil">{error}</AvisoLinea>}
 
@@ -54,10 +56,11 @@ export function ImportarCompraAgil({ cot, token, onAplicar, deshabilitado }) {
           <div data-vista-compra-agil>
             <div style={{ fontSize: T.small, color: C.inkMuted, marginBottom: 10 }}>{vista.fuente} · consultado {fechaHora(vista.consultado_en)}{vista.datos.estado ? ` · estado: ${vista.datos.estado}` : ""}</div>
             {vista.datos.oc_emitida && <AvisoLinea tono="info">ChileCompra indica que este proceso ya tiene una OC emitida. La cotización no cambia de estado por esto.</AvisoLinea>}
-            {!vista.filas.length && <AvisoLinea tono="info">No hay datos nuevos: la cotización ya coincide con lo publicado.</AvisoLinea>}
-            {vista.filas.map((f) => (
+            {vista.datos.completar_manual?.length > 0 && <AvisoLinea tono="info" icono="✍" dato="completar-manual">Esta consulta trae solo los datos generales del proceso. Completa manualmente: dirección de entrega, plazo, productos solicitados y documentos.</AvisoLinea>}
+            {!filas.length && <AvisoLinea tono="info">No hay datos nuevos: la cotización ya coincide con lo publicado.</AvisoLinea>}
+            {filas.map((f) => (
               <label key={f.campo} data-fila-importar={f.campo} style={{ display: "flex", gap: 8, alignItems: "flex-start", padding: "8px 0", borderBottom: `1px solid ${C.border}`, fontSize: T.sm, cursor: "pointer" }}>
-                <input type="checkbox" checked={!!vista.marcados[f.campo]} onChange={(e) => setVista((v) => ({ ...v, marcados: { ...v.marcados, [f.campo]: e.target.checked } }))} style={{ marginTop: 3 }} />
+                <input type="checkbox" checked={marcado(f)} onChange={(e) => setVista((v) => ({ ...v, marcados: { ...v.marcados, [f.campo]: e.target.checked } }))} style={{ marginTop: 3 }} />
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontWeight: 800, color: C.ink }}>{f.etiqueta}</div>
                   <div style={{ color: C.ink, wordBreak: "break-word" }}>{mostrar(f.campo, f.valor)}</div>
@@ -73,10 +76,10 @@ export function ImportarCompraAgil({ cot, token, onAplicar, deshabilitado }) {
                 </div>
               </label>
             ))}
-            <div style={{ fontSize: T.small, color: C.inkFaint, margin: "10px 0" }}>La fecha de emisión de BFK, el estado, los productos ofrecidos y los precios no se modifican. Comuna y ciudad no vienen en la API: complétalas a mano si corresponde.</div>
+            <div style={{ fontSize: T.small, color: C.inkFaint, margin: "10px 0" }}>La fecha de emisión de BFK, el estado, los productos ofrecidos y los precios no se modifican. Lo que ChileCompra no entrega queda vacío para completarlo a mano; nada se inventa.</div>
             <div style={{ display: "flex", gap: 8 }}>
               <BotonSecundario onClick={() => setVista(null)} style={{ flex: 1, justifyContent: "center" }}>Cancelar</BotonSecundario>
-              <BotonPrincipal data-aplicar-compra-agil onClick={aplicar} disabled={!vista.filas.some((f) => vista.marcados[f.campo])} style={{ flex: 2, justifyContent: "center" }}>Aplicar datos marcados</BotonPrincipal>
+              <BotonPrincipal data-aplicar-compra-agil onClick={aplicar} disabled={!filas.some(marcado)} style={{ flex: 2, justifyContent: "center" }}>Aplicar datos marcados</BotonPrincipal>
             </div>
           </div>
         </Modal>

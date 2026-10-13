@@ -74,6 +74,24 @@ export function normalizarCompraAgil(p) {
   };
 }
 
+// Normaliza un elemento del LISTADO oficial (payload.items[], guía v2 §6.1). Solo cabecera del proceso:
+// el listado no trae dirección de entrega, plazo ni productos solicitados; esos datos y los documentos
+// quedan para ingreso manual. Lo que no viene queda vacío (no se inventa).
+export function normalizarListadoCompraAgil(it) {
+  const inst = it?.institucion || {}; const fec = it?.fechas || {}; const mon = it?.montos || {};
+  return {
+    codigo: txt(it?.codigo), nombre: txt(it?.nombre), descripcion: "",
+    estado: txt(it?.estado?.glosa || it?.estado?.codigo),
+    institucion: txt(inst.organismo_comprador), unidad_compra: txt(inst.unidad_compra), rut: txt(inst.rut),
+    region: txt(inst.nombre_region), direccion_entrega: "", plazo_dias: null,
+    // Presupuesto DISPONIBLE informado por el comprador (referencial). Nunca es el precio ofertado por BFK.
+    presupuesto: { tipo: "Disponible", moneda: txt(mon.moneda), estimado: null, disponible: numONull(mon.monto_disponible_clp ?? mon.monto_disponible) },
+    fecha_publicacion: txt(fec.fecha_publicacion), fecha_cierre: txt(fec.fecha_cierre),
+    productos: [], documentos: [], oc_emitida: false,
+    origen: "listado", completar_manual: ["direccion_entrega", "plazo", "productos", "documentos"],
+  };
+}
+
 const COMO_OBTENER = "Solicítalo en https://www.chilecompra.cl/api/ («Pide tu ticket», con Clave Única; llega por correo) y configúralo en Vercel como MP_TICKET_COMPRA_AGIL.";
 
 // Diagnóstico por etapas. SOLO administradores de BFK con sesión válida; a cualquier otro se le responde 401/403
@@ -125,6 +143,29 @@ async function medir(url, ticket, ms) {
   } finally { clearTimeout(fin); }
   return out;
 }
+// Latencia desde la región donde corre la función hacia los servicios que usan las funciones de BFK
+// (sin ticket, sin datos, sin consumir cuota): 3 muestras por destino, se informa la mediana en ms.
+async function medirLatencias(queda) {
+  const destinos = {
+    supabase_auth: [`${SUPABASE_URL}/auth/v1/health`, { apikey: SUPABASE_ANON_KEY }],   // validación de sesión (todas las funciones)
+    mercado_publico_oc: ["https://api.mercadopublico.cl/servicios/v1/publico/ordenesdecompra.json", {}], // /api/oc (sin ticket: error inmediato)
+    compra_agil: [API, {}],                                                                // /api/compra-agil (sin ticket: 400)
+    tienda_falabella: ["https://www.falabella.com/falabella-cl", {}],                      // /api/producto
+    anthropic: ["https://api.anthropic.com/v1/messages", {}],                              // /api/interpretar (inactiva; sin clave: 401)
+  };
+  const out = {};
+  for (const [k, [url, h]] of Object.entries(destinos)) {
+    const ms = [];
+    for (let i = 0; i < 3; i++) {
+      const t = queda(4_000); if (t < 500) break;
+      const t0 = Date.now();
+      try { const r = await fetch(url, { method: "GET", headers: h, redirect: "manual", signal: AbortSignal.timeout(t) }); await r.arrayBuffer().catch(() => {}); ms.push(Date.now() - t0); out[k + "_http"] = r.status; }
+      catch (e) { out[k + "_falla"] = e?.name || "error"; break; }
+    }
+    ms.sort((x, y) => x - y); out[k] = ms.length ? ms[Math.floor(ms.length / 2)] : null;
+  }
+  return out;
+}
 let diagnosticos = []; let ultimaPruebaTicket = 0;
 async function diagnosticar(req, res) {
   res.setHeader("Cache-Control", "no-store");
@@ -135,6 +176,7 @@ async function diagnosticar(req, res) {
   if (diagnosticos.length >= 3) return res.status(429).json({ ok: false, error: "Espera un minuto." });
   diagnosticos.push(ahora);
   const limite = ahora + PLAZO_TOTAL_MS; const queda = (max) => Math.min(max, limite - Date.now());
+  if (req.query?.latencias === "1") return res.status(200).json({ ok: true, region: process.env.VERCEL_REGION || null, latencias: await medirLatencias(queda), duracion_ms: Date.now() - ahora });
   const ticket = (process.env.MP_TICKET_COMPRA_AGIL || process.env.MP_TICKET || "").trim();
   const omitido = { ok: false, falla: "omitido" };
   const e = {};
@@ -204,15 +246,19 @@ export default async function handler(req, res) {
   if (!ticket) return res.status(503).json({ ok: false, codigo: "SIN_TICKET", error: `La consulta oficial de Compra Ágil requiere un ticket de ChileCompra que aún no está configurado en el servidor. ${COMO_OBTENER} Mientras tanto, ingresa los datos manualmente.` });
   if (limitado(ses.uid)) return res.status(429).json({ ok: false, codigo: "LIMITE", error: "Demasiadas consultas. Espera un minuto e intenta de nuevo." });
 
+  // Consulta normal: LISTADO oficial filtrado por código (paginación predeterminada). El detalle
+  // (/v2/compra-agil/{codigo}) hoy no responde a tiempo, por eso no se usa.
   let r;
-  try { r = await fetch(`${API}/${encodeURIComponent(codigo)}`, { headers: { ticket, Accept: "application/json" }, signal: AbortSignal.timeout(20_000) }); }
+  try { r = await fetch(`${API}?id=${encodeURIComponent(codigo)}`, { headers: { ticket, Accept: "application/json" }, signal: AbortSignal.timeout(20_000) }); }
   catch (e) { return res.status(502).json({ ok: false, codigo: e?.name === "TimeoutError" ? "DEMORA_API" : "SIN_CONEXION", error: e?.name === "TimeoutError" ? "La API de ChileCompra no respondió a tiempo. Intenta más tarde o ingresa los datos manualmente." : "No se pudo conectar con la API de ChileCompra. Ingresa los datos manualmente." }); }
   const cuerpo = await r.json().catch(() => null);
   if (r.status === 401 || r.status === 403) return res.status(502).json({ ok: false, codigo: "TICKET_INVALIDO", error: `ChileCompra rechazó el ticket configurado para la API de Compra Ágil (HTTP ${r.status}). ${COMO_OBTENER}` });
   if (r.status === 429) return res.status(429).json({ ok: false, codigo: "CUOTA", error: "Se agotó la cuota diaria del ticket de ChileCompra. Se restablece al comenzar el próximo día. Ingresa los datos manualmente." });
   if (r.status === 404) return res.status(404).json({ ok: false, codigo: "NO_ENCONTRADA", error: `ChileCompra no encontró la Compra Ágil ${codigo}. Revisa el código.` });
-  if (!r.ok || !cuerpo?.payload) return res.status(502).json({ ok: false, codigo: "ERROR_API", error: `La API de ChileCompra respondió con un error (HTTP ${r.status}${(cuerpo?.errors || cuerpo?.errores)?.[0]?.mensaje ? `: ${(cuerpo.errors || cuerpo.errores)[0].mensaje}` : ""}). Ingresa los datos manualmente.` });
+  if (!r.ok || !Array.isArray(cuerpo?.payload?.items)) return res.status(502).json({ ok: false, codigo: "ERROR_API", error: `La API de ChileCompra respondió con un error (HTTP ${r.status}${(cuerpo?.errors || cuerpo?.errores)?.[0]?.mensaje ? `: ${(cuerpo.errors || cuerpo.errores)[0].mensaje}` : ""}). Ingresa los datos manualmente.` });
 
+  const item = cuerpo.payload.items.find((x) => txt(x?.codigo).toUpperCase() === codigo);
+  if (!item) return res.status(404).json({ ok: false, codigo: "NO_ENCONTRADA", error: `ChileCompra no encontró la Compra Ágil ${codigo}. Revisa el código o ingresa los datos manualmente.` });
   res.setHeader("Cache-Control", "no-store");
-  return res.status(200).json({ ok: true, fuente: "API oficial de Compra Ágil (ChileCompra)", consultado_en: new Date().toISOString(), datos: normalizarCompraAgil(cuerpo.payload) });
+  return res.status(200).json({ ok: true, fuente: "API oficial de Compra Ágil (ChileCompra) · listado", consultado_en: new Date().toISOString(), datos: normalizarListadoCompraAgil(item) });
 }
