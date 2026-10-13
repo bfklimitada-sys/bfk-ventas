@@ -7,6 +7,7 @@
 <p>Solo administradores. Primero inicia sesión en BFK Datos en esta misma vista previa; luego vuelve a esta página. No guarda nada.</p>
 <button id="red">1. Probar red (DNS, TCP, TLS, API sin ticket)</button>
 <button id="lis">2. Probar solo el listado con el ticket (usa 1 consulta de la cuota)</button>
+<button id="lat" class="sec">3. Medir latencias desde esta región (no usa cuota)</button>
 <pre id="out">Sin resultados.</pre>
 <script>
 const out = document.getElementById("out");
@@ -22,5 +23,6 @@ async function correr(modo) {
 }
 document.getElementById("red").onclick = () => correr("");
 document.getElementById("lis").onclick = () => correr("listado");
+document.getElementById("lat").onclick = async () => { let token = ""; try { token = JSON.parse(localStorage.getItem("bfk_supabase_session_v2") || "null")?.access_token || ""; } catch {} if (!token) { out.textContent = "Inicia sesión primero."; return; } out.textContent = "Midiendo…"; const r = await fetch("/api/compra-agil?diagnostico=1&latencias=1", { headers: { Authorization: "Bearer " + token } }); out.textContent = "HTTP " + r.status + "\n" + JSON.stringify(await r.json().catch(() => ({})), null, 2); };
 </script>
 </body></html>
