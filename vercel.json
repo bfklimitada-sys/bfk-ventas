@@ -10,7 +10,10 @@
       "maxDuration": 60
     },
     "api/compra-agil.mjs": {
-      "maxDuration": 30
+      "maxDuration": 30,
+      "regions": [
+        "gru1"
+      ]
     }
   }
 }

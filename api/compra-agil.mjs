@@ -15,6 +15,9 @@
 // Exige una sesión válida de BFK (cabecera Authorization: Bearer <token>).
 // ═══════════════════════════════════════════════════════════════
 
+import { lookup } from "node:dns/promises";
+import { connect as netConnect } from "node:net";
+import { connect as tlsConnect } from "node:tls";
 import { codigoCompraAgil } from "../src/lib/cotizaciones.js";
 
 const SUPABASE_URL = "https://gypywxaugwuxbgmcqntp.supabase.co";
@@ -73,22 +76,51 @@ export function normalizarCompraAgil(p) {
 
 const COMO_OBTENER = "Solicítalo en https://www.chilecompra.cl/api/ («Pide tu ticket», con Clave Única; llega por correo) y configúralo en Vercel como MP_TICKET_COMPRA_AGIL.";
 
-// Diagnóstico mínimo SIN sesión: ¿el ticket configurado en el servidor es aceptado por la API de Compra Ágil?
-// Solo devuelve el código HTTP de ChileCompra (nunca el ticket ni datos de la compra). Máximo 3 consultas por minuto.
+// Diagnóstico por etapas SIN sesión (sin datos ni credenciales en la respuesta). Máximo 3 por minuto.
+// Distingue: DNS → conexión TCP → TLS → API sin ticket (espera 400) → ticket inválido de control (espera 401)
+// → ticket configurado (200/404 = aceptado; 401/403 = rechazado). Informa la región real de ejecución.
+// Los tiempos de espera NO se amplían (ticket real: 20 s, igual que la consulta normal); si una etapa falla, las siguientes se omiten.
+// Peor caso total < 30 s (maxDuration).
+const HOST = "api2.mercadopublico.cl";
+const TICKET_CONTROL = "00000000-0000-0000-0000-000000000000"; // ticket inexistente: solo para comprobar la respuesta 401
+const conLimite = (ms, fn) => new Promise((ok) => {
+  const t0 = Date.now(); const fin = setTimeout(() => ok({ ok: false, ms: Date.now() - t0, falla: "demora" }), ms);
+  fn().then((r) => { clearTimeout(fin); ok({ ok: true, ms: Date.now() - t0, ...r }); }, (e) => { clearTimeout(fin); ok({ ok: false, ms: Date.now() - t0, falla: [e?.name, e?.code || e?.cause?.code].filter(Boolean).join(":") || "error" }); });
+});
+const socket = (seguro) => new Promise((ok, mal) => {
+  const o = { host: HOST, port: 443, servername: HOST };
+  const s = seguro ? tlsConnect(o, () => { s.end(); ok({}); }) : netConnect(o, () => { s.end(); ok({}); });
+  s.setTimeout(5_200, () => s.destroy(new Error("demora")));
+  s.on("error", mal);
+});
+const pedir = (ticket, ms) => async () => {
+  const r = await fetch(`${API}/3390-246-COT26`, { headers: { ...(ticket ? { ticket } : {}), Accept: "application/json" }, signal: AbortSignal.timeout(ms + 200) });
+  const c = await r.json().catch(() => null);
+  return { http: r.status, codigo_api: (c?.errors || c?.errores)?.[0]?.codigo ?? null }; // nunca el contenido
+};
 let diagnosticos = [];
 async function diagnosticar(req, res) {
   const ahora = Date.now(); diagnosticos = diagnosticos.filter((t) => ahora - t < VENTANA_MS);
   if (diagnosticos.length >= 3) return res.status(429).json({ ok: false, error: "Espera un minuto." });
   diagnosticos.push(ahora);
-  const origen = (process.env.MP_TICKET_COMPRA_AGIL || "").trim() ? "MP_TICKET_COMPRA_AGIL" : (process.env.MP_TICKET || "").trim() ? "MP_TICKET" : null;
-  if (!origen) return res.status(200).json({ ok: true, ticket_configurado: false });
-  const codigo = codigoCompraAgil(req.query?.diagnostico) || "3390-246-COT26";
-  let estado = null, falla = null;
-  try { const r = await fetch(`${API}/${encodeURIComponent(codigo)}`, { headers: { ticket: (process.env.MP_TICKET_COMPRA_AGIL || process.env.MP_TICKET).trim(), Accept: "application/json" }, signal: AbortSignal.timeout(25_000) }); estado = r.status; }
-  // Solo el tipo de error (nunca el mensaje, que podría incluir el valor de la cabecera).
-  catch (e) { estado = "sin_conexion"; falla = [e?.name, e?.cause?.code || e?.cause?.name].filter(Boolean).join(":") || "desconocida"; }
+  const ticket = (process.env.MP_TICKET_COMPRA_AGIL || process.env.MP_TICKET || "").trim();
+  const origen = (process.env.MP_TICKET_COMPRA_AGIL || "").trim() ? "MP_TICKET_COMPRA_AGIL" : ticket ? "MP_TICKET" : null;
+  const e = {};
+  e.dns = await conLimite(3_000, async () => ({ direcciones: (await lookup(HOST, { all: true })).length }));
+  e.tcp = e.dns.ok ? await conLimite(5_000, () => socket(false)) : { ok: false, falla: "omitido" };
+  e.tls = e.tcp.ok ? await conLimite(5_000, () => socket(true)) : { ok: false, falla: "omitido" };
+  e.api_sin_ticket = e.tls.ok ? await conLimite(6_000, pedir(null, 6_000)) : { ok: false, falla: "omitido" };
+  e.ticket_control = e.api_sin_ticket.ok ? await conLimite(6_000, pedir(TICKET_CONTROL, 6_000)) : { ok: false, falla: "omitido" };
+  e.ticket_configurado = !ticket ? { ok: false, falla: "sin_ticket" } : e.ticket_control.ok ? await conLimite(20_000, pedir(ticket, 20_000)) : { ok: false, falla: "omitido" };
+  const h = e.ticket_configurado.http;
+  const conclusion = !e.dns.ok ? "falla_dns" : !e.tcp.ok ? "conexion_bloqueada_o_sin_ruta" : !e.tls.ok ? "falla_tls"
+    : !e.api_sin_ticket.ok ? "la_api_no_responde_a_esta_region"
+    : !ticket ? "ticket_no_configurado"
+    : !e.ticket_control.ok ? "la_api_no_responde_con_ticket"
+    : !e.ticket_configurado.ok ? "demora_solo_con_ticket_real"
+    : h === 200 || h === 404 ? "ticket_aceptado" : h === 401 || h === 403 ? "ticket_rechazado" : h === 429 ? "cuota_agotada" : "error_api";
   res.setHeader("Cache-Control", "no-store");
-  return res.status(200).json({ ok: true, ticket_configurado: true, origen, codigo, http_chilecompra: estado, ...(falla ? { falla } : {}), ticket_aceptado: estado === 200 || estado === 404 });
+  return res.status(200).json({ ok: true, region: process.env.VERCEL_REGION || null, ticket_configurado: !!ticket, origen, etapas: e, conclusion });
 }
 
 export default async function handler(req, res) {
@@ -103,7 +135,7 @@ export default async function handler(req, res) {
 
   let r;
   try { r = await fetch(`${API}/${encodeURIComponent(codigo)}`, { headers: { ticket, Accept: "application/json" }, signal: AbortSignal.timeout(20_000) }); }
-  catch (e) { return res.status(502).json({ ok: false, codigo: "SIN_CONEXION", error: e?.name === "TimeoutError" ? "La API de ChileCompra no respondió a tiempo. Intenta más tarde o ingresa los datos manualmente." : "No se pudo conectar con la API de ChileCompra. Ingresa los datos manualmente." }); }
+  catch (e) { return res.status(502).json({ ok: false, codigo: e?.name === "TimeoutError" ? "DEMORA_API" : "SIN_CONEXION", error: e?.name === "TimeoutError" ? "La API de ChileCompra no respondió a tiempo. Intenta más tarde o ingresa los datos manualmente." : "No se pudo conectar con la API de ChileCompra. Ingresa los datos manualmente." }); }
   const cuerpo = await r.json().catch(() => null);
   if (r.status === 401 || r.status === 403) return res.status(502).json({ ok: false, codigo: "TICKET_INVALIDO", error: `ChileCompra rechazó el ticket configurado para la API de Compra Ágil (HTTP ${r.status}). ${COMO_OBTENER}` });
   if (r.status === 429) return res.status(429).json({ ok: false, codigo: "CUOTA", error: "Se agotó la cuota diaria del ticket de ChileCompra. Se restablece al comenzar el próximo día. Ingresa los datos manualmente." });
