@@ -264,6 +264,17 @@ async function ingresarProducto(p, d) {
   await llenar(p.locator("[data-confirmar-eliminar]"), "otra cosa"); ok("13_confirmacion_incorrecta_no_habilita", await btn.isDisabled());
   await llenar(p.locator("[data-confirmar-eliminar]"), "prueba para eliminar"); await btn.click(); await espera(p, 1000);
   ok("13_elimina_con_confirmacion", M.rpc.some((r) => r.fn === "cz_eliminar_cotizacion" && r.b.p_confirmacion === "prueba para eliminar") && M.cots.size === 1 && (await p.locator('[data-hoja-lateral="cotizacion"]').count()) === 0);
+  // 13b. Sin código ni nombre: se confirma con el identificador interno corto.
+  await p.locator("[data-nueva-cotizacion]").click(); await espera(p, 600);
+  await llenar(H(p).locator('[data-campo="institucion"]'), "Municipalidad sin código");
+  await H(p).locator("[data-guardar-cotizacion]").click(); await espera(p, 800);
+  const idSin = [...M.cots.keys()].pop();
+  await H(p).locator("[data-eliminar-cotizacion]").click(); await espera(p, 300);
+  const btn2 = p.locator("[data-eliminar-definitivamente]"); const corto = idSin.slice(0, 8).toUpperCase();
+  ok("13_sin_codigo_muestra_id_interno", (await p.locator("[data-modal-eliminar]").innerText()).includes(corto) && await btn2.isDisabled());
+  await llenar(p.locator("[data-confirmar-eliminar]"), "Municipalidad sin código"); ok("13_sin_codigo_no_acepta_institucion", await btn2.isDisabled());
+  await llenar(p.locator("[data-confirmar-eliminar]"), corto.toLowerCase()); await btn2.click(); await espera(p, 1000);
+  ok("13_sin_codigo_elimina_con_id_interno", M.rpc.some((r) => r.fn === "cz_eliminar_cotizacion" && r.b.p_id === idSin && r.b.p_confirmacion === corto.toLowerCase()) && !M.cots.has(idSin));
   ok("A_sin_errores_de_consola", errs.length === 0, errs);
   await ctx.close();
 }

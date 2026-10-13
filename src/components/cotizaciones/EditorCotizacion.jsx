@@ -245,7 +245,7 @@ export function EditorCotizacion({ almacen, inicial, token, perfil, entidadesCat
           <Field label="Observaciones (internas)"><textarea rows={3} value={cot.observaciones} onChange={(e) => setCampo("observaciones", e.target.value)} style={{ ...iStyle, resize: "vertical" }} /></Field>
           {esAdmin && cot.id && cap.eliminar && (
             <div style={{ borderTop: `1px solid ${C.border}`, marginTop: 16, paddingTop: 12 }}>
-              <button type="button" data-eliminar-cotizacion onClick={() => setEliminar(true)} style={{ border: `1px solid ${C.danger}`, background: "#fff", color: C.dangerText, borderRadius: 10, padding: "8px 14px", minHeight: 40, fontWeight: 700, cursor: "pointer" }}>Eliminar cotización</button>
+              <button type="button" data-eliminar-cotizacion onClick={() => { if (sucio) { showToast?.("Guarda o descarta los cambios antes de eliminar la cotización.", "error"); return; } setEliminar(true); }} style={{ border: `1px solid ${C.danger}`, background: "#fff", color: C.dangerText, borderRadius: 10, padding: "8px 14px", minHeight: 40, fontWeight: 700, cursor: "pointer" }}>Eliminar cotización</button>
               <div style={{ fontSize: T.small, color: C.inkFaint, marginTop: 4 }}>Solo administradores. Pide confirmación escrita; no se permite en adjudicadas.</div>
             </div>
           )}

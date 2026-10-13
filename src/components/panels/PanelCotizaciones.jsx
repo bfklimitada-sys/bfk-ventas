@@ -85,7 +85,7 @@ export function PanelCotizaciones({ token, perfil, entidadesCatalogo, showToast 
         {lista.filas.map((c) => (
           <Tarjeta key={c.id} onClick={() => abrir(c.id)} padding="12px 14px" data-cotizacion={c.id_externo || c.id}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
-              <span style={{ fontSize: T.body, fontWeight: 800, color: C.ink }}>{c.id_externo || <span style={{ color: C.inkMuted }}>Sin código Mercado Público</span>}</span>
+              <span style={{ fontSize: T.body, fontWeight: 800, color: C.ink }}>{c.id_externo || <span style={{ color: C.inkMuted }}>Sin código Mercado Público{!c.nombre ? ` · ID ${String(c.id || "").slice(0, 8).toUpperCase()}` : ""}</span>}</span>
               <Badge tono={ESTADOS_COTIZACION[c.estado]?.tono}>{ESTADOS_COTIZACION[c.estado]?.label || c.estado}</Badge>
             </div>
             <div style={{ fontSize: T.sm, color: C.inkMuted, marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.institucion || "Sin institución"}{c.nombre ? ` · ${c.nombre}` : ""}</div>
