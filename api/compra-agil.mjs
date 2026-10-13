@@ -113,8 +113,11 @@ async function medir(url, ticket, ms) {
     const texto = await r.text(); out.ms_total = Date.now() - t0; out.bytes = texto.length;
     let c = null; try { c = JSON.parse(texto); } catch { /* no JSON */ }
     out.codigo_api = (c?.errors || c?.errores)?.[0]?.codigo ?? null;
-    if (out.url_tipo === "listado") { out.total_resultados = c?.payload?.paginacion?.total_resultados ?? null; out.items = Array.isArray(c?.payload?.items) ? c.payload.items.length : null; }
-    else out.con_payload = !!c?.payload;
+    // Éxito solo con HTTP 200 y un payload válido (listado: payload.items es un arreglo; detalle: payload es un objeto).
+    if (out.url_tipo === "listado") {
+      out.total_resultados = c?.payload?.paginacion?.total_resultados ?? null; out.items = Array.isArray(c?.payload?.items) ? c.payload.items.length : null;
+      out.payload_valido = r.status === 200 && Array.isArray(c?.payload?.items);
+    } else out.payload_valido = r.status === 200 && !!c?.payload && typeof c.payload === "object";
     out.ok = true;
   } catch (e) {
     out.ok = false; out.ms_total = Date.now() - t0;
@@ -141,28 +144,40 @@ async function diagnosticar(req, res) {
   e.api_sin_ticket = e.tls.ok ? await conLimite(queda(6_000), pedir(null)) : omitido;
   e.ticket_control = e.api_sin_ticket.ok ? await conLimite(queda(6_000), pedir(TICKET_CONTROL)) : omitido;
   const comparar = req.query?.ticket === "comparar";
-  const pedido = req.query?.ticket === "1" || comparar;
+  const soloListado = req.query?.ticket === "listado";
+  const pedido = req.query?.ticket === "1" || comparar || soloListado;
   const permitido = Date.now() - ultimaPruebaTicket > 10 * 60_000;
   if (!pedido) e.ticket_configurado = { ok: false, falla: "no_solicitado" };
   else if (!ticket) e.ticket_configurado = { ok: false, falla: "no_disponible_en_este_entorno" };
   else if (!e.ticket_control.ok) e.ticket_configurado = omitido;
   else if (!permitido) e.ticket_configurado = { ok: false, falla: "espera_10_minutos" };
+  else if (soloListado) {
+    // Solo el listado oficial filtrado por id (paginación predeterminada), 1 consulta de la cuota, sin llamar al detalle.
+    ultimaPruebaTicket = Date.now();
+    e.ticket_configurado = { solo_listado: true, listado: await medir(`${API}?id=3390-246-COT26`, ticket, queda(20_000)) };
+  }
   else if (comparar) {
     // Misma Compra Ágil por las dos vías oficiales, en paralelo (2 consultas de la cuota): listado filtrado por id
     // (1 resultado) y detalle. Ambas con el mismo plazo, dentro del límite total.
     ultimaPruebaTicket = Date.now(); const ms = queda(20_000);
-    const [listado, detalle] = await Promise.all([medir(`${API}?id=3390-246-COT26&tamano_pagina=1`, ticket, ms), medir(`${API}/3390-246-COT26`, ticket, ms)]);
+    const [listado, detalle] = await Promise.all([medir(`${API}?id=3390-246-COT26`, ticket, ms), medir(`${API}/3390-246-COT26`, ticket, ms)]);
     e.ticket_configurado = { comparacion: true, listado, detalle };
   }
   else { ultimaPruebaTicket = Date.now(); e.ticket_configurado = await conLimite(queda(20_000), pedir(ticket)); }
   const h = e.ticket_configurado.http;
   const L = e.ticket_configurado.listado, D = e.ticket_configurado.detalle;
   const rech = (x) => x?.http === 401 || x?.http === 403;
-  const conclusionComparar = !L ? null
+  const conclusionListado = !e.ticket_configurado.solo_listado ? null
+    : L.http === 429 ? "cuota_agotada" : rech(L) ? "ticket_rechazado"
+    : L.ok && L.payload_valido ? "listado_ok_ticket_aceptado"
+    : L.ok && L.http === 200 ? "listado_200_sin_payload_valido"
+    : L.ok ? "listado_error_api"
+    : "listado_espera";
+  const conclusionComparar = conclusionListado ? null : !L ? null
     : L.http === 429 || D.http === 429 ? "cuota_agotada"
     : rech(L) || rech(D) ? "ticket_rechazado"
-    : L.ok && D.ok && L.http === 200 && (D.http === 200 || D.http === 404) ? "ticket_aceptado_listado_y_detalle"
-    : L.ok && L.http === 200 && !D.ok ? "listado_ok_detalle_espera"
+    : L.payload_valido && D.payload_valido ? "ticket_aceptado_listado_y_detalle"
+    : L.payload_valido && !D.ok ? "listado_ok_detalle_espera"
     : !L.ok && D.ok ? "detalle_ok_listado_espera"
     : !L.ok && !D.ok ? "ambas_consultas_esperan_sin_aislar"
     : "error_api";
@@ -172,6 +187,7 @@ async function diagnosticar(req, res) {
     : !pedido ? "red_ok_ticket_no_probado"
     : !ticket ? "red_ok_ticket_no_disponible_en_este_entorno"
     : !permitido ? "red_ok_espera_10_minutos_para_probar_el_ticket"
+    : conclusionListado ? conclusionListado
     : conclusionComparar ? conclusionComparar
     : !e.ticket_configurado.ok ? "demora_solo_con_ticket_real"
     : h === 200 || h === 404 ? "ticket_aceptado" : h === 401 || h === 403 ? "ticket_rechazado" : h === 429 ? "cuota_agotada" : "error_api";
