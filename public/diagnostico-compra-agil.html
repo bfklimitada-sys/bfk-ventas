@@ -6,7 +6,7 @@
 <h2>Diagnóstico Compra Ágil (vista previa temporal)</h2>
 <p>Solo administradores. Primero inicia sesión en BFK Datos en esta misma vista previa; luego vuelve a esta página. No guarda nada.</p>
 <button id="red">1. Probar red (DNS, TCP, TLS, API sin ticket)</button>
-<button id="cmp">3. Comparar listado y detalle con el ticket (usa 2 consultas de la cuota)</button>
+<button id="lis">2. Probar solo el listado con el ticket (usa 1 consulta de la cuota)</button>
 <pre id="out">Sin resultados.</pre>
 <script>
 const out = document.getElementById("out");
@@ -21,6 +21,6 @@ async function correr(modo) {
   } catch (e) { out.textContent = "Error: " + e.message; }
 }
 document.getElementById("red").onclick = () => correr("");
-document.getElementById("cmp").onclick = () => correr("comparar");
+document.getElementById("lis").onclick = () => correr("listado");
 </script>
 </body></html>
