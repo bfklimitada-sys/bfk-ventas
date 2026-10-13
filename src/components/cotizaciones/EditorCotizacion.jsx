@@ -383,6 +383,8 @@ export function EditorCotizacion({ almacen, inicial, token, perfil, entidadesCat
         <PanelPestana visible={pestana === "eett"} titulo="EETT">
           <AvisoLinea tono="info" icono="🔒">El PDF contiene solo información técnica: nunca precios, despachos, enlaces, proveedores, recargos, ganancias ni IVA. Se descarga en este dispositivo y no se guarda en el servidor.</AvisoLinea>
           {pdf.faltan.length > 0 && <AvisoLinea tono="warn" dato="faltan-datos" accion="Completar" onClick={() => setPestana("datos")}>Falta: {pdf.faltan.join(" y ")}.</AvisoLinea>}
+          {pdf.advertencias.map((a, i) => <AvisoLinea key={i} tono="warn" icono="⚠" dato={`eett-advertencia-${a.tipo}`} {...(a.tipo === "faltan_datos" ? { accion: "Revisar datos", onClick: () => setPestana("datos") } : {})}>{a.mensaje}</AvisoLinea>)}
+          {pdf.advertencias.length > 0 && <div data-eett-advertencias-nota style={{ fontSize: T.small, color: C.inkMuted, marginBottom: 6 }}>Estas advertencias son para revisión manual: no bloquean la generación del PDF.</div>}
           {!cot.items.length && <div style={{ fontSize: T.sm, color: C.inkFaint }}>Agrega productos para generar la EETT.</div>}
           {pdf.porItem.map((p, i) => {
             const it = cot.items[i];

@@ -38,7 +38,7 @@ const MX0 = 5, MX1 = 205, MY0 = 5, MY1 = 292;
 const CAB_ALTO = 24.3, LOGO_ANCHO = 48.9;              // banda azul 151,1 mm + recuadro del logo
 const CX0 = 10.3, CX1 = 199.7, CANCHO = CX1 - CX0;     // ancho útil de franjas e imágenes
 const PIE_ALTO = 11.3, PIE_Y = MY1 - PIE_ALTO;         // banda del pie
-const IMG_ALTO = 56, IMG_IZQ = [CX0, 82.3], IMG_DER = [103, 96.7];
+const IMG_ALTO_STD = 56, IMG_ALTO_MIN = 34, IMG_IZQ = [CX0, 82.3], IMG_DER = [103, 96.7];
 const COLS = [{ x: 15.6, w: 71.5 }, { x: 108.3, w: 84.1 }]; // columnas Características Generales / Especificaciones
 const RENGLON = 7.5;                                    // alto de renglón de la plantilla
 const ELAB_ALTO = 15;                                   // bloque «Elaboración de especificaciones técnicas»
@@ -123,7 +123,7 @@ export function crearPdfEETT(cot, items, { jsPDF, logo, elaboracion } = {}) {
   };
 
   // Dos fotografías lado a lado (proporción conservada, sin deformar). Con una sola, se centra.
-  const imagenes = (y, imgs) => {
+  const imagenes = (y, imgs, IMG_ALTO = IMG_ALTO_STD) => {
     const lista = imgs.slice(0, 2);
     if (!lista.length) return y;
     const cajas = lista.length === 1 ? [[CX0 + (CANCHO - IMG_DER[1]) / 2, IMG_DER[1]]] : [IMG_IZQ, IMG_DER];
@@ -138,51 +138,158 @@ export function crearPdfEETT(cot, items, { jsPDF, logo, elaboracion } = {}) {
     return y + IMG_ALTO;
   };
 
-  // Renglones etiqueta/valor. Alto mínimo = renglón de la plantilla; crece si el texto se envuelve.
-  const TAM_FILA = 10.3;
-  const partes = (p, c) => {
-    doc.setFontSize(TAM_FILA);
-    doc.setFont("helvetica", "bold"); const le = doc.splitTextToSize(textoPDF(p.etiqueta), COLS[c].w * 0.5);
-    doc.setFont("helvetica", "normal"); const va = doc.splitTextToSize(textoPDF(p.valor), COLS[c].w * 0.48);
-    return { le, va, h: Math.max(RENGLON, 3.6 + Math.max(le.length, va.length) * 4) };
+  // ── Renglones etiqueta/valor (corrección 13/10/2026, caso 5602-269-COT26) ──
+  // · Breves: etiqueta y valor lado a lado. · Extensos: etiqueta arriba y valor debajo con todo el ancho.
+  // · Siempre alineados desde arriba; el alto de cada renglón se ajusta al texto real (sin superposiciones).
+  // · Párrafos muy largos se dividen en bloques legibles y pueden continuar en la página siguiente
+  //   (sin truncar ni alterar el texto: solo se reparten los saltos de línea).
+  const FS = 10.3, FS_TXT = 9.4;                 // etiqueta/valor breve · valor extenso
+  const lh = (fs) => fs * 0.3528 * 1.2;          // interlineado en mm
+  const PAD_SUP = 5.0, PAD_INF = 2.3, GAP_ETQ = 1.0, GAP_PAR = 0.45; // GAP_PAR: fracción de línea entre bloques
+  // Avance hasta la línea i: "" marca separación entre bloques (no se dibuja; suma media línea extra).
+  const paso = (lineas, i, fs) => (i === 0 || lineas[i] === "" ? 0 : lh(fs) + (lineas[i - 1] === "" ? lh(fs) * GAP_PAR : 0));
+  const altoLineas = (lineas, fs) => lineas.reduce((a, l, i) => a + paso(lineas, i, fs), 0);
+
+  // Bloques legibles: respeta los saltos de línea originales; un párrafo muy largo sin saltos se reparte
+  // en bloques de frases completas (no se cambia ni se omite ninguna palabra).
+  const bloquesTexto = (s) => textoPDF(s).replace(/\r/g, "").split(/\n+/).map((x) => x.trim()).filter(Boolean).flatMap((par) => {
+    if (par.length <= 420) return [par];
+    const frases = par.split(/(?<=[.;])\s+(?=[A-ZÁÉÍÓÚÑ0-9•·(¿¡-])/);
+    const out = []; let act = "";
+    frases.forEach((f) => { if (act && (act + " " + f).length > 380) { out.push(act); act = f; } else act = act ? act + " " + f : f; });
+    if (act) out.push(act);
+    return out;
+  });
+  const lineasValor = (valor, ancho, fs) => {
+    doc.setFont("helvetica", "normal"); doc.setFontSize(fs);
+    const out = [];
+    bloquesTexto(valor).forEach((b, i) => { if (i) out.push(""); out.push(...doc.splitTextToSize(b, ancho)); });
+    return out;
   };
-  const dibujarFila = (c, yFin, p, pt) => {
-    const { x, w } = COLS[c];
-    const base = yFin - 1.6 - (Math.max(pt.le.length, pt.va.length) - 1) * 4;
-    doc.setFontSize(TAM_FILA); doc.setFont("helvetica", "bold"); doc.setTextColor(0);
-    doc.text(pt.le, x, base + (Math.max(pt.le.length, pt.va.length) - pt.le.length) * 4);
-    doc.setFont("helvetica", "normal"); doc.setTextColor(...GRIS_VALOR);
-    doc.text(pt.va, x + w, base + (Math.max(pt.le.length, pt.va.length) - pt.va.length) * 4, { align: "right" });
-    doc.setDrawColor(...LINEA); doc.setLineWidth(0.2); doc.line(x, yFin, x + w, yFin);
+
+  // geo: { x, w, etq } — etq: ancho fijo de la columna de etiqueta (modo ancho completo) o null (columnas de la plantilla).
+  const medirFila = (p, geo) => {
+    const etiqueta = textoPDF(p.etiqueta), valor = textoPDF(p.valor);
+    const multi = /\n/.test(valor);
+    doc.setFont("helvetica", "bold"); doc.setFontSize(FS);
+    const anchoEtq = geo.etq || Math.min(doc.getTextWidth(etiqueta) + 0.5, geo.w * 0.52);
+    const anchoMaxEtq = geo.etq ? geo.etq - 2 : geo.w * 0.52;
+    const le = etiqueta ? doc.splitTextToSize(etiqueta, anchoMaxEtq) : [];
+    const palabraCortada = etiqueta.split(/\s+/).some((w) => doc.getTextWidth(w) > anchoMaxEtq); // nunca partir una palabra
+    if (etiqueta && !multi && le.length <= 2 && !palabraCortada) {
+      const anchoVal = geo.w - anchoEtq - 3;
+      const va = lineasValor(valor, anchoVal, FS);
+      if (va.length <= (geo.etq ? 4 : 3)) {
+        const n = Math.max(le.length, va.length, 1);
+        return { tipo: "lado", le, va, fsV: FS, anchoEtq, h: Math.max(RENGLON, PAD_SUP + (n - 1) * lh(FS) + PAD_INF) };
+      }
+    }
+    // Apilada: etiqueta completa arriba, valor debajo con todo el ancho disponible.
+    const leA = etiqueta ? (doc.setFont("helvetica", "bold"), doc.setFontSize(FS), doc.splitTextToSize(etiqueta, geo.w)) : [];
+    const fsV = valor.length > 140 || multi ? FS_TXT : FS;
+    const va = lineasValor(valor, geo.w, fsV);
+    return { tipo: "apilada", le: leA, va, fsV, h: altoApilada(leA, va, fsV) };
+  };
+  function altoApilada(le, va, fsV) {
+    const hEtq = le.length ? (le.length - 1) * lh(FS) + GAP_ETQ + lh(fsV) : 0;
+    return Math.max(RENGLON, PAD_SUP + hEtq + altoLineas(va, fsV) + PAD_INF);
+  }
+  // Divide una fila apilada para que su primera parte quepa en «disp» mm (mínimo 3 líneas de valor).
+  const partirFila = (pt, disp) => {
+    if (pt.tipo !== "apilada") return null;
+    let k = 0;
+    while (k < pt.va.length && altoApilada(pt.le, pt.va.slice(0, k + 1), pt.fsV) <= disp) k++;
+    while (k > 0 && pt.va[k - 1] === "") k--;
+    if (k < Math.min(3, pt.va.length) || k >= pt.va.length) return null;
+    const resto = pt.va.slice(k); while (resto[0] === "") resto.shift();
+    const etq = pt.le.length ? pt.le.join(" ").replace(/ \(continuación\)$/, "") + " (continuación)" : "";
+    doc.setFont("helvetica", "bold"); doc.setFontSize(FS);
+    const leR = etq ? doc.splitTextToSize(etq, pt.anchoTotal) : [];
+    const a = { ...pt, va: pt.va.slice(0, k) }; a.h = altoApilada(a.le, a.va, a.fsV);
+    const b = { ...pt, le: leR, va: resto }; b.h = altoApilada(b.le, b.va, b.fsV);
+    return [a, b];
+  };
+  const dibujarLineas = (lineas, x, y, fs, opc) => { // y = línea base de la primera
+    let yy = y;
+    lineas.forEach((l, i) => {
+      yy += paso(lineas, i, fs);
+      if (l !== "") doc.text(l, x, yy, opc);
+    });
+  };
+  const dibujarFila = (geo, yTop, pt, alinearDer) => {
+    const { x, w } = geo; const yBase = yTop + PAD_SUP;
+    doc.setFontSize(FS); doc.setFont("helvetica", "bold"); doc.setTextColor(0);
+    if (pt.tipo === "lado") {
+      dibujarLineas(pt.le, x, yBase, FS);
+      doc.setFont("helvetica", "normal"); doc.setFontSize(pt.fsV); doc.setTextColor(...GRIS_VALOR);
+      if (alinearDer) dibujarLineas(pt.va, x + w, yBase, pt.fsV, { align: "right" });
+      else dibujarLineas(pt.va, x + pt.anchoEtq + 3, yBase, pt.fsV);
+    } else {
+      dibujarLineas(pt.le, x, yBase, FS);
+      const yVal = yBase + (pt.le.length ? (pt.le.length - 1) * lh(FS) + GAP_ETQ + lh(pt.fsV) : 0);
+      doc.setFont("helvetica", "normal"); doc.setFontSize(pt.fsV); doc.setTextColor(...GRIS_VALOR);
+      dibujarLineas(pt.va, x, yVal, pt.fsV);
+    }
+    doc.setDrawColor(...LINEA); doc.setLineWidth(0.2); doc.line(x, yTop + pt.h, x + w, yTop + pt.h);
   };
   const renglonVacio = (c, yFin) => { doc.setDrawColor(...LINEA); doc.setLineWidth(0.2); doc.line(COLS[c].x, yFin, COLS[c].x + COLS[c].w, yFin); };
+  const tituloSeccion = (x, w, yTop, texto) => {
+    doc.setDrawColor(0); doc.setLineWidth(0.3); doc.line(x, yTop, x + w, yTop); doc.line(x, yTop + 7.5, x + w, yTop + 7.5);
+    doc.setFont("helvetica", "bold"); doc.setFontSize(13.5); doc.setTextColor(0);
+    doc.text(texto, x + w / 2, yTop + 5.4, { align: "center" });
+    return yTop + 7.5;
+  };
+  const TIT = ["Características Generales", "Especificaciones"];
+  const GEO_COL = COLS.map((c) => ({ x: c.x, w: c.w, etq: null }));
+  const GEO_ANCHO = { x: COLS[0].x, w: COLS[1].x + COLS[1].w - COLS[0].x, etq: 58 };
 
-  // Encabezado de columnas + renglones. Devuelve las filas que no cupieron (para la página siguiente).
-  // relleno: dibuja renglones vacíos hasta «limiteRelleno» (aspecto de la plantilla).
-  const columnas = (y, izq, der, limite, limiteRelleno, primera) => {
-    const TIT = ["Características Generales", "Especificaciones"];
-    const yTop = y + 4, yCab = yTop + 7.5;
-    [izq, der].forEach((lista, c) => {
-      if (!primera && !lista.length) return;
-      const { x, w } = COLS[c];
-      doc.setDrawColor(0); doc.setLineWidth(0.3); doc.line(x, yTop, x + w, yTop); doc.line(x, yCab, x + w, yCab);
-      doc.setFont("helvetica", "bold"); doc.setFontSize(13.5); doc.setTextColor(0);
-      doc.text(TIT[c], x + w / 2, yTop + 5.4, { align: "center" });
+  // ¿Caben ambas columnas (plantilla) en esta página sin filas extensas? Si no, se usa el modo de ancho completo.
+  const caben2Columnas = (y, izq, der, limite) => {
+    const yIni = y + 4 + 7.5 + 3.8;
+    return [izq, der].every((lista, c) => {
+      let yy = yIni;
+      for (const p of lista) { const pt = medirFila(p, GEO_COL[c]); if (pt.tipo === "apilada" && pt.va.length > 8) return false; yy += pt.h; }
+      return yy <= limite;
     });
-    const resto = [[], []]; let yFin = yCab;
+  };
+  // Plantilla: dos columnas con renglones de relleno hasta «limiteRelleno».
+  const columnas = (y, izq, der, limiteRelleno) => {
+    const yCab = y + 4 + 7.5; let yFin = yCab;
     [izq, der].forEach((lista, c) => {
+      tituloSeccion(COLS[c].x, COLS[c].w, y + 4, TIT[c]);
       let yy = yCab + 3.8; // separación inicial de la plantilla
-      lista.forEach((p) => {
-        const pt = partes(p, c);
-        if (resto[c].length || yy + pt.h > limite) { resto[c].push(p); return; }
-        yy += pt.h; dibujarFila(c, yy, p, pt);
-      });
-      if (primera || lista.length) {
-        if (!resto[c].length) while (yy + RENGLON <= limiteRelleno) { yy += RENGLON; renglonVacio(c, yy); }
-      }
+      lista.forEach((p) => { const pt = medirFila(p, GEO_COL[c]); dibujarFila(GEO_COL[c], yy, pt, true); yy += pt.h; });
+      while (yy + RENGLON <= limiteRelleno) { yy += RENGLON; renglonVacio(c, yy); }
       yFin = Math.max(yFin, yy);
     });
-    return { y: yFin + 3, resto };
+    return yFin + 3;
+  };
+  const altoFlujo = (izq, der) => [izq, der].reduce((a, lista) => a + (lista.length ? 4 + 7.5 + 2 + 3 + lista.reduce((b, p) => b + medirFila(p, GEO_ANCHO).h, 0) : 0), 0);
+  // Ancho completo: «Características Generales» y luego «Especificaciones», cada una a todo el ancho,
+  // continuando en páginas siguientes solo cuando es necesario (orden y contenido originales).
+  const flujo = (y, izq, der, limite, nuevaPagina) => {
+    const g = GEO_ANCHO;
+    [izq, der].forEach((lista, c) => {
+      if (!lista.length) return;
+      const cola = lista.map((p) => ({ ...medirFila(p, g), anchoTotal: g.w }));
+      let primeraFila = true;
+      // Título + primera fila (o sus 3 primeras líneas) deben quedar juntos.
+      const minimo = (pt) => pt.tipo === "apilada" ? Math.min(pt.h, altoApilada(pt.le, pt.va.slice(0, 3), pt.fsV)) : pt.h;
+      if (y + 4 + 7.5 + 2 + minimo(cola[0]) > limite) y = nuevaPagina();
+      y = tituloSeccion(g.x, g.w, y + 4, TIT[c]) + 2;
+      while (cola.length) {
+        const pt = cola[0];
+        if (y + pt.h <= limite) { dibujarFila(g, y, pt, false); y += pt.h; cola.shift(); primeraFila = false; continue; }
+        const partes = partirFila(pt, limite - y);
+        if (partes) { dibujarFila(g, y, partes[0], false); cola[0] = { ...partes[1], anchoTotal: g.w }; }
+        else if (primeraFila) { dibujarFila(g, y, pt, false); y += pt.h; cola.shift(); continue; } // seguridad: nunca ciclar
+        y = nuevaPagina();
+        y = tituloSeccion(g.x, g.w, y + 4, `${TIT[c]} (continuación)`) + 2;
+        primeraFila = true;
+      }
+      y += 3;
+    });
+    return y;
   };
 
   const lineasDescripcion = (texto) => { doc.setFont("helvetica", "normal"); doc.setFontSize(9); return doc.splitTextToSize(textoPDF(texto), CANCHO - 6); };
@@ -217,8 +324,6 @@ export function crearPdfEETT(cot, items, { jsPDF, logo, elaboracion } = {}) {
     let y = paginaNueva(idx === 0);
     y = idx === 0 ? tablaProceso(y) : y + 3.5;
     y = franja(y, f.nombre || "Producto sin nombre") + 3.8;
-    if (f.imagenes.length) y = imagenes(y, f.imagenes) + 3.8;
-    y = franja(y, "CARACTERÍSTICAS");
     const generales = [
       ...(f.marca ? [{ etiqueta: "MARCA", valor: f.marca }] : []),
       ...(f.modelo ? [{ etiqueta: "MODELO", valor: f.modelo }] : []),
@@ -228,14 +333,20 @@ export function crearPdfEETT(cot, items, { jsPDF, logo, elaboracion } = {}) {
     const desc = f.descripcion ? lineasDescripcion(f.descripcion) : [];
     const reservaDesc = desc.length ? 16 + Math.min(desc.length, 12) * 3.9 : 0;
     const limite = LIM - reservaElab;
-    let r = columnas(y, generales, f.especificaciones, limite, limite - reservaDesc, true);
-    let yAct = r.y;
-    while (r.resto[0].length || r.resto[1].length) {
-      let y2 = paginaNueva(false) + 3.5;
-      y2 = franja(y2, `${f.nombre || "Producto"} (continuación)`) + 0.5;
-      r = columnas(y2, r.resto[0], r.resto[1], limite, limite - reservaDesc, false);
-      yAct = r.y;
+    const continuar = () => franja(paginaNueva(false) + 3.5, `${f.nombre || "Producto"} (continuación)`) + 0.5;
+    // Altura de las fotografías: si la ficha excede la página por poco, se reducen (sin deformarlas,
+    // mínimo 34 mm) para no dejar una página casi vacía con uno o dos renglones. Se calcula ANTES de dibujar.
+    const yTrasImg = (alto) => y + (f.imagenes.length ? alto + 3.8 : 0) + 10.3; // + franja «CARACTERÍSTICAS»
+    let altoImg = IMG_ALTO_STD;
+    if (f.imagenes.length && !caben2Columnas(yTrasImg(IMG_ALTO_STD), generales, f.especificaciones, limite)) {
+      const exceso = yTrasImg(IMG_ALTO_STD) + altoFlujo(generales, f.especificaciones) - limite;
+      if (exceso > 0 && exceso <= IMG_ALTO_STD - IMG_ALTO_MIN) altoImg = IMG_ALTO_STD - exceso - 0.5;
     }
+    if (f.imagenes.length) y = imagenes(y, f.imagenes, altoImg) + 3.8;
+    y = franja(y, "CARACTERÍSTICAS");
+    let yAct;
+    if (caben2Columnas(y, generales, f.especificaciones, limite)) yAct = columnas(y, generales, f.especificaciones, limite - reservaDesc);
+    else yAct = flujo(y, generales, f.especificaciones, limite, continuar);
     let pendientes = desc; let fresca = false;
     while (pendientes.length) {
       const d = descripcion(yAct, pendientes, limite);

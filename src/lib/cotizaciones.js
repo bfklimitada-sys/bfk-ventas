@@ -217,7 +217,27 @@ export function estadoParaPDF(cot) {
   const faltan = [];
   // El ID de Mercado Público es opcional: si falta, se omite del encabezado del PDF (11/10/2026).
   if (!String(cot?.institucion || "").trim()) faltan.push("institución");
-  return { porItem, faltan, listo: items.length > 0 && !faltan.length && porItem.every((p) => p.aprobado) };
+  return { porItem, faltan, advertencias: advertenciasEETT(cot), listo: items.length > 0 && !faltan.length && porItem.every((p) => p.aprobado) };
+}
+
+// Advertencias previas al PDF (13/10/2026): datos que faltan en el encabezado y posible discrepancia evidente
+// entre la licitación y cada producto. Solo AVISAN para revisión manual: no bloquean ni corrigen nada.
+const VACIAS = new Set("ADQUISICION ADQUISICIONES COMPRA COMPRAS PARA CON SIN DEL DE LA LAS LOS POR UNA UNO UNOS UNAS SEGUN OTROS OTRAS VARIOS VARIAS MATERIALES MATERIAL INSUMOS INSUMO PRODUCTOS PRODUCTO SERVICIO SERVICIOS SUMINISTRO SUMINISTROS ARTICULOS ARTICULO ELEMENTOS ELEMENTO EQUIPOS EQUIPO UNIDAD UNIDADES DEPARTAMENTO DIRECCION MUNICIPAL MUNICIPALIDAD ESCUELA LICEO HOSPITAL CESFAM OFICINA OFICINAS AREA SECCION PROGRAMA PROYECTO REQUERIMIENTO SOLICITUD COTIZACION GENERAL GENERALES NUEVO NUEVOS NUEVA NUEVAS TIPO SEGUN ADJUNTO ADJUNTA".split(" "));
+const raices = (s) => (normal(s).match(/[A-Z0-9]+/g) || []).filter((w) => w.length >= 4 && !/^\d+$/.test(w) && !VACIAS.has(w)).map((w) => w.slice(0, 5));
+export function advertenciasEETT(cot) {
+  const av = [];
+  const faltaEnc = [["nombre", "nombre de la licitación"], ["fecha", "fecha de emisión"], ["plazo", "plazo de entrega"], ["rut", "RUT de la institución"]]
+    .filter(([k]) => !String(cot?.[k] || "").trim()).map(([, t]) => t);
+  if (faltaEnc.length) av.push({ tipo: "faltan_datos", mensaje: `Faltan datos del encabezado del PDF: ${faltaEnc.join(", ")}. Se omitirán o quedarán en blanco.` });
+  const textoLic = [cot?.nombre, cot?.descripcion, ...(cot?.requerimientos || []).flatMap((r) => [r?.nombre, r?.descripcion])].filter(Boolean).join(" ");
+  const lic = new Set(raices(textoLic));
+  if (lic.size >= 2) (cot?.items || []).forEach((it, i) => {
+    const f = it?.ficha || {};
+    const prod = raices([f.nombre, f.marca, f.modelo].join(" "));
+    if (prod.length && !prod.some((w) => lic.has(w)))
+      av.push({ tipo: "discrepancia", item: i, mensaje: `Posible discrepancia: la licitación «${String(cot?.nombre || cot?.descripcion || "").trim().slice(0, 90)}» no comparte términos con el producto ${i + 1} «${String(f.nombre || "").trim().slice(0, 70)}». Revisa que el producto corresponda (no se cambia ningún dato).` });
+  });
+  return av;
 }
 
 // Bloque «Elaboración de especificaciones técnicas» del PDF: solo nombres, fecha y código (nunca montos).
