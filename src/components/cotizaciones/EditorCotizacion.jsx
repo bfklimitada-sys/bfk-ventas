@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { C, T, R, iStyle, iMono, selStyle, fmt, MONO } from "../../lib/theme";
 import { Field, Modal } from "../ui/Basicos";
 import { HojaLateral, Pestanas, PanelPestana, Tarjeta, Badge, AvisoLinea, BotonPrincipal, BotonSecundario, FilaDato, Desplegable, Seccion } from "../ui/Sistema";
-import { calcularCotizacion, estadoParaPDF, destinoDe, direccionValida, invalidarDespachosPorDireccion, envioConfirmado, textoParaMercadoPublico, itemVacio, envioVacio, nuevaClave, hoyISO, digitosValor, proveedorDeEnlace, ESTADOS_COTIZACION, ESTADOS_ENVIO, RECARGO_SUGERIDO } from "../../lib/cotizaciones";
+import { calcularCotizacion, estadoParaPDF, destinoDe, direccionValida, invalidarDespachosPorDireccion, envioConfirmado, textoParaMercadoPublico, aplicarRecargoGeneral, aplicarRecargoProducto, itemVacio, envioVacio, nuevaClave, hoyISO, digitosValor, proveedorDeEnlace, ESTADOS_COTIZACION, ESTADOS_ENVIO, RECARGO_SUGERIDO } from "../../lib/cotizaciones";
 import { logoBFK } from "../../lib/cotizacionesDatos";
 import { generarPdfEETT, descargarBlob, huellaPDF } from "../../lib/eettPdf";
 import { EditorFicha } from "./EditorFicha";
@@ -22,6 +22,19 @@ const enlaceValido = (u) => /^https?:\/\/\S+$/i.test(String(u || "").trim());
 async function copiarTexto(t) {
   try { await navigator.clipboard.writeText(t); return true; } catch { /* alternativa */ }
   try { const a = document.createElement("textarea"); a.value = t; a.setAttribute("readonly", ""); a.style.position = "fixed"; a.style.opacity = "0"; document.body.appendChild(a); a.select(); const ok = document.execCommand("copy"); a.remove(); return ok; } catch { return false; }
+}
+
+// Campo de porcentaje: muestra % (0,30 → 30) y entrega fracción. Conserva el texto mientras se escribe
+// (permite «32,5» o «32.») y solo informa valores válidos; vacío = "".
+function CampoPorcentaje({ id, dato, valor, onCambiar, disabled }) {
+  const aTexto = (v) => (v === "" || v == null || Number.isNaN(Number(v)) ? "" : String(Math.round(Number(v) * 10000) / 100));
+  const [txt, setTxt] = useState(() => aTexto(valor)); const enfocado = useRef(false);
+  useEffect(() => { if (!enfocado.current) setTxt(aTexto(valor)); }, [valor]);
+  return <input id={id} data-campo={dato} type="text" inputMode="decimal" disabled={disabled} value={txt}
+    onFocus={() => { enfocado.current = true; }} onBlur={() => { enfocado.current = false; setTxt(aTexto(valor)); }}
+    onChange={(e) => { const t = e.target.value.replace(",", "."); if (!/^-?\d*\.?\d*$/.test(t)) return; setTxt(e.target.value);
+      if (t === "") onCambiar(""); else if (!Number.isNaN(Number(t)) && t !== "-" && t !== ".") onCambiar(Math.round(Number(t) * 100) / 10000); }}
+    style={{ ...iMono, width: 80 }} />;
 }
 
 // Quita los despachos que ya no usa ningún producto (evita costos duplicados o huérfanos).
@@ -191,6 +204,12 @@ export function EditorCotizacion({ almacen, inicial, token, perfil, entidadesCat
   };
 
   // ── Precios ──
+  // Recargo general: se aplica a TODOS los productos (reemplaza los ajustes individuales). Nunca se suman recargos.
+  const cambiarRecargoGeneral = (v) => {
+    const ajustados = cot.items.filter((x) => !(x.recargo == null || x.recargo === "")).length;
+    cambiar((c) => aplicarRecargoGeneral(c, v));
+    if (ajustados && v !== "" && v != null) showToast?.(`Recargo general aplicado a todos los productos (${ajustados} tenía${ajustados === 1 ? "" : "n"} un recargo propio).`);
+  };
   const copiarUno = async (i) => {
     const l = calc.lineas[i];
     if (l.avisos.length) { showToast?.("Este producto tiene costos o despachos pendientes: confírmalos antes de copiar su valor.", "error"); return; }
@@ -410,6 +429,13 @@ export function EditorCotizacion({ almacen, inicial, token, perfil, entidadesCat
                   Cantidad: <b style={{ color: C.ink }}>{l.cantidad}</b> · Subtotal neto: <b data-subtotal={i + 1} style={{ color: C.ink, fontFamily: MONO }}>{m(l.neto_linea)}</b><br />
                   <span style={{ fontSize: T.small }}>El despacho ({m(l.envio_asignado)}) ya está incorporado en el valor unitario: el campo Despacho de Mercado Público va en $0.</span>
                 </div>
+                <div data-recargo-producto={i + 1} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.border}` }}>
+                  <label htmlFor={`cz-recargo-${it.key}`} style={{ fontSize: T.sm, color: C.inkMuted, flex: "1 1 160px" }}>Recargo de este producto (%)</label>
+                  <CampoPorcentaje id={`cz-recargo-${it.key}`} dato={`recargo-producto-${i + 1}`} disabled={protegido} valor={l.recargo} onCambiar={(v) => cambiar((c) => aplicarRecargoProducto(c, it.key, v))} />
+                  <span style={{ fontSize: T.sm }}>%</span>
+                  <Badge tono={it.recargo == null || it.recargo === "" ? "neutro" : "info"}>{it.recargo == null || it.recargo === "" ? "General" : "Ajustado"}</Badge>
+                  {!(it.recargo == null || it.recargo === "") && !protegido && <button type="button" data-volver-general={i + 1} onClick={() => cambiar((c) => aplicarRecargoProducto(c, it.key, null))} style={{ border: "none", background: "none", color: C.tealDark, textDecoration: "underline", cursor: "pointer", fontSize: T.small, padding: 0, minHeight: 32 }}>Usar el general</button>}
+                </div>
                 {l.avisos.map((a, j) => <AvisoLinea key={j} tono="warn" dato="pendiente-precio">{a}</AvisoLinea>)}
               </Tarjeta>
             );
@@ -419,11 +445,10 @@ export function EditorCotizacion({ almacen, inicial, token, perfil, entidadesCat
             <Tarjeta padding="12px 14px" data-totales-cotizacion>
               <FilaDato k="Costo total de adquisición (productos + despachos)" v={m(calc.totales.costo_bruto)} dato="costo-adquisicion" />
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "8px 0", borderBottom: `1px solid ${C.border}` }}>
-                <label htmlFor="cz-recargo" style={{ fontSize: T.sm, color: C.inkMuted, flex: 1 }}>Recargo comercial</label>
-                <input id="cz-recargo" data-campo="recargo" type="number" inputMode="decimal" step="1" disabled={protegido} value={cot.recargo === "" || cot.recargo == null ? "" : Math.round(Number(cot.recargo) * 1000) / 10}
-                  onChange={(e) => setCampo("recargo", e.target.value === "" ? "" : Number(e.target.value) / 100)} style={{ ...iMono, width: 80 }} />
+                <label htmlFor="cz-recargo" style={{ fontSize: T.sm, color: C.inkMuted, flex: 1 }}>Recargo comercial <span style={{ fontSize: T.small }}>(general: se aplica a todos los productos)</span></label>
+                <CampoPorcentaje id="cz-recargo" dato="recargo" disabled={protegido} valor={cot.recargo} onCambiar={cambiarRecargoGeneral} />
                 <span style={{ fontSize: T.sm }}>%</span>
-                {Number(cot.recargo) !== RECARGO_SUGERIDO && !protegido && <button type="button" onClick={() => setCampo("recargo", RECARGO_SUGERIDO)} style={{ border: "none", background: "none", color: C.tealDark, textDecoration: "underline", cursor: "pointer", fontSize: T.small, padding: 0, minHeight: 32 }}>Usar sugerido 30%</button>}
+                {Number(cot.recargo) !== RECARGO_SUGERIDO && !protegido && <button type="button" onClick={() => cambiarRecargoGeneral(RECARGO_SUGERIDO)} style={{ border: "none", background: "none", color: C.tealDark, textDecoration: "underline", cursor: "pointer", fontSize: T.small, padding: 0, minHeight: 32 }}>Usar sugerido 30%</button>}
               </div>
               <div style={{ padding: "8px 0", borderBottom: `1px solid ${C.border}` }}>
                 <div style={{ fontSize: T.sm, color: C.inkMuted, marginBottom: 4 }}>Precio unitario neto de cada producto</div>

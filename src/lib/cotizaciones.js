@@ -136,6 +136,22 @@ export function calcularCotizacion(cot, formula = FORMULA) {
   };
 }
 
+// Recargos (14/10/2026): se controlan SOLO desde Precios. Cada producto usa EXCLUSIVAMENTE su porcentaje efectivo
+// (el propio si tiene uno; si no, el general); nunca se suman. Estas funciones no tocan costos ni despachos.
+// Cambiar el recargo general lo aplica a TODOS los productos (los ajustes individuales previos se reemplazan).
+export function aplicarRecargoGeneral(cot, recargo) {
+  cot.recargo = recargo;
+  for (const it of cot.items || []) it.recargo = null;
+  return cot;
+}
+// Ajusta un solo producto. Vacío o igual al general → sigue al recargo general.
+export function aplicarRecargoProducto(cot, key, recargo) {
+  const it = (cot.items || []).find((x) => x.key === key); if (!it) return cot;
+  const general = cot.recargo == null || cot.recargo === "" ? RECARGO_SUGERIDO : Number(cot.recargo);
+  it.recargo = recargo === "" || recargo == null || Number(recargo) === general ? null : Number(recargo);
+  return cot;
+}
+
 // Equivalencia recargo → margen sobre venta neta (30% de recargo = 23,1% de margen).
 export const margenDeRecargo = (r) => (1 + num(r) > 0 ? num(r) / (1 + num(r)) : 0);
 

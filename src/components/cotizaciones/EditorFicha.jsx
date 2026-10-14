@@ -218,10 +218,6 @@ export function EditorFicha({ inicial, envios = [], items = [], destino = "", de
               {compartidoCon.length > 0 && <div style={{ fontSize: T.small, color: C.inkMuted, marginTop: 4 }}>Compartido con: {compartidoCon.map((x) => x.ficha?.nombre || "producto").join(", ")}. El costo total se ingresa una sola vez y se reparte según el valor de cada producto.</div>}
             </div>
 
-            <Field label="Recargo comercial individual (opcional)" hint="Vacío = recargo general de la cotización (sugerido 30%).">
-              <input data-campo="recargo-item" type="number" inputMode="decimal" value={it.recargo == null || it.recargo === "" ? "" : Math.round(Number(it.recargo) * 1000) / 10} disabled={protegido}
-                onChange={(e) => set("recargo", e.target.value === "" ? null : Number(e.target.value) / 100)} style={{ ...iMono, width: 120 }} placeholder="%" />
-            </Field>
             {it.producto_id
               ? <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: T.sm, marginBottom: 8 }}><input type="checkbox" checked={actualizarBib} onChange={(e) => setActualizarBib(e.target.checked)} /> Actualizar también la ficha en la biblioteca compartida</label>
               : <label data-guardar-biblioteca style={{ display: "flex", alignItems: "center", gap: 8, fontSize: T.sm, marginBottom: 8 }}><input type="checkbox" checked={guardarBib} onChange={(e) => setGuardarBib(e.target.checked)} /> Guardar en la biblioteca compartida (solo la ficha técnica)</label>}
