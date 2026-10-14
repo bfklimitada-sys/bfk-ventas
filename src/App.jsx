@@ -1,4 +1,3 @@
-import { abrirCorreo } from "./lib/correos.js";
 import { useState, useEffect, useRef } from "react";
 import { LoginScreen } from "./components/auth/LoginScreen";
 import { RestablecerContrasena } from "./components/auth/RestablecerContrasena";
@@ -1589,16 +1588,16 @@ export default function App() {
     try { await ins("contactos_cobranza",session.access_token,{id:genId("cob"),rut,nombre_cliente:nombreCliente,correo,creado_por:session.user.id}); await cargarTodo(); }
     catch(e){ /* si ya existe el RUT (unique), no es un error fatal */ }
   };
-  // Trazabilidad uniforme de correos: una entrada en historial_cambios por cada correo que el usuario ejecuta.
-  // No guarda el cuerpo del correo; un fallo al registrar nunca impide abrir el correo.
+  // Trazabilidad uniforme de correos: una entrada en historial_cambios SOLO cuando el usuario confirma que envió
+  // el correo (abrir Gmail o la app de correo no registra nada). No guarda el cuerpo del correo.
   const registrarCorreoOC=async({ocId,tipo,detalle,correo})=>{
     const oc=ocs.find(o=>o.id===ocId);
     try{
       await registrarCambio(session.access_token,{ocId,ocNumero:oc?.numero_oc,usuarioId:perfil?.id,usuarioNombre:perfil?.nombre,
-        accion:`Correo generado: ${tipo}${detalle?` · ${detalle}`:""}`,campo:"destinatario",valorNuevo:correo});
+        accion:`Correo enviado (confirmado por el usuario): ${tipo}${detalle?` · ${detalle}`:""}`,campo:"destinatario",valorNuevo:correo});
     }catch{}
   };
-  const handleCorreoOC=async(data)=>{ await registrarCorreoOC(data); await cargarTodo(); };
+  const handleCorreoOC=async(data)=>{ await registrarCorreoOC(data); showToast(`Envío registrado (confirmado por el usuario): ${data.tipo}`); await cargarTodo(); };
   const handleEnviarReclamo=async({correo,cc,asunto,cuerpo,ocId,rut,tipo,detalle})=>{
     const ccLimpio=(cc||"").split(",").map(s=>s.trim()).filter(Boolean).join(",");
     const ahora=new Date().toISOString();
@@ -1616,8 +1615,7 @@ export default function App() {
       });
     } catch {}
     await registrarCorreoOC({ocId,tipo:tipo||"reclamo de pago",detalle,correo});
-    abrirCorreo({correo,cc:ccLimpio,asunto,cuerpo});
-    showToast(`Correo abierto para ${correo}`);
+    showToast(`Envío del reclamo registrado (confirmado por el usuario) para ${correo}`);
     setOcs([]);
     await cargarTodo();
   };
