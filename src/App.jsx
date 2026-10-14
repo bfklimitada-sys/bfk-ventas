@@ -409,12 +409,14 @@ export default function App() {
       // modifican. Se agregan los productos (desglose) y el registro de la compra se
       // delega en handleCompraRapida, para que haya una sola lógica: evento de compra,
       // costo, financiador, saldo del financiador e historial "Compra registrada".
+      // Lo comprado se guarda como productos «compra» (14/10/2026): nunca como líneas de venta, para no duplicar
+      // lo vendido ni tocar su información original (que viene de Mercado Público). Sin precio de venta.
       if(data.productos?.length){
         const existentes=(ocs.find(o=>o.id===ocId)?.oc_productos_link||[]).length;
         for(let i=0;i<data.productos.length;i++){
           const p=data.productos[i];
-          const desc=`${p.descripcion} × ${p.cantidad} | Compra: $${(p.precioCompra*p.cantidad).toLocaleString("es-CL")} | Venta: $${(p.precioVenta*p.cantidad).toLocaleString("es-CL")}`;
-          await ins("oc_productos_link",t,{id:genId("lnk"),oc_id:ocId,descripcion:desc,url:p.url||"sin-link",orden:existentes+i,creado_por:session.user.id});
+          await ins("oc_productos_link",t,{id:genId("lnk"),oc_id:ocId,descripcion:p.descripcion,url:p.url||"sin-link",orden:existentes+i,
+            origen:"compra",cantidad:p.cantidad||null,precio_compra:Math.round((Number(p.precioCompra)||0)*(Number(p.cantidad)||1))||null,precio_venta:null,creado_por:session.user.id});
         }
       }
       await handleCompraRapida({ocId,costoCompra:data.costoCompra,fecha:data.fecha,fechaEst:data.fechaEst,financiadorId:data.financiadorId,proveedor:data.proveedor});

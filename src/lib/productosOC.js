@@ -55,3 +55,23 @@ export function repartirInversion(total, lineas) {
     return { id: l.id, precio_compra: parte };
   });
 }
+
+// Venta de una OC existente (14/10/2026), solo lectura: lo vendido viene de Mercado Público (líneas «venta»).
+// El desglose por producto es CONFIABLE solo si todas las líneas vendidas tienen precio y su suma calza con el
+// monto adjudicado (neto = monto/1,19, o el monto con IVA). Si no, se usa el monto total como referencia y
+// nunca se inventan precios unitarios. precio_venta de cada línea es el total de la línea (como lo entrega MP).
+export function ventaDeOC(oc) {
+  const total = Number(oc?.monto_total) || 0;
+  const vendidas = (oc?.oc_productos_link || []).filter((l) => (l.origen || "venta") === "venta" && String(l.descripcion || "").trim() && l.descripcion !== "Producto por completar")
+    .slice().sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0));
+  const conPrecio = vendidas.length > 0 && vendidas.every((l) => Number(l.precio_venta) > 0);
+  const suma = conPrecio ? vendidas.reduce((s, l) => s + Number(l.precio_venta), 0) : 0;
+  const tol = Math.max(2, total * 0.005);
+  const base = !conPrecio || !total ? null : Math.abs(suma - total / 1.19) <= tol ? "neto" : Math.abs(suma - total) <= tol ? "con IVA" : null;
+  const lineas = vendidas.map((l) => {
+    const cantidad = Number(l.cantidad) > 0 ? Number(l.cantidad) : null;
+    const totalLinea = base ? Number(l.precio_venta) : null;
+    return { id: l.id, descripcion: l.descripcion, cantidad, total: totalLinea, unitario: totalLinea && cantidad ? totalLinea / cantidad : null };
+  });
+  return { total, confiable: !!base, base, lineas };
+}

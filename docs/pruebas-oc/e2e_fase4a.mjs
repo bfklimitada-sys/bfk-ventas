@@ -431,7 +431,7 @@ await escenario("S12", async () => {
     await boton(p, /Registrar compra/); await espera(p, 400); m = enModal(p);
     await boton(p, /Siguiente/, m); await espera(p, 200);
     await m.getByPlaceholder("ej: Silla ergonómica negra 3C").fill("Monitor 24");
-    const nums = m.locator("input[type=number]"); await nums.nth(1).fill("700000"); await nums.nth(2).fill("1190000");
+    const nums = m.locator("input[type=number]"); await nums.nth(1).fill("700000"); // OC existente: el precio de venta viene de la OC (no se pide desde 14/10/2026)
     await boton(p, /Siguiente/, m); await espera(p, 200); await boton(p, /Siguiente/, m); await espera(p, 200);
     await boton(p, /Registrar compra/, m);
   });
