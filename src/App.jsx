@@ -399,10 +399,17 @@ export default function App() {
       await registrarCambio(t,{ocId,ocNumero:data.numNueva,usuarioId:perfil?.id,usuarioNombre:perfil?.nombre,
         accion:"OC creada (ingreso manual)",campo:"numero_oc",valorNuevo:data.numNueva});
       if(data.productos?.length){
-        for(let i=0;i<data.productos.length;i++){
-          const p=data.productos[i];
-          const desc=`${p.descripcion} × ${p.cantidad} | Compra: $${(p.precioCompra*p.cantidad).toLocaleString("es-CL")} | Venta: $${(p.precioVenta*p.cantidad).toLocaleString("es-CL")}`;
-          await ins("oc_productos_link",t,{id:genId("lnk"),oc_id:ocId,descripcion:desc,url:p.url||"sin-link",orden:i,creado_por:session.user.id});
+        // 15/10/2026: el origen se indica SIEMPRE (la columna toma «compra» por defecto). Cada producto de una OC
+        // ingresada a mano queda como lo VENDIDO (origen venta, con su precio de venta) y como lo COMPRADO
+        // (origen compra, con su precio de compra y el enlace del proveedor). Los montos de la compra siguen
+        // viniendo del evento de compra, no de estas líneas.
+        const n=data.productos.length;
+        for(let i=0;i<n;i++){
+          const p=data.productos[i]; const cant=Number(p.cantidad)||1;
+          await ins("oc_productos_link",t,{id:genId("lnk"),oc_id:ocId,descripcion:p.descripcion,url:"sin-link",orden:i,origen:"venta",
+            cantidad:cant,precio_compra:null,precio_venta:Math.round((Number(p.precioVenta)||0)*cant)||null,creado_por:session.user.id});
+          await ins("oc_productos_link",t,{id:genId("lnk"),oc_id:ocId,descripcion:p.descripcion,url:p.url||"sin-link",orden:n+i,origen:"compra",
+            cantidad:cant,precio_compra:Math.round((Number(p.precioCompra)||0)*cant)||null,precio_venta:null,creado_por:session.user.id});
         }
       }
       if(data.rutCliente?.trim()){
@@ -602,8 +609,10 @@ export default function App() {
     } else {
       // OC pendiente de sincronizar: guardamos solo los links
       for(let i=0;i<links.length;i++){
+        // Marcador de un producto VENDIDO (origen venta explícito, 15/10/2026): al sincronizar con Mercado Público
+        // se completa en la misma línea en vez de agregar otra.
         await ins("oc_productos_link",t,{id:genId("lnk"),oc_id:ocId,
-          descripcion:"Producto por completar",url:links[i],orden:i,creado_por:session.user.id});
+          descripcion:"Producto por completar",url:links[i],orden:i,origen:"venta",creado_por:session.user.id});
       }
     }
 
