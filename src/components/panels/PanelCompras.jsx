@@ -4,6 +4,7 @@ import { FormIngresarCompra } from "../forms/FormIngresarCompra";
 import { RegistrarCompraOC } from "../forms/CompraDesdeCotizacion";
 import { CorregirCompra } from "../forms/CorregirCompra";
 import { filaProtegida, comprasConPedido } from "../../lib/compraCotizacion";
+import { financiamientoPendiente, financiamientoNoCorresponde, saldoFinanciamientoOC, resumenFinanciamiento, documentosPendientes, documentosCobrados, tieneValeVistaPendiente } from "../../lib/filtrosCompras";
 import { FormEntregaFallida, FormFechaEntrega, FormReclamarFactura } from "../forms/FormulariosCorreo";
 import { FormConfirmarEntrega, FormEmitirFactura, FormPagoCliente, FormPagoFinanciamiento } from "../forms/FormulariosRapidos";
 import { DiasBadge, Field, Leyenda, Modal, Trazabilidad } from "../ui/Basicos";
@@ -778,7 +779,7 @@ const ICONO_ESTADO={mp_cancelada:<Ic n="🔴"/>,facturada_sin_entrega:<Ic n="⚠
   falta_financiamiento:<Ic n="🏦"/>,reclamar:<Ic n="⚠"/>,vencida:<Ic n="🔴"/>,por_vencer:<Ic n="🟡"/>,facturada:<Ic n="🧾"/>,entregada:<Ic n="📦"/>,
   comprada:<Ic n="🚚"/>,mp_sin_aceptar:<Ic n="⏳"/>,sin_compra:"○"};
 
-export function FilaOC({ onCorregirCompra, onAnularCompra, onCompraDesdeCotizacion, onBuscarCotizacionOC, onCargarCotizacionOC, correosOC = SIN_CORREOS, onMarcarCorreo, pagosVendedor, onAsignarVendedor, onAsignarFinanciador, difsHistoricas, onCambiarFinanciamiento, oc, perfiles, todasLasOcs, onSincronizarFecha, expanded, onToggle, contactos, onEnviarReclamo, onCorreoOC, onRegistrarRespuestaReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, onRepartirInversion, buscarDuplicadoOC, perfil, historialCambios, onAgregarComentario, onEliminarComentario, bloqueoEstado, onArchivarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa, onRegistrarNC }) {
+export function FilaOC({ notaVista, onCorregirCompra, onAnularCompra, onCompraDesdeCotizacion, onBuscarCotizacionOC, onCargarCotizacionOC, correosOC = SIN_CORREOS, onMarcarCorreo, pagosVendedor, onAsignarVendedor, onAsignarFinanciador, difsHistoricas, onCambiarFinanciamiento, oc, perfiles, todasLasOcs, onSincronizarFecha, expanded, onToggle, contactos, onEnviarReclamo, onCorreoOC, onRegistrarRespuestaReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, onRepartirInversion, buscarDuplicadoOC, perfil, historialCambios, onAgregarComentario, onEliminarComentario, bloqueoEstado, onArchivarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa, onRegistrarNC }) {
   const evF=facturaVigente(oc);
   const dias=fmt.diasDesde(evF?.fecha);
   const saldo=(oc.monto_facturado||0)-(oc.monto_cobrado||0);
@@ -877,6 +878,7 @@ export function FilaOC({ onCorregirCompra, onAnularCompra, onCompraDesdeCotizaci
 
   return (
     <div data-oc={oc.numero_oc} style={{background:expanded?C.tealLight:C.card,borderTop:`1px solid ${expanded?C.teal:C.border}`,borderRight:`1px solid ${expanded?C.teal:C.border}`,borderBottom:`1px solid ${expanded?C.teal:C.border}`,borderLeft:`4px solid ${estadoOC.color}`,borderRadius:12,marginBottom:8,overflow:expanded?"visible":"hidden"}}>
+      {notaVista&&<div data-nota-vista style={{fontSize:12,fontWeight:700,color:C.inkMuted,background:C.paper,padding:"4px 12px",borderBottom:`1px solid ${C.border}`}}>{notaVista}</div>}
       <div onClick={handleToggle} role="button" tabIndex={0} aria-expanded={!!expanded} onKeyDown={e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); handleToggle(); } }} style={{padding:escritorio?"10px 14px":"12px 14px",cursor:"pointer"}}>
         {escritorio?(
           /* Escritorio: una fila compacta — código · cliente y asignaciones · estado y avance · monto */
@@ -1291,7 +1293,9 @@ export function PanelCompras({ onCorregirCompra, onAnularCompra, onCompraDesdeCo
     if(v==="entregar") return comprada&&!entregada;
     if(v==="facturar") return entregada&&!facturada;
     if(v==="cobrar")   return facturada&&!cobrada;
-    if(v==="financ")   return comprada&&!finPagado;
+    // 15/10/2026: solo financiamiento EFECTIVAMENTE pendiente (externo y con saldo > 0 según sus registros).
+    if(v==="financ")   return financiamientoPendiente(oc);
+    if(v==="valevista") return tieneValeVistaPendiente(oc);
     return true;
   };
   useEffect(()=>{
@@ -1356,7 +1360,8 @@ export function PanelCompras({ onCorregirCompra, onAnularCompra, onCompraDesdeCo
       {key:"entregar",label:"Por entregar", n:n("entregar"),color:C.info,    bg:C.infoLight},
       {key:"facturar",label:"Por facturar", n:n("facturar"),color:C.purple,  bg:C.purpleLight},
       {key:"cobrar",  label:"Por cobrar",   n:n("cobrar"),  color:C.warnText,    bg:C.warnLight},
-      {key:"financ",  label:"Por pagar",    n:n("financ"),  color:C.dangerText,  bg:C.dangerLight},
+      {key:"financ",  label:"Financiamiento pendiente", n:n("financ"),  color:C.dangerText,  bg:C.dangerLight},
+      {key:"valevista",label:"Vale vista pendiente", n:n("valevista"), color:C.warnText, bg:C.warnLight},
     ];
   },[ocs]);
 
@@ -1574,6 +1579,48 @@ export function PanelCompras({ onCorregirCompra, onAnularCompra, onCompraDesdeCo
         })}
       </div>
 
+      {vista==="financ"&&(()=>{
+        const grupos=resumenFinanciamiento(filtered,ocs,financiadores);
+        const noCorr=ocs.filter(financiamientoNoCorresponde).length;
+        return (
+          <div data-resumen-financiamiento style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"10px 12px",marginBottom:12,fontSize:12}}>
+            <div style={{fontWeight:800,color:C.ink,marginBottom:4}}>Financiamiento pendiente por financiador</div>
+            {grupos.length===0&&<div style={{color:C.inkFaint}}>No hay financiamiento pendiente con estos filtros.</div>}
+            {grupos.map(g=>(
+              <div key={g.id} data-fin-grupo={g.id} style={{padding:"6px 0",borderTop:`1px solid ${C.border}`}}>
+                <div style={{display:"flex",justifyContent:"space-between",gap:8,flexWrap:"wrap"}}>
+                  <b>{g.nombre} <span style={{fontWeight:600,color:C.inkMuted}}>· financiador {g.tipo==="propio"?"propio":"externo"} · {g.n} OC</span></b>
+                  <b data-fin-pendiente={g.id} style={{color:C.dangerText}}>{fmt.money(g.pendiente)}</b>
+                </div>
+                <div style={{color:C.inkMuted,marginTop:2}}>Costo de compras {fmt.money(g.costo)} − devoluciones asignadas a estas OC {fmt.money(g.devuelto)}</div>
+                {g.saldoGlobal!=null&&<div data-fin-saldo-global={g.id} style={{color:g.cuadra?C.okText:C.warnText,marginTop:2,fontWeight:600}}>
+                  Saldo global del financiador: {fmt.money(g.saldoGlobal)}{g.cuadra?" · coincide con sus OC pendientes":` · difiere de la suma de sus OC pendientes (${fmt.money(g.pendienteTodas)}): hay devoluciones o ajustes no asignados a una OC; el saldo global es la referencia`}
+                </div>}
+              </div>
+            ))}
+            <div style={{color:C.inkFaint,marginTop:6,lineHeight:1.45}}>Las devoluciones de capital se asignan por FIFO global (OC más antigua primero) al registrarse; aquí no se redistribuyen.{noCorr>0?` ${noCorr} OC con fondos propios o venta propia no aparecen: no corresponde devolución.`:""}</div>
+          </div>
+        );
+      })()}
+      {vista==="valevista"&&(()=>{
+        const docs=documentosPendientes(filtered);
+        return (
+          <div data-resumen-valevista style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"10px 12px",marginBottom:12,fontSize:12}}>
+            <div style={{display:"flex",justifyContent:"space-between",gap:8,fontWeight:800,color:C.ink,marginBottom:4}}>
+              <span>Vales vista y cheques recibidos sin abonar en banco</span><span data-vv-total style={{color:C.warnText}}>{docs.length} · {fmt.money(docs.reduce((s,d)=>s+d.monto,0))}</span>
+            </div>
+            {docs.length===0&&<div style={{color:C.inkFaint}}>No hay documentos pendientes con estos filtros.</div>}
+            {docs.map(d=>(
+              <div key={d.ev.id} data-vv-doc={d.ev.id} style={{display:"flex",justifyContent:"space-between",gap:8,flexWrap:"wrap",padding:"5px 0",borderTop:`1px solid ${C.border}`}}>
+                <span style={{minWidth:0}}><b style={{fontFamily:MONO}}>{d.numero}</b> · {d.cliente||"—"}<br/>
+                  <span style={{color:C.inkMuted}}>{d.medio}{d.institucion?` ${d.institucion}`:""} · recibido {d.fecha?fmt.date(d.fecha):"sin fecha"}</span></span>
+                <span style={{textAlign:"right"}}><b>{fmt.money(d.monto)}</b><br/><span data-vv-estado style={{color:C.warnText,fontWeight:700}}>{d.estado}</span></span>
+              </div>
+            ))}
+            <div style={{color:C.inkFaint,marginTop:6,lineHeight:1.45}}>«Documento recibido» no es «Dinero abonado en banco»: no cuenta como caja ni se concilia hasta marcarse cobrado (desde la cartola o al editar el cobro). Al cobrarse todos sus documentos, la OC sale de este filtro.</div>
+          </div>
+        );
+      })()}
       {/* ── Resumen y orden ── */}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:10}}>
         <span style={{fontSize:12,color:C.inkFaint,minWidth:0,lineHeight:1.5}}>
@@ -1620,7 +1667,7 @@ export function PanelCompras({ onCorregirCompra, onAnularCompra, onCompraDesdeCo
         </button>
         </span>
       </div>
-      {filtered.map(oc=><FilaOC key={oc.id} onCorregirCompra={onCorregirCompra} onAnularCompra={onAnularCompra} onCompraDesdeCotizacion={onCompraDesdeCotizacion} onBuscarCotizacionOC={onBuscarCotizacionOC} onCargarCotizacionOC={onCargarCotizacionOC} pagosVendedor={pagosVendedor} onAsignarVendedor={onAsignarVendedor} onAsignarFinanciador={onAsignarFinanciador} correosOC={correosPorOC.get(oc.id)||SIN_CORREOS} onMarcarCorreo={onMarcarCorreo} onRegistrarNC={onRegistrarNC} difsHistoricas={difsHistoricas} onCambiarFinanciamiento={onCambiarFinanciamiento} oc={oc} perfiles={perfiles} todasLasOcs={ocs} onSincronizarFecha={onSincronizarFecha} expanded={expId===oc.id} onToggle={()=>setExpId(expId===oc.id?null:oc.id)} contactos={contactos} onEnviarReclamo={onEnviarReclamo} onCorreoOC={onCorreoOC} onRegistrarRespuestaReclamo={onRegistrarRespuestaReclamo} onGuardarContacto={onGuardarContacto} onGuardarDatosOC={onGuardarDatosOC} onEditarEvento={onEditarEvento} financiadores={financiadores} onConfirmarEntrega={onConfirmarEntrega} onEmitirFactura={onEmitirFactura} onPagoCliente={onPagoCliente} onPagoFinanciamiento={onPagoFinanciamiento} entidadesCatalogo={entidadesCatalogo} onGuardarLink={onGuardarLink} onEliminarLink={onEliminarLink} onEditarLink={onEditarLink} onRepartirInversion={onRepartirInversion} buscarDuplicadoOC={buscarDuplicadoOC} bloqueoEstado={bloqueoEstado} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={onAgregarComentario} onEliminarComentario={onEliminarComentario} onArchivarOC={onArchivarOC} onEliminarFactura={onEliminarFactura} onEliminarEvento={onEliminarEvento} vendedores={vendedores} onIngresarCompra={onIngresarCompra} onAsignarResponsable={onAsignarResponsable} onGuardarPostventa={onGuardarPostventa} />)}
+      {filtered.map(oc=><FilaOC key={oc.id} notaVista={vista==="financ"?`${(financiadores||[]).find(f=>f.id===oc.financiador_id)?.nombre||"Sin financiador"} · pendiente ${fmt.money(saldoFinanciamientoOC(oc))} (costo ${fmt.money(oc.costo_total)} − devuelto ${fmt.money(oc.monto_pagado_fin)})`:vista==="valevista"?`${documentosPendientes([oc]).length} documento(s) recibido(s) sin abonar · ${fmt.money(documentosPendientes([oc]).reduce((s,d)=>s+d.monto,0))}${documentosCobrados(oc).length?` · ${documentosCobrados(oc).length} ya abonado(s) en banco`:""}`:null} onCorregirCompra={onCorregirCompra} onAnularCompra={onAnularCompra} onCompraDesdeCotizacion={onCompraDesdeCotizacion} onBuscarCotizacionOC={onBuscarCotizacionOC} onCargarCotizacionOC={onCargarCotizacionOC} pagosVendedor={pagosVendedor} onAsignarVendedor={onAsignarVendedor} onAsignarFinanciador={onAsignarFinanciador} correosOC={correosPorOC.get(oc.id)||SIN_CORREOS} onMarcarCorreo={onMarcarCorreo} onRegistrarNC={onRegistrarNC} difsHistoricas={difsHistoricas} onCambiarFinanciamiento={onCambiarFinanciamiento} oc={oc} perfiles={perfiles} todasLasOcs={ocs} onSincronizarFecha={onSincronizarFecha} expanded={expId===oc.id} onToggle={()=>setExpId(expId===oc.id?null:oc.id)} contactos={contactos} onEnviarReclamo={onEnviarReclamo} onCorreoOC={onCorreoOC} onRegistrarRespuestaReclamo={onRegistrarRespuestaReclamo} onGuardarContacto={onGuardarContacto} onGuardarDatosOC={onGuardarDatosOC} onEditarEvento={onEditarEvento} financiadores={financiadores} onConfirmarEntrega={onConfirmarEntrega} onEmitirFactura={onEmitirFactura} onPagoCliente={onPagoCliente} onPagoFinanciamiento={onPagoFinanciamiento} entidadesCatalogo={entidadesCatalogo} onGuardarLink={onGuardarLink} onEliminarLink={onEliminarLink} onEditarLink={onEditarLink} onRepartirInversion={onRepartirInversion} buscarDuplicadoOC={buscarDuplicadoOC} bloqueoEstado={bloqueoEstado} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={onAgregarComentario} onEliminarComentario={onEliminarComentario} onArchivarOC={onArchivarOC} onEliminarFactura={onEliminarFactura} onEliminarEvento={onEliminarEvento} vendedores={vendedores} onIngresarCompra={onIngresarCompra} onAsignarResponsable={onAsignarResponsable} onGuardarPostventa={onGuardarPostventa} />)}
       {filtered.length===0&&<div style={{textAlign:"center",padding:30,color:C.inkFaint,fontSize:13}}>No hay órdenes con estos filtros.</div>}
       <Leyenda items={[
         {muestra:"✓ Cerrada",   color:C.okText,      bg:C.okLight,      texto:"Cobrada al cliente y pagada al financiador. Ciclo terminado."},

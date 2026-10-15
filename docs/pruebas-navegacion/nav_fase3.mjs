@@ -28,7 +28,7 @@ const FUNCIONES={
   finanzas:["Resultado del mes","Margen comercial"],
   impuestos:["IVA mensual","F29","Registrar IVA de otro mes","Ver historial"],
   banco:["Actualizar saldo de la cuenta","Conciliación","Cartola","Por revisar"],
-  compras:["Buscar OC, cliente, RUT, comuna, factura...","Por comprar","Por entregar","Por facturar","Por cobrar","Por pagar","Filtros"],
+  compras:["Buscar OC, cliente, RUT, comuna, factura...","Por comprar","Por entregar","Por facturar","Por cobrar","Financiamiento pendiente","Vale vista pendiente","Filtros"],
   agenda:["Octubre","Ver alertas"],
   notif:["Urgente","Atención","Informativas"],
   financiamiento:["Abonar a un financiador","Ver cartola","Registrar"],
