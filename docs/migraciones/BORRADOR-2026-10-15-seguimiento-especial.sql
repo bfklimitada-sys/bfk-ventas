@@ -16,7 +16,7 @@
 --  · Resolver exige describir la solución; quién y cuándo lo resolvió se registran automáticamente.
 --  · Autor y fecha de creación se fijan en la base (no los envía el navegador) y no se pueden cambiar.
 -- ═══════════════════════════════════════════════════════════════
-begin;
+-- (se ejecuta dentro de UNA transacción del aplicador: psql --single-transaction o el instalador con huella)
 
 create table public.oc_seguimientos (
   id                   text primary key,
@@ -93,5 +93,3 @@ create policy seg_crean on public.oc_seguimientos for insert to authenticated wi
 create policy seg_editan on public.oc_seguimientos for update to authenticated using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
 create policy seg_solo_admin_borra on public.oc_seguimientos for delete to authenticated using (public.seg_es_admin());
 grant select, insert, update, delete on public.oc_seguimientos to authenticated;
-
-commit;
