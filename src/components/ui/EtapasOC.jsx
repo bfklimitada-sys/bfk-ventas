@@ -1,3 +1,4 @@
+import { esEventoDePedido } from "../../lib/compraCotizacion";
 import { Fragment, useRef, useState, useEffect } from "react";
 import { estaCobrada, estaComprada, estaEntregada, estaFacturada, financiamientoPagado } from "../../lib/ocs";
 import { Field } from "./Basicos";
@@ -85,7 +86,7 @@ export const numeroIncidente=(lista,ev)=>{
   const i=cron.findIndex(e=>e.id===ev?.id); return i<0?cron.length+1:i+1;
 };
 
-export function EtapasOC({ oc, perfil, perfiles, activa, soloEtapa, extra, onEditarEvento, onEliminarFactura, onEliminarEvento, onAccion, onCorreoFallida, onCorreoFecha, onPostventa, onReabrirPostventa, onGuardarLink, onEliminarLink, onEditarLink, onAsignarResponsable, financiadores, difsOC, onCambiarFinanciamiento }) {
+export function EtapasOC({ onCorregirCompra, oc, perfil, perfiles, activa, soloEtapa, extra, onEditarEvento, onEliminarFactura, onEliminarEvento, onAccion, onCorreoFallida, onCorreoFecha, onPostventa, onReabrirPostventa, onGuardarLink, onEliminarLink, onEditarLink, onAsignarResponsable, financiadores, difsOC, onCambiarFinanciamiento }) {
   // Fase 4B: diferencias históricas pendientes bloquean las operaciones de su dominio hasta que se apruebe la corrección.
   const bloqueado=(dominio)=>(difsOC||[]).some(d=>(d.bloquea||[]).includes(dominio));
   const [cambiandoFin,setCambiandoFin]=useState(false);
@@ -273,6 +274,11 @@ export function EtapasOC({ oc, perfil, perfiles, activa, soloEtapa, extra, onEdi
                 <button onClick={()=>onPostventa&&onPostventa(ev,"editar")}
                   style={{fontSize:12,background:C.tealLight,color:C.tealDark,border:"none",borderRadius:8,padding:"4px 10px",cursor:"pointer",fontWeight:600}}><Ic n="✏️"/> Editar</button>
               </>:
+              etapa.tabla==="eventos_compra"&&esEventoDePedido(ev)?(
+                // 15/10/2026: compra desde cotización → se corrige o anula como un todo (productos, costo y deuda coherentes).
+                !(dominio&&bloqueado(dominio))&&onCorregirCompra&&<button data-corregir-compra={ev.id} onClick={()=>onCorregirCompra(ev)}
+                  style={{fontSize:12,background:C.tealLight,color:C.tealDark,border:"none",borderRadius:8,padding:"4px 10px",cursor:"pointer",fontWeight:700}}>Corregir compra</button>
+              ):
               !(dominio&&bloqueado(dominio))&&<button onClick={()=>onEditarEvento&&onEditarEvento({tipo:etapa.label,e:ev,tabla:etapa.tabla})}
                 style={{fontSize:12,background:C.tealLight,color:C.tealDark,border:"none",borderRadius:8,padding:"4px 10px",cursor:"pointer",fontWeight:600}}><Ic n="✏️"/> Editar</button>}
               {perfil?.rol==="admin"&&etapa.key==="factura"&&!bloqueado("facturacion")&&(
@@ -281,7 +287,7 @@ export function EtapasOC({ oc, perfil, perfiles, activa, soloEtapa, extra, onEdi
                   await onEliminarFactura(oc.id, ev.id); setDetalle(null);
                 }} style={{fontSize:12,background:C.dangerLight,color:C.dangerText,border:"none",borderRadius:8,padding:"4px 10px",cursor:"pointer",fontWeight:600}}><Ic n="🗑"/> Eliminar</button>
               )}
-              {perfil?.rol==="admin"&&etapa.key!=="factura"&&!(dominio&&bloqueado(dominio))&&(
+              {perfil?.rol==="admin"&&etapa.key!=="factura"&&!(dominio&&bloqueado(dominio))&&!(etapa.tabla==="eventos_compra"&&esEventoDePedido(ev))&&(
                 <button onClick={async()=>{
                   if(!window.confirm(`¿Eliminar este registro de ${etapa.label}?`)) return;
                   if(onEliminarEvento) await onEliminarEvento(etapa.tabla, ev.id, oc.id, etapa.key); setDetalle(null);

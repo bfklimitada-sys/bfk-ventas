@@ -46,7 +46,7 @@ const BASE = baseCotizacion(cotCargada());
   ok("U4_parcial_proyecta_sin_definitivo", c.parcial && c.costoActualizado === Math.round(BASE.costoTotal) && c.utilidadActualizada === c.utilidadOriginal, c);
   ok("U5_no_compra_mas_de_lo_pendiente", validarCompra({ opcion: "B", filas: [...fil, { ...fil[0], rid: "x", cantidad: 1 }], lineas: lin, base: BASE }).errores.some((e) => /no se duplican/.test(e)));
   ok("U6_id_fila_reversible", leerIdCompra(idFilaCompra("PABC", 2, "it-a1", 0))?.item === "ita1" && leerIdCompra("lnk_123") === null);
-  ok("U7_ya_comprado_se_descuenta", estadoLineas(BASE, compradoEnOC({ oc_productos_link: [{ id: idFilaCompra("P1", 1, "it-a1", 0), origen: "compra", cantidad: 2 }] }))[0].pendiente === 0);
+  ok("U7_ya_comprado_se_descuenta", estadoLineas(BASE, compradoEnOC({ eventos_compra: [{ id: "e", notas: "Pedido P1-1 · desde cotización" }], oc_productos_link: [{ id: idFilaCompra("P1", 1, "it-a1", 0), origen: "compra", cantidad: 2 }] }))[0].pendiente === 0);
 }
 
 // ═════ Interfaz ═════

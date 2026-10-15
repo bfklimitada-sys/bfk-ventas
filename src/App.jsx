@@ -43,7 +43,7 @@ import { PanelResumenFinanzas } from "./components/panels/PanelResumenFinanzas";
 import { PanelCotizaciones } from "./components/panels/PanelCotizaciones";
 import { listarBorradores } from "./lib/borradoresCotizacion";
 import { buscarCotizacionesDeOC, cargarCotizacionLectura } from "./lib/cotizacionesDatos";
-import { idFilaCompra, idFilaDespacho, marcaPedido } from "./lib/compraCotizacion";
+import { idFilaCompra, idFilaDespacho, marcaPedido, filaProtegida, esEventoDePedido } from "./lib/compraCotizacion";
 import { BarraInferior, BarraLateral, MenuMas, contarAlertas, useEsEscritorio } from "./components/ui/Navegacion";
 
 // Pantallas, grupos, direcciones (#/ruta) y permisos: una sola definición en lib/navegacion.js.
@@ -471,6 +471,33 @@ export default function App() {
     await registrarCambio(t,{ocId,ocNumero:oc?.numero_oc,usuarioId:perfil?.id,usuarioNombre:perfil?.nombre,
       accion:`Compra registrada desde cotización ${codigoCotizacion} (pedido ${pedido}: ${grupos.length} proveedor${grupos.length===1?"":"es"})`,campo:"compra",valorNuevo:grupos.map(g=>g.proveedor).join(", ")}).catch(()=>{});
     showToast(omitidos&&!registrados?"Esta compra ya estaba registrada: no se duplicó":"Compra registrada desde la cotización"); setAccion(null); await cargarTodo();
+  };
+
+  // «Corregir compra» (15/10/2026): corrige la MISMA compra (editar_compra_oc valida y recalcula costo y deuda; no deja el
+  // costo bajo lo pagado al financiador) y después sus productos. Lo comercial no mueve dinero. Pagos y devoluciones FIFO
+  // no se tocan. Reintentar es seguro: el costo se fija a un valor final, no se suma.
+  const handleCorregirCompra=async({ocId,evento,plan,proveedor,fechaEntrega,motivo,clave})=>{
+    const t=session.access_token; const oc=ocs.find(o=>o.id===ocId);
+    if(plan.financiero&&perfil?.rol!=="admin") throw new Error("Solo un administrador puede corregir cantidades, precios o despacho de una compra confirmada");
+    if(plan.cambiaEvento){
+      await editarCompraOC(t,{eventoId:evento.id,fecha:evento.fecha,costo:plan.financiero?plan.costoNuevo:evento.costo_compra,montoVenta:null,
+        fechaEntregaEstimada:fechaEntrega||null,proveedor:proveedor||null});
+    }
+    for(const c of plan.cambiosFilas) await upd("oc_productos_link",t,c.id,c.patch);
+    await registrarCambio(t,{ocId,ocNumero:oc?.numero_oc,usuarioId:perfil?.id,usuarioNombre:perfil?.nombre,
+      accion:`Compra corregida (Pedido ${clave})${plan.financiero?"":" · sin cambio de dinero"}${motivo?` · motivo: ${motivo}`:""}`,campo:"compra",
+      valorAnterior:plan.financiero?fmt.money(evento.costo_compra):null,valorNuevo:[plan.financiero?fmt.money(plan.costoNuevo):null,...plan.detalle].filter(Boolean).join(" · ").slice(0,500)}).catch(()=>{});
+    showToast(plan.financiero?"Compra corregida · costo y deuda recalculados":"Datos de la compra actualizados (sin cambio de dinero)"); await cargarTodo();
+  };
+  const handleAnularCompra=async({ocId,evento,filas,motivo,clave})=>{
+    const t=session.access_token; const oc=ocs.find(o=>o.id===ocId);
+    if(perfil?.rol!=="admin") throw new Error("Solo un administrador puede anular una compra");
+    await eliminarCompraOC(t,evento.id);   // la base valida (pagos al financiador, bloqueos) y recalcula costo y deuda
+    // Sus productos se eliminan después; si alguno fallara, queda sin compra asociada y ya no cuenta como comprado.
+    let fallidos=0; for(const id of filas){ try{ await delConfirmado("oc_productos_link",t,id); }catch{ fallidos++; } }
+    await registrarCambio(t,{ocId,ocNumero:oc?.numero_oc,usuarioId:perfil?.id,usuarioNombre:perfil?.nombre,
+      accion:`Compra anulada (Pedido ${clave}) · motivo: ${motivo}`,campo:"compra",valorAnterior:fmt.money(evento.costo_compra),valorNuevo:"anulada"}).catch(()=>{});
+    showToast(fallidos?`Compra anulada; ${fallidos} producto(s) no se pudieron quitar y quedaron sin compra asociada`:"Compra anulada · costo y deuda recalculados",fallidos?"error":"success"); await cargarTodo();
   };
 
   // ─── NUEVA OC RÁPIDA (datos desde Mercado Público) ───────────
@@ -1242,6 +1269,9 @@ export default function App() {
   const handleEliminarLink=async(linkId,oc)=>{
     const t=session.access_token;
     const l=(oc?.oc_productos_link||[]).find(x=>x.id===linkId);
+    // 15/10/2026: una línea de una compra confirmada no se elimina suelta (cambiaría lo comprado sin corregir la compra).
+    const prot=l&&filaProtegida(l,oc);
+    if(prot){ showToast(`Esta línea pertenece a la compra confirmada (Pedido ${prot.clave}). Usa «Corregir compra».`,"error"); return false; }
     // Fase 4A: el historial y la recarga solo después de confirmar que la base eliminó el producto.
     try{ await delConfirmado("oc_productos_link",t,linkId); }
     catch(e){ showToast(e.message,"error"); await cargarTodo(); return false; }
@@ -1263,6 +1293,8 @@ export default function App() {
   const handleEditarLink=async(linkId,campos,oc)=>{
     const t=session.access_token;
     const antes=(oc?.oc_productos_link||[]).find(x=>x.id===linkId)||{};
+    const prot=filaProtegida(antes,oc);
+    if(prot){ showToast(`Esta línea pertenece a la compra confirmada (Pedido ${prot.clave}). Usa «Corregir compra».`,"error"); return; }
     const {patch,cambios}=cambiosProducto(antes,campos||{});
     if(!Object.keys(patch).length){ showToast("Sin cambios en el producto"); return; }
     if("direccion_entrega" in patch) patch.direccion_entrega=patch.direccion_entrega||null;
@@ -1286,7 +1318,7 @@ export default function App() {
     try{
       for(const a of (asignaciones||[])){
         const antes=lineas.find(l=>l.id===a.id);
-        if(!antes||Number(antes.precio_compra)===Number(a.precio_compra)) continue;
+        if(!antes||filaProtegida(antes,oc)||Number(antes.precio_compra)===Number(a.precio_compra)) continue;   // compras confirmadas: no se reparten
         await upd("oc_productos_link",t,a.id,{precio_compra:a.precio_compra});
         n++;
       }
@@ -1405,6 +1437,7 @@ export default function App() {
     const t=session.access_token;
     const oc=ocs.find(o=>o.id===ocId);
     const ev=(oc?.[tabla]||[]).find(e=>e.id===eventoId);
+    if(tabla==="eventos_compra"&&esEventoDePedido(ev)){ showToast("Esta compra se registró desde una cotización: anúlala con «Corregir compra» (elimina también sus productos).","error"); return; }
 
     if(tabla==="eventos_compra"||tabla==="eventos_pago_financiamiento"){
       try{ tabla==="eventos_compra" ? await eliminarCompraOC(t,eventoId) : await eliminarPagoFinanciador(t,eventoId); }
@@ -1596,6 +1629,7 @@ export default function App() {
   // cobros y entregas actualizan solo el evento. En todos los casos los totales los recalcula la base.
   const handleEditarEvento=async(oc, tabla, eventoOriginal, cambios)=>{
     const t=session.access_token;
+    if (tabla==="eventos_compra"&&esEventoDePedido(eventoOriginal)) throw new Error("Esta compra se registró desde una cotización: corrígela con «Corregir compra» para mantener productos, costo y deuda coherentes.");
     if (tabla==="eventos_compra") {
       await editarCompraOC(t,{eventoId:eventoOriginal.id,fecha:cambios.fecha??eventoOriginal.fecha,
         costo:cambios.costo_compra??eventoOriginal.costo_compra,montoVenta:cambios.monto_venta??null});
@@ -1740,7 +1774,7 @@ export default function App() {
     <ModoTodoContext.Provider value={todo}>
       {pestanasHub&&!todo&&<Pestanas etiqueta={HUBS[pantalla.hub].label} variante="subrayado" activa={tab} onCambiar={irA} items={pestanasHub.map(p=>({key:p.key,label:p.label,attrs:{"data-nav":p.key,"aria-current":tab===p.key?"page":undefined}}))} />}
       {(tab==="panel"||todo)&&hoja("panel",<PanelDashboard onQuitarAlertaCartola={handleQuitarAlertaCartola} onBuscarCompras={(q)=>{setBusquedaCompras(q);setFiltroCompras(null);setOcFoco(null);setVolverA(null);setTab("compras");}} ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} aportes={aportes} ajustes={ajustesSaldo} categorias={categoriasGasto} perfil={perfil} onExportarTodo={handleExportarTodo} exportando={exportando} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setVolverA(null);setTab(t);}} onAccion={(k)=>setAccion(k)} onSincronizar={completarTodasDesdeMP} onCorregirFechas={corregirFechasTodas} sincronizando={sincronizando} porAceptar={porAceptar.filter(a=>!buscarDuplicadoOC(a.numero_oc))} onActualizarPorAceptar={revisarPorAceptar} verificandoPorAceptar={verificandoPorAceptar} aceptadasSinCargar={aceptadasSinCargar.filter(a=>!buscarDuplicadoOC(a.numero_oc))} onCargarOC={(numero)=>{setCodigoOcRapida(numero);setAccion("compra_oc");}} onCargarTodasAceptadas={handleCargarTodasAceptadas} cargandoAceptadas={cargandoAceptadas} onActualizarAceptadas={revisarAceptadasSinCargar} verificandoAceptadas={verificandoAceptadas} canceladasEnMP={canceladasEnMP.filter(c=>ocs.some(o=>o.id===c.id))} onArchivarCancelada={(id)=>handleArchivarOC(id,"Cancelada en Mercado Público")} onActualizarCanceladas={revisarCanceladasEnMP} verificandoCanceladas={verificandoCanceladas} onValidarTodo={validarTodoContraMP} validandoTodo={validandoTodo} usoMP={usoMP} actMP={actMP} esCodigoMP={esCodigoMP} ultimaCartola={ultimaCartola} saldoBanco={saldoBanco} bancoMensual={bancoMensual} onEditarSaldo={()=>setAccion("saldo_banco")} />)}
-      {(tab==="compras"||todo)&&hoja("compras",<>{!todo&&volverA==="notif"&&<button onClick={()=>{setVolverA(null);setTab("notif");}} style={{width:"100%",textAlign:"left",background:C.tealLight,color:C.tealDark,border:"none",borderRadius:12,padding:"10px 12px",marginBottom:10,fontWeight:800,fontSize:13,minHeight:44,cursor:"pointer"}}>← Volver a Alertas</button>}<PanelCompras key={"compras-"+reinicio} pagosVendedor={pagosVendedor} onAsignarVendedor={handleAsignarVendedor} onAsignarFinanciador={handleAsignarFinanciador} correosBfk={correosBfk} onMarcarCorreo={handleMarcarCorreo} difsHistoricas={difsHistoricas} onCambiarFinanciamiento={handleCambiarFinanciamiento} busquedaInicial={busquedaCompras} ocs={ocs} perfiles={perfiles} filtroInicial={filtroCompras} ocFoco={ocFoco} onFocoUsado={()=>setOcFoco(null)} contactos={contactos} onEnviarReclamo={handleEnviarReclamo} onCorreoOC={handleCorreoOC} onRegistrarRespuestaReclamo={handleRegistrarRespuestaReclamo} onGuardarContacto={handleGuardarContacto} onGuardarDatosOC={handleGuardarDatosOC} onEditarEvento={handleEditarEvento} financiadores={financiadores} onConfirmarEntrega={handleEntrega} onEmitirFactura={handleFactura} onPagoCliente={handlePagoCliente} onPagoFinanciamiento={handlePagoFin} entidadesCatalogo={entidadesCatalogo} onGuardarLink={handleGuardarLink} onEliminarLink={handleEliminarLink} onEditarLink={handleEditarLink} onRepartirInversion={handleRepartirInversion} buscarDuplicadoOC={buscarDuplicadoOC} onSincronizarFecha={handleSincronizarFecha} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={handleAgregarComentario} onEliminarComentario={handleEliminarComentario} onArchivarOC={handleArchivarOC} onEliminarFactura={handleEliminarFactura} onRegistrarNC={handleNotaCredito} onEliminarEvento={handleEliminarEvento} vendedores={vendedores} onIngresarCompra={handleIngresarCompra} onCompraDesdeCotizacion={handleCompraDesdeCotizacion} onBuscarCotizacionOC={buscarCotizacionOC} onCargarCotizacionOC={cargarCotizacionOC} onAsignarResponsable={handleAsignarResponsable} onGuardarPostventa={handleGuardarPostventa} /></>)}
+      {(tab==="compras"||todo)&&hoja("compras",<>{!todo&&volverA==="notif"&&<button onClick={()=>{setVolverA(null);setTab("notif");}} style={{width:"100%",textAlign:"left",background:C.tealLight,color:C.tealDark,border:"none",borderRadius:12,padding:"10px 12px",marginBottom:10,fontWeight:800,fontSize:13,minHeight:44,cursor:"pointer"}}>← Volver a Alertas</button>}<PanelCompras key={"compras-"+reinicio} pagosVendedor={pagosVendedor} onAsignarVendedor={handleAsignarVendedor} onAsignarFinanciador={handleAsignarFinanciador} correosBfk={correosBfk} onMarcarCorreo={handleMarcarCorreo} difsHistoricas={difsHistoricas} onCambiarFinanciamiento={handleCambiarFinanciamiento} busquedaInicial={busquedaCompras} ocs={ocs} perfiles={perfiles} filtroInicial={filtroCompras} ocFoco={ocFoco} onFocoUsado={()=>setOcFoco(null)} contactos={contactos} onEnviarReclamo={handleEnviarReclamo} onCorreoOC={handleCorreoOC} onRegistrarRespuestaReclamo={handleRegistrarRespuestaReclamo} onGuardarContacto={handleGuardarContacto} onGuardarDatosOC={handleGuardarDatosOC} onEditarEvento={handleEditarEvento} financiadores={financiadores} onConfirmarEntrega={handleEntrega} onEmitirFactura={handleFactura} onPagoCliente={handlePagoCliente} onPagoFinanciamiento={handlePagoFin} entidadesCatalogo={entidadesCatalogo} onGuardarLink={handleGuardarLink} onEliminarLink={handleEliminarLink} onEditarLink={handleEditarLink} onRepartirInversion={handleRepartirInversion} buscarDuplicadoOC={buscarDuplicadoOC} onSincronizarFecha={handleSincronizarFecha} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={handleAgregarComentario} onEliminarComentario={handleEliminarComentario} onArchivarOC={handleArchivarOC} onEliminarFactura={handleEliminarFactura} onRegistrarNC={handleNotaCredito} onEliminarEvento={handleEliminarEvento} vendedores={vendedores} onIngresarCompra={handleIngresarCompra} onCompraDesdeCotizacion={handleCompraDesdeCotizacion} onCorregirCompra={handleCorregirCompra} onAnularCompra={handleAnularCompra} onBuscarCotizacionOC={buscarCotizacionOC} onCargarCotizacionOC={cargarCotizacionOC} onAsignarResponsable={handleAsignarResponsable} onGuardarPostventa={handleGuardarPostventa} /></>)}
       {(tab==="notif"||todo)&&hoja("notif",<PanelNotificaciones correos={correosBfk} onMarcarCorreo={handleMarcarCorreo} notificaciones={notificaciones} ocs={ocs} onMarcarLeidas={handleMarcarNotificacionesLeidas} filtroAlertas={filtroAlertas} onFiltroAlertas={setFiltroAlertas} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setVolverA(ocId?"notif":null);setTab(t);}} />)}
       {(tab==="agenda"||todo)&&hoja("agenda",<PanelCalendario ocs={ocs} onMarcarFecha={handleMarcarFecha} onVerAlertas={(f)=>{setFiltroCompras(null);setOcFoco(null);setVolverA(null);setFiltroAlertas({nivel:(f&&f.nivel)||"todas",etapa:(f&&f.etapa)||null});setTab("notif");}} />)}
       {tab==="cotizaciones"&&!todo&&hoja("cotizaciones",<PanelCotizaciones token={session?.access_token} perfil={perfil} entidadesCatalogo={entidadesCatalogo} showToast={showToast} />)}

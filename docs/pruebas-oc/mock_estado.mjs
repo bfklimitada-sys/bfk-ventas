@@ -211,7 +211,8 @@ export function crearBase(inicial, { mp = {}, borrado = {} } = {}) {
       const oc = db.ordenes_compra_v2.find((o) => o.id === ev.oc_id);
       if (num(b.p_costo) < num(oc.monto_pagado_fin)) return err(`El costo de la OC ${oc.numero_oc} no puede quedar bajo lo ya pagado al financiador`);
       if (b.p_monto_venta !== null && b.p_monto_venta !== undefined && num(b.p_monto_venta) !== num(ev.monto_venta)) oc.monto_total = Math.max(0, num(oc.monto_total) + num(b.p_monto_venta) - num(ev.monto_venta));
-      Object.assign(ev, { fecha: b.p_fecha, costo_compra: num(b.p_costo), ...(b.p_monto_venta !== null && b.p_monto_venta !== undefined ? { monto_venta: num(b.p_monto_venta) } : {}) });
+      Object.assign(ev, { fecha: b.p_fecha, costo_compra: num(b.p_costo), ...(b.p_monto_venta !== null && b.p_monto_venta !== undefined ? { monto_venta: num(b.p_monto_venta) } : {}),
+        ...(b.p_proveedor !== null && b.p_proveedor !== undefined ? { proveedor: b.p_proveedor } : {}), ...(b.p_fecha_entrega_estimada ? { fecha_entrega_estimada: b.p_fecha_entrega_estimada } : {}) });
       hist(yo, ev.oc_id, "Compra corregida"); return ok(resumen(ev.oc_id));
     }
     if (fn === "registrar_movimiento_cartola") {

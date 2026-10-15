@@ -49,17 +49,83 @@ export function baseCotizacion(cot) {
   return { lineas, envios, direccion: destinoDe(cot), costoTotal, codigo: cot.id_externo || cot.nombre || String(cot.id || "").slice(0, 8) };
 }
 
-// Lo ya comprado desde esta cotización en la OC: cantidades por línea y despachos registrados.
-export function compradoEnOC(oc) {
-  const porItem = {}; const despachos = new Set(); const pedidos = new Set();
+// ── Consistencia productos ↔ compras (15/10/2026) ──
+// Una fila de pedido («lnkcz-…») solo es VÁLIDA si su compra existe: un evento de compra de la OC con la marca
+// «Pedido <id>-<n>» en sus notas. Las filas válidas pertenecen a una compra confirmada: no se editan ni eliminan
+// sueltas (se usa «Corregir compra»), y son las ÚNICAS que cuentan como compradas. Filas sin compra asociada
+// (huérfanas) no cuentan y siguen las reglas normales de edición.
+export const MARCA_PEDIDO = /Pedido ([A-Z0-9]+)-(\d+)/;
+export function comprasConPedido(oc) {
+  const m = new Map();
+  for (const e of oc?.eventos_compra || []) { const r = MARCA_PEDIDO.exec(String(e.notas || "")); if (r) m.set(`${san(r[1])}-${r[2]}`, e); }
+  return m;
+}
+export const esEventoDePedido = (e) => MARCA_PEDIDO.test(String(e?.notas || ""));
+// ¿La fila pertenece a una compra confirmada? Devuelve { clave, pedido, n, evento } o null.
+export function filaProtegida(l, oc, compras = comprasConPedido(oc)) {
+  if (l?.origen !== "compra") return null;
+  const r = leerIdCompra(l.id); if (!r) return null;
+  const clave = `${r.pedido}-${r.n}`; const evento = compras.get(clave);
+  return evento ? { clave, pedido: r.pedido, n: r.n, evento } : null;
+}
+// Pedidos confirmados de la OC con sus filas (productos y despachos).
+export function pedidosDeOC(oc) {
+  const compras = comprasConPedido(oc); const out = new Map();
+  for (const [clave, evento] of compras) out.set(clave, { clave, evento, productos: [], despachos: [] });
   for (const l of oc?.oc_productos_link || []) {
-    if (l.origen !== "compra") continue;
-    const r = leerIdCompra(l.id); if (!r) continue;
-    pedidos.add(`${r.pedido}-${r.n}`);
+    const f = filaProtegida(l, oc, compras); if (!f) continue;
+    const r = leerIdCompra(l.id); (r.envio ? out.get(f.clave).despachos : out.get(f.clave).productos).push(l);
+  }
+  return [...out.values()];
+}
+export const pedidoDeEvento = (oc, evento) => pedidosDeOC(oc).find((p) => p.evento.id === evento?.id) || null;
+
+// Lo ya comprado desde esta cotización en la OC: cantidades por línea y despachos registrados.
+// Solo cuentan filas de compras CONFIRMADAS (con su evento de compra).
+export function compradoEnOC(oc) {
+  const porItem = {}; const despachos = new Set(); const pedidos = new Set(); const compras = comprasConPedido(oc);
+  for (const l of oc?.oc_productos_link || []) {
+    const f = filaProtegida(l, oc, compras); if (!f) continue;
+    const r = leerIdCompra(l.id);
+    pedidos.add(f.clave);
     if (r.envio) despachos.add(r.envio);
     else porItem[r.item] = (porItem[r.item] || 0) + (Number(l.cantidad) || 0);
   }
   return { porItem, despachos, pedidos };
+}
+
+// «Corregir compra»: separa lo comercial/operativo (no mueve dinero) de lo financiero (cantidad, precio, despacho).
+// filas: [{ id, descripcion, url, direccion_entrega, cantidad, unitario | monto (despacho) }] con los valores nuevos.
+// Las cantidades solo pueden bajar (para comprar más se usa «Registrar otra compra», que valida lo pendiente).
+// Devuelve { cambiosFilas: [{ id, patch }], financiero, costoNuevo, errores, detalle }.
+export function planCorreccion(pedido, nuevos, { proveedor, fechaEntrega } = {}) {
+  const errores = []; const cambiosFilas = []; const detalle = []; let delta = 0; let financiero = false;
+  const todas = [...pedido.productos, ...pedido.despachos];
+  for (const l of todas) {
+    const n = nuevos.find((x) => x.id === l.id); if (!n) continue;
+    const esDesp = !!leerIdCompra(l.id)?.envio; const patch = {};
+    const texto = (k, v) => { const a = k === "url" ? (l.url && l.url !== "sin-link" ? l.url : "") : String(l[k] || ""); const b = String(v ?? "").trim(); if (a.trim() !== b) { patch[k] = k === "url" ? (b || "sin-link") : (b || null); detalle.push(`${l.descripcion}: ${k === "url" ? "enlace" : k === "descripcion" ? "producto" : "dirección"} cambiado`); } };
+    if (!esDesp) { texto("descripcion", n.descripcion); texto("url", n.url); texto("direccion_entrega", n.direccion_entrega); }
+    const cantAntes = esDesp ? 1 : Number(l.cantidad) || 0;
+    const cant = esDesp ? 1 : Number(n.cantidad);
+    if (!esDesp && (!Number.isInteger(cant) || cant < 0)) errores.push(`«${l.descripcion}»: la cantidad debe ser un entero mayor o igual a 0.`);
+    else if (!esDesp && cant > cantAntes) errores.push(`«${l.descripcion}»: la cantidad solo puede disminuir (${cantAntes} → ${cant}). Para comprar más usa «Registrar otra compra».`);
+    const totalAntes = Number(l.precio_compra) || 0;
+    const totalNuevo = esDesp ? Math.round(Number(n.monto)) : Math.round(Number(n.unitario) * cant);
+    if (!(totalNuevo >= 0) || Number.isNaN(totalNuevo)) errores.push(`«${l.descripcion}»: monto inválido.`);
+    if (!esDesp && cant !== cantAntes) { patch.cantidad = cant; financiero = true; detalle.push(`${l.descripcion}: cantidad ${cantAntes} → ${cant}`); }
+    if (totalNuevo !== totalAntes && !Number.isNaN(totalNuevo)) { patch.precio_compra = totalNuevo; financiero = true; delta += totalNuevo - totalAntes; detalle.push(`${l.descripcion}: costo ${totalAntes} → ${totalNuevo}`); }
+    if (Object.keys(patch).length) cambiosFilas.push({ id: l.id, patch });
+  }
+  const ev = pedido.evento;
+  const cambiaProveedor = proveedor !== undefined && String(proveedor).trim() !== String(ev.proveedor || "").trim();
+  const cambiaFecha = fechaEntrega !== undefined && String(fechaEntrega || "") !== String(ev.fecha_entrega_estimada || "").slice(0, 10) && !!fechaEntrega;
+  if (cambiaProveedor) detalle.push(`proveedor ${ev.proveedor || "—"} → ${String(proveedor).trim()}`);
+  if (cambiaFecha) detalle.push(`entrega estimada → ${fechaEntrega}`);
+  const costoNuevo = financiero ? Math.max(0, Math.round((Number(ev.costo_compra) || 0) + delta)) : Number(ev.costo_compra) || 0;
+  return { cambiosFilas, financiero: financiero && costoNuevo !== (Number(ev.costo_compra) || 0) || financiero, costoNuevo, delta, errores: [...new Set(errores)], detalle,
+    cambiaEvento: cambiaProveedor || cambiaFecha || (financiero && costoNuevo !== (Number(ev.costo_compra) || 0)), cambiaProveedor, cambiaFecha,
+    hayCambios: cambiosFilas.length > 0 || cambiaProveedor || cambiaFecha };
 }
 
 // Estado por línea: cotizada, comprada y pendiente.

@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo } from "react";
 import { contarCorreosPendientes, ordenarCorreos } from "../../lib/correosBfk";
 import { FormIngresarCompra } from "../forms/FormIngresarCompra";
 import { RegistrarCompraOC } from "../forms/CompraDesdeCotizacion";
+import { CorregirCompra } from "../forms/CorregirCompra";
+import { filaProtegida, comprasConPedido } from "../../lib/compraCotizacion";
 import { FormEntregaFallida, FormFechaEntrega, FormReclamarFactura } from "../forms/FormulariosCorreo";
 import { FormConfirmarEntrega, FormEmitirFactura, FormPagoCliente, FormPagoFinanciamiento } from "../forms/FormulariosRapidos";
 import { DiasBadge, Field, Leyenda, Modal, Trazabilidad } from "../ui/Basicos";
@@ -248,7 +250,7 @@ export function FormEditarEvento({ item, onSave, onCancel }) {
 }
 
 // ─── Detalle completo de la OC, plegable ───────────────────
-export function DetalleOC({ oc, perfil, parte, onEditarLink, onEliminarLink, onGuardarLink, onRepartirInversion }) {
+export function DetalleOC({ oc, perfil, parte, onEditarLink, onEliminarLink, onGuardarLink, onRepartirInversion, onCorregirCompra }) {
   const [abierto,setAbierto]=useState(false);
   const [editando,setEditando]=useState(null);   // id del link en edición
   const [dNom,setDNom]=useState(""); const [dCant,setDCant]=useState("");
@@ -287,17 +289,21 @@ export function DetalleOC({ oc, perfil, parte, onEditarLink, onEliminarLink, onG
   const todos=(oc.oc_productos_link||[]).slice().sort((a,b)=>a.orden-b.orden);
   const vendidos=todos.filter(l=>(l.origen||"venta")==="venta");
   const comprados=todos.filter(l=>l.origen==="compra");
+  // 15/10/2026: las líneas de una compra confirmada (pedido desde cotización) no se editan, eliminan ni reparten sueltas.
+  const comprasPedido=comprasConPedido(oc);
+  const protegidaDe=(l)=>filaProtegida(l,oc,comprasPedido);
+  const libres=comprados.filter(l=>!protegidaDe(l));
   const links=todos;
 
   const repartirInversion=async()=>{
     const total=Number(montoTotal);
-    if(!total||total<=0||!comprados.length) return;
+    if(!total||total<=0||!libres.length) return;
     setGuardandoReparto(true);
     try{
       // Se reparte a prorrata del valor de venta de cada producto — si vale más, probablemente
       // costó más también. Si ningún producto tiene precio de venta, en partes iguales (lib/productosOC.js).
       // Fase 4A: se guarda SOLO el precio de compra de cada línea; nada más se toca ni se borra.
-      const asignaciones=calcularReparto(total,comprados);
+      const asignaciones=calcularReparto(total,libres);
       if(onRepartirInversion) await onRepartirInversion(oc,asignaciones,total);
       setRepartiendo(false); setMontoTotal("");
     } finally { setGuardandoReparto(false); }
@@ -492,18 +498,25 @@ export function DetalleOC({ oc, perfil, parte, onEditarLink, onEliminarLink, onG
                         ):(
                           <span style={{flex:1,fontSize:12,color:C.inkFaint}}>Sin link</span>
                         )}
+                        {protegidaDe(l)?(
+                          <span data-linea-protegida={protegidaDe(l).clave} style={{flexShrink:0,fontSize:12,color:C.inkMuted,display:"flex",alignItems:"center",gap:6}}>
+                            🔒 Compra confirmada · Pedido {protegidaDe(l).clave}
+                            {onCorregirCompra&&<button data-corregir-desde-linea onClick={()=>onCorregirCompra(protegidaDe(l).evento)} style={{background:"none",border:"none",color:C.tealDark,fontSize:12,cursor:"pointer",fontWeight:700,padding:0,textDecoration:"underline"}}>Corregir compra</button>}
+                          </span>
+                        ):<>
                         <button onClick={()=>abrirEdicion(l)}
                           style={{flexShrink:0,background:"none",border:"none",color:C.inkMuted,fontSize:12,cursor:"pointer",fontWeight:600,padding:0}}>Editar</button>
                         {esAdmin&&(
                           <button onClick={async()=>{ if(window.confirm("¿Eliminar este producto?")) await onEliminarLink(l.id,oc); }}
                             style={{flexShrink:0,background:"none",border:"none",color:C.dangerText,fontSize:12,cursor:"pointer",fontWeight:600,padding:0}}>Eliminar</button>
                         )}
+                        </>}
                       </div>
                     </div>
                   );
                 })}
 
-                {comprados.length>1&&!repartiendo&&!nuevo&&!editando&&(
+                {libres.length>1&&!repartiendo&&!nuevo&&!editando&&(
                   <button onClick={()=>setRepartiendo(true)}
                     style={{fontSize:12,background:C.purpleLight,border:`1px solid ${C.purple}55`,borderRadius:8,
                       padding:"7px 12px",color:C.purple,cursor:"pointer",width:"100%",fontWeight:700,marginBottom:6}}>
@@ -513,8 +526,8 @@ export function DetalleOC({ oc, perfil, parte, onEditarLink, onEliminarLink, onG
                 {repartiendo&&(
                   <div style={{background:C.purpleLight,borderRadius:8,padding:"11px",marginBottom:6}}>
                     <div style={{fontSize:12,color:C.inkMuted,marginBottom:8,lineHeight:1.4}}>
-                      Ingresa el total que pagaste por los {comprados.length} productos — se reparte a prorrata
-                      del precio de venta de cada uno{comprados.every(l=>!l.precio_venta)?" (en partes iguales, ninguno tiene precio de venta cargado)":""}.
+                      Ingresa el total que pagaste por los {libres.length} productos{libres.length<comprados.length?" (sin contar los de compras confirmadas desde cotización)":""} — se reparte a prorrata
+                      del precio de venta de cada uno{libres.every(l=>!l.precio_venta)?" (en partes iguales, ninguno tiene precio de venta cargado)":""}.
                     </div>
                     <Field label="Total invertido ($)"><input style={iMono} type="number" value={montoTotal} onChange={e=>setMontoTotal(e.target.value)} autoFocus /></Field>
                     <div style={{display:"flex",gap:6}}>
@@ -765,14 +778,14 @@ const ICONO_ESTADO={mp_cancelada:<Ic n="🔴"/>,facturada_sin_entrega:<Ic n="⚠
   falta_financiamiento:<Ic n="🏦"/>,reclamar:<Ic n="⚠"/>,vencida:<Ic n="🔴"/>,por_vencer:<Ic n="🟡"/>,facturada:<Ic n="🧾"/>,entregada:<Ic n="📦"/>,
   comprada:<Ic n="🚚"/>,mp_sin_aceptar:<Ic n="⏳"/>,sin_compra:"○"};
 
-export function FilaOC({ onCompraDesdeCotizacion, onBuscarCotizacionOC, onCargarCotizacionOC, correosOC = SIN_CORREOS, onMarcarCorreo, pagosVendedor, onAsignarVendedor, onAsignarFinanciador, difsHistoricas, onCambiarFinanciamiento, oc, perfiles, todasLasOcs, onSincronizarFecha, expanded, onToggle, contactos, onEnviarReclamo, onCorreoOC, onRegistrarRespuestaReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, onRepartirInversion, buscarDuplicadoOC, perfil, historialCambios, onAgregarComentario, onEliminarComentario, bloqueoEstado, onArchivarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa, onRegistrarNC }) {
+export function FilaOC({ onCorregirCompra, onAnularCompra, onCompraDesdeCotizacion, onBuscarCotizacionOC, onCargarCotizacionOC, correosOC = SIN_CORREOS, onMarcarCorreo, pagosVendedor, onAsignarVendedor, onAsignarFinanciador, difsHistoricas, onCambiarFinanciamiento, oc, perfiles, todasLasOcs, onSincronizarFecha, expanded, onToggle, contactos, onEnviarReclamo, onCorreoOC, onRegistrarRespuestaReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, onRepartirInversion, buscarDuplicadoOC, perfil, historialCambios, onAgregarComentario, onEliminarComentario, bloqueoEstado, onArchivarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa, onRegistrarNC }) {
   const evF=facturaVigente(oc);
   const dias=fmt.diasDesde(evF?.fecha);
   const saldo=(oc.monto_facturado||0)-(oc.monto_cobrado||0);
   const [reclamando,setReclamando]=useState(false);
   const [editandoDatos,setEditandoDatos]=useState(false);
   const [editandoEvento,setEditandoEvento]=useState(null);
-  const [accionRapida,setAccionRapida]=useState(null);
+  const [accionRapida,setAccionRapida]=useState(null); const [corrigiendo,setCorrigiendo]=useState(null);
   const [pvForm,setPvForm]=useState(null);   // {evento, cerrar} — editar o cerrar un incidente existente
   const [correoFallida,setCorreoFallida]=useState(false);
   const [correoFecha,setCorreoFecha]=useState(false);
@@ -805,7 +818,7 @@ export function FilaOC({ onCompraDesdeCotizacion, onBuscarCotizacionOC, onCargar
   onEditarEvento=prot(onEditarEvento); onConfirmarEntrega=prot(onConfirmarEntrega); onEmitirFactura=prot(onEmitirFactura);
   onPagoCliente=prot(onPagoCliente); onPagoFinanciamiento=prot(onPagoFinanciamiento); onGuardarLink=prot(onGuardarLink);
   onEliminarLink=prot(onEliminarLink); onEditarLink=prot(onEditarLink); onArchivarOC=prot(onArchivarOC);
-  onEliminarFactura=prot(onEliminarFactura); onEliminarEvento=prot(onEliminarEvento); onIngresarCompra=prot(onIngresarCompra); onCompraDesdeCotizacion=prot(onCompraDesdeCotizacion);
+  onEliminarFactura=prot(onEliminarFactura); onEliminarEvento=prot(onEliminarEvento); onIngresarCompra=prot(onIngresarCompra); onCompraDesdeCotizacion=prot(onCompraDesdeCotizacion); onCorregirCompra=prot(onCorregirCompra); onAnularCompra=prot(onAnularCompra);
   onAsignarResponsable=prot(onAsignarResponsable); onGuardarPostventa=prot(onGuardarPostventa); onRepartirInversion=prot(onRepartirInversion);
   onRegistrarNC=prot(onRegistrarNC); onAsignarVendedor=prot(onAsignarVendedor); onAsignarFinanciador=prot(onAsignarFinanciador);
 
@@ -1022,7 +1035,7 @@ export function FilaOC({ onCompraDesdeCotizacion, onBuscarCotizacionOC, onCargar
           onAccion:(key)=>setAccionRapida(key),
           onPostventa:(ev,modo)=>setPvForm({evento:ev,cerrar:modo==="cerrar"}),
           onReabrirPostventa:(ev)=>onGuardarPostventa({id:ev.id,ocId:oc.id,tipo:ev.tipo,fecha:ev.fecha,descripcion:ev.descripcion,estado:"abierto",solucion:ev.solucion||null,fecha_resolucion:null,costo_extra:ev.costo_extra||0,detalle_costo:ev.detalle_costo||null}),
-          onCorreoFallida:()=>setCorreoFallida(true),onCorreoFecha:()=>setCorreoFecha(true),
+          onCorreoFallida:()=>setCorreoFallida(true),onCorreoFecha:()=>setCorreoFecha(true),onCorregirCompra:onCorregirCompra?setCorrigiendo:null,
           onGuardarLink,onEliminarLink,onEditarLink};
         const sub=(t)=><div style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,margin:"4px 0 6px"}}>{t}</div>;
         const estadoChip=(ok,t)=><span style={{fontSize:12,fontWeight:700,padding:"2px 7px",borderRadius:999,background:ok?C.okLight:C.paper,color:ok?C.okText:C.inkFaint,border:`1px solid ${ok?C.okLight:C.border}`,whiteSpace:"nowrap"}}>{ok?"✓ ":""}{t}</span>;
@@ -1097,7 +1110,7 @@ export function FilaOC({ onCompraDesdeCotizacion, onBuscarCotizacionOC, onCargar
             <DetalleOC oc={oc} perfil={perfil} parte="info" />
           </>)}
 
-          {sec("productos",<DetalleOC oc={oc} perfil={perfil} parte="productos" onEditarLink={onEditarLink} onEliminarLink={onEliminarLink} onGuardarLink={onGuardarLink} onRepartirInversion={onRepartirInversion} />)}
+          {sec("productos",<DetalleOC oc={oc} perfil={perfil} parte="productos" onEditarLink={onEditarLink} onEliminarLink={onEliminarLink} onGuardarLink={onGuardarLink} onRepartirInversion={onRepartirInversion} onCorregirCompra={onCorregirCompra?setCorrigiendo:null} />)}
 
           {sec("compra",<>
             <div data-financiamiento-resumen style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(110px,1fr))",gap:6,marginBottom:10}}>
@@ -1198,6 +1211,12 @@ export function FilaOC({ onCompraDesdeCotizacion, onBuscarCotizacionOC, onCargar
           <FormPostventa oc={oc} onSave={async(d)=>{ await onGuardarPostventa(d); setAccionRapida(null); }} />
         </Modal>
       )}
+      {corrigiendo&&(
+        <Modal title="Corregir compra" onClose={()=>setCorrigiendo(null)}>
+          <CorregirCompra oc={oc} evento={(oc.eventos_compra||[]).find(e=>e.id===corrigiendo.id)||corrigiendo} perfil={perfil}
+            onCorregir={async(d)=>{ await onCorregirCompra(d); setCorrigiendo(null); }} onAnular={async(d)=>{ await onAnularCompra(d); setCorrigiendo(null); }} />
+        </Modal>
+      )}
       {accionRapida==="compra"&&(
         <Modal title="Registrar compra" onClose={()=>setAccionRapida(null)}>
           <RegistrarCompraOC oc={oc} ocs={[]} financiadores={financiadores} vendedores={vendedores} entidadesCatalogo={entidadesCatalogo} perfil={perfil} onSave={async(data)=>{ await onIngresarCompra(data); setAccionRapida(null); }}
@@ -1239,7 +1258,7 @@ export function FilaOC({ onCompraDesdeCotizacion, onBuscarCotizacionOC, onCargar
 }
 
 
-export function PanelCompras({ onCompraDesdeCotizacion, onBuscarCotizacionOC, onCargarCotizacionOC, pagosVendedor, onAsignarVendedor, onAsignarFinanciador, correosBfk, onMarcarCorreo, onRegistrarNC, difsHistoricas, onCambiarFinanciamiento, ocs, perfiles, filtroInicial, busquedaInicial, ocFoco, onFocoUsado, onSincronizarFecha, contactos, onEnviarReclamo, onCorreoOC, onRegistrarRespuestaReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, onRepartirInversion, buscarDuplicadoOC, perfil, historialCambios, onAgregarComentario, onEliminarComentario, onArchivarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa }) {
+export function PanelCompras({ onCorregirCompra, onAnularCompra, onCompraDesdeCotizacion, onBuscarCotizacionOC, onCargarCotizacionOC, pagosVendedor, onAsignarVendedor, onAsignarFinanciador, correosBfk, onMarcarCorreo, onRegistrarNC, difsHistoricas, onCambiarFinanciamiento, ocs, perfiles, filtroInicial, busquedaInicial, ocFoco, onFocoUsado, onSincronizarFecha, contactos, onEnviarReclamo, onCorreoOC, onRegistrarRespuestaReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, onRepartirInversion, buscarDuplicadoOC, perfil, historialCambios, onAgregarComentario, onEliminarComentario, onArchivarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa }) {
   const correosPorOC=useMemo(()=>{ const m=new Map(); for(const c of (correosBfk||[])) if(c.oc_id){ if(!m.has(c.oc_id)) m.set(c.oc_id,[]); m.get(c.oc_id).push(c); } for(const [k,v] of m) m.set(k,ordenarCorreos(v)); return m; },[correosBfk]);
   const [filtros,setFiltros]=useState({}); const [busq,setBusq]=useState(""); const [expId,setExpId]=useState(null);
   const escritorio=useEscritorio();
@@ -1601,7 +1620,7 @@ export function PanelCompras({ onCompraDesdeCotizacion, onBuscarCotizacionOC, on
         </button>
         </span>
       </div>
-      {filtered.map(oc=><FilaOC key={oc.id} onCompraDesdeCotizacion={onCompraDesdeCotizacion} onBuscarCotizacionOC={onBuscarCotizacionOC} onCargarCotizacionOC={onCargarCotizacionOC} pagosVendedor={pagosVendedor} onAsignarVendedor={onAsignarVendedor} onAsignarFinanciador={onAsignarFinanciador} correosOC={correosPorOC.get(oc.id)||SIN_CORREOS} onMarcarCorreo={onMarcarCorreo} onRegistrarNC={onRegistrarNC} difsHistoricas={difsHistoricas} onCambiarFinanciamiento={onCambiarFinanciamiento} oc={oc} perfiles={perfiles} todasLasOcs={ocs} onSincronizarFecha={onSincronizarFecha} expanded={expId===oc.id} onToggle={()=>setExpId(expId===oc.id?null:oc.id)} contactos={contactos} onEnviarReclamo={onEnviarReclamo} onCorreoOC={onCorreoOC} onRegistrarRespuestaReclamo={onRegistrarRespuestaReclamo} onGuardarContacto={onGuardarContacto} onGuardarDatosOC={onGuardarDatosOC} onEditarEvento={onEditarEvento} financiadores={financiadores} onConfirmarEntrega={onConfirmarEntrega} onEmitirFactura={onEmitirFactura} onPagoCliente={onPagoCliente} onPagoFinanciamiento={onPagoFinanciamiento} entidadesCatalogo={entidadesCatalogo} onGuardarLink={onGuardarLink} onEliminarLink={onEliminarLink} onEditarLink={onEditarLink} onRepartirInversion={onRepartirInversion} buscarDuplicadoOC={buscarDuplicadoOC} bloqueoEstado={bloqueoEstado} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={onAgregarComentario} onEliminarComentario={onEliminarComentario} onArchivarOC={onArchivarOC} onEliminarFactura={onEliminarFactura} onEliminarEvento={onEliminarEvento} vendedores={vendedores} onIngresarCompra={onIngresarCompra} onAsignarResponsable={onAsignarResponsable} onGuardarPostventa={onGuardarPostventa} />)}
+      {filtered.map(oc=><FilaOC key={oc.id} onCorregirCompra={onCorregirCompra} onAnularCompra={onAnularCompra} onCompraDesdeCotizacion={onCompraDesdeCotizacion} onBuscarCotizacionOC={onBuscarCotizacionOC} onCargarCotizacionOC={onCargarCotizacionOC} pagosVendedor={pagosVendedor} onAsignarVendedor={onAsignarVendedor} onAsignarFinanciador={onAsignarFinanciador} correosOC={correosPorOC.get(oc.id)||SIN_CORREOS} onMarcarCorreo={onMarcarCorreo} onRegistrarNC={onRegistrarNC} difsHistoricas={difsHistoricas} onCambiarFinanciamiento={onCambiarFinanciamiento} oc={oc} perfiles={perfiles} todasLasOcs={ocs} onSincronizarFecha={onSincronizarFecha} expanded={expId===oc.id} onToggle={()=>setExpId(expId===oc.id?null:oc.id)} contactos={contactos} onEnviarReclamo={onEnviarReclamo} onCorreoOC={onCorreoOC} onRegistrarRespuestaReclamo={onRegistrarRespuestaReclamo} onGuardarContacto={onGuardarContacto} onGuardarDatosOC={onGuardarDatosOC} onEditarEvento={onEditarEvento} financiadores={financiadores} onConfirmarEntrega={onConfirmarEntrega} onEmitirFactura={onEmitirFactura} onPagoCliente={onPagoCliente} onPagoFinanciamiento={onPagoFinanciamiento} entidadesCatalogo={entidadesCatalogo} onGuardarLink={onGuardarLink} onEliminarLink={onEliminarLink} onEditarLink={onEditarLink} onRepartirInversion={onRepartirInversion} buscarDuplicadoOC={buscarDuplicadoOC} bloqueoEstado={bloqueoEstado} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={onAgregarComentario} onEliminarComentario={onEliminarComentario} onArchivarOC={onArchivarOC} onEliminarFactura={onEliminarFactura} onEliminarEvento={onEliminarEvento} vendedores={vendedores} onIngresarCompra={onIngresarCompra} onAsignarResponsable={onAsignarResponsable} onGuardarPostventa={onGuardarPostventa} />)}
       {filtered.length===0&&<div style={{textAlign:"center",padding:30,color:C.inkFaint,fontSize:13}}>No hay órdenes con estos filtros.</div>}
       <Leyenda items={[
         {muestra:"✓ Cerrada",   color:C.okText,      bg:C.okLight,      texto:"Cobrada al cliente y pagada al financiador. Ciclo terminado."},
