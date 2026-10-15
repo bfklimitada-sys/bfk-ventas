@@ -92,7 +92,7 @@ for (const [pref, movil] of [["E", false], ["M", true]]) {
   const n0 = b.escr.length;
   await s.locator("[data-seg-guardar]").click(); await espera(p, 400);
   const cats = await s.locator('select[data-seg="categoria"] option').allInnerTexts();
-  ok(`${pref}T02_categorias_predefinidas`, cats.length === 9 && ["Postventa / Garantía", "Sobrecosto / Cargo adicional", "Proveedor", "Producto", "Entrega / Despacho", "Cliente", "Facturación / Cobranza", "Otro"].every((c) => cats.includes(c)), cats);
+  ok(`${pref}T02_categorias_predefinidas`, cats.length === 10 && cats.includes("Subsanación de factura") && ["Postventa / Garantía", "Sobrecosto / Cargo adicional", "Proveedor", "Producto", "Entrega / Despacho", "Cliente", "Facturación / Cobranza", "Otro"].every((c) => cats.includes(c)), cats);
   ok(`${pref}T03_validacion_categoria_y_descripcion`, /Elige la categoría/.test(await s.locator("[data-seg-errores]").innerText()) && /Describe el seguimiento/.test(await s.locator("[data-seg-errores]").innerText()) && b.escr.length === n0);
   await s.locator('select[data-seg="categoria"]').selectOption("sobrecosto");
   await s.locator('textarea[data-seg="descripcion"]').fill("Proveedor cobra despacho adicional");

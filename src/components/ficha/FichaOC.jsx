@@ -105,7 +105,7 @@ export function ResumenFinanciero({ oc }) {
 // ── Facturación SII: cadena documental ─────────────────────────
 const TONO_ESTADO = { vigente: "ok", anulada: "danger", nc_anula: "danger", nc_texto: "neutro", nc_monto: "warn", nc_sin_codigo: "warn", nd: "info" };
 
-function FilaDocumento({ oc, d, primero, perfil, bloqueado, onEditar, onEliminar }) {
+function FilaDocumento({ oc, d, primero, perfil, bloqueado, onEditar, onEliminar, nSubsanacion = 0, onSubsanar, onVerSubsanacion }) {
   const est = estadoDocumento(oc, d);
   const ef = efectoMonto(oc, d);
   const nc = esNotaCredito(d);
@@ -132,6 +132,11 @@ function FilaDocumento({ oc, d, primero, perfil, bloqueado, onEditar, onEliminar
           {est === "nc_texto" && <Badge tono="neutro">Sin efecto monetario</Badge>}
           {d.verificado_sii ? <Badge tono="info">✓ Verificada SII</Badge> : <Badge tono="neutro">Pendiente SII</Badge>}
           {d.motivo_diferencia && <Badge tono="warn">Diferencia SII</Badge>}
+          {/* Subsanación solicitada por el cliente (Seguimiento especial): distinta de «Pendiente SII». */}
+          {nSubsanacion > 0 && <button type="button" data-consulta="1" data-subsanacion-abierta={d.numero_factura} onClick={() => onVerSubsanacion && onVerSubsanacion(d.id)}
+            title="Ver la subsanación en Seguimiento especial"
+            style={{ fontSize: 12, fontWeight: 800, padding: "2px 8px", borderRadius: 999, border: `1px solid ${C.purple}55`, background: C.purpleLight, color: C.purple, cursor: "pointer" }}>
+            Subsanación solicitada{nSubsanacion > 1 ? ` (${nSubsanacion})` : ""}</button>}
         </div>
         {(d.ref_folio || codigoRef(d)) && (
           <div style={{ fontSize: 12, color: C.inkMuted, marginTop: 5 }}>
@@ -143,6 +148,11 @@ function FilaDocumento({ oc, d, primero, perfil, bloqueado, onEditar, onEliminar
         )}
         {d.motivo_diferencia && <div style={{ fontSize: 12, color: C.warnText, marginTop: 4 }}><Ic n="⚠" /> Difiere de la OC: {d.motivo_diferencia}</div>}
         {d.evidencia_sii && <div style={{ fontSize: 12, color: C.inkFaint, marginTop: 4 }}>{d.evidencia_sii}</div>}
+        {/* La subsanación es un seguimiento: no modifica la factura, por eso se ofrece aun con la facturación bloqueada. */}
+        {onSubsanar && esFactura(d) && !nc && String(d.numero_factura || "").trim() && (
+          <button type="button" data-registrar-subsanacion={d.numero_factura} onClick={() => onSubsanar(d.id)}
+            style={{ fontSize: 12, background: C.card, color: C.purple, border: `1px solid ${C.purple}55`, borderRadius: 8, padding: "4px 10px", cursor: "pointer", fontWeight: 700, marginTop: 8 }}>Registrar subsanación</button>
+        )}
         {!bloqueado && (
           <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
             {!nc && <button onClick={() => onEditar && onEditar({ tipo: esNotaDebito(d) ? "Nota de débito" : "Factura", e: d, tabla: "eventos_factura" })}
@@ -158,7 +168,7 @@ function FilaDocumento({ oc, d, primero, perfil, bloqueado, onEditar, onEliminar
   );
 }
 
-export function FacturacionSII({ oc, perfil, bloqueado, onEmitir, onRegistrarNC, onEditar, onEliminar }) {
+export function FacturacionSII({ oc, perfil, bloqueado, onEmitir, onRegistrarNC, onEditar, onEliminar, subsanacionesDe, onSubsanar, onVerSubsanacion }) {
   const [copiado, setCopiado] = useState(false);
   const grupos = cadenaDocumental(oc);
   const vig = facturasVigentesDe(oc);
@@ -183,7 +193,8 @@ export function FacturacionSII({ oc, perfil, bloqueado, onEmitir, onRegistrarNC,
       )}
       {grupos.map((g, i) => (
         <div key={i} data-cadena={i} style={{ marginBottom: 6 }}>
-          {g.map((d, j) => <FilaDocumento key={d.id} oc={oc} d={d} primero={j === 0} perfil={perfil} bloqueado={bloqueado} onEditar={onEditar} onEliminar={onEliminar} />)}
+          {g.map((d, j) => <FilaDocumento key={d.id} oc={oc} d={d} primero={j === 0} perfil={perfil} bloqueado={bloqueado} onEditar={onEditar} onEliminar={onEliminar}
+            nSubsanacion={subsanacionesDe ? subsanacionesDe(d.id) : 0} onSubsanar={onSubsanar} onVerSubsanacion={onVerSubsanacion} />)}
         </div>
       ))}
 

@@ -1,11 +1,13 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Field } from "../ui/Basicos";
 import { Ic } from "../ui/Iconos";
 import { C, btnP, fmt, iStyle } from "../../lib/theme";
 import {
   CATEGORIAS_SEGUIMIENTO, PRIORIDADES_SEGUIMIENTO, etiquetaCategoria, etiquetaPrioridad, etiquetaEstado,
   seguimientosAbiertos, seguimientosResueltos, revisionVencida,
+  descripcionSubsanacion, leerSubsanacion, subsanacionDuplicada,
 } from "../../lib/seguimientos";
+import { esFactura, esNotaCredito } from "../../lib/tributario";
 
 // «Seguimiento especial» de una OC (15/10/2026).
 // La base (oc_seguimientos) fija autor y fechas, exige la solución para resolver y conserva lo resuelto;
@@ -21,22 +23,42 @@ const chip = (t, tono, extra = {}) => (
   <span style={{ fontSize: 12, fontWeight: 800, padding: "2px 8px", borderRadius: 999, background: tono.bg, color: tono.color, border: `1px solid ${tono.color}33`, whiteSpace: "nowrap", ...extra }}>{t}</span>
 );
 const btnS = (color = C.tealDark) => ({ background: C.card, border: `1px solid ${color}55`, color, borderRadius: 8, padding: "7px 10px", minHeight: 36, fontSize: 13, fontWeight: 700, cursor: "pointer" });
-const VACIO = { categoria: "", descripcion: "", prioridad: "media", responsable_id: "", fecha_revision: "", sobrecosto_estimado: "", estado: "pendiente" };
+const hoyISO = () => { const d = new Date(); const z = (n) => String(n).padStart(2, "0"); return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`; };
+const VACIO = { categoria: "", descripcion: "", prioridad: "media", responsable_id: "", fecha_revision: "", sobrecosto_estimado: "", estado: "pendiente",
+  factura_id: "", motivo: "", fecha_solicitud: "", solicitante: "" };
+// «Subsanación de factura» se ofrece como tipo propio, pero se guarda con la categoría «facturacion» (ya permitida).
+export const SUBSANACION = "subsanacion";
+// Facturas a las que se puede asociar una subsanación (no notas de crédito), con su folio.
+export const facturasDe = (oc) => (oc?.eventos_factura || []).filter((d) => esFactura(d) && !esNotaCredito(d) && String(d.numero_factura || "").trim());
 
-function Formulario({ perfiles, onGuardar, onCancelar }) {
-  const [f, setF] = useState(VACIO); const [errores, setErrores] = useState([]); const [guardando, setGuardando] = useState(false);
+function Formulario({ oc, perfiles, inicial, onGuardar, onCancelar }) {
+  const [f, setF] = useState(() => ({ ...VACIO, ...(inicial?.facturaId ? { categoria: SUBSANACION, factura_id: inicial.facturaId, fecha_solicitud: hoyISO() } : {}) }));
+  const [errores, setErrores] = useState([]); const [guardando, setGuardando] = useState(false);
   const enCurso = useRef(false);
-  const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
+  const set = (k, v) => setF((x) => ({ ...x, [k]: v, ...(k === "categoria" && v === SUBSANACION && !x.fecha_solicitud ? { fecha_solicitud: hoyISO() } : {}) }));
+  const esSub = f.categoria === SUBSANACION;
+  const facturas = facturasDe(oc);
   const guardar = async () => {
     if (enCurso.current) return;
     const errs = [];
     if (!f.categoria) errs.push("Elige la categoría.");
-    if (!f.descripcion.trim()) errs.push("Describe el seguimiento.");
-    if (f.sobrecosto_estimado !== "" && (!(Number(f.sobrecosto_estimado) >= 0) || !Number.isFinite(Number(f.sobrecosto_estimado)))) errs.push("El sobrecosto estimado debe ser un monto igual o mayor a 0.");
+    const fac = facturas.find((x) => x.id === f.factura_id);
+    if (esSub) {
+      if (!fac) errs.push("Elige la factura afectada.");
+      if (!f.motivo.trim()) errs.push("Indica el motivo de la subsanación.");
+      if (!f.fecha_solicitud) errs.push("Indica la fecha de la solicitud.");
+      if (fac && f.motivo.trim() && subsanacionDuplicada(oc, { facturaId: fac.id, fechaSolicitud: f.fecha_solicitud || null, motivo: f.motivo }))
+        errs.push(`Ya hay una subsanación abierta de la factura N.º ${fac.numero_factura} con el mismo motivo y fecha de solicitud. Registra el avance en ella.`);
+    } else if (!f.descripcion.trim()) errs.push("Describe el seguimiento.");
+    if (!esSub && f.sobrecosto_estimado !== "" && (!(Number(f.sobrecosto_estimado) >= 0) || !Number.isFinite(Number(f.sobrecosto_estimado)))) errs.push("El sobrecosto estimado debe ser un monto igual o mayor a 0.");
     if (errs.length) { setErrores(errs); return; }
     enCurso.current = true; setGuardando(true); setErrores([]);
     const resp = perfiles.find((p) => p.id === f.responsable_id);
-    try { await onGuardar({ ...f, responsable_id: resp?.id || null, responsable_nombre: resp?.nombre || null }); }
+    const datos = esSub
+      ? { categoria: "facturacion", descripcion: descripcionSubsanacion({ facturaId: fac.id, numero: fac.numero_factura, motivo: f.motivo, fechaSolicitud: f.fecha_solicitud, solicitante: f.solicitante, observaciones: f.descripcion }),
+          prioridad: f.prioridad, estado: f.estado, fecha_revision: f.fecha_revision, sobrecosto_estimado: "" }
+      : { categoria: f.categoria, descripcion: f.descripcion, prioridad: f.prioridad, estado: f.estado, fecha_revision: f.fecha_revision, sobrecosto_estimado: f.sobrecosto_estimado };
+    try { await onGuardar({ ...datos, responsable_id: resp?.id || null, responsable_nombre: resp?.nombre || null }); }
     catch (e) { setErrores([`No se guardó: ${e.message}`]); enCurso.current = false; setGuardando(false); }
   };
   return (
@@ -45,10 +67,27 @@ function Formulario({ perfiles, onGuardar, onCancelar }) {
         <select data-seg="categoria" style={iStyle} value={f.categoria} onChange={(e) => set("categoria", e.target.value)}>
           <option value="">Elegir…</option>
           {CATEGORIAS_SEGUIMIENTO.map((c) => <option key={c.id} value={c.id}>{c.etiqueta}</option>)}
+          <option value={SUBSANACION}>Subsanación de factura</option>
         </select>
       </Field>
-      <Field label="Descripción" required>
-        <textarea data-seg="descripcion" rows={3} style={{ ...iStyle, resize: "vertical" }} value={f.descripcion} onChange={(e) => set("descripcion", e.target.value)} placeholder="ej: el proveedor cobra un despacho adicional; revisar con el cliente" />
+      {esSub && <>
+        <Field label="Factura afectada" required hint="La subsanación no anula, modifica ni reemplaza la factura, ni cambia su estado SII.">
+          <select data-seg="factura" style={iStyle} value={f.factura_id} onChange={(e) => set("factura_id", e.target.value)}>
+            <option value="">Elegir factura…</option>
+            {facturas.map((d) => <option key={d.id} value={d.id}>N.º {d.numero_factura} · {fmt.money(d.monto)}{d.fecha ? ` · ${fecha(d.fecha)}` : ""}</option>)}
+          </select>
+        </Field>
+        {facturas.length === 0 && <div data-seg-sin-facturas style={{ fontSize: 12, color: C.warnText, margin: "-8px 0 10px" }}>Esta OC no tiene facturas con folio registradas.</div>}
+        <Field label="Motivo de la subsanación" required>
+          <textarea data-seg="motivo" rows={2} style={{ ...iStyle, resize: "vertical" }} value={f.motivo} onChange={(e) => set("motivo", e.target.value)} placeholder="ej: el organismo pide indicar el N.º de OC en la glosa" />
+        </Field>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 8 }}>
+          <Field label="Fecha de solicitud" required><input data-seg="fecha_solicitud" type="date" style={iStyle} value={f.fecha_solicitud} onChange={(e) => set("fecha_solicitud", e.target.value)} /></Field>
+          <Field label="Solicitado por (opcional)"><input data-seg="solicitante" style={iStyle} value={f.solicitante} onChange={(e) => set("solicitante", e.target.value)} placeholder="Organismo o contacto" /></Field>
+        </div>
+      </>}
+      <Field label={esSub ? "Observaciones (opcional)" : "Descripción"} required={!esSub}>
+        <textarea data-seg="descripcion" rows={esSub ? 2 : 3} style={{ ...iStyle, resize: "vertical" }} value={f.descripcion} onChange={(e) => set("descripcion", e.target.value)} placeholder={esSub ? "Detalle adicional de la solicitud" : "ej: el proveedor cobra un despacho adicional; revisar con el cliente"} />
       </Field>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 8 }}>
         <Field label="Prioridad">
@@ -67,18 +106,31 @@ function Formulario({ perfiles, onGuardar, onCancelar }) {
             <option value="pendiente">Pendiente</option><option value="en_gestion">En gestión</option>
           </select>
         </Field>
-        <Field label="Fecha de revisión (opcional)">
+        <Field label={esSub ? "Fecha límite de respuesta" : "Fecha de revisión (opcional)"}>
           <input data-seg="fecha_revision" type="date" style={iStyle} value={f.fecha_revision} onChange={(e) => set("fecha_revision", e.target.value)} />
         </Field>
       </div>
-      <Field label="Sobrecosto estimado (opcional)" hint="Solo informativo: no se suma a costos, compras, utilidad ni deudas.">
+      {!esSub && <Field label="Sobrecosto estimado (opcional)" hint="Solo informativo: no se suma a costos, compras, utilidad ni deudas.">
         <input data-seg="sobrecosto" type="number" min="0" step="1" inputMode="numeric" style={iStyle} value={f.sobrecosto_estimado} onChange={(e) => set("sobrecosto_estimado", e.target.value)} placeholder="$" />
-      </Field>
+      </Field>}
       {errores.length > 0 && <div data-seg-errores style={{ background: C.dangerLight, color: C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 10, fontWeight: 600 }}>{errores.map((e, i) => <div key={i}>• {e}</div>)}</div>}
       <div style={{ display: "flex", gap: 8 }}>
-        <button data-seg-guardar onClick={guardar} disabled={guardando} style={{ ...btnP(guardando ? C.inkFaint : C.teal), flex: 1 }}>{guardando ? "Guardando…" : "✓ Registrar seguimiento"}</button>
+        <button data-seg-guardar onClick={guardar} disabled={guardando} style={{ ...btnP(guardando ? C.inkFaint : C.teal), flex: 1 }}>{guardando ? "Guardando…" : esSub ? "✓ Registrar subsanación" : "✓ Registrar seguimiento"}</button>
         <button onClick={onCancelar} disabled={guardando} style={{ ...btnS(C.inkMuted), flex: "0 0 auto" }}>Cancelar</button>
       </div>
+    </div>
+  );
+}
+
+// Datos de una subsanación: la factura se lee de su registro (monto y fecha no se copian al seguimiento).
+function DatosSubsanacion({ oc, sub }) {
+  const fac = (oc?.eventos_factura || []).find((d) => d.id === sub.facturaId);
+  return (
+    <div data-seg-subsanacion={sub.facturaId} style={{ fontSize: 13, color: C.ink, display: "grid", gap: 2 }}>
+      <div><b>Factura N.º {sub.numero || "s/n"}</b>{fac ? <span style={{ color: C.inkMuted }}> · {fmt.money(fac.monto)}{fac.fecha ? ` · emitida ${fecha(fac.fecha)}` : ""}</span> : <span style={{ color: C.warnText }}> · el documento ya no está registrado en la OC</span>}</div>
+      <div style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}><b>Motivo:</b> {sub.motivo}</div>
+      <div style={{ fontSize: 12, color: C.inkMuted }}>Solicitada {sub.fechaSolicitud ? `el ${fecha(sub.fechaSolicitud)}` : "—"}{sub.solicitante ? ` por ${sub.solicitante}` : ""}</div>
+      {sub.observaciones && <div style={{ fontSize: 12, color: C.inkMuted, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>Observaciones: {sub.observaciones}</div>}
     </div>
   );
 }
@@ -102,7 +154,8 @@ function Bitacora({ s }) {
   );
 }
 
-function Item({ s, perfiles, perfil, soloLectura, onActualizar, onEliminar }) {
+function Item({ oc, s, perfiles, perfil, soloLectura, onActualizar, onEliminar }) {
+  const sub = leerSubsanacion(s);
   const [modo, setModo] = useState(null); // null | "avance" | "resolver"
   const [texto, setTexto] = useState(""); const [error, setError] = useState(""); const [ocupado, setOcupado] = useState(false);
   const enCurso = useRef(false);
@@ -125,18 +178,18 @@ function Item({ s, perfiles, perfil, soloLectura, onActualizar, onEliminar }) {
   };
   const tono = TONO_PRIORIDAD[s.prioridad] || TONO_PRIORIDAD.media;
   return (
-    <div data-seg-item={s.id} data-estado={s.estado} data-prioridad={s.prioridad} data-atrasado={vencida ? "1" : undefined}
+    <div id={`seg-${s.id}`} data-seg-item={s.id} data-subsanacion={sub ? sub.facturaId : undefined} data-estado={s.estado} data-prioridad={s.prioridad} data-atrasado={vencida ? "1" : undefined}
       style={{ background: C.card, border: `1px solid ${vencida || s.prioridad === "alta" ? C.danger + "66" : C.border}`, borderLeft: `4px solid ${tono.color}`, borderRadius: 10, padding: "9px 11px", marginBottom: 8 }}>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 5, alignItems: "center", marginBottom: 5 }}>
         {chip(`Prioridad ${etiquetaPrioridad(s.prioridad).toLowerCase()}`, tono)}
         {chip(etiquetaEstado(s.estado), s.estado === "en_gestion" ? { color: C.info, bg: C.infoLight } : { color: C.inkMuted, bg: C.paper })}
-        <span style={{ fontSize: 12, fontWeight: 700, color: C.inkMuted }}>{etiquetaCategoria(s.categoria)}</span>
+        {sub ? chip("Subsanación de factura", { color: C.purple, bg: C.purpleLight }) : <span style={{ fontSize: 12, fontWeight: 700, color: C.inkMuted }}>{etiquetaCategoria(s.categoria)}</span>}
         {vencida && <span data-seg-atrasado>{chip("⏰ Seguimiento atrasado", { color: C.dangerText, bg: C.dangerLight })}</span>}
       </div>
-      <div style={{ fontSize: 14, color: C.ink, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{s.descripcion}</div>
+      {sub ? <DatosSubsanacion oc={oc} sub={sub} /> : <div style={{ fontSize: 14, color: C.ink, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{s.descripcion}</div>}
       <div style={{ fontSize: 12, color: C.inkMuted, marginTop: 5, display: "flex", flexWrap: "wrap", columnGap: 10, rowGap: 2 }}>
         <span>Responsable: <b style={{ color: s.responsable_nombre ? C.ink : C.warnText }}>{s.responsable_nombre || "sin asignar"}</b></span>
-        <span>Revisión: <b style={{ color: vencida ? C.dangerText : C.ink }}>{fecha(s.fecha_revision)}</b></span>
+        <span>{sub ? "Fecha límite" : "Revisión"}: <b style={{ color: vencida ? C.dangerText : C.ink }}>{fecha(s.fecha_revision)}</b></span>
         {s.sobrecosto_estimado != null && <span data-seg-sobrecosto>Sobrecosto estimado: <b>{fmt.money(s.sobrecosto_estimado)}</b> <i>(informativo)</i></span>}
         <span style={{ color: C.inkFaint }}>Registrado por {s.creado_por_nombre || "—"} · {fmt.datetime(s.creado_en)}</span>
       </div>
@@ -170,8 +223,11 @@ function Item({ s, perfiles, perfil, soloLectura, onActualizar, onEliminar }) {
   );
 }
 
-export function SeguimientoEspecial({ oc, perfil, perfiles, soloLectura, onCrear, onActualizar, onEliminar }) {
+// solicitud: { facturaId, n } — «Registrar subsanación» desde Facturación SII abre el formulario con la factura elegida.
+export function SeguimientoEspecial({ oc, perfil, perfiles, soloLectura, onCrear, onActualizar, onEliminar, solicitud, onSolicitudUsada }) {
   const [creando, setCreando] = useState(false); const [verResueltos, setVerResueltos] = useState(false);
+  const [inicial, setInicial] = useState(null);
+  useEffect(() => { if (solicitud?.n) { setInicial({ facturaId: solicitud.facturaId, n: solicitud.n }); setCreando(true); if (onSolicitudUsada) onSolicitudUsada(); } }, [solicitud?.n]); // eslint-disable-line react-hooks/exhaustive-deps
   const abiertos = seguimientosAbiertos(oc); const resueltos = seguimientosResueltos(oc);
   const personas = (perfiles || []).filter((p) => p && p.id && p.nombre).sort((a, b) => String(a.nombre).localeCompare(String(b.nombre)));
   const puede = !soloLectura && !!onCrear;
@@ -180,12 +236,12 @@ export function SeguimientoEspecial({ oc, perfil, perfiles, soloLectura, onCrear
       <div style={{ fontSize: 12, color: C.inkMuted, marginBottom: 8 }}>
         Casos que requieren atención especial (garantías, sobrecostos, proveedor, cliente…). El sobrecosto estimado es <b>solo informativo</b>: no modifica costos, utilidad, compras ni deudas.
       </div>
-      {puede && !creando && <button data-seg-agregar onClick={() => setCreando(true)} style={{ ...btnS(), width: "100%", marginBottom: 10 }}>+ Agregar seguimiento</button>}
-      {puede && creando && <Formulario perfiles={personas} onCancelar={() => setCreando(false)} onGuardar={async (d) => { await onCrear(oc.id, d); setCreando(false); }} />}
+      {puede && !creando && <button data-seg-agregar onClick={() => { setInicial(null); setCreando(true); }} style={{ ...btnS(), width: "100%", marginBottom: 10 }}>+ Agregar seguimiento</button>}
+      {puede && creando && <Formulario key={inicial?.n || "nuevo"} oc={oc} inicial={inicial} perfiles={personas} onCancelar={() => { setCreando(false); setInicial(null); }} onGuardar={async (d) => { await onCrear(oc.id, d); setCreando(false); setInicial(null); }} />}
       {soloLectura && <div style={{ fontSize: 12, color: C.inkFaint, marginBottom: 8 }}><Ic n="🔒" /> Solo lectura mientras otro usuario edita esta OC.</div>}
       {abiertos.length === 0 && <div data-seg-sin-abiertos style={{ fontSize: 13, color: C.inkFaint, padding: "4px 0 8px" }}>Sin seguimientos abiertos.</div>}
       {abiertos.map((s) => (
-        <Item key={s.id} s={s} perfiles={personas} perfil={perfil} soloLectura={soloLectura}
+        <Item key={s.id} oc={oc} s={s} perfiles={personas} perfil={perfil} soloLectura={soloLectura}
           onActualizar={(seg, patch, avance) => onActualizar(oc.id, seg, patch, avance)} onEliminar={(seg) => onEliminar(oc.id, seg)} />
       ))}
       {resueltos.length > 0 && (
@@ -193,12 +249,12 @@ export function SeguimientoEspecial({ oc, perfil, perfiles, soloLectura, onCrear
           <button data-consulta data-seg-ver-resueltos onClick={() => setVerResueltos((v) => !v)} style={{ background: "none", border: "none", padding: "4px 0", color: C.tealDark, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
             {verResueltos ? "▾" : "▸"} Historial: {resueltos.length} seguimiento{resueltos.length > 1 ? "s" : ""} resuelto{resueltos.length > 1 ? "s" : ""}</button>
           {verResueltos && resueltos.map((s) => (
-            <div key={s.id} data-seg-resuelto={s.id} style={{ background: C.paper, border: `1px solid ${C.border}`, borderRadius: 10, padding: "8px 11px", marginTop: 6, fontSize: 13 }}>
+            <div key={s.id} id={`seg-${s.id}`} data-seg-resuelto={s.id} style={{ background: C.paper, border: `1px solid ${C.border}`, borderRadius: 10, padding: "8px 11px", marginTop: 6, fontSize: 13 }}>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 5, alignItems: "center", marginBottom: 3 }}>
                 {chip("✓ Resuelto", { color: C.okText, bg: C.okLight })}
-                <span style={{ fontSize: 12, fontWeight: 700, color: C.inkMuted }}>{etiquetaCategoria(s.categoria)} · prioridad {etiquetaPrioridad(s.prioridad).toLowerCase()}</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: C.inkMuted }}>{leerSubsanacion(s) ? "Subsanación de factura" : etiquetaCategoria(s.categoria)} · prioridad {etiquetaPrioridad(s.prioridad).toLowerCase()}</span>
               </div>
-              <div style={{ color: C.ink, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{s.descripcion}</div>
+              {leerSubsanacion(s) ? <DatosSubsanacion oc={oc} sub={leerSubsanacion(s)} /> : <div style={{ color: C.ink, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{s.descripcion}</div>}
               <div data-seg-solucion style={{ marginTop: 4, color: C.okText, overflowWrap: "anywhere" }}><b>Solución:</b> {s.solucion}</div>
               <div style={{ fontSize: 12, color: C.inkFaint, marginTop: 3 }}>
                 Resuelto por {s.resuelto_por_nombre || "—"} · {fmt.datetime(s.resuelto_en)} · registrado por {s.creado_por_nombre || "—"} el {fmt.datetime(s.creado_en)}

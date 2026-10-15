@@ -43,7 +43,7 @@ import { PanelResumenFinanzas } from "./components/panels/PanelResumenFinanzas";
 import { PanelCotizaciones } from "./components/panels/PanelCotizaciones";
 import { listarBorradores } from "./lib/borradoresCotizacion";
 import { buscarCotizacionesDeOC, cargarCotizacionLectura } from "./lib/cotizacionesDatos";
-import { etiquetaCategoria, etiquetaPrioridad, etiquetaEstado } from "./lib/seguimientos";
+import { etiquetaCategoria, etiquetaPrioridad, etiquetaEstado, etiquetaSeguimiento } from "./lib/seguimientos";
 import { idFilaCompra, idFilaDespacho, marcaPedido, filaProtegida, esEventoDePedido } from "./lib/compraCotizacion";
 import { BarraInferior, BarraLateral, MenuMas, contarAlertas, useEsEscritorio } from "./components/ui/Navegacion";
 
@@ -449,8 +449,8 @@ export default function App() {
       responsable_id:d.responsable_id||null,responsable_nombre:d.responsable_nombre||null,fecha_revision:d.fecha_revision||null,
       sobrecosto_estimado:d.sobrecosto_estimado===""||d.sobrecosto_estimado==null?null:Math.round(Number(d.sobrecosto_estimado))};
     await ins("oc_seguimientos",t,fila);
-    await registrarCambio(t,{ocId,ocNumero:oc?.numero_oc,usuarioId:perfil?.id,usuarioNombre:perfil?.nombre,accion:`Seguimiento especial creado (${etiquetaCategoria(d.categoria)} · prioridad ${etiquetaPrioridad(d.prioridad)})`,
-      campo:`seguimiento:${fila.id}`,valorNuevo:fila.descripcion.slice(0,300)}).catch(()=>{});
+    await registrarCambio(t,{ocId,ocNumero:oc?.numero_oc,usuarioId:perfil?.id,usuarioNombre:perfil?.nombre,accion:`Seguimiento especial creado (${etiquetaSeguimiento(fila)} · prioridad ${etiquetaPrioridad(d.prioridad)})`,
+      campo:`seguimiento:${fila.id}`,valorNuevo:fila.descripcion.replace(/\n?⟦subsanacion[^⟧]*⟧\s*$/,"").slice(0,300)}).catch(()=>{});
     showToast("Seguimiento registrado"); await cargarTodo();
   };
   // patch: campos a cambiar; avance: texto opcional de avance (solo historial).
@@ -466,7 +466,7 @@ export default function App() {
         accion:k==="estado"&&v==="resuelto"?"Seguimiento especial resuelto":`Seguimiento especial: ${nombre[k]||k} cambiado`,campo:`seguimiento:${seg.id}`,
         valorAnterior:fmtV(k,seg[k]).slice(0,300),valorNuevo:fmtV(k,v).slice(0,300)}).catch(()=>{}); }
     if(String(avance||"").trim()) await registrarCambio(t,{ocId,ocNumero:oc?.numero_oc,usuarioId:perfil?.id,usuarioNombre:perfil?.nombre,
-      accion:`Seguimiento especial: avance (${etiquetaCategoria(seg.categoria)})`,campo:`seguimiento:${seg.id}`,valorNuevo:String(avance).trim().slice(0,500)}).catch(()=>{});
+      accion:`Seguimiento especial: avance (${etiquetaSeguimiento(seg)})`,campo:`seguimiento:${seg.id}`,valorNuevo:String(avance).trim().slice(0,500)}).catch(()=>{});
     showToast(patch?.estado==="resuelto"?"Seguimiento resuelto (queda en el historial)":"Seguimiento actualizado"); await cargarTodo();
   };
   const handleEliminarSeguimiento=async(ocId,seg)=>{

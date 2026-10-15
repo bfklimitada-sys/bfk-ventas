@@ -5,7 +5,7 @@ import { RegistrarCompraOC } from "../forms/CompraDesdeCotizacion";
 import { CorregirCompra } from "../forms/CorregirCompra";
 import { filaProtegida, comprasConPedido } from "../../lib/compraCotizacion";
 import { SeguimientoEspecial, TONO_PRIORIDAD } from "../ficha/SeguimientoEspecial";
-import { tieneSeguimientoAbierto, seguimientosAbiertos, seguimientosResueltos, prioridadMaxima, alertasSeguimiento, etiquetaPrioridad } from "../../lib/seguimientos";
+import { subsanacionesAbiertas, tieneSeguimientoAbierto, seguimientosAbiertos, seguimientosResueltos, prioridadMaxima, alertasSeguimiento, etiquetaPrioridad } from "../../lib/seguimientos";
 import { financiamientoPendiente, financiamientoNoCorresponde, saldoFinanciamientoOC, resumenFinanciamiento, documentosPendientes, documentosCobrados, tieneValeVistaPendiente } from "../../lib/filtrosCompras";
 import { FormEntregaFallida, FormFechaEntrega, FormReclamarFactura } from "../forms/FormulariosCorreo";
 import { FormConfirmarEntrega, FormEmitirFactura, FormPagoCliente, FormPagoFinanciamiento } from "../forms/FormulariosRapidos";
@@ -29,7 +29,7 @@ import { exportarVistaExcel, generarFichaPDF } from "../../lib/exportacionVista"
 import { cumpleCriterios, listaProveedores } from "../../lib/busqueda";
 import { recepcionMP } from "../../lib/mercadoPublico";
 import { FILTROS_PANEL, esFiltroPanel, esVenta, estaCobrada, estaComprada, estaEntregada, estaFacturada, etapasCompletadas, facturaVencida, fechaCompra, fechaOC, fechaOCEditable, financiamientoPagado, mensajeDuplicado, normalizarCodigoOC, tieneVendedor } from "../../lib/ocs";
-import { repartirInversion as calcularReparto } from "../../lib/productosOC";
+import { repartirInversion as calcularReparto, productosVendidos, textoProductosVendidos } from "../../lib/productosOC";
 import { MEDIOS_PAGO, esDocumentoBancario, esCobroFueraDeBanco } from "../../lib/mediosPago";
 import { AsignacionesOC } from "../ficha/AsignacionesOC";
 import { faltaFinanciador, faltaVendedor, nombreFinanciador, nombreVendedor, primerNombre } from "../../lib/asignaciones";
@@ -291,6 +291,7 @@ export function DetalleOC({ oc, perfil, parte, onEditarLink, onEliminarLink, onG
   const limpiar=()=>{setDNom("");setDCant("");setDCompra("");setDVenta("");setDUrl("");setDDir("");};
   const todos=(oc.oc_productos_link||[]).slice().sort((a,b)=>a.orden-b.orden);
   const vendidos=todos.filter(l=>(l.origen||"venta")==="venta");
+  const pv=productosVendidos(oc);   // conteo de lo VENDIDO: desglose BFK o, si no hay, los ítems de Mercado Público
   const comprados=todos.filter(l=>l.origen==="compra");
   // 15/10/2026: las líneas de una compra confirmada (pedido desde cotización) no se editan, eliminan ni reparten sueltas.
   const comprasPedido=comprasConPedido(oc);
@@ -333,7 +334,7 @@ export function DetalleOC({ oc, perfil, parte, onEditarLink, onEliminarLink, onG
         style={{width:"100%",background:C.card,border:`1px solid ${C.border}`,borderRadius:12,
           padding:"9px 12px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         <span style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4}}>
-          Productos y números{vendidos.length>0&&<span style={{color:C.tealDark}}> · {vendidos.length} producto{vendidos.length>1?"s":""}</span>}
+          Productos y números{pv.n>0&&<span style={{color:C.tealDark}}> · {textoProductosVendidos(oc)}</span>}
         </span>
         <span style={{color:C.inkFaint,fontSize:12}}>{abierto?"▲":"▼"}</span>
       </button>}
@@ -376,7 +377,8 @@ export function DetalleOC({ oc, perfil, parte, onEditarLink, onEliminarLink, onG
           })()}
 
           {/* Productos: cantidad y precio separados del nombre */}
-          {ver("productos")&&links.length===0&&parte&&<div style={{fontSize:12,color:C.inkFaint}}>Sin productos registrados.</div>}
+          {ver("productos")&&parte&&pv.fuente==="mp"&&<div data-sin-desglose-venta style={{fontSize:12,color:C.inkFaint,marginBottom:8}}>Productos vendidos según Mercado Público ({textoProductosVendidos(oc)}). No hay desglose de venta registrado en BFK.</div>}
+          {ver("productos")&&links.length===0&&parte&&pv.n===0&&<div style={{fontSize:12,color:C.inkFaint}}>Sin productos registrados.</div>}
           {ver("productos")&&links.length>0&&(
             <div style={{marginBottom:12}}>
               <div style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Productos</div>
@@ -789,6 +791,7 @@ export function FilaOC({ notaVista, onCrearSeguimiento, onActualizarSeguimiento,
   const [editandoDatos,setEditandoDatos]=useState(false);
   const [editandoEvento,setEditandoEvento]=useState(null);
   const [accionRapida,setAccionRapida]=useState(null); const [corrigiendo,setCorrigiendo]=useState(null);
+  const [solicitudSub,setSolicitudSub]=useState(null);   // «Registrar subsanación» desde una factura
   const [pvForm,setPvForm]=useState(null);   // {evento, cerrar} — editar o cerrar un incidente existente
   const [correoFallida,setCorreoFallida]=useState(false);
   const [correoFecha,setCorreoFecha]=useState(false);
@@ -1016,7 +1019,6 @@ export function FilaOC({ notaVista, onCrearSeguimiento, onActualizarSeguimiento,
         const ir=(id)=>{ setAbiertas({...abiertasAct,[id]:true}); setTimeout(()=>{ const el=document.getElementById(`${id}-${oc.id}`); if(el) el.scrollIntoView({behavior:"smooth",block:"start"}); },30); };
         const facturadoVig=Number(oc.monto_facturado)||0, porCobrar=Math.max(0,facturadoVig-(Number(oc.monto_cobrado)||0));
         const nDocs=(oc.eventos_factura||[]).length;
-        const vendidos=(oc.oc_productos_link||[]).filter(l=>(l.origen||"venta")==="venta").length;
         const incAbiertos=(oc.eventos_postventa||[]).filter(e=>e.estado!=="resuelto").length;
         const nCorreosPend=contarCorreosPendientes(correosOC);
         const pendientes=[
@@ -1031,7 +1033,7 @@ export function FilaOC({ notaVista, onCrearSeguimiento, onActualizarSeguimiento,
         ].filter(Boolean);
         const secciones=[
           {id:"info",icono:"📋",titulo:"Información OC",resumen:[oc.rut_cliente,oc.comuna].filter(Boolean).join(" · ")},
-          {id:"productos",icono:"📦",titulo:"Productos",resumen:vendidos?`${vendidos} producto${vendidos>1?"s":""}`:"sin productos"},
+          {id:"productos",icono:"📦",titulo:"Productos",resumen:textoProductosVendidos(oc)},
           {id:"compra",icono:"🏦",titulo:"Compra y financiamiento",resumen:Number(oc.costo_total)?`${fmt.money(oc.costo_total)} · ${TIPOS_FINANCIAMIENTO[tipoFin]?.etiqueta||""}`:"sin compra"},
           {id:"facturacion",icono:"🧾",titulo:"Facturación SII",resumen:nDocs?`${fmt.money(montoTributarioVigente(oc))} vigente · ${nDocs} doc.`:"sin documentos",aviso:bloqueadoDom("facturacion")},
           {id:"entrega",icono:"🚚",titulo:"Entrega",resumen:estaEntregada(oc)?"entregada":"pendiente"},
@@ -1145,7 +1147,10 @@ export function FilaOC({ notaVista, onCrearSeguimiento, onActualizarSeguimiento,
 
           {sec("facturacion",<FacturacionSII oc={oc} perfil={perfil} bloqueado={bloqueadoDom("facturacion")}
             onEmitir={()=>setAccionRapida("factura")} onRegistrarNC={()=>setRegistrandoNC(true)}
-            onEditar={setEditandoEvento} onEliminar={onEliminarFactura} />)}
+            onEditar={setEditandoEvento} onEliminar={onEliminarFactura}
+            subsanacionesDe={(fid)=>subsanacionesAbiertas(oc,fid).length}
+            onSubsanar={onCrearSeguimiento?(fid)=>{ setSolicitudSub({facturaId:fid,n:Date.now()}); ir("seguimiento"); }:undefined}
+            onVerSubsanacion={(fid)=>{ ir("seguimiento"); const s0=subsanacionesAbiertas(oc,fid)[0]; if(s0) setTimeout(()=>{ const el=document.getElementById(`seg-${s0.id}`); if(el) el.scrollIntoView({behavior:"smooth",block:"center"}); },120); }} />)}
 
           {sec("entrega",<>
             <EtapasOC {...etapaProps} soloEtapa="entrega" />
@@ -1158,7 +1163,7 @@ export function FilaOC({ notaVista, onCrearSeguimiento, onActualizarSeguimiento,
             <EtapasOC {...etapaProps} soloEtapa="cobro" extra={{cobro:bloqueCobranza}} />
           </>)}
 
-          {sec("seguimiento",<SeguimientoEspecial oc={oc} perfil={perfil} perfiles={perfiles} soloLectura={soloLectura}
+          {sec("seguimiento",<SeguimientoEspecial oc={oc} perfil={perfil} perfiles={perfiles} soloLectura={soloLectura} solicitud={solicitudSub} onSolicitudUsada={()=>setSolicitudSub(null)}
             onCrear={onCrearSeguimiento} onActualizar={onActualizarSeguimiento} onEliminar={onEliminarSeguimiento} />)}
 
           {sec("comunicaciones",<ComunicacionesFicha oc={oc} pendientes={pendientes} correos={correosOC} onMarcarCorreo={onMarcarCorreo} />)}

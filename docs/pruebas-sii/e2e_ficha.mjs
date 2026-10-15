@@ -49,8 +49,8 @@ for (const [modo, vp] of [["escritorio", { width: 1280, height: 900 }], ["movil"
   const f = page.locator('[data-ficha-oc="TEST-1-AG26"]');
   r.cabecera = await f.locator("[data-ficha-cabecera]").count() === 1;
   r.resumen_6 = await f.locator("[data-resumen-financiero] [data-tile]").count() === 6;
-  r.indice_8 = (await f.locator("[data-indice-ficha] button").count()) === 8;
-  r.secciones_8 = (await f.locator("[data-seccion-ficha]").count()) === 8;
+  r.indice_9 = (await f.locator("[data-indice-ficha] button").count()) === 9;   // + «Seguimiento especial» (15/10/2026)
+  r.secciones_9 = (await f.locator("[data-seccion-ficha]").count()) === 9;
   if (modo === "movil") { r.movil_acordeon_cerrado = !(await f.locator('[data-seccion-ficha^="info-"] [data-ficha-pdf]').count()); }
   await f.locator("[data-indice-ficha] button", { hasText: "Facturación SII" }).click(); await page.waitForTimeout(600);
   const fact = f.locator("[data-facturacion-sii]");

@@ -75,3 +75,17 @@ export function ventaDeOC(oc) {
   });
   return { total, confiable: !!base, base, lineas };
 }
+
+// Productos VENDIDOS de una OC (15/10/2026), solo lectura. Dos fuentes, sin sumarlas:
+//  1) desglose estructurado en BFK: líneas «venta» identificables (con nombre real);
+//  2) si no hay desglose, los ítems de la foto de Mercado Público (oc.mp.items).
+// Nunca cuenta líneas «compra» (lo que compramos no es lo que vendemos) ni crea, importa o modifica productos.
+const PLACEHOLDER = "Producto por completar";
+export function productosVendidos(oc) {
+  const estructurados = (oc?.oc_productos_link || []).filter((l) => (l.origen || "venta") === "venta" && String(l.descripcion || "").trim() && l.descripcion !== PLACEHOLDER);
+  const mp = (oc?.mp?.items || []).filter((it) => String(it?.descripcion || "").trim());
+  if (estructurados.length) return { n: estructurados.length, fuente: "bfk", nMP: mp.length };
+  if (mp.length) return { n: mp.length, fuente: "mp", nMP: mp.length };
+  return { n: 0, fuente: null, nMP: 0 };
+}
+export const textoProductosVendidos = (oc) => { const { n } = productosVendidos(oc); return n ? `${n} producto${n > 1 ? "s" : ""}` : "sin productos"; };

@@ -31,7 +31,7 @@ for (const ancho of [360, 390]) {
   ok(`M${ancho}_cabecera_sin_chips_estado`, !/✓ Compra|Financ\./.test(txtCab), txtCab);
   ok(`M${ancho}_tarjeta_conserva_resumen`, (await p.locator(`[data-oc="${NUM}"] > div`).first().innerText()).includes(NUM)
     && await p.locator(`[data-oc="${NUM}"] [data-asignaciones-fila]`).count() === 1);
-  ok(`M${ancho}_indice_presente`, await cab.locator("[data-indice-ficha] button").count() === 8);
+  ok(`M${ancho}_indice_presente`, await cab.locator("[data-indice-ficha] button").count() === 9);   // + «Seguimiento especial» (15/10/2026)
   ok(`M${ancho}_edicion_presente`, await ficha.locator("[data-asignacion-editar]").count() >= 1 && await ficha.locator("[data-resumen-financiero]").count() === 1);
   // Ningún botón de la ficha sobresale del ancho de pantalla.
   const cortados = await p.evaluate(({ num }) => {
