@@ -10,6 +10,7 @@
 --
 -- Reglas:
 --  · sobrecosto_estimado es SOLO informativo: ninguna función financiera lo lee (no es compra, gasto, deuda ni utilidad).
+--  · «anon» (sin sesión) no tiene ningún permiso sobre la tabla ni sus funciones (se revocan los permisos por defecto de Supabase).
 --  · Leer, crear y actualizar: usuarios autenticados (igual que oc_comentarios / eventos_postventa).
 --    Eliminar: solo administradores (igual que historial_cambios y ordenes_compra_v2).
 --  · Un seguimiento RESUELTO queda congelado (historial): solo un administrador puede modificarlo.
@@ -93,3 +94,8 @@ create policy seg_crean on public.oc_seguimientos for insert to authenticated wi
 create policy seg_editan on public.oc_seguimientos for update to authenticated using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
 create policy seg_solo_admin_borra on public.oc_seguimientos for delete to authenticated using (public.seg_es_admin());
 grant select, insert, update, delete on public.oc_seguimientos to authenticated;
+-- Supabase concede por defecto TODO a «anon» sobre tablas y funciones nuevas de public (pg_default_acl).
+-- Las tablas hijas de la OC no dan acceso a «anon»: se retira explícitamente (además de RLS).
+revoke all on public.oc_seguimientos from anon;
+revoke all on function public.seg_es_admin() from anon;
+revoke all on function public.seg_antes_guardar() from public, anon, authenticated;

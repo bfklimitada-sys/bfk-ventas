@@ -19,6 +19,9 @@ insert into public.perfiles values ('11111111-1111-1111-1111-111111111111','Ana'
 create table public.ordenes_compra_v2 (id text primary key, numero_oc text, monto_total numeric, costo_total numeric);
 insert into public.ordenes_compra_v2 values ('oc1','1234-56-AG26',2380000,1271990), ('oc2','2000-1-SE26',500000,300000);
 grant select, insert, update, delete on public.ordenes_compra_v2 to authenticated;
+-- Igual que Supabase: permisos por defecto a anon y authenticated sobre objetos nuevos de public.
+alter default privileges in schema public grant all on tables to anon, authenticated;
+alter default privileges in schema public grant execute on functions to anon, authenticated;
 SQL
 F=0; ok() { if [ "$2" = "$3" ]; then echo "OK    $1"; else echo "FALLA $1 :: esperado [$3] obtenido [$2]"; F=$((F+1)); fi; }
 COMO() { local uid=$1; shift; Q -c "set role authenticated; set prueba.uid = '$uid'; $*" 2>&1 | grep -Ev '^(CONTEXT|PL/pgSQL|SQL (statement|function))' | head -1; }
@@ -41,6 +44,7 @@ COMO $ADM "update oc_seguimientos set descripcion='Aumento del costo de despacho
 ok "S10_admin_puede_corregir_resuelto" "$(Q -c "select descripcion||' · '||resuelto_por_nombre from oc_seguimientos where id='s1'")" "Aumento del costo de despacho (corregido) · Ana"
 ok "S11_no_cambia_oc_ni_autor" "$(COMO $USR "update oc_seguimientos set oc_id='oc2' where id='s5'" | grep -c 'No se puede cambiar')" "1"
 ok "S12_usuario_no_borra" "$(COMO $USR "delete from oc_seguimientos where id='s5'"; Q -c "select count(*) from oc_seguimientos where id='s5'")" "1"
+ok "S13b_anon_sin_permisos_de_tabla" "$(Q -c "select count(*) from information_schema.role_table_grants where grantee='anon' and table_name='oc_seguimientos'")" "0"
 ok "S13_anonimo_no_lee" "$(Q -c "set role anon; select count(*) from oc_seguimientos" 2>&1 | grep -c 'permission denied')" "1"
 ok "S14_oc_con_seguimiento_no_se_borra" "$(COMO $ADM "delete from ordenes_compra_v2 where id='oc1'" | grep -c 'violates foreign key')" "1"
 COMO $ADM "delete from oc_seguimientos where id='s5'" >/dev/null
@@ -49,4 +53,4 @@ ok "S16_tablas_existentes_intactas" "$(Q -c "select md5(string_agg(t::text, ',' 
 Q -1 -f "$MIG/BORRADOR-2026-10-15-seguimiento-especial-deshacer.sql" >/dev/null 2>&1; ok "S17_deshacer" $? 0
 ok "S18_deshacer_limpio" "$(Q -c "select count(*) from pg_class where relname='oc_seguimientos'")|$(Q -c "select count(*) from pg_proc where proname in ('seg_es_admin','seg_antes_guardar')")|$(Q -c "select md5(string_agg(t::text, ',' order by id)) from public.ordenes_compra_v2 t")" "0|0|$ANTES"
 Q -1 -f "$MIG/BORRADOR-2026-10-15-seguimiento-especial.sql" >/dev/null 2>&1; ok "S19_reaplicable" $? 0
-echo; echo "$((19-F)) OK · $F fallas"; exit $F
+echo; echo "$((20-F)) OK · $F fallas"; exit $F
