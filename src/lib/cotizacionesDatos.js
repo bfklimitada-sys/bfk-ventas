@@ -296,3 +296,18 @@ export async function logoBFK(url) {
   try { let b = await (await fetch(url)).blob(); if (!/^image\//.test(b.type)) b = new Blob([b], { type: "image/jpeg" }); logoCache = await new Promise((ok) => { const f = new FileReader(); f.onload = () => ok(f.result); f.readAsDataURL(b); }); } catch { logoCache = null; }
   return logoCache;
 }
+
+// ── Compra desde la cotización adjudicada (15/10/2026): SOLO LECTURA de cotizaciones ──
+// Cotizaciones cuyo oc_codigo coincide con el código de la OC. El filtro del servidor es amplio (contiene) y la
+// coincidencia EXACTA (sin mayúsculas ni espacios) se verifica después: nunca se vincula por parecido.
+// Si el módulo de cotizaciones no está instalado, devuelve [] (se usa el formulario de compra normal).
+export async function buscarCotizacionesDeOC(token, numeroOC) {
+  const codigo = String(numeroOC || "").trim(); if (!codigo) return [];
+  const patron = codigo.replace(/[%*,()]/g, "");
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/cotizaciones?select=id,id_externo,nombre,institucion,estado,oc_codigo,fecha,total,actualizado_en&oc_codigo=ilike.*${encodeURIComponent(patron)}*`, { headers: cab(token) });
+  if (!r.ok) { const c = await json(r); if (r.status === 404 && TABLA_INEXISTENTE.includes(c?.code)) return []; throw new Error(`No se pudo consultar las cotizaciones (HTTP ${r.status}).`); }
+  return (await r.json()) || [];
+}
+export async function cargarCotizacionLectura(token, id) {
+  return crearAlmacen(token, "base", 2).cargarCotizacion(id);
+}

@@ -72,6 +72,7 @@ export function crearBase(inicial, { mp = {}, borrado = {} } = {}) {
       if (v.startsWith("eq.")) { const x = decodeURIComponent(v.slice(3)); r = r.filter((f) => String(f[k]) === x); }
       else if (v === "is.null") r = r.filter((f) => f[k] === null || f[k] === undefined);
       else if (v.startsWith("like.")) { const re = new RegExp("^" + decodeURIComponent(v.slice(5)).replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*") + "$"); r = r.filter((f) => re.test(String(f[k]))); }
+      else if (v.startsWith("ilike.")) { const re = new RegExp("^" + decodeURIComponent(v.slice(6)).replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*") + "$", "i"); r = r.filter((f) => re.test(String(f[k] ?? ""))); }
       else if (v.startsWith("in.(")) { const xs = decodeURIComponent(v.slice(4, -1)).split(","); r = r.filter((f) => xs.includes(String(f[k]))); }
     }
     return r;
@@ -196,7 +197,7 @@ export function crearBase(inicial, { mp = {}, borrado = {} } = {}) {
       const tiene = db.eventos_compra.some((e) => e.oc_id === oc.id);
       if (b.p_financiador_id && b.p_financiador_id !== oc.financiador_id) { if (tiene) return err(`La OC ${oc.numero_oc} ya tiene compras financiadas por otro financiador.`); oc.financiador_id = b.p_financiador_id; }
       if (!oc.financiador_id && !oc.es_venta_propia) return err("Indique el financiador de la compra");
-      db.eventos_compra.push({ id: "evc_" + db.eventos_compra.length + "_" + escr.length, oc_id: oc.id, fecha: b.p_fecha, costo_compra: num(b.p_costo), monto_venta: b.p_monto_venta ?? oc.monto_total, fecha_entrega_estimada: b.p_fecha_entrega_estimada, financiador_id: oc.financiador_id, proveedor: b.p_proveedor || "", creado_por: yo, creadoEn: new Date().toISOString() });
+      db.eventos_compra.push({ id: "evc_" + db.eventos_compra.length + "_" + escr.length, oc_id: oc.id, fecha: b.p_fecha, costo_compra: num(b.p_costo), monto_venta: b.p_monto_venta ?? oc.monto_total, fecha_entrega_estimada: b.p_fecha_entrega_estimada, financiador_id: oc.financiador_id, proveedor: b.p_proveedor || "", notas: b.p_notas || "", creado_por: yo, creadoEn: new Date().toISOString() });
       hist(yo, oc.id, "Compra registrada"); return ok(resumen(oc.id));
     }
     if (fn === "editar_compra_oc" || fn === "eliminar_compra_oc") {

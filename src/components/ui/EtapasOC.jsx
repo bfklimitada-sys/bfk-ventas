@@ -107,7 +107,8 @@ export function EtapasOC({ oc, perfil, perfiles, activa, soloEtapa, extra, onEdi
 
   const etapas = [
     { key:"compra",  label:"Compra",  ok:estaComprada(oc),        icon:<Ic n="📦"/>, tabla:"eventos_compra",
-      accion: !estaComprada(oc)?{label:<I t={"📦 Registrar compra"}/>,color:C.tealDark,key:"compra"}:null,
+      // Compras parciales (15/10/2026): con la OC ya comprada se puede registrar otra compra (otro pedido o proveedor).
+      accion: !estaComprada(oc)?{label:<I t={"📦 Registrar compra"}/>,color:C.tealDark,key:"compra"}:{label:<I t={"➕ Registrar otra compra"}/>,color:C.tealDark,key:"compra"},
       correoBtns: null },
     { key:"entrega", label:"Entrega", ok:estaEntregada(oc),          icon:<Ic n="🚚"/>, tabla:"eventos_entrega",
       accion: !estaEntregada(oc)?{label:"✓ Confirmar entrega",color:C.transit,key:"entrega"}:null,

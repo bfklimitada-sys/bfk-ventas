@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { contarCorreosPendientes, ordenarCorreos } from "../../lib/correosBfk";
 import { FormIngresarCompra } from "../forms/FormIngresarCompra";
+import { RegistrarCompraOC } from "../forms/CompraDesdeCotizacion";
 import { FormEntregaFallida, FormFechaEntrega, FormReclamarFactura } from "../forms/FormulariosCorreo";
 import { FormConfirmarEntrega, FormEmitirFactura, FormPagoCliente, FormPagoFinanciamiento } from "../forms/FormulariosRapidos";
 import { DiasBadge, Field, Leyenda, Modal, Trazabilidad } from "../ui/Basicos";
@@ -764,7 +765,7 @@ const ICONO_ESTADO={mp_cancelada:<Ic n="🔴"/>,facturada_sin_entrega:<Ic n="⚠
   falta_financiamiento:<Ic n="🏦"/>,reclamar:<Ic n="⚠"/>,vencida:<Ic n="🔴"/>,por_vencer:<Ic n="🟡"/>,facturada:<Ic n="🧾"/>,entregada:<Ic n="📦"/>,
   comprada:<Ic n="🚚"/>,mp_sin_aceptar:<Ic n="⏳"/>,sin_compra:"○"};
 
-export function FilaOC({ correosOC = SIN_CORREOS, onMarcarCorreo, pagosVendedor, onAsignarVendedor, onAsignarFinanciador, difsHistoricas, onCambiarFinanciamiento, oc, perfiles, todasLasOcs, onSincronizarFecha, expanded, onToggle, contactos, onEnviarReclamo, onCorreoOC, onRegistrarRespuestaReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, onRepartirInversion, buscarDuplicadoOC, perfil, historialCambios, onAgregarComentario, onEliminarComentario, bloqueoEstado, onArchivarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa, onRegistrarNC }) {
+export function FilaOC({ onCompraDesdeCotizacion, onBuscarCotizacionOC, onCargarCotizacionOC, correosOC = SIN_CORREOS, onMarcarCorreo, pagosVendedor, onAsignarVendedor, onAsignarFinanciador, difsHistoricas, onCambiarFinanciamiento, oc, perfiles, todasLasOcs, onSincronizarFecha, expanded, onToggle, contactos, onEnviarReclamo, onCorreoOC, onRegistrarRespuestaReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, onRepartirInversion, buscarDuplicadoOC, perfil, historialCambios, onAgregarComentario, onEliminarComentario, bloqueoEstado, onArchivarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa, onRegistrarNC }) {
   const evF=facturaVigente(oc);
   const dias=fmt.diasDesde(evF?.fecha);
   const saldo=(oc.monto_facturado||0)-(oc.monto_cobrado||0);
@@ -804,7 +805,7 @@ export function FilaOC({ correosOC = SIN_CORREOS, onMarcarCorreo, pagosVendedor,
   onEditarEvento=prot(onEditarEvento); onConfirmarEntrega=prot(onConfirmarEntrega); onEmitirFactura=prot(onEmitirFactura);
   onPagoCliente=prot(onPagoCliente); onPagoFinanciamiento=prot(onPagoFinanciamiento); onGuardarLink=prot(onGuardarLink);
   onEliminarLink=prot(onEliminarLink); onEditarLink=prot(onEditarLink); onArchivarOC=prot(onArchivarOC);
-  onEliminarFactura=prot(onEliminarFactura); onEliminarEvento=prot(onEliminarEvento); onIngresarCompra=prot(onIngresarCompra);
+  onEliminarFactura=prot(onEliminarFactura); onEliminarEvento=prot(onEliminarEvento); onIngresarCompra=prot(onIngresarCompra); onCompraDesdeCotizacion=prot(onCompraDesdeCotizacion);
   onAsignarResponsable=prot(onAsignarResponsable); onGuardarPostventa=prot(onGuardarPostventa); onRepartirInversion=prot(onRepartirInversion);
   onRegistrarNC=prot(onRegistrarNC); onAsignarVendedor=prot(onAsignarVendedor); onAsignarFinanciador=prot(onAsignarFinanciador);
 
@@ -1199,7 +1200,8 @@ export function FilaOC({ correosOC = SIN_CORREOS, onMarcarCorreo, pagosVendedor,
       )}
       {accionRapida==="compra"&&(
         <Modal title="Registrar compra" onClose={()=>setAccionRapida(null)}>
-          <FormIngresarCompra ocs={[]} financiadores={financiadores} vendedores={vendedores} entidadesCatalogo={entidadesCatalogo} perfil={perfil} ocExistente={oc} onSave={async(data)=>{ await onIngresarCompra(data); setAccionRapida(null); }} />
+          <RegistrarCompraOC oc={oc} ocs={[]} financiadores={financiadores} vendedores={vendedores} entidadesCatalogo={entidadesCatalogo} perfil={perfil} onSave={async(data)=>{ await onIngresarCompra(data); setAccionRapida(null); }}
+            onBuscarCotizacionOC={onBuscarCotizacionOC} onCargarCotizacionOC={onCargarCotizacionOC} onCompraDesdeCotizacion={async(data)=>{ await onCompraDesdeCotizacion(data); setAccionRapida(null); }} />
         </Modal>
       )}
       {accionRapida==="entrega"&&(
@@ -1237,7 +1239,7 @@ export function FilaOC({ correosOC = SIN_CORREOS, onMarcarCorreo, pagosVendedor,
 }
 
 
-export function PanelCompras({ pagosVendedor, onAsignarVendedor, onAsignarFinanciador, correosBfk, onMarcarCorreo, onRegistrarNC, difsHistoricas, onCambiarFinanciamiento, ocs, perfiles, filtroInicial, busquedaInicial, ocFoco, onFocoUsado, onSincronizarFecha, contactos, onEnviarReclamo, onCorreoOC, onRegistrarRespuestaReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, onRepartirInversion, buscarDuplicadoOC, perfil, historialCambios, onAgregarComentario, onEliminarComentario, onArchivarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa }) {
+export function PanelCompras({ onCompraDesdeCotizacion, onBuscarCotizacionOC, onCargarCotizacionOC, pagosVendedor, onAsignarVendedor, onAsignarFinanciador, correosBfk, onMarcarCorreo, onRegistrarNC, difsHistoricas, onCambiarFinanciamiento, ocs, perfiles, filtroInicial, busquedaInicial, ocFoco, onFocoUsado, onSincronizarFecha, contactos, onEnviarReclamo, onCorreoOC, onRegistrarRespuestaReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, onRepartirInversion, buscarDuplicadoOC, perfil, historialCambios, onAgregarComentario, onEliminarComentario, onArchivarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa }) {
   const correosPorOC=useMemo(()=>{ const m=new Map(); for(const c of (correosBfk||[])) if(c.oc_id){ if(!m.has(c.oc_id)) m.set(c.oc_id,[]); m.get(c.oc_id).push(c); } for(const [k,v] of m) m.set(k,ordenarCorreos(v)); return m; },[correosBfk]);
   const [filtros,setFiltros]=useState({}); const [busq,setBusq]=useState(""); const [expId,setExpId]=useState(null);
   const escritorio=useEscritorio();
@@ -1599,7 +1601,7 @@ export function PanelCompras({ pagosVendedor, onAsignarVendedor, onAsignarFinanc
         </button>
         </span>
       </div>
-      {filtered.map(oc=><FilaOC key={oc.id} pagosVendedor={pagosVendedor} onAsignarVendedor={onAsignarVendedor} onAsignarFinanciador={onAsignarFinanciador} correosOC={correosPorOC.get(oc.id)||SIN_CORREOS} onMarcarCorreo={onMarcarCorreo} onRegistrarNC={onRegistrarNC} difsHistoricas={difsHistoricas} onCambiarFinanciamiento={onCambiarFinanciamiento} oc={oc} perfiles={perfiles} todasLasOcs={ocs} onSincronizarFecha={onSincronizarFecha} expanded={expId===oc.id} onToggle={()=>setExpId(expId===oc.id?null:oc.id)} contactos={contactos} onEnviarReclamo={onEnviarReclamo} onCorreoOC={onCorreoOC} onRegistrarRespuestaReclamo={onRegistrarRespuestaReclamo} onGuardarContacto={onGuardarContacto} onGuardarDatosOC={onGuardarDatosOC} onEditarEvento={onEditarEvento} financiadores={financiadores} onConfirmarEntrega={onConfirmarEntrega} onEmitirFactura={onEmitirFactura} onPagoCliente={onPagoCliente} onPagoFinanciamiento={onPagoFinanciamiento} entidadesCatalogo={entidadesCatalogo} onGuardarLink={onGuardarLink} onEliminarLink={onEliminarLink} onEditarLink={onEditarLink} onRepartirInversion={onRepartirInversion} buscarDuplicadoOC={buscarDuplicadoOC} bloqueoEstado={bloqueoEstado} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={onAgregarComentario} onEliminarComentario={onEliminarComentario} onArchivarOC={onArchivarOC} onEliminarFactura={onEliminarFactura} onEliminarEvento={onEliminarEvento} vendedores={vendedores} onIngresarCompra={onIngresarCompra} onAsignarResponsable={onAsignarResponsable} onGuardarPostventa={onGuardarPostventa} />)}
+      {filtered.map(oc=><FilaOC key={oc.id} onCompraDesdeCotizacion={onCompraDesdeCotizacion} onBuscarCotizacionOC={onBuscarCotizacionOC} onCargarCotizacionOC={onCargarCotizacionOC} pagosVendedor={pagosVendedor} onAsignarVendedor={onAsignarVendedor} onAsignarFinanciador={onAsignarFinanciador} correosOC={correosPorOC.get(oc.id)||SIN_CORREOS} onMarcarCorreo={onMarcarCorreo} onRegistrarNC={onRegistrarNC} difsHistoricas={difsHistoricas} onCambiarFinanciamiento={onCambiarFinanciamiento} oc={oc} perfiles={perfiles} todasLasOcs={ocs} onSincronizarFecha={onSincronizarFecha} expanded={expId===oc.id} onToggle={()=>setExpId(expId===oc.id?null:oc.id)} contactos={contactos} onEnviarReclamo={onEnviarReclamo} onCorreoOC={onCorreoOC} onRegistrarRespuestaReclamo={onRegistrarRespuestaReclamo} onGuardarContacto={onGuardarContacto} onGuardarDatosOC={onGuardarDatosOC} onEditarEvento={onEditarEvento} financiadores={financiadores} onConfirmarEntrega={onConfirmarEntrega} onEmitirFactura={onEmitirFactura} onPagoCliente={onPagoCliente} onPagoFinanciamiento={onPagoFinanciamiento} entidadesCatalogo={entidadesCatalogo} onGuardarLink={onGuardarLink} onEliminarLink={onEliminarLink} onEditarLink={onEditarLink} onRepartirInversion={onRepartirInversion} buscarDuplicadoOC={buscarDuplicadoOC} bloqueoEstado={bloqueoEstado} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={onAgregarComentario} onEliminarComentario={onEliminarComentario} onArchivarOC={onArchivarOC} onEliminarFactura={onEliminarFactura} onEliminarEvento={onEliminarEvento} vendedores={vendedores} onIngresarCompra={onIngresarCompra} onAsignarResponsable={onAsignarResponsable} onGuardarPostventa={onGuardarPostventa} />)}
       {filtered.length===0&&<div style={{textAlign:"center",padding:30,color:C.inkFaint,fontSize:13}}>No hay órdenes con estos filtros.</div>}
       <Leyenda items={[
         {muestra:"✓ Cerrada",   color:C.okText,      bg:C.okLight,      texto:"Cobrada al cliente y pagada al financiador. Ciclo terminado."},
