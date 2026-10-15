@@ -1,3 +1,4 @@
+import { alertasSeguimiento } from "../../lib/seguimientos";
 import { diasAtrasoEntrega, esVenta, ocCanceladaEnMP, estaCerrada, estaCobrada, estaComprada, estaEntregada, estaFacturada, facturaPorCobrar, fechaEntregaEstimada, financiamientoPagado, tieneVendedor, valeVistasPendientes, vencimientoFactura } from "../../lib/ocs";
 import { CorreosPendientes } from "./CorreosBfk";
 import { useState, useEffect } from "react";
@@ -40,7 +41,7 @@ export function HistorialCambiosOC({ ocId, historialCambios }) {
       {items.map(h=>(
         <div key={h.id} style={{borderLeft:`2px solid ${C.border}`,paddingLeft:10,marginBottom:8}}>
           <div style={{fontSize:12,fontWeight:600,color:C.ink}}>{h.accion}</div>
-          {h.campo&&<div style={{fontSize:12,color:C.inkMuted}}>{h.campo}: <span style={{color:C.dangerText,textDecoration:"line-through"}}>{h.valor_anterior||"—"}</span> → <span style={{color:C.okText}}>{h.valor_nuevo||"—"}</span></div>}
+          {h.campo&&<div style={{fontSize:12,color:C.inkMuted}}>{String(h.campo).startsWith("seguimiento:")?"seguimiento":h.campo}: <span style={{color:C.dangerText,textDecoration:"line-through"}}>{h.valor_anterior||"—"}</span> → <span style={{color:C.okText}}>{h.valor_nuevo||"—"}</span></div>}
           <div style={{fontSize:12,color:C.inkFaint}}>{h.usuario_nombre} · {fmt.datetime(h.creadoEn)}</div>
         </div>
       ))}
@@ -114,6 +115,12 @@ export function calcularAlertas(ocs) {
 
   // Fase 4A: mismos criterios que la lista, los filtros, el Panel y la Agenda (lib/ocs.js).
   for (const oc of (ocs || [])) {
+    // Seguimiento especial (15/10/2026): UNA alerta por seguimiento abierto de prioridad alta o con la revisión
+    // vencida («Seguimiento atrasado»). Al resolverse deja de cumplirse y la alerta desaparece sola.
+    for (const a of alertasSeguimiento(oc)) {
+      alertas.push({ ocId:oc.id, nivel:"alto", icono:<Ic n="🚩"/>, oc:oc.numero_oc, cliente:oc.cliente, seguimientoId:a.id,
+        titulo:a.titulo, detalle:a.detalle, monto:0, tab:"compras", filtro:"seguimiento", orden:a.vencida?0:1 });
+    }
     // Aportes de socios y ventas externas no generan alertas de gestión
     if (!esVenta(oc)) continue;
     const saldo = (oc.monto_facturado || 0) - (oc.monto_cobrado || 0);
@@ -263,11 +270,12 @@ export function calcularAlertas(ocs) {
 // El filtro vive en App (prop `filtroAlertas`) para sobrevivir a la navegación y a las recargas de datos.
 // nivel: todas | alto | medio | bajo · etapa (opcional): refina con el campo `filtro` que ya trae cada alerta
 // ("entrega" = entregas atrasadas, "cobro" = facturas vencidas), sin categorías nuevas.
-const ETAPA_ALERTA = { entrega: "entregas atrasadas", cobro: "facturas vencidas sin cobrar" };
+const ETAPA_ALERTA = { entrega: "entregas atrasadas", cobro: "facturas vencidas sin cobrar", seguimiento: "seguimiento especial" };
 const LEYENDA_ALERTAS = [
         {muestra:<Ic n="🔴"/>, texto:"Urgente: facturas pasadas de plazo o entregas atrasadas. Son las que cuestan plata."},
         {muestra:<Ic n="🟡"/>, texto:"Atención: vencen dentro de 5 días, o llevan días entregadas sin facturar."},
         {muestra:<Ic n="⏸"/>, texto:"Informativas: OCs sin avance hace más de dos semanas, o esperando Mercado Público."},
+        {muestra:<Ic n="🚩"/>, texto:"Seguimiento especial: casos abiertos de prioridad alta o con la fecha de revisión vencida (atrasados). Desaparecen al resolverse."},
         {muestra:<Ic n="⚠"/>, texto:"OC sin vendedor: OCs abiertas que no entran en ninguna comisión hasta asignarles un vendedor."},
         {muestra:"›", texto:"Al tocar una alerta te lleva al listado filtrado por esa etapa."},
       ];
@@ -339,7 +347,7 @@ export function PanelNotificaciones({ notificaciones, ocs, onMarcarLeidas, onNav
       )}
 
       {visibles.map((a, i) => (
-        <button key={i} onClick={() => onNavigate && onNavigate(a.tab, a.filtro, a.ocId)}
+        <button key={i} data-alerta-seguimiento={a.seguimientoId} onClick={() => onNavigate && onNavigate(a.tab, a.filtro, a.ocId)}
           style={{width:"100%",textAlign:"left",background:C.card,border:`1px solid ${C.border}`,
             borderLeft:`4px solid ${colorNivel(a.nivel)}`,borderRadius:12,padding:"11px 13px",
             marginBottom:7,cursor:"pointer",display:"flex",gap:10,alignItems:"flex-start"}}>

@@ -40,6 +40,7 @@ const P = {
   dotOrange: <circle cx="12" cy="12" r="6" fill="currentColor" stroke="none"/>,
   dotAmber: <circle cx="12" cy="12" r="6" fill="currentColor" stroke="none"/>,
   heart: <><path d="M12 20s-8-5-8-11a4.5 4.5 0 018-2.5A4.5 4.5 0 0120 9c0 6-8 11-8 11z"/></>,
+  flag: <><path d="M5 21V4"/><path d="M5 4h12l-2.5 4 2.5 4H5"/></>,
   sparkle: <><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M18 6l-2.5 2.5M8.5 15.5L6 18"/></>,
 };
 const COLOR = { dotRed:"#EF4444", dotAmber:"#F59E0B", dotOrange:"#F97316" };
@@ -47,7 +48,7 @@ const ALIAS = {
   "📊":"chart","📦":"box","📅":"calendar","🏦":"bank","🧾":"receipt","🧑‍💼":"briefcase","💼":"briefcase","🔔":"bell","👥":"users","👋":"hand",
   "⚠":"alert","⚠️":"alert","📧":"mail","📩":"mailIn","🚚":"truck","💰":"coins","💸":"coins","⏳":"hourglass","🛠":"wrench","🗑":"trash","🗄":"archive",
   "⏸":"pause","📄":"file","🔗":"link","✏️":"pencil","✅":"check","📋":"clipboard","💬":"message","🔒":"lock","🏢":"building","📥":"download",
-  "☰":"menu","◀":"chevL","▶":"chevR","🔴":"dotRed","🟡":"dotAmber","🟠":"dotOrange","💚":"heart",
+  "☰":"menu","◀":"chevL","▶":"chevR","🔴":"dotRed","🟡":"dotAmber","🟠":"dotOrange","💚":"heart","🚩":"flag",
 };
 export function Ic({ n, size = "1.15em", color, style }) {
   const clave = String(n || "").replace(/️/g, "");

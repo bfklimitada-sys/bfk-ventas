@@ -138,8 +138,40 @@ export function crearBase(inicial, { mp = {}, borrado = {} } = {}) {
     recalcular(); return { status: 200, json: { ok: true, vinculados: ids, marca: m } };
   };
 
-  const escribir = (metodo, tabla, params, cuerpo) => {
+  const bloqueosOcupados = {};   // { ocId: nombre } → gestionar_bloqueo_oc responde «ocupada» (otro usuario edita)
+  // Réplica de la función/políticas de oc_seguimientos (migración 15/10/2026): la base fija autor y fechas,
+  // exige solución para resolver, congela lo resuelto para no administradores y solo un administrador borra.
+  const nombreDe = (yo) => (db.perfiles || []).find((p) => p.id === yo)?.nombre || null;
+  const seguimiento = (metodo, id, cuerpo, yo) => {
+    db.oc_seguimientos = db.oc_seguimientos || [];
+    const ahora = new Date().toISOString();
+    if (!yo) return err("permission denied for table oc_seguimientos", 401);
+    if (metodo === "POST") {
+      const f = { ...(Array.isArray(cuerpo) ? cuerpo[0] : cuerpo) };
+      if (!["postventa", "sobrecosto", "proveedor", "producto", "entrega", "cliente", "facturacion", "otro"].includes(f.categoria)) return err('new row violates check constraint "oc_seguimientos_categoria_check"');
+      if (!String(f.descripcion || "").trim()) return err('new row violates check constraint "oc_seguimientos_descripcion_check"');
+      if (f.estado === "resuelto") return err("Un seguimiento se crea abierto; para resolverlo se registra la solución después");
+      Object.assign(f, { prioridad: f.prioridad || "media", estado: f.estado || "pendiente", creado_por: yo, creado_por_nombre: nombreDe(yo), creado_en: ahora, actualizado_por: yo, actualizado_en: ahora, solucion: null, resuelto_por: null, resuelto_por_nombre: null, resuelto_en: null });
+      if (db.oc_seguimientos.some((x) => x.id === f.id)) return { status: 409, json: { code: "23505", message: "duplicate key" } };
+      db.oc_seguimientos.push(f); return { status: 201, json: [clon(f)] };
+    }
+    const f = db.oc_seguimientos.find((x) => x.id === id);
+    if (metodo === "DELETE") { if (!f || !esAdmin(yo)) return { status: 200, json: [] }; db.oc_seguimientos = db.oc_seguimientos.filter((x) => x.id !== id); return { status: 200, json: [clon(f)] }; }
+    if (metodo === "PATCH") {
+      if (!f) return { status: 200, json: [] };
+      const c = { ...cuerpo };
+      if (["oc_id", "creado_por", "creado_en"].some((k) => k in c && String(c[k]) !== String(f[k]))) return err("No se puede cambiar la OC, el autor ni la fecha de creación de un seguimiento");
+      if (f.estado === "resuelto" && !esAdmin(yo)) return err("El seguimiento ya está resuelto: queda como historial");
+      const n = { ...f, ...c };
+      if (n.estado === "resuelto" && f.estado !== "resuelto") { if (!String(n.solucion || "").trim()) return err("Para resolver un seguimiento se debe registrar la solución"); Object.assign(n, { resuelto_por: yo, resuelto_por_nombre: nombreDe(yo), resuelto_en: ahora }); }
+      if (n.estado !== "resuelto") Object.assign(n, { resuelto_por: null, resuelto_por_nombre: null, resuelto_en: null });
+      Object.assign(f, n, { actualizado_por: yo, actualizado_en: ahora }); return { status: 200, json: [clon(f)] };
+    }
+    return { status: 405, json: {} };
+  };
+  const escribir = (metodo, tabla, params, cuerpo, yo) => {
     const id = (params.get("id") || "").startsWith("eq.") ? decodeURIComponent(params.get("id").slice(3)) : null;
+    if (tabla === "oc_seguimientos") { escr.push({ metodo, tabla, id, cuerpo: clon(cuerpo ?? null), n: escr.length }); return seguimiento(metodo, id, cuerpo, yo); }
     escr.push({ metodo, tabla, id, cuerpo: clon(cuerpo ?? null), n: escr.length });
     db[tabla] = db[tabla] || [];
     // Protección (Fase 4B): el navegador no fija totales derivados.
@@ -183,6 +215,7 @@ export function crearBase(inicial, { mp = {}, borrado = {} } = {}) {
     escr.push({ metodo: "RPC", tabla: fn, id: null, cuerpo: clon(b), n: escr.length });
     if (process.env.BFK_CAPTURA_RPC && /(^|_)cartola($|_)/.test(fn) && !interno) appendFileSync(process.env.BFK_CAPTURA_RPC, JSON.stringify({ fn, b }) + "\n");
     const ok = (j) => { recalcular(); return { status: 200, json: { ok: true, ...j } }; };
+    if (fn === "gestionar_bloqueo_oc" && bloqueosOcupados[b.p_oc_id] && b.p_accion !== "liberar") return { status: 200, json: { ok: false, motivo: "ocupada", usuario_nombre: bloqueosOcupados[b.p_oc_id], segundos_restantes: 45 } };
     if (fn === "gestionar_bloqueo_oc") return { status: 200, json: { ok: true, segundos_restantes: 45 } };
     if (fn === "registrar_entidad_desde_oc") return { status: 200, json: { accion: "sin_cambios" } };
     if (fn === "archivar_oc" || fn === "restaurar_oc") {
@@ -305,7 +338,7 @@ export function crearBase(inicial, { mp = {}, borrado = {} } = {}) {
     if (!r) return { status: 404, body: { ok: false, error: "OC no encontrada en Mercado Público" } };
     return typeof r === "function" ? r(llamadasMP.filter((c) => c === cod).length) : r;
   };
-  return { db, escr, llamadasMP, leer, escribir, rpc, respuestaMP, difs };
+  return { db, escr, llamadasMP, leer, escribir, rpc, respuestaMP, difs, bloqueosOcupados };
 }
 
 export async function abrir(browser, base, { url, usuario = "u1", ancho = 390, alto = 844, movil = true, espera = 1800, dialogos = "aceptar", prompt = "", ua } = {}) {
@@ -337,7 +370,7 @@ export async function instalarRutas(page, base, yo) {
       if (u.pathname.includes("/rest/v1/rpc/")) { const r = base.rpc(u.pathname.split("/").pop(), cuerpo || {}, yo); return route.fulfill({ status: r.status, json: r.json }); }
       const tabla = u.pathname.split("/").pop();
       if (m === "GET") return route.fulfill({ json: base.leer(tabla, u.searchParams) });
-      const r = base.escribir(m, tabla, u.searchParams, cuerpo);
+      const r = base.escribir(m, tabla, u.searchParams, cuerpo, yo);
       return route.fulfill({ status: r.status, json: r.json });
     }
     return route.abort();
