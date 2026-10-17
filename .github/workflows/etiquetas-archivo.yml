@@ -1,0 +1,41 @@
+name: Etiquetas de archivo de ramas (TEMPORAL)
+# Crea una etiqueta anotada archivo/<rama> en el commit actual de cada rama listada en .archivo/ramas.txt.
+# No borra ni modifica ramas. Si una etiqueta ya existe y apunta a otro commit, falla.
+on:
+  push:
+    branches: [etiquetas-archivo-temporal]
+permissions:
+  contents: write
+jobs:
+  etiquetar:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Crear y verificar etiquetas
+        run: |
+          git config user.name "bfk-archivo"; git config user.email "bfk-archivo@users.noreply.github.com"
+          git fetch -q origin '+refs/heads/*:refs/remotes/origin/*' '+refs/tags/*:refs/tags/*'
+          creadas=0; existentes=0; mal=0
+          while read -r b; do
+            [ -z "$b" ] && continue
+            sha="$(git rev-parse "refs/remotes/origin/$b^{commit}")"
+            if git rev-parse -q --verify "refs/tags/archivo/$b" >/dev/null; then
+              [ "$(git rev-parse "refs/tags/archivo/$b^{commit}")" = "$sha" ] && existentes=$((existentes+1)) || { echo "::error::archivo/$b existe con otro commit"; mal=$((mal+1)); }
+              continue
+            fi
+            git tag -a "archivo/$b" "$sha" -m "Archivo de la rama $b (conservación antes de limpieza, 17/10/2026). Commit $sha."
+            git push -q origin "refs/tags/archivo/$b"
+            creadas=$((creadas+1))
+          done < .archivo/ramas.txt
+          git fetch -q --force origin '+refs/tags/*:refs/tags/*'
+          ok=0
+          while read -r b; do
+            [ -z "$b" ] && continue
+            r="$(git rev-parse "refs/remotes/origin/$b^{tree}")"; t="$(git rev-parse "refs/tags/archivo/$b^{tree}")"
+            c1="$(git rev-parse "refs/remotes/origin/$b^{commit}")"; c2="$(git rev-parse "refs/tags/archivo/$b^{commit}")"
+            n1="$(git rev-list --count "refs/remotes/origin/$b")"; n2="$(git rev-list --count "refs/tags/archivo/$b")"
+            [ "$r" = "$t" ] && [ "$c1" = "$c2" ] && [ "$n1" = "$n2" ] && ok=$((ok+1)) || { echo "::error::archivo/$b no coincide"; mal=$((mal+1)); }
+          done < .archivo/ramas.txt
+          echo "::notice title=etiquetas::creadas=$creadas existentes=$existentes verificadas_identicas=$ok de $(grep -c . .archivo/ramas.txt) fallas=$mal"
+          [ "$mal" = 0 ]
