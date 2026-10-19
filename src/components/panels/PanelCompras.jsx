@@ -5,6 +5,7 @@ import { RegistrarCompraOC } from "../forms/CompraDesdeCotizacion";
 import { CorregirCompra } from "../forms/CorregirCompra";
 import { filaProtegida, comprasConPedido } from "../../lib/compraCotizacion";
 import { SeguimientoEspecial, TONO_PRIORIDAD } from "../ficha/SeguimientoEspecial";
+import { direccionEntregaOC, facturaVisibleOC } from "../../lib/vistaCompras";
 import { subsanacionesAbiertas, tieneSeguimientoAbierto, seguimientosAbiertos, seguimientosResueltos, prioridadMaxima, alertasSeguimiento, etiquetaPrioridad } from "../../lib/seguimientos";
 import { financiamientoPendiente, financiamientoNoCorresponde, saldoFinanciamientoOC, resumenFinanciamiento, documentosPendientes, documentosCobrados, tieneValeVistaPendiente } from "../../lib/filtrosCompras";
 import { FormEntregaFallida, FormFechaEntrega, FormReclamarFactura } from "../forms/FormulariosCorreo";
@@ -886,6 +887,18 @@ export function FilaOC({ notaVista, onCrearSeguimiento, onActualizarSeguimiento,
   const chipSeguimiento=segAbiertos.length>0?(()=>{ const tono=TONO_PRIORIDAD[prioridadMaxima(oc)]||TONO_PRIORIDAD.media; return (
     <span data-chip-seguimiento={prioridadMaxima(oc)} data-atrasado={segAtrasado?"1":undefined} title={`Seguimiento especial: ${segAbiertos.length} abierto(s) · prioridad máxima ${etiquetaPrioridad(prioridadMaxima(oc)).toLowerCase()}${segAtrasado?" · revisión vencida":""}`}
       style={{background:tono.bg,border:`1px solid ${tono.color}44`,color:tono.color,fontWeight:800,padding:"2px 8px",borderRadius:999,whiteSpace:"nowrap"}}><Ic n="🚩"/> Seguimiento{segAbiertos.length>1?` ${segAbiertos.length}`:""}{segAtrasado?" · atrasado":""}</span>); })():null;
+  // Vista general (19/10/2026): dirección de entrega y factura vigente, solo lectura y en una línea compacta.
+  const dirEntrega=direccionEntregaOC(oc), facVista=facturaVisibleOC(oc);
+  const lineaEntregaFactura=(oc.tipo_registro||"venta")!=="aporte_socio"?(
+    <div data-fila-entrega-factura style={{display:"flex",alignItems:"center",gap:8,minWidth:0,fontSize:12,lineHeight:1.35}}>
+      <span data-fila-direccion={dirEntrega.fuente||"ninguna"} title={dirEntrega.texto}
+        style={{flex:escritorio?"0 1 auto":"1 1 auto",minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:dirEntrega.fuente?C.inkMuted:C.inkFaint,fontStyle:dirEntrega.fuente?"normal":"italic"}}>
+        <Ic n="🚚"/> {dirEntrega.texto}</span>
+      <span data-fila-factura={facVista.estado} title={[facVista.texto,facVista.extra].filter(Boolean).join(" · ")+(facVista.extra?" (detalle en la ficha)":"")}
+        style={{flexShrink:0,whiteSpace:"nowrap",fontWeight:700,marginLeft:escritorio?6:"auto",paddingLeft:escritorio?8:0,borderLeft:escritorio?`1px solid ${C.border}`:"none",color:facVista.estado==="vigente"?C.ink:facVista.estado==="anulada"?C.warnText:C.inkFaint}}>
+        <Ic n="🧾"/> {facVista.texto}{facVista.extra?<span style={{fontWeight:500,color:C.inkFaint}}> · {facVista.extra}</span>:null}</span>
+    </div>
+  ):null;
   const handleToggle=()=>{ onToggle(); }; // el bloqueo se gestiona de forma central (useBloqueoOC) según la OC expandida
 
   return (
@@ -925,6 +938,7 @@ export function FilaOC({ notaVista, onCrearSeguimiento, onActualizarSeguimiento,
             {chipSeguimiento}
           </div>
         )}
+          {lineaEntregaFactura}
                 </div>
             <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4,minWidth:0}}>
           <span style={{display:"inline-flex",alignItems:"flex-start",gap:5,background:estadoOC.bg,color:estadoOC.color,
@@ -980,6 +994,8 @@ export function FilaOC({ notaVista, onCrearSeguimiento, onActualizarSeguimiento,
             })()}
           </span>
         </div>
+        {/* Línea 2b — dirección de entrega y factura vigente (19/10/2026) */}
+        {lineaEntregaFactura&&<div style={{marginTop:4}}>{lineaEntregaFactura}</div>}
         {/* Línea 3 — estado, asignaciones y avance en una sola fila */}
         <div style={{display:"flex",alignItems:"center",flexWrap:"wrap",columnGap:6,rowGap:5,marginTop:7}}>
           <span style={{display:"inline-flex",alignItems:"flex-start",gap:5,background:estadoOC.bg,color:estadoOC.color,
