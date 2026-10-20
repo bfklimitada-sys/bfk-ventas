@@ -21,6 +21,16 @@ Sin cambios de fórmula: utilidad = venta − costo real registrado (con IVA) �
 IVA 0 (regla de la fase 1). Comisión general, F29 e IVA mensual sin cambios.
 
 ## Migraciones
-- `BORRADOR-2026-10-20-hotfix-permisos-trib.sql` — URGENTE, corrige la fase 2 (escrituras de OC bloqueadas).
+- `2026-10-20-hotfix-permisos-trib.sql` — **APLICADA en producción el 20/10/2026** (solo `authenticated`; anon sigue sin permiso).
+  Es la versión exacta aplicada (sha256 5122053f…). Su prueba permanente está en bfk-respaldos `scripts/prueba-permisos-api.sh` (9/9).
 - `BORRADOR-2026-10-20-fase3-guardas-exentas.sql` — recomendada: la base exige las reglas de DTE 34 y de
   cotizaciones exentas aunque un cliente escriba directo. Requiere el hotfix (usa trib_escritura_api).
+
+## Ensayo de las guardas en copia restaurada (20/10/2026)
+Copia del respaldo bfk-20261020T1734Z con los permisos exactos de producción (fase 2 + corrección): 76 tablas iguales;
+guardas instaladas con huella idéntica; **16/16 pruebas en sesiones independientes** (`docs/migraciones/pruebas/exentas/sesiones/`,
+cada prueba en su propia conexión con el rol fijado); prueba permanente de la API 9/9 antes y después de las guardas;
+huella financiera igual; deshacer sin rastro; reinstalar y deshacer de nuevo. Ejecución 39470617050.
+
+Verificación de borde en producción (solo lectura): 0 cotizaciones con impuestos = 0 y subtotal > 0 (la guarda no
+bloquearía la edición de ninguna cotización existente); 0 facturas DTE 34; 0 clasificaciones aprobadas.
