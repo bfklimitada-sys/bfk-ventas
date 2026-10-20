@@ -1,5 +1,5 @@
 -- 4b. Contacto principal: uno por institución
-\ir ../_usuario.sql
+\ir ../_admin.sql
 \ir ../_ids.sql
 select public.guardar_contacto_institucional(nullif(:'bruno','')::uuid, null, '{"es_principal":true}'::jsonb)->>'ok' as o1 \gset
 select public.guardar_contacto_institucional(nullif(:'carla','')::uuid, null, '{"es_principal":true}'::jsonb)->>'ok' as o2 \gset

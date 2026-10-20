@@ -34,7 +34,7 @@ import { CLAVE_REVISION_AUTO, LIMITE_USO_DIARIO, PREFIJO_FOTO_MP, cambiosOCDesde
 import { alimentarCatalogoDesdeOC } from "./lib/entidadesOC";
 import { ContactosContext } from "./components/ficha/ContactosInstitucion";
 import { avisosConciliacion } from "./lib/contactosInstitucionales";
-import { rpcConciliarContactosOC, rpcGuardarContacto, rpcResolverContacto, rpcContactoObsoleto } from "./lib/supabase";
+import { rpcConciliarContactosOC, rpcGuardarContacto, rpcResolverContacto, rpcContactoObsoleto, rpcResolverPropuesta, rpcFusionarContactos, rpcCorreoCobranza } from "./lib/supabase";
 import { rpcCartola, rpcArchivarOC, rpcRestaurarOC, cargarCorreosBfk, rpcMarcarCorreo, rpcAsignarVendedor, rpcAsignarFinanciador } from "./lib/supabase";
 import { contarCorreosAccion, desdeCorreos, reemplazarCorreo } from "./lib/correosBfk";
 import { C, MONO, SANS, fmt } from "./lib/theme";
@@ -1762,13 +1762,17 @@ export default function App() {
   const ctxContactos=useMemo(()=>({
     disponible:Array.isArray(contactosInst), contactos:contactosInst||[], vinculos:vinculosInst,
     numeroOC:(id)=>[...ocs,...ocsArchivadas].find(o=>o.id===id)?.numero_oc||id,
-    guardar:async({id,rut,datos,ocId})=>{ await rpcGuardarContacto(session.access_token,{id,rut,datos,ocId}); await recargarContactos(); showToast("Contacto guardado"); },
+    esAdmin:perfil?.rol==="admin",
+    guardar:async({id,rut,datos,ocId})=>{ const r=await rpcGuardarContacto(session.access_token,{id,rut,datos,ocId}); await recargarContactos();
+      showToast(r?.propuesta?"Propuesta enviada: el administrador debe aprobarla":"Contacto guardado"); },
+    resolverPropuesta:async(id,aprobar)=>{ await rpcResolverPropuesta(session.access_token,id,aprobar); await recargarContactos(); showToast(aprobar?"Actualización aprobada":"Propuesta rechazada"); },
+    fusionar:async(conservar,absorber,motivo)=>{ await rpcFusionarContactos(session.access_token,conservar,absorber,motivo); await recargarContactos(); showToast("Contactos fusionados: el absorbido quedó como obsoleto"); },
     resolver:async(id,decision,motivo)=>{ await rpcResolverContacto(session.access_token,id,decision,motivo); await recargarContactos();
       showToast(decision==="reemplaza"?"Correo actualizado: el anterior quedó como obsoleto":decision==="adicional"?"Contacto confirmado":"Contacto descartado"); },
     obsoleto:async(id,motivo)=>{ await rpcContactoObsoleto(session.access_token,id,motivo); await recargarContactos(); showToast("Contacto marcado como obsoleto"); },
     cargarHistorial:(id)=>sel("contactos_institucionales_historial",session.access_token,`&contacto_id=eq.${id}&order=creado_en.desc&limit=50`),
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }),[contactosInst,vinculosInst,ocs,ocsArchivadas,session]);
+  }),[contactosInst,vinculosInst,ocs,ocsArchivadas,session,perfil]);
 
   const handleGuardarContacto=async({rut,nombreCliente,correo})=>{
     try { await ins("contactos_cobranza",session.access_token,{id:genId("cob"),rut,nombre_cliente:nombreCliente,correo,creado_por:session.user.id}); await cargarTodo(); }
@@ -1791,7 +1795,8 @@ export default function App() {
     const oc=ocs.find(o=>o.id===ocId);
     try {
       await upd("ordenes_compra_v2",t,ocId,{
-        correo_cliente:correo, rut_cliente:rut||undefined,
+        ...(String(oc?.correo_cliente||"").trim()?{}:{correo_cliente:correo}),   // el correo histórico de la OC no se reemplaza
+        rut_cliente:rut||undefined,
         ultimo_reclamo_fecha:ahora, ultimo_reclamo_por:session.user.id,
       });
       await ins("oc_reclamos",t,{
@@ -1800,6 +1805,8 @@ export default function App() {
         usuario_id:session.user.id,usuario_nombre:perfil?.nombre||"",
       });
     } catch {}
+    // Contactos institucionales: el correo de cobranza queda vinculado a esta OC (no sobrescribe contactos existentes)
+    if(ciDisponible.current){ try{ await rpcCorreoCobranza(t,ocId,correo); }catch{} }   // solo el destinatario: las copias suelen ser de BFK
     await registrarCorreoOC({ocId,tipo:tipo||"reclamo de pago",detalle,correo});
     showToast(`Envío del reclamo registrado (confirmado por el usuario) para ${correo}`);
     setOcs([]);

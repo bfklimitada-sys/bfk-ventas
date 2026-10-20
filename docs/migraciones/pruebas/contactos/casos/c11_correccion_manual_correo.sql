@@ -1,5 +1,5 @@
 -- REGLA 8/10: corrección manual del correo desde la ficha: el anterior queda obsoleto; la OC histórica no cambia
-\ir ../_usuario.sql
+\ir ../_admin.sql
 \ir ../_ids.sql
 select md5(contacto || '|' || correo_cliente) as oc_antes from public.ordenes_compra_v2 where id = 'ci_t_04' \gset
 select public.guardar_contacto_institucional(nullif(:'ana_gob','')::uuid, '99111222-7', '{"correo":"Ana.P@alfa.gob.cl"}'::jsonb, 'ci_t_04') as r \gset

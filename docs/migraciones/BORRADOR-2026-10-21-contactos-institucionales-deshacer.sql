@@ -97,6 +97,9 @@ end;
 $_$;
 
 drop function if exists public.conciliar_contactos_oc(text,text,text);
+drop function if exists public.resolver_propuesta_contacto(uuid,boolean);
+drop function if exists public.fusionar_contactos(uuid,uuid,text);
+drop function if exists public.registrar_correo_cobranza(text,text);
 drop function if exists public.guardar_contacto_institucional(uuid,text,jsonb,text);
 drop function if exists public.resolver_contacto_pendiente(uuid,text,text);
 drop function if exists public.marcar_contacto_obsoleto(uuid,text,uuid);
@@ -104,6 +107,8 @@ drop function if exists public.ci_conciliar_datos(text,text,timestamptz,text,uui
 drop function if exists public.ci_conciliar_uno(text,text,timestamptz,text,uuid,text,text,text,text);
 drop function if exists public.ci_contexto(text,text,text,uuid);
 drop function if exists public.ci_exigir_sesion();
+drop function if exists public.ci_exigir_admin();
+drop function if exists public.ci_es_admin(uuid);
 drop table if exists public.contactos_institucionales_historial;
 drop table if exists public.contactos_institucionales_oc;
 drop table if exists public.contactos_institucionales;

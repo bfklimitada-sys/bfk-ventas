@@ -1,5 +1,5 @@
 -- 9. Edición manual sin sobrescritura posterior
-\ir ../_usuario.sql
+\ir ../_admin.sql
 \ir ../_ids.sql
 select public.guardar_contacto_institucional(nullif(:'bruno','')::uuid, null, '{"telefono":"+56 2 2222 2222","cargo":"Jefe de Adquisiciones","departamento":"Adquisiciones"}'::jsonb, 'ci_t_03')->>'ok' as ok \gset
 select public.conciliar_contactos_oc('ci_t_06', 'mp') as r \gset

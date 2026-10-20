@@ -4,7 +4,7 @@
 -- Idempotente: repetirla no crea duplicados (informa nuevos_en_esta_pasada = 0).
 -- Orden: 1) OC de la más reciente a la más antigua (cada correo queda vinculado a su OC; cambios de correo de la misma
 --        persona quedan PENDIENTES para revisión, nunca se reemplazan solos), 2) catálogo de entidades,
---        3) contactos de cobranza (correo sin nombre de persona).
+--        3) correos de reclamos de pago (vinculados a su OC) y contactos de cobranza (correo sin nombre de persona).
 -- Origen: 'importado' (OC y catálogo) y 'cobranza'. Nada queda "confirmado manualmente".
 -- =====================================================================================
 begin;
@@ -37,6 +37,16 @@ begin
     if v_clave is null then insert into _ci_res values ('catalogo', '{"accion":"rut_invalido"}'); continue; end if;
     insert into _ci_res select 'catalogo', e from jsonb_array_elements(
       public.ci_conciliar_datos(v_clave, null, null, 'importado', null, o.contacto, null, o.correo)) e;
+  end loop;
+
+  -- correos usados al reclamar pagos (oc_reclamos): quedan vinculados a SU OC, con origen cobranza (solo el destinatario: las copias suelen ser correos de BFK)
+  for o in select r.oc_id, r.correo, r.fecha, oc.rut_cliente from public.oc_reclamos r
+             join public.ordenes_compra_v2 oc on oc.id = r.oc_id
+            where btrim(coalesce(r.correo,'')) <> '' order by r.fecha desc nulls last, r.id loop
+    v_clave := public.ci_rut_clave(o.rut_cliente);
+    if v_clave is null then insert into _ci_res values ('reclamo', '{"accion":"rut_invalido"}'); continue; end if;
+    insert into _ci_res select 'reclamo', e from jsonb_array_elements(
+      public.ci_conciliar_datos(v_clave, o.oc_id, o.fecha, 'cobranza', null, '', null, o.correo)) e;
   end loop;
 
   -- nombre_cliente en cobranza es el nombre de la institución, no de una persona: se carga solo el correo

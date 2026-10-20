@@ -81,6 +81,11 @@ create table public.contactos_institucionales (
   reemplazado_por  uuid references public.contactos_institucionales(id) on delete set null,
   obsoleto_motivo  text check (length(obsoleto_motivo) <= 300),
   oc_origen        text,
+  -- actualización propuesta por un usuario no administrador (la aprueba o rechaza el administrador)
+  propuesta        jsonb,
+  propuesta_oc     text,
+  propuesta_por    uuid,
+  propuesta_en     timestamptz,
   ultima_oc        text,
   ultima_oc_fecha  timestamptz,
   creado_en        timestamptz not null default now(),
@@ -180,6 +185,23 @@ begin
   end if;
   return v;
 end $_$;
+
+-- Administrador: confirma reemplazos, obsolescencia, fusiones, contacto principal y aprueba propuestas.
+create function public.ci_exigir_admin() returns uuid
+  language plpgsql stable security definer
+  set search_path to 'public', 'pg_temp'
+as $_$
+declare v uuid := public.ci_exigir_sesion();
+begin
+  if not exists (select 1 from public.perfiles where id = v and rol = 'admin') then
+    raise exception 'CONTACTO_RECHAZADO: solo el administrador puede confirmar reemplazos, marcar obsoletos o fusionar contactos' using errcode = 'CI011';
+  end if;
+  return v;
+end $_$;
+create function public.ci_es_admin(p_uid uuid) returns boolean
+  language sql stable security definer
+  set search_path to 'public', 'pg_temp'
+as $_$ select exists (select 1 from public.perfiles where id = p_uid and rol = 'admin') $_$;
 
 create function public.ci_contexto(p_accion text, p_origen text, p_oc text, p_usuario uuid) returns void
   language sql
@@ -402,6 +424,25 @@ begin
   if p_id is null and btrim(coalesce(p_datos->>'correo','')) = '' and btrim(coalesce(p_datos->>'nombre','')) = '' and btrim(coalesce(p_datos->>'telefono','')) = '' then
     raise exception 'CONTACTO_RECHAZADO: indica al menos un nombre, correo o teléfono' using errcode = 'CI010';
   end if;
+  if not public.ci_es_admin(v_uid) then
+    if p_id is null and coalesce((p_datos->>'es_principal')::boolean, false) then
+      raise exception 'CONTACTO_RECHAZADO: solo el administrador define el contacto principal' using errcode = 'CI011';
+    end if;
+    if p_id is not null then
+      -- usuario no administrador: la corrección queda como PROPUESTA; el contacto no cambia hasta que el administrador la apruebe
+      if coalesce(p_datos->>'correo','') <> '' and exists (select 1 from public.contactos_institucionales
+           where rut_clave = v_clave and correo_clave = lower(btrim(p_datos->>'correo')) and id <> p_id) then
+        raise exception 'CONTACTO_DUPLICADO: ese correo ya está registrado para esta institución' using errcode = 'CI009';
+      end if;
+      if p_oc_id is not null and not exists (select 1 from public.ordenes_compra_v2 o where o.id = p_oc_id and public.ci_rut_clave(o.rut_cliente) = v_clave) then
+        raise exception 'CONTACTO_RECHAZADO: la OC no pertenece a esta institución' using errcode = 'CI008';
+      end if;
+      perform public.ci_contexto('propuesta_usuario', 'manual', p_oc_id, v_uid);
+      update public.contactos_institucionales set propuesta = p_datos, propuesta_oc = p_oc_id, propuesta_por = v_uid, propuesta_en = now(), actualizado_por = v_uid
+       where id = p_id;
+      return jsonb_build_object('ok', true, 'id', p_id, 'propuesta', true);
+    end if;
+  end if;
 
   v_correo := lower(btrim(coalesce(p_datos->>'correo', x.correo, '')));
   v_alc := coalesce(p_datos->>'alcance', x.alcance, 'institucion');
@@ -442,7 +483,8 @@ begin
       telefono = btrim(coalesce(p_datos->>'telefono', telefono)),
       estado = 'vigente', motivo_pendiente = null, conflicto_con = null, obsoleto_motivo = null, reemplazado_por = null,
       confirmado_manual = true, confirmado_por = v_uid, confirmado_en = now(),
-      es_principal = v_princ, alcance = v_alc, oc_exclusiva = v_ocx, actualizado_por = v_uid
+      es_principal = v_princ, alcance = v_alc, oc_exclusiva = v_ocx, actualizado_por = v_uid,
+      propuesta = null, propuesta_oc = null, propuesta_por = null, propuesta_en = null
     where id = p_id;
     -- correo corregido: el correo anterior queda como OBSOLETO (así una OC futura con el correo malo no lo revive)
     if x.correo_clave <> '' and x.correo_clave <> v_correo then
@@ -472,7 +514,7 @@ create function public.resolver_contacto_pendiente(p_id uuid, p_decision text, p
   set search_path to 'public', 'pg_temp'
 as $_$
 declare
-  v_uid uuid := public.ci_exigir_sesion();
+  v_uid uuid := case when p_decision = 'adicional' then public.ci_exigir_sesion() else public.ci_exigir_admin() end;
   x public.contactos_institucionales%rowtype; v_otro public.contactos_institucionales%rowtype;
 begin
   select * into x from public.contactos_institucionales where id = p_id for update;
@@ -516,7 +558,7 @@ create function public.marcar_contacto_obsoleto(p_id uuid, p_motivo text default
   language plpgsql security definer
   set search_path to 'public', 'pg_temp'
 as $_$
-declare v_uid uuid := public.ci_exigir_sesion(); x public.contactos_institucionales%rowtype;
+declare v_uid uuid := public.ci_exigir_admin(); x public.contactos_institucionales%rowtype;
 begin
   select * into x from public.contactos_institucionales where id = p_id for update;
   if not found then raise exception 'CONTACTO_RECHAZADO: el contacto no existe' using errcode = 'CI005'; end if;
@@ -530,6 +572,75 @@ begin
          actualizado_por = v_uid
    where id = p_id;
   return jsonb_build_object('ok', true, 'id', p_id);
+end $_$;
+
+-- ---------- RPC: el administrador aprueba o rechaza una propuesta de actualización ----------
+create function public.resolver_propuesta_contacto(p_id uuid, p_aprobar boolean) returns jsonb
+  language plpgsql security definer
+  set search_path to 'public', 'pg_temp'
+as $_$
+declare v_uid uuid := public.ci_exigir_admin(); x public.contactos_institucionales%rowtype; r jsonb;
+begin
+  select * into x from public.contactos_institucionales where id = p_id for update;
+  if not found or x.propuesta is null then raise exception 'CONTACTO_RECHAZADO: el contacto no tiene una propuesta pendiente' using errcode = 'CI006'; end if;
+  if p_aprobar then
+    r := public.guardar_contacto_institucional(p_id, null, x.propuesta || case when x.estado = 'obsoleto' then '{"reactivar":true}'::jsonb else '{}'::jsonb end, x.propuesta_oc);
+    return jsonb_build_object('ok', true, 'id', p_id, 'aprobada', true, 'correo_anterior_obsoleto', r->'correo_anterior_obsoleto');
+  end if;
+  perform public.ci_contexto('propuesta_rechazada', 'manual', x.propuesta_oc, v_uid);
+  update public.contactos_institucionales set propuesta = null, propuesta_oc = null, propuesta_por = null, propuesta_en = null, actualizado_por = v_uid where id = p_id;
+  return jsonb_build_object('ok', true, 'id', p_id, 'aprobada', false);
+end $_$;
+
+-- ---------- RPC: fusionar dos contactos de la misma institución (solo administrador) ----------
+-- El absorbido queda OBSOLETO (reemplazado por el que se conserva, no se borra); sus OC también quedan asociadas al conservado.
+create function public.fusionar_contactos(p_conservar uuid, p_absorber uuid, p_motivo text default null) returns jsonb
+  language plpgsql security definer
+  set search_path to 'public', 'pg_temp'
+as $_$
+declare v_uid uuid := public.ci_exigir_admin(); a public.contactos_institucionales%rowtype; b public.contactos_institucionales%rowtype; n int;
+begin
+  if p_conservar = p_absorber then raise exception 'CONTACTO_RECHAZADO: elige dos contactos distintos' using errcode = 'CI008'; end if;
+  select * into a from public.contactos_institucionales where id = p_conservar for update;
+  select * into b from public.contactos_institucionales where id = p_absorber for update;
+  if a.id is null or b.id is null then raise exception 'CONTACTO_RECHAZADO: el contacto no existe' using errcode = 'CI005'; end if;
+  if a.rut_clave <> b.rut_clave then raise exception 'CONTACTO_RECHAZADO: solo se fusionan contactos de la misma institución' using errcode = 'CI008'; end if;
+  if a.estado = 'obsoleto' then raise exception 'CONTACTO_RECHAZADO: el contacto que se conserva no puede estar obsoleto' using errcode = 'CI006'; end if;
+  perform pg_advisory_xact_lock(hashtext('contactos_inst:' || a.rut_clave));
+  insert into public.contactos_institucionales_oc (contacto_id, oc_id, correo_en_oc, origen)
+  select a.id, oc_id, correo_en_oc, 'fusion' from public.contactos_institucionales_oc where contacto_id = b.id on conflict do nothing;
+  get diagnostics n = row_count;
+  perform public.ci_contexto('fusion_absorbido', 'manual', null, v_uid);
+  update public.contactos_institucionales set estado = 'obsoleto', es_principal = false, motivo_pendiente = null, conflicto_con = null,
+         reemplazado_por = a.id, obsoleto_motivo = coalesce(nullif(btrim(p_motivo),''), 'fusionado con otro contacto'), actualizado_por = v_uid
+   where id = b.id;
+  perform public.ci_contexto('fusion_conserva', 'manual', null, v_uid);
+  update public.contactos_institucionales set
+         nombre = case when nombre = '' then b.nombre else nombre end, cargo = case when cargo = '' then b.cargo else cargo end,
+         departamento = case when departamento = '' then b.departamento else departamento end,
+         telefono = case when telefono = '' then b.telefono else telefono end,
+         estado = 'vigente', motivo_pendiente = null, conflicto_con = null, confirmado_manual = true, confirmado_por = v_uid, confirmado_en = now(),
+         es_principal = a.es_principal or (b.es_principal and b.estado = 'vigente'), actualizado_por = v_uid
+   where id = a.id;
+  return jsonb_build_object('ok', true, 'id', a.id, 'absorbido', b.id, 'oc_agregadas', n);
+end $_$;
+
+-- ---------- RPC: correo usado al reclamar un pago de una OC (cobranza) ----------
+-- Se concilia con los contactos de la institución de esa OC (vínculo con la OC, origen cobranza). Nunca sobrescribe un
+-- contacto existente (solo lo vincula); un correo nuevo queda como contacto adicional sin nombre. La OC no se modifica.
+create function public.registrar_correo_cobranza(p_oc_id text, p_correos text) returns jsonb
+  language plpgsql security definer
+  set search_path to 'public', 'pg_temp'
+as $_$
+declare v_uid uuid := public.ci_exigir_sesion(); o record; v_clave text;
+begin
+  select id, rut_cliente into o from public.ordenes_compra_v2 where id = p_oc_id;
+  if not found then return jsonb_build_object('ok', false, 'accion', 'oc_no_existe'); end if;
+  v_clave := public.ci_rut_clave(o.rut_cliente);
+  if v_clave is null then return jsonb_build_object('ok', true, 'accion', case when btrim(coalesce(o.rut_cliente,'')) = '' then 'sin_rut' else 'rut_invalido' end); end if;
+  perform pg_advisory_xact_lock(hashtext('contactos_inst:' || v_clave));
+  return jsonb_build_object('ok', true, 'accion', 'conciliada', 'rut_clave', v_clave,
+    'resultados', public.ci_conciliar_datos(v_clave, o.id, now(), 'cobranza', v_uid, '', null, p_correos));
 end $_$;
 
 -- ---------- catálogo: ya no se sobrescribe el contacto/correo con cada OC ----------
@@ -636,13 +747,16 @@ revoke all on function public.ci_rut_clave(text), public.ci_rut_formato(text), p
   public.ci_conciliar_uno(text,text,timestamptz,text,uuid,text,text,text,text),
   public.ci_conciliar_datos(text,text,timestamptz,text,uuid,text,text,text),
   public.conciliar_contactos_oc(text,text,text), public.guardar_contacto_institucional(uuid,text,jsonb,text),
-  public.resolver_contacto_pendiente(uuid,text,text), public.marcar_contacto_obsoleto(uuid,text,uuid) from public, anon, authenticated;
+  public.resolver_contacto_pendiente(uuid,text,text), public.marcar_contacto_obsoleto(uuid,text,uuid),
+  public.ci_exigir_admin(), public.ci_es_admin(uuid), public.resolver_propuesta_contacto(uuid,boolean),
+  public.fusionar_contactos(uuid,uuid,text), public.registrar_correo_cobranza(text,text) from public, anon, authenticated;
 revoke all on sequence public.contactos_institucionales_historial_id_seq from public, anon, authenticated;
 -- funciones puras usadas por índices/checks: ejecutables por quien lee o escribe la tabla
 grant execute on function public.ci_rut_clave(text), public.ci_rut_formato(text), public.ci_nombre_clave(text) to authenticated, service_role;
 grant execute on function public.conciliar_contactos_oc(text,text,text), public.guardar_contacto_institucional(uuid,text,jsonb,text),
-  public.resolver_contacto_pendiente(uuid,text,text), public.marcar_contacto_obsoleto(uuid,text,uuid) to authenticated, service_role;
-grant execute on function public.ci_trg_historial(), public.ci_trg_no_borrar(), public.ci_exigir_sesion(), public.ci_contexto(text,text,text,uuid),
+  public.resolver_contacto_pendiente(uuid,text,text), public.marcar_contacto_obsoleto(uuid,text,uuid),
+  public.resolver_propuesta_contacto(uuid,boolean), public.fusionar_contactos(uuid,uuid,text), public.registrar_correo_cobranza(text,text) to authenticated, service_role;
+grant execute on function public.ci_trg_historial(), public.ci_trg_no_borrar(), public.ci_exigir_sesion(), public.ci_exigir_admin(), public.ci_es_admin(uuid), public.ci_contexto(text,text,text,uuid),
   public.ci_conciliar_uno(text,text,timestamptz,text,uuid,text,text,text,text),
   public.ci_conciliar_datos(text,text,timestamptz,text,uuid,text,text,text) to service_role;
 

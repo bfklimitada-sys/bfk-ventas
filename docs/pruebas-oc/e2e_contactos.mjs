@@ -56,6 +56,9 @@ const RPC_CI = {
   guardar_contacto_institucional: "public.guardar_contacto_institucional((j->>'p_id')::uuid, j->>'p_rut', j->'p_datos', j->>'p_oc_id')",
   resolver_contacto_pendiente: "public.resolver_contacto_pendiente((j->>'p_id')::uuid, j->>'p_decision', j->>'p_motivo')",
   marcar_contacto_obsoleto: "public.marcar_contacto_obsoleto((j->>'p_id')::uuid, j->>'p_motivo', (j->>'p_reemplazo')::uuid)",
+  resolver_propuesta_contacto: "public.resolver_propuesta_contacto((j->>'p_id')::uuid, (j->>'p_aprobar')::boolean)",
+  fusionar_contactos: "public.fusionar_contactos((j->>'p_conservar')::uuid, (j->>'p_absorber')::uuid, j->>'p_motivo')",
+  registrar_correo_cobranza: "public.registrar_correo_cobranza(j->>'p_oc_id', j->>'p_correos')",
 };
 const llamadasCI = [];
 function conectar(base) {
@@ -134,16 +137,29 @@ const browser = await chromium.launch({ executablePath: CHROME, args: ["--no-san
   await bloque(p).locator('[data-contacto="bruno@muni-alfa.cl"] [data-editar-contacto]').click(); await espera(p, 300);
   const f4 = bloque(p).locator("[data-form-contacto]");
   await f4.locator('[data-campo-contacto="correo"]').fill("bruno.soto@muni-alfa.cl"); await f4.locator("[data-guardar-contacto]").click(); await espera(p, 1300);
-  ok("A07_correccion_manual_anterior_obsoleto", contactos(`correo_clave = 'bruno.soto@muni-alfa.cl' and estado = 'vigente' and confirmado_manual`).length === 1
-    && contactos(`correo_clave = 'bruno@muni-alfa.cl' and estado = 'obsoleto'`).length === 1);
-  await bloque(p).locator("[data-ver-obsoletos]").click(); await espera(p, 300);
-  ok("A08_correos_anteriores_visibles", await bloque(p).locator('[data-contacto="bruno@muni-alfa.cl"][data-estado="obsoleto"]').count() === 1);
-  await bloque(p).locator('[data-contacto="bruno.soto@muni-alfa.cl"] [data-ver-historial]').click(); await espera(p, 1000);
-  const h = await bloque(p).locator('[data-contacto="bruno.soto@muni-alfa.cl"] [data-historial-contacto]').innerText().catch(() => "");
-  ok("A09_historial_correo_anterior_y_nuevo", /correccion manual/.test(h) && /correo: bruno@muni-alfa\.cl → bruno\.soto@muni-alfa\.cl/.test(h), h);
+  ok("A07a_usuario_propone_y_el_contacto_no_cambia", contactos(`correo_clave = 'bruno@muni-alfa.cl' and estado = 'vigente' and propuesta->>'correo' = 'bruno.soto@muni-alfa.cl'`).length === 1
+    && contactos(`correo_clave = 'bruno.soto@muni-alfa.cl'`).length === 0);
+  ok("A07b_ficha_muestra_propuesta_pendiente", /Pendiente de aprobación del administrador/.test(await bloque(p).locator('[data-contacto="bruno@muni-alfa.cl"] [data-propuesta]').innerText().catch(() => "")));
+  ok("A07c_usuario_sin_acciones_de_administrador", await p.locator('[data-resolver="reemplaza"], [data-resolver="descartar"], [data-marcar-obsoleto], [data-fusionar], [data-hacer-principal], [data-aprobar-propuesta], [data-es-principal]').count() === 0);
   ok("A10_oc_historica_no_modificada", ocLocal("oc1") === ocHistOC1 && ocLocal("oc3") === "Bruno Soto · 22 333 4444|bruno@muni-alfa.cl");
+  {
+    const A = await abrir(browser, b, { url: URL_APP, ancho: 1440, alto: 900, movil: false, espera: 2600, usuario: "u1" });
+    await abrirOC(A.page, "2001-101-SE26");
+    await A.page.waitForFunction(() => !document.querySelector('[data-solo-lectura="1"] [data-contactos-oc]'), null, { timeout: 15000 }).catch(() => {});
+    await bloque(A.page).locator('[data-contacto="bruno@muni-alfa.cl"] [data-aprobar-propuesta]').click(); await espera(A.page, 1300);
+    ok("A07d_admin_aprueba_anterior_obsoleto", contactos(`correo_clave = 'bruno.soto@muni-alfa.cl' and estado = 'vigente' and confirmado_manual`).length === 1
+      && contactos(`correo_clave = 'bruno@muni-alfa.cl' and estado = 'obsoleto'`).length === 1);
+    await bloque(A.page).locator("[data-ver-obsoletos]").click(); await espera(A.page, 300);
+    ok("A08_correos_anteriores_visibles", await bloque(A.page).locator('[data-contacto="bruno@muni-alfa.cl"][data-estado="obsoleto"]').count() === 1);
+    await bloque(A.page).locator('[data-contacto="bruno.soto@muni-alfa.cl"] [data-ver-historial]').click(); await espera(A.page, 1000);
+    const h = await bloque(A.page).locator('[data-contacto="bruno.soto@muni-alfa.cl"] [data-historial-contacto]').innerText().catch(() => "");
+    ok("A09_historial_propuesta_aprobacion_y_correo_anterior", /propuesta usuario/.test(h) && /correccion manual/.test(h) && /correo: bruno@muni-alfa\.cl → bruno\.soto@muni-alfa\.cl/.test(h), h);
+    ok("A09b_errores_js_admin", A.errs.length === 0, A.errs);
+    await A.ctx.close();
+  }
+  await p.reload({ waitUntil: "load" }); await espera(p, 2500);
   // 3: otra OC de la misma institución (sin correo propio) reutiliza los contactos; el exclusivo de oc1 no aparece
-  await cerrarFicha(p); await abrirOC(p, "2002-102-SE26");
+  await abrirOC(p, "2002-102-SE26");
   const t2 = await bloque(p).innerText().catch(() => "");
   ok("A11_otra_oc_misma_institucion_reutiliza", /diego\.mora@muni-alfa\.cl/.test(t2) && /bruno\.soto@muni-alfa\.cl/.test(t2) && !/elena@muni-alfa\.cl/.test(t2), t2.slice(0, 300));
   await p.locator("[data-indice-ficha] button", { hasText: "Cobranza" }).first().click(); await espera(p, 450);
@@ -165,7 +181,7 @@ const browser = await chromium.launch({ executablePath: CHROME, args: ["--no-san
 // ═════ B. Sincronización con Mercado Público: correo nuevo de la misma persona → aviso y pendiente; resolver ═════
 {
   const b = conectar(crearBase(datos, { mp }));
-  const { page: p, errs } = await abrir(browser, b, { url: URL_APP, ancho: 1440, alto: 900, movil: false, espera: 4500, usuario: "u2" });
+  const { page: p, errs } = await abrir(browser, b, { url: URL_APP, ancho: 1440, alto: 900, movil: false, espera: 4500, usuario: "u1" });
   await espera(p, 2500);
   ok("B00_otra_sesion_recupera_lo_guardado_en_A", contactos(`correo_clave = 'diego.mora@muni-alfa.cl'`).length === 1);
   const pend = contactos(`correo_clave = 'ana.perez@alfa.gob.cl'`);
@@ -228,7 +244,13 @@ const browser = await chromium.launch({ executablePath: CHROME, args: ["--no-san
   await cat.locator("[data-buscar-institucion]").fill("99.111.222-7"); await espera(p, 400);
   await cat.getByRole("button", { name: /99\.111\.222-7/ }).first().click().catch(() => {}); await espera(p, 600);
   ok("D02_catalogo_muestra_contactos_de_la_institucion", await cat.locator('[data-contactos-institucion="991112227"] [data-contacto]').count() >= 3);
-  ok("D03_errores_js", errs.length === 0, errs);
+  const tarjetaAna = cat.locator('[data-contacto="ana.perez@alfa.gob.cl"]');
+  await tarjetaAna.locator("[data-fusionar]").click(); await espera(p, 300);
+  const opt = await tarjetaAna.locator("[data-absorber] option").evaluateAll((os) => os.find((o) => /ana@otro-alfa\.cl/.test(o.textContent))?.value || "");
+  await tarjetaAna.locator("[data-absorber]").selectOption(opt); await tarjetaAna.locator("[data-confirmar-fusion]").click(); await espera(p, 1300);
+  ok("D03_admin_fusiona_absorbido_obsoleto_sin_borrar", contactos(`correo_clave = 'ana@otro-alfa.cl' and estado = 'obsoleto' and reemplazado_por is not null`).length === 1
+    && JSON.parse(psql(`select count(*) from public.contactos_institucionales_oc v join public.contactos_institucionales c on c.id = v.contacto_id where c.correo_clave = 'ana.perez@alfa.gob.cl' and v.oc_id = 'oc12'`)) === 1);
+  ok("D04_errores_js", errs.length === 0, errs);
 }
 
 await browser.close();

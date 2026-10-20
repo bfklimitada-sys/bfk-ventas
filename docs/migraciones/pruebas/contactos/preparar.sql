@@ -15,6 +15,7 @@ insert into public.ordenes_compra_v2 (id, numero_oc, cliente, entidad, rut_clien
  ('ci_t_13','CI-T-13','Municipalidad de Prueba Alfa','Municipalidad de Prueba Alfa','99.111.222-7','Diego Mora · 22 111 2222','','2026-09-01 10:00-03'),
  ('ci_t_14','CI-T-14','Municipalidad de Prueba Alfa','Municipalidad de Prueba Alfa','99.111.222-7','Ana Pérez','ana.perez@antiguo-alfa.cl','2025-12-01 10:00-03'),
  ('ci_t_16','CI-T-16','Municipalidad de Prueba Alfa','Municipalidad de Prueba Alfa','99.111.222-7','Carla Ruiz','carla.ruiz@antiguo-alfa.cl','2026-02-01 10:00-03'),
+ ('ci_t_17','CI-T-17','Municipalidad de Prueba Alfa.','Municipalidad de Prueba Alfa.','99.111.333-9','Ana Pérez · +56 9 7777 7777','ana.perez@muni-alfa.cl','2026-09-30 10:00-03'),
  ('ci_t_15','CI-T-15','Municipalidad de Prueba Alfa','Municipalidad de Prueba Alfa','99.111.222-7','Eva Lagos','eva@@muni-alfa','2026-09-05 10:00-03');
 -- catálogo: una entidad con contacto confirmado para comprobar que la OC ya no lo sobrescribe
 insert into public.entidades_catalogo (id, rut, nombre_entidad, comuna, contacto, correo)

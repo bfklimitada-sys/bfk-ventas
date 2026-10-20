@@ -1055,7 +1055,7 @@ export function FilaOC({ tributario, notaVista, onCrearSeguimiento, onActualizar
           nCorreosPend>0&&`${nCorreosPend} correo${nCorreosPend>1?"s":""} pendiente${nCorreosPend>1?"s":""} de gestión`,
         ].filter(Boolean);
         const secciones=[
-          (()=>{ const nCI=contactosDeInstitucion(ctxCI?.contactos,oc.rut_cliente,oc.id).filter(c=>c.estado==="pendiente").length;
+          (()=>{ const nCI=contactosDeInstitucion(ctxCI?.contactos,oc.rut_cliente,oc.id).filter(c=>c.estado==="pendiente"||c.propuesta).length;
             return {id:"info",icono:"📋",titulo:"Información OC",resumen:[oc.rut_cliente,oc.comuna,nCI?`${nCI} contacto${nCI>1?"s":""} por verificar`:""].filter(Boolean).join(" · "),aviso:nCI>0}; })(),
           {id:"productos",icono:"📦",titulo:"Productos",resumen:textoProductosVendidos(oc)},
           {id:"compra",icono:"🏦",titulo:"Compra y financiamiento",resumen:Number(oc.costo_total)?`${fmt.money(oc.costo_total)} · ${TIPOS_FINANCIAMIENTO[tipoFin]?.etiqueta||""}`:"sin compra"},

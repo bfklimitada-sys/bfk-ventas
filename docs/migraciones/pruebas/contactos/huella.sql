@@ -14,7 +14,7 @@ select md5(string_agg(l, E'\n' order by l)) as huella from (
     from pg_policies where tablename not like 'contactos\_institucionales%'
   union all select 'F|' || string_agg(p.oid::regprocedure::text || md5(pg_get_functiondef(p.oid)) || coalesce(p.proacl::text, ''), ',' order by p.oid::regprocedure::text)
     from pg_proc p where p.pronamespace = 'public'::regnamespace and p.prokind = 'f'
-     and p.proname not like 'ci\_%' and p.proname not in ('conciliar_contactos_oc','guardar_contacto_institucional','resolver_contacto_pendiente','marcar_contacto_obsoleto','registrar_entidad_desde_oc')
+     and p.proname not like 'ci\_%' and p.proname not in ('conciliar_contactos_oc','guardar_contacto_institucional','resolver_contacto_pendiente','marcar_contacto_obsoleto','registrar_entidad_desde_oc','resolver_propuesta_contacto','fusionar_contactos','registrar_correo_cobranza')
   union all select 'G|' || string_agg(grantee||table_schema||table_name||privilege_type, ',' order by grantee, table_schema, table_name, privilege_type)
     from information_schema.role_table_grants where table_schema in ('public', 'storage') and table_name not like 'contactos\_institucionales%'
   union all select 'R|' || coalesce(string_agg(tgrelid::regclass::text || tgname || md5(pg_get_triggerdef(oid)), ',' order by 1), '') from pg_trigger
