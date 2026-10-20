@@ -35,6 +35,8 @@ import { FILTROS_PANEL, esFiltroPanel, esVenta, estaCobrada, estaComprada, estaE
 import { repartirInversion as calcularReparto, productosVendidos, textoProductosVendidos } from "../../lib/productosOC";
 import { MEDIOS_PAGO, esDocumentoBancario, esCobroFueraDeBanco } from "../../lib/mediosPago";
 import { AsignacionesOC } from "../ficha/AsignacionesOC";
+import { ContactosOC, useContactos } from "../ficha/ContactosInstitucion";
+import { contactosDeInstitucion } from "../../lib/contactosInstitucionales";
 import { faltaFinanciador, faltaVendedor, nombreFinanciador, nombreVendedor, primerNombre } from "../../lib/asignaciones";
 
 const SIN_CORREOS = [];
@@ -789,6 +791,7 @@ const ICONO_ESTADO={mp_cancelada:<Ic n="🔴"/>,facturada_sin_entrega:<Ic n="⚠
   comprada:<Ic n="🚚"/>,mp_sin_aceptar:<Ic n="⏳"/>,sin_compra:"○"};
 
 export function FilaOC({ tributario, notaVista, onCrearSeguimiento, onActualizarSeguimiento, onEliminarSeguimiento, onCorregirCompra, onAnularCompra, onCompraDesdeCotizacion, onBuscarCotizacionOC, onCargarCotizacionOC, correosOC = SIN_CORREOS, onMarcarCorreo, pagosVendedor, onAsignarVendedor, onAsignarFinanciador, difsHistoricas, onCambiarFinanciamiento, oc, perfiles, todasLasOcs, onSincronizarFecha, expanded, onToggle, contactos, onEnviarReclamo, onCorreoOC, onRegistrarRespuestaReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, onRepartirInversion, buscarDuplicadoOC, perfil, historialCambios, onAgregarComentario, onEliminarComentario, bloqueoEstado, onArchivarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa, onRegistrarNC }) {
+  const ctxCI=useContactos();   // contactos institucionales: aviso de pendientes en «Información OC»
   const evF=facturaVigente(oc);
   const dias=fmt.diasDesde(evF?.fecha);
   const saldo=(oc.monto_facturado||0)-(oc.monto_cobrado||0);
@@ -1052,7 +1055,8 @@ export function FilaOC({ tributario, notaVista, onCrearSeguimiento, onActualizar
           nCorreosPend>0&&`${nCorreosPend} correo${nCorreosPend>1?"s":""} pendiente${nCorreosPend>1?"s":""} de gestión`,
         ].filter(Boolean);
         const secciones=[
-          {id:"info",icono:"📋",titulo:"Información OC",resumen:[oc.rut_cliente,oc.comuna].filter(Boolean).join(" · ")},
+          (()=>{ const nCI=contactosDeInstitucion(ctxCI?.contactos,oc.rut_cliente,oc.id).filter(c=>c.estado==="pendiente").length;
+            return {id:"info",icono:"📋",titulo:"Información OC",resumen:[oc.rut_cliente,oc.comuna,nCI?`${nCI} contacto${nCI>1?"s":""} por verificar`:""].filter(Boolean).join(" · "),aviso:nCI>0}; })(),
           {id:"productos",icono:"📦",titulo:"Productos",resumen:textoProductosVendidos(oc)},
           {id:"compra",icono:"🏦",titulo:"Compra y financiamiento",resumen:Number(oc.costo_total)?`${fmt.money(oc.costo_total)} · ${TIPOS_FINANCIAMIENTO[tipoFin]?.etiqueta||""}`:"sin compra"},
           {id:"facturacion",icono:"🧾",titulo:"Facturación SII",resumen:nDocs?`${fmt.money(montoTributarioVigente(oc))} vigente · ${nDocs} doc.`:"sin documentos",aviso:bloqueadoDom("facturacion")},
@@ -1145,6 +1149,7 @@ export function FilaOC({ tributario, notaVista, onCrearSeguimiento, onActualizar
               </div>
             )}
             <DetalleOC oc={oc} perfil={perfil} parte="info" />
+            <ContactosOC oc={oc} />
           </>)}
 
           {sec("productos",<DetalleOC oc={oc} perfil={perfil} parte="productos" onEditarLink={onEditarLink} onEliminarLink={onEliminarLink} onGuardarLink={onGuardarLink} onRepartirInversion={onRepartirInversion} onCorregirCompra={onCorregirCompra?setCorrigiendo:null} />)}

@@ -1,6 +1,6 @@
 import { bloqueoFacturaPorExenta } from "./lib/tributario";
 import { cargarClasificaciones, solicitarClasificacion, resolverClasificacion, anularSolicitud, heredarDeCotizacion, subirRespaldo, abrirRespaldo } from "./lib/clasificacionTributariaApi";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { LoginScreen } from "./components/auth/LoginScreen";
 import { RestablecerContrasena } from "./components/auth/RestablecerContrasena";
 import { RETORNO_RECUPERACION } from "./lib/retornoAuth";
@@ -32,6 +32,9 @@ import { buscarOCPorCodigo, esCodigoMP, esErrorDuplicado, estadoMP, fechaOCEdita
 import { cambiosProducto } from "./lib/productosOC";
 import { CLAVE_REVISION_AUTO, LIMITE_USO_DIARIO, PREFIJO_FOTO_MP, cambiosOCDesdeMP, claveFotoMP, elegirRevisionAutomatica, fotoMP, lineaVentaDesdeMP, mpCancelada, planProductosVenta, toca } from "./lib/mercadoPublico";
 import { alimentarCatalogoDesdeOC } from "./lib/entidadesOC";
+import { ContactosContext } from "./components/ficha/ContactosInstitucion";
+import { avisosConciliacion } from "./lib/contactosInstitucionales";
+import { rpcConciliarContactosOC, rpcGuardarContacto, rpcResolverContacto, rpcContactoObsoleto } from "./lib/supabase";
 import { rpcCartola, rpcArchivarOC, rpcRestaurarOC, cargarCorreosBfk, rpcMarcarCorreo, rpcAsignarVendedor, rpcAsignarFinanciador } from "./lib/supabase";
 import { contarCorreosAccion, desdeCorreos, reemplazarCorreo } from "./lib/correosBfk";
 import { C, MONO, SANS, fmt } from "./lib/theme";
@@ -78,6 +81,9 @@ export default function App() {
   const [pagosVendedor,setPagosVendedor]=useState([]); const [ajustesSaldo,setAjustesSaldo]=useState([]); const [perfiles,setPerfiles]=useState([]);
   const [contactos,setContactos]=useState([]);
   const [entidadesCatalogo,setEntidadesCatalogo]=useState([]);
+  const [contactosInst,setContactosInst]=useState(null);   // contactos institucionales (null = migración no instalada)
+  const [vinculosInst,setVinculosInst]=useState([]);
+  const ciDisponible=useRef(false);   // se lee dentro de flujos que corren antes del re-render (sincronización al cargar)
   const [pagoFinSueltos,setPagoFinSueltos]=useState([]);
   const [difsHistoricas,setDifsHistoricas]=useState([]); // Fase 4B: diferencias históricas pendientes de aprobación (solo lectura)
   const [notificaciones,setNotificaciones]=useState([]);
@@ -92,6 +98,13 @@ export default function App() {
   const [bancoMensual,setBancoMensual]=useState([]);
 
   const showToast=(msg,type="success")=>{ setToast({msg,type}); setTimeout(()=>setToast(null),3000); };
+  // Contactos institucionales: tras guardar o sincronizar una OC, la base compara sus correos con los de la institución
+  // (por RUT validado). Nunca modifica la OC; si la migración no está instalada no hace nada. Devuelve avisos para el usuario.
+  const conciliarContactos=async(token,ocId,origen,cargo)=>{
+    if(!ciDisponible.current||!ocId) return "";
+    try{ return avisosConciliacion(await rpcConciliarContactosOC(token,ocId,origen,cargo)).join(" "); }
+    catch{ return ""; }
+  };
 
   useEffect(()=>{ if(tab!=="compras") setBusquedaCompras(null); },[tab]);
 
@@ -309,7 +322,7 @@ export default function App() {
     if(!session) return;
     const t=session.access_token;
     try {
-      const [ocsD,finD,vendD,catD,gastD,ivaD,pagVD,ajuD,perfD,contD,entD,pagoFinSueltosD,notifD,histD,reclamosD,respD,pvD,aporD,cartD,sbD,bmD,difD,fotosD,correosD,segD,segHistD,tribD,tribCotD]=await enLotes([
+      const [ocsD,finD,vendD,catD,gastD,ivaD,pagVD,ajuD,perfD,contD,entD,pagoFinSueltosD,notifD,histD,reclamosD,respD,pvD,aporD,cartD,sbD,bmD,difD,fotosD,correosD,segD,segHistD,tribD,tribCotD,ciD,ciOcD]=await enLotes([
         ()=>conReintento(()=>selOCs(t)),
         ()=>sel("financiadores",t,"&order=nombre").catch(()=>[]),
         ()=>sel("vendedores",t,"&order=nombre").catch(()=>[]),
@@ -338,6 +351,8 @@ export default function App() {
         ()=>sel("historial_cambios",t,"&campo=like.seguimiento%3A*&order=creadoEn.desc&limit=2000").catch(()=>[]),   // su bitácora (avances y cambios)
         ()=>cargarClasificaciones(t).catch(()=>null),   // Fase 2 exentas: historial de clasificación tributaria (null = migración no instalada)
         ()=>sel("cotizaciones",t,"&estado=eq.adjudicada&tratamiento_iva=not.is.null&limit=500").catch(()=>[]),   // cotizaciones adjudicadas ya clasificadas (para heredar a la OC)
+        ()=>sel("contactos_institucionales",t,"&order=rut_clave").catch(()=>null),   // contactos institucionales (null = no instalado)
+        ()=>sel("contactos_institucionales_oc",t).catch(()=>[]),
       ]);
       const reclamosPorOC={}, respPorOC={}, pvPorOC={}, segPorOC={};
       const bitacoraSeg={}; for(const h of (segHistD||[])){ const k=String(h.campo||"").slice(12); if(k) (bitacoraSeg[k]||=[]).push(h); }
@@ -351,6 +366,7 @@ export default function App() {
       setOcs(ocsConReclamos.filter(o=>!o.archivada)); setOcsArchivadas(ocsConReclamos.filter(o=>o.archivada)); setFinanciadores(finD); setVendedores(vendD); setCategoriasGasto(catD);
       setGastos(gastD); setIvaMensual(ivaD); setPagosVendedor(pagVD); setAjustesSaldo(ajuD); setPerfiles(perfD);
       setContactos(contD); setEntidadesCatalogo(entD); setPagoFinSueltos(pagoFinSueltosD);
+      ciDisponible.current=Array.isArray(ciD); setContactosInst(Array.isArray(ciD)?ciD:null); setVinculosInst(Array.isArray(ciOcD)?ciOcD:[]);
       setClasificaciones(Array.isArray(tribD)?tribD:null); setCotizacionesClasificadas(Array.isArray(tribCotD)?tribCotD:[]); setNotificaciones(notifD); setHistorialCambios(histD); setAportes(aporD); setUltimaCartola((cartD||[])[0]||null); setSaldoBanco((sbD||[])[0]||null); setBancoMensual(bmD||[]); setDifsHistoricas(difD||[]); setCorreosBfk(correosD||[]);
 
       // Reintentar completar las OCs que se guardaron antes de ser aceptadas
@@ -422,6 +438,8 @@ export default function App() {
           await alimentarCatalogoDesdeOC({catalogo:entidadesCatalogo,token:t,usuarioId:session.user.id,rut:data.rutCliente,
             datos:{nombre_entidad:data.entidad||data.cliente||"",comuna:data.comuna||"",contacto:data.contacto||"",correo:data.correo||""}});
         }catch{}
+        const avisoCI=await conciliarContactos(t,ocId,"oc");
+        if(avisoCI) setTimeout(()=>showToast(avisoCI,"error"),3200);
       }
     } else {
       // OC existente: el monto adjudicado (monto_total) y los datos del cliente NO se
@@ -627,6 +645,8 @@ export default function App() {
         await alimentarCatalogoDesdeOC({catalogo:entidadesCatalogo,token:t,usuarioId:session.user.id,rut:oc.rut_cliente,
           datos:{nombre_entidad:oc.cliente||"",comuna:oc.comuna||"",contacto:oc.contacto||"",correo:correo_cliente||""}});
       }catch{}
+      const avisoCI=await conciliarContactos(t,ocId,"mp",oc.cargo_contacto);
+      if(avisoCI&&!silencioso) setTimeout(()=>showToast(avisoCI,"error"),3200);
     }
 
     if(silencioso) return ocId;   // carga masiva: avisa y recarga una sola vez al final
@@ -753,6 +773,7 @@ export default function App() {
             await alimentarCatalogoDesdeOC({catalogo:entidadesCatalogo,token:t,usuarioId:session.user.id,rut:d.rut_cliente,
               datos:{nombre_entidad:d.cliente||"",comuna:d.comuna||"",contacto:d.contacto||"",correo:oc.correo_cliente||d.correo_cliente||""}});
           }catch{}
+          await conciliarContactos(t,oc.id,"mp",d.cargo_contacto);   // los pendientes quedan visibles en la ficha
         }
         completadas++;
       }catch{ /* si una falla, seguimos con el resto */ }
@@ -1674,7 +1695,7 @@ export default function App() {
           await upd("ordenes_compra_v2",t,ocId,{
             cliente:d.cliente||cliente, entidad:d.entidad||entidad,
             rut_cliente:d.rut_cliente||rutCliente, comuna:d.comuna||comuna,
-            contacto:d.contacto||contacto, correo_cliente:correo||d.correo_cliente||"",
+            contacto:contacto||d.contacto||"", correo_cliente:correo||d.correo_cliente||"",   // lo escrito en la OC no se reemplaza
             monto_total:d.monto_total||oc?.monto_total, tipo_despacho:d.tipo_despacho||"",
             ...(fechaHoraMP?{fecha_emision_mp:String(fechaHoraMP).slice(0,10),fecha_hora_emision_mp:fechaHoraMP}:{}),
             dias_pago:d.dias_pago||30, sync_pendiente:false, no_en_mp:false});
@@ -1691,6 +1712,8 @@ export default function App() {
         await alimentarCatalogoDesdeOC({ catalogo: entidadesCatalogo, token: session.access_token, usuarioId: session.user.id, rut: rutCliente,
           datos: { nombre_entidad: entidad||cliente||"", comuna: comuna||"", contacto: contacto||"", correo: correo||"" } });
       } catch {}
+      const avisoCI=await conciliarContactos(t,ocId,resincronizar?"mp":"oc");
+      if(avisoCI) aviso={msg:`${aviso?.msg||"Datos actualizados"} · ${avisoCI}`,tipo:"error"};
     }
     showToast(aviso?.msg||"Datos actualizados",aviso?.tipo); await cargarTodo();
   };
@@ -1730,6 +1753,23 @@ export default function App() {
     const r=await cambiarFinanciamientoOC(session.access_token,{ocId:oc.id,tipo,financiadorId});
     showToast(r?.sin_cambios?"Sin cambios en el financiamiento":`Financiamiento actualizado${r?.despues?`: ${r.despues}`:""} · deuda recalculada por la base`); await cargarTodo();
   };
+  // ─── CONTACTOS INSTITUCIONALES (21/10/2026) ─────────────────────────
+  const recargarContactos=async()=>{
+    const t=session.access_token;
+    const [c,v]=await Promise.all([sel("contactos_institucionales",t,"&order=rut_clave").catch(()=>null),sel("contactos_institucionales_oc",t).catch(()=>[])]);
+    if(Array.isArray(c)) setContactosInst(c); if(Array.isArray(v)) setVinculosInst(v);
+  };
+  const ctxContactos=useMemo(()=>({
+    disponible:Array.isArray(contactosInst), contactos:contactosInst||[], vinculos:vinculosInst,
+    numeroOC:(id)=>[...ocs,...ocsArchivadas].find(o=>o.id===id)?.numero_oc||id,
+    guardar:async({id,rut,datos,ocId})=>{ await rpcGuardarContacto(session.access_token,{id,rut,datos,ocId}); await recargarContactos(); showToast("Contacto guardado"); },
+    resolver:async(id,decision,motivo)=>{ await rpcResolverContacto(session.access_token,id,decision,motivo); await recargarContactos();
+      showToast(decision==="reemplaza"?"Correo actualizado: el anterior quedó como obsoleto":decision==="adicional"?"Contacto confirmado":"Contacto descartado"); },
+    obsoleto:async(id,motivo)=>{ await rpcContactoObsoleto(session.access_token,id,motivo); await recargarContactos(); showToast("Contacto marcado como obsoleto"); },
+    cargarHistorial:(id)=>sel("contactos_institucionales_historial",session.access_token,`&contacto_id=eq.${id}&order=creado_en.desc&limit=50`),
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }),[contactosInst,vinculosInst,ocs,ocsArchivadas,session]);
+
   const handleGuardarContacto=async({rut,nombreCliente,correo})=>{
     try { await ins("contactos_cobranza",session.access_token,{id:genId("cob"),rut,nombre_cliente:nombreCliente,correo,creado_por:session.user.id}); await cargarTodo(); }
     catch(e){ /* si ya existe el RUT (unique), no es un error fatal */ }
@@ -1840,7 +1880,7 @@ export default function App() {
   const nuevaOC=()=>{ setMenuMas(false); setAccion("compra_oc"); };
 
   const contenidoPantallas=(
-    <ModoTodoContext.Provider value={todo}>
+    <ModoTodoContext.Provider value={todo}><ContactosContext.Provider value={ctxContactos}>
       {pestanasHub&&!todo&&<Pestanas etiqueta={HUBS[pantalla.hub].label} variante="subrayado" activa={tab} onCambiar={irA} items={pestanasHub.map(p=>({key:p.key,label:p.label,attrs:{"data-nav":p.key,"aria-current":tab===p.key?"page":undefined}}))} />}
       {(tab==="panel"||todo)&&hoja("panel",<PanelDashboard onQuitarAlertaCartola={handleQuitarAlertaCartola} onBuscarCompras={(q)=>{setBusquedaCompras(q);setFiltroCompras(null);setOcFoco(null);setVolverA(null);setTab("compras");}} ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} aportes={aportes} ajustes={ajustesSaldo} categorias={categoriasGasto} perfil={perfil} onExportarTodo={handleExportarTodo} exportando={exportando} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setVolverA(null);setTab(t);}} onAccion={(k)=>setAccion(k)} onSincronizar={completarTodasDesdeMP} onCorregirFechas={corregirFechasTodas} sincronizando={sincronizando} porAceptar={porAceptar.filter(a=>!buscarDuplicadoOC(a.numero_oc))} onActualizarPorAceptar={revisarPorAceptar} verificandoPorAceptar={verificandoPorAceptar} aceptadasSinCargar={aceptadasSinCargar.filter(a=>!buscarDuplicadoOC(a.numero_oc))} onCargarOC={(numero)=>{setCodigoOcRapida(numero);setAccion("compra_oc");}} onCargarTodasAceptadas={handleCargarTodasAceptadas} cargandoAceptadas={cargandoAceptadas} onActualizarAceptadas={revisarAceptadasSinCargar} verificandoAceptadas={verificandoAceptadas} canceladasEnMP={canceladasEnMP.filter(c=>ocs.some(o=>o.id===c.id))} onArchivarCancelada={(id)=>handleArchivarOC(id,"Cancelada en Mercado Público")} onActualizarCanceladas={revisarCanceladasEnMP} verificandoCanceladas={verificandoCanceladas} onValidarTodo={validarTodoContraMP} validandoTodo={validandoTodo} usoMP={usoMP} actMP={actMP} esCodigoMP={esCodigoMP} ultimaCartola={ultimaCartola} saldoBanco={saldoBanco} bancoMensual={bancoMensual} onEditarSaldo={()=>setAccion("saldo_banco")} />)}
       {(tab==="compras"||todo)&&hoja("compras",<>{!todo&&volverA==="notif"&&<button onClick={()=>{setVolverA(null);setTab("notif");}} style={{width:"100%",textAlign:"left",background:C.tealLight,color:C.tealDark,border:"none",borderRadius:12,padding:"10px 12px",marginBottom:10,fontWeight:800,fontSize:13,minHeight:44,cursor:"pointer"}}>← Volver a Alertas</button>}<PanelCompras key={"compras-"+reinicio} pagosVendedor={pagosVendedor} onAsignarVendedor={handleAsignarVendedor} onAsignarFinanciador={handleAsignarFinanciador} correosBfk={correosBfk} onMarcarCorreo={handleMarcarCorreo} difsHistoricas={difsHistoricas} onCambiarFinanciamiento={handleCambiarFinanciamiento} busquedaInicial={busquedaCompras} ocs={ocs} perfiles={perfiles} filtroInicial={filtroCompras} ocFoco={ocFoco} onFocoUsado={()=>setOcFoco(null)} contactos={contactos} onEnviarReclamo={handleEnviarReclamo} onCorreoOC={handleCorreoOC} onRegistrarRespuestaReclamo={handleRegistrarRespuestaReclamo} onGuardarContacto={handleGuardarContacto} onGuardarDatosOC={handleGuardarDatosOC} onEditarEvento={handleEditarEvento} financiadores={financiadores} onConfirmarEntrega={handleEntrega} onEmitirFactura={handleFactura} onPagoCliente={handlePagoCliente} onPagoFinanciamiento={handlePagoFin} entidadesCatalogo={entidadesCatalogo} onGuardarLink={handleGuardarLink} onEliminarLink={handleEliminarLink} onEditarLink={handleEditarLink} onRepartirInversion={handleRepartirInversion} buscarDuplicadoOC={buscarDuplicadoOC} onSincronizarFecha={handleSincronizarFecha} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={handleAgregarComentario} onEliminarComentario={handleEliminarComentario} onArchivarOC={handleArchivarOC} onEliminarFactura={handleEliminarFactura} onRegistrarNC={handleNotaCredito} onEliminarEvento={handleEliminarEvento} vendedores={vendedores} onIngresarCompra={handleIngresarCompra} onCompraDesdeCotizacion={handleCompraDesdeCotizacion} onCorregirCompra={handleCorregirCompra} onCrearSeguimiento={handleCrearSeguimiento} onActualizarSeguimiento={handleActualizarSeguimiento} onEliminarSeguimiento={handleEliminarSeguimiento} onAnularCompra={handleAnularCompra} onBuscarCotizacionOC={buscarCotizacionOC} onCargarCotizacionOC={cargarCotizacionOC} onAsignarResponsable={handleAsignarResponsable} onGuardarPostventa={handleGuardarPostventa} tributario={tributario} /></>)}
@@ -1854,7 +1894,7 @@ export default function App() {
       {(tab==="banco"||todo)&&hoja("banco",<PanelBanco ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} aportes={aportes} saldoBanco={saldoBanco} ultimaCartola={ultimaCartola} bancoMensual={bancoMensual} onEditarSaldo={()=>setAccion("saldo_banco")} onImportarCartola={()=>setAccion("cartola")} onQuitarAlertaCartola={handleQuitarAlertaCartola} />)}
       {(tab==="vendedores"||todo)&&hoja("vendedores",<PanelVendedores vendedores={vendedores} ocs={ocs} ivaMensual={ivaMensual} gastos={gastos} pagosVendedor={pagosVendedor} onGuardarIva={handleGuardarIva} onPagoVendedor={handlePagoVendedorSimple} onAnularPago={handleAnularPagoVendedor} esAdmin={perfil?.rol==="admin"} onIrImpuestos={()=>irA("impuestos")} onVerOCs={(filtro)=>{setFiltroCompras(filtro);setOcFoco(null);setVolverA(null);setTab("compras");}} onAbrirOC={(ocId)=>{setFiltroCompras(null);setOcFoco(ocId);setVolverA(null);setTab("compras");}} />)}
       {(tab==="usuarios"||todo)&&perfil?.rol==="admin"&&hoja("usuarios",<PanelUsuarios difsHistoricas={difsHistoricas} perfiles={perfiles} ocs={ocs} ocsArchivadas={ocsArchivadas} onRestaurarOC={handleRestaurarOC} onChangeRol={handleChangeRol} session={session} showToast={showToast} entidadesCatalogo={entidadesCatalogo} onEntidadesImportadas={handleEntidadesImportadas} usoMP={usoMP} sincronizando={sincronizando} validandoTodo={validandoTodo} exportando={exportando} onCorregirFechas={corregirFechasTodas} onValidarTodo={validarTodoContraMP} onExportarTodo={handleExportarTodo} />)}
-    </ModoTodoContext.Provider>
+    </ContactosContext.Provider></ModoTodoContext.Provider>
   );
 
   // Contenido + ventanas, igual en celular y escritorio

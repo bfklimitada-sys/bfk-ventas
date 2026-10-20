@@ -94,6 +94,11 @@ async function rpcSimple(t, fn, body) {
 // Registro desde la cartola (funciones de la base con la garantía atómica). El error conserva el código
 // (23505 = ya registrado; BFK01 = posible duplicado de un registro manual; PGRST202 = función aún no instalada).
 export const rpcCartola = (t, fn, body) => rpcSimple(t, fn, body);
+// Contactos institucionales (21/10/2026): toda escritura pasa por RPC (la base valida RUT, duplicados y prioridad).
+export const rpcConciliarContactosOC = (t, ocId, origen = "mp", cargo = null) => rpcSimple(t, "conciliar_contactos_oc", { p_oc_id: ocId, p_origen: origen, p_cargo: cargo || null });
+export const rpcGuardarContacto = (t, { id = null, rut = null, datos, ocId = null }) => rpcSimple(t, "guardar_contacto_institucional", { p_id: id, p_rut: rut, p_datos: datos, p_oc_id: ocId });
+export const rpcResolverContacto = (t, id, decision, motivo = null) => rpcSimple(t, "resolver_contacto_pendiente", { p_id: id, p_decision: decision, p_motivo: motivo });
+export const rpcContactoObsoleto = (t, id, motivo = null, reemplazo = null) => rpcSimple(t, "marcar_contacto_obsoleto", { p_id: id, p_motivo: motivo, p_reemplazo: reemplazo });
 export const rpcArchivarOC = (t, ocId, motivo) => rpcSimple(t, "archivar_oc", { p_oc_id: ocId, p_motivo: motivo || null });
 export const rpcRestaurarOC = (t, ocId) => rpcSimple(t, "restaurar_oc", { p_oc_id: ocId });
 

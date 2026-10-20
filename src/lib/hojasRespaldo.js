@@ -33,5 +33,8 @@ export const HOJAS_RESPALDO = [
   { hoja:"Notificaciones",            tabla:"notificaciones" },
   { hoja:"HistorialCambios",          tabla:"historial_cambios" },
   { hoja:"DiferenciasHistoricas",     tabla:"fin_diferencias_historicas" },
-  { hoja:"ClasificacionTributaria",   tabla:"trib_clasificaciones", opcional:true },  // Fase 2 exentas: solicitudes y aprobaciones (solo lectura; no importable)  // Fase 4B: diferencias congeladas pendientes de aprobación (solo lectura)
+  { hoja:"ClasificacionTributaria",   tabla:"trib_clasificaciones", opcional:true },
+  { hoja:"ContactosInstitucionales",  tabla:"contactos_institucionales", opcional:true },            // 21/10/2026: contactos por institución (solo lectura; no importable)
+  { hoja:"ContactosInstitucionalesOC", tabla:"contactos_institucionales_oc", opcional:true },        // qué OC respaldó cada contacto
+  { hoja:"ContactosInstitucionalesHist", tabla:"contactos_institucionales_historial", opcional:true },// bitácora de cambios de contactos  // Fase 2 exentas: solicitudes y aprobaciones (solo lectura; no importable)  // Fase 4B: diferencias congeladas pendientes de aprobación (solo lectura)
 ];

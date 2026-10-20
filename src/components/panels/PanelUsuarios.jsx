@@ -4,6 +4,7 @@ import { C, btnP, fmt, iStyle } from "../../lib/theme";
 import { Ic } from "../ui/Iconos";
 import { Seccion, Tarjeta, Badge, BotonAdmin, Pestanas, PanelPestana } from "../ui/Sistema";
 import { ImportarEntidades } from "../forms/ImportarEntidades";
+import { ContactosCatalogo } from "../ficha/ContactosInstitucion";
 
 export function PanelUsuarios({ perfiles, ocs, ocsArchivadas, onRestaurarOC, onChangeRol, session, showToast, entidadesCatalogo, onEntidadesImportadas, usoMP, sincronizando, validandoTodo, exportando, onCorregirFechas, onValidarTodo, onExportarTodo, difsHistoricas }) {
   const [verDifs,setVerDifs]=useState(false);
@@ -89,6 +90,12 @@ export function PanelUsuarios({ perfiles, ocs, ocsArchivadas, onRestaurarOC, onC
           ):(
             <ImportarEntidades session={session} onTerminado={onEntidadesImportadas} onCancelar={()=>setShowImport(false)} />
           )}
+        </Tarjeta>
+
+        <Tarjeta>
+          <div style={{fontSize:14,fontWeight:700,color:C.ink,marginBottom:2}}><Ic n="👥"/> Contactos institucionales</div>
+          <div style={{fontSize:12,color:C.inkMuted,marginBottom:10}}>Varios contactos por institución (por RUT). Corrige correos, resuelve los pendientes y revisa el historial.</div>
+          <ContactosCatalogo entidades={entidadesCatalogo} />
         </Tarjeta>
       </Seccion>
       </PanelPestana>

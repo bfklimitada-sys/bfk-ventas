@@ -5,6 +5,8 @@ import { C, btnP, fmt, iStyle } from "../../lib/theme";
 import { I } from "../ui/Iconos";
 import { abrirCorreo, abrirGmail, abrirMailto, copiarTexto, esTelefono, CUENTA_REMITENTE } from "../../lib/correos";
 import { entidadPorRut, filtrarPorRut } from "../../lib/rut";
+import { correoSugerido, textoSugerencia } from "../../lib/contactosInstitucionales";
+import { ElegirContacto, useContactos } from "../ficha/ContactosInstitucion";
 
 // ── Preparar y confirmar un correo (14/10/2026) ──
 // 1) «Abrir en Gmail» (PC) / «Abrir en la app de correo» (teléfono): deja el mensaje listo, SIN enviarlo ni registrarlo.
@@ -74,7 +76,8 @@ export function FormEntregaFallida({ oc, onEnviar, entidadesCatalogo }) {
   const matchCatalogo=entidadPorRut(entidadesCatalogo,oc.rut_cliente).entidad;
   const [lugar,setLugar]=useState("bodega");
   const [motivo,setMotivo]=useState("usted no estaba en el lugar");
-  const [correo,setCorreo]=useState(oc.correo_cliente||matchCatalogo?.correo||"");
+  const ctxCI=useContactos(); const sug=correoSugerido(ctxCI?.contactos,oc);
+  const [correo,setCorreo]=useState(sug.correo||oc.correo_cliente||matchCatalogo?.correo||"");
 
   const asunto=`Entrega OC ${oc.numero_oc}`;
   const cuerpo=`Estimado/a,\n\nJunto con saludar le comento que hoy durante la mañana nos acercamos a ${lugar} para hacer la entrega de los productos asociados a la OC del asunto, siendo esta entrega fallida debido a que ${motivo}.\n\nPor favor avisar a personal de bodega que realizaremos un nuevo intento de entrega entre hoy y el resto de la semana en curso.\n\nAgradezco su ayuda con esa gestión.\n\nSin más que agregar, saludos cordiales,\nBFK Ltda`;
@@ -85,7 +88,8 @@ export function FormEntregaFallida({ oc, onEnviar, entidadesCatalogo }) {
   return (
     <div>
       <div style={{background:C.warnLight,borderRadius:8,padding:"10px 12px",fontSize:13,color:C.warnText,fontWeight:700,marginBottom:14}}>OC {oc.numero_oc} · Correo de entrega fallida</div>
-      <Field label="Correo del destinatario" required hint={oc.correo_cliente?"Correo guardado en esta OC":matchCatalogo?"Autocompletado desde el catálogo de entidades":""}><input style={iStyle} type="email" value={correo} onChange={e=>setCorreo(e.target.value)} placeholder="contacto@entidad.cl" /></Field>
+      <Field label="Correo del destinatario" required hint={sug.correo?textoSugerencia(sug):matchCatalogo?"Autocompletado desde el catálogo de entidades":""}><input style={iStyle} type="email" value={correo} onChange={e=>setCorreo(e.target.value)} placeholder="contacto@entidad.cl" /></Field>
+      <ElegirContacto oc={oc} valor={correo} onElegir={c=>setCorreo(c.correo)} />
       <Field label="Lugar de entrega" required hint="ej: bodega de farmacología, bodega central"><input style={iStyle} value={lugar} onChange={e=>setLugar(e.target.value)} /></Field>
       <Field label="Motivo de la entrega fallida" required hint="ej: usted no estaba en el lugar, bodega estaba cerrada"><input style={iStyle} value={motivo} onChange={e=>setMotivo(e.target.value)} /></Field>
       <div style={{background:C.paper,borderRadius:8,padding:"10px 12px",marginBottom:14}}>
@@ -104,7 +108,8 @@ export function FormFechaEntrega({ oc, onEnviar, entidadesCatalogo }) {
   const evC=(oc.eventos_compra||[])[0];
   const fechaEstimadaDefault=evC?.fecha_entrega_estimada||"";
   const [fechaEntrega,setFechaEntrega]=useState(fechaEstimadaDefault);
-  const [correo,setCorreo]=useState(oc.correo_cliente||matchCatalogo?.correo||"");
+  const ctxCI=useContactos(); const sug=correoSugerido(ctxCI?.contactos,oc);
+  const [correo,setCorreo]=useState(sug.correo||oc.correo_cliente||matchCatalogo?.correo||"");
 
   const asunto=`Fecha de entrega OC ${oc.numero_oc}`;
   const fechaFmt=fechaEntrega?fmt.dateLong(fechaEntrega):"[fecha a definir]";
@@ -116,7 +121,8 @@ export function FormFechaEntrega({ oc, onEnviar, entidadesCatalogo }) {
   return (
     <div>
       <div style={{background:C.transitLight,borderRadius:8,padding:"10px 12px",fontSize:13,color:C.transit,fontWeight:700,marginBottom:14}}>OC {oc.numero_oc} · Correo de fecha de entrega</div>
-      <Field label="Correo del destinatario" required hint={oc.correo_cliente?"Correo guardado en esta OC":matchCatalogo?"Autocompletado desde el catálogo de entidades":""}><input style={iStyle} type="email" value={correo} onChange={e=>setCorreo(e.target.value)} placeholder="contacto@entidad.cl" /></Field>
+      <Field label="Correo del destinatario" required hint={sug.correo?textoSugerencia(sug):matchCatalogo?"Autocompletado desde el catálogo de entidades":""}><input style={iStyle} type="email" value={correo} onChange={e=>setCorreo(e.target.value)} placeholder="contacto@entidad.cl" /></Field>
+      <ElegirContacto oc={oc} valor={correo} onElegir={c=>setCorreo(c.correo)} />
       <Field label="Fecha estimada de entrega" required hint={fechaEstimadaDefault?"Autocompletado con la fecha estimada registrada":""}><input style={iStyle} type="date" value={fechaEntrega} onChange={e=>setFechaEntrega(e.target.value)} /></Field>
       <div style={{background:C.paper,borderRadius:8,padding:"10px 12px",marginBottom:14}}>
         <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:4}}>Asunto</div>
@@ -133,7 +139,8 @@ export function FormReclamarFactura({ oc, evF, dias, contactos, onEnviar, onGuar
   const contactoExistente = filtrarPorRut(contactos, oc.rut_cliente)[0];
   const [rut, setRut] = useState(oc.rut_cliente || "");
   const [nombreCliente, setNombreCliente] = useState(oc.cliente || contactoExistente?.nombre_cliente || "");
-  const [correo, setCorreo] = useState(oc.correo_cliente || contactoExistente?.correo || "");
+  const ctxCI = useContactos(); const sug = correoSugerido(ctxCI?.contactos, oc);
+  const [correo, setCorreo] = useState(sug.correo || oc.correo_cliente || contactoExistente?.correo || "");
   const [cc, setCc] = useState("");
 
   const asunto = `OC ${oc.numero_oc} — Consulta por pago factura N°${evF?.numero_factura || ""}`;
@@ -155,7 +162,8 @@ export function FormReclamarFactura({ oc, evF, dias, contactos, onEnviar, onGuar
       {oc.ultimo_reclamo_fecha&&<div style={{background:C.warnLight,borderRadius:8,padding:"8px 12px",fontSize:12,color:C.warnText,fontWeight:600,marginBottom:14}}>Ya se reclamó esta factura el {fmt.datetime(oc.ultimo_reclamo_fecha)}</div>}
       <Field label="RUT del cliente" hint="Para guardar el correo y reutilizarlo después"><input style={iStyle} value={rut} onChange={e=>setRut(e.target.value)} placeholder="ej: 12.345.678-9" /></Field>
       <Field label="Nombre del cliente" required><input style={iStyle} value={nombreCliente} onChange={e=>setNombreCliente(e.target.value)} /></Field>
-      <Field label="Correo del cliente" required hint={oc.correo_cliente?"Correo ya guardado en esta OC":contactoExistente?"Correo guardado encontrado para este RUT":"Se guardará para futuras facturas"}><input style={iStyle} type="email" value={correo} onChange={e=>setCorreo(e.target.value)} placeholder="contacto@entidad.cl" /></Field>
+      <Field label="Correo del cliente" required hint={sug.correo?textoSugerencia(sug):contactoExistente?"Correo guardado encontrado para este RUT":"Se guardará para futuras facturas"}><input style={iStyle} type="email" value={correo} onChange={e=>setCorreo(e.target.value)} placeholder="contacto@entidad.cl" /></Field>
+      <ElegirContacto oc={oc} valor={correo} onElegir={c=>setCorreo(c.correo)} />
       <Field label="Con copia (CC)" hint="Opcional — separa varios correos con coma"><input style={iStyle} value={cc} onChange={e=>setCc(e.target.value)} placeholder="jefatura@bfk.cl, contador@bfk.cl" /></Field>
       <div style={{background:C.paper,borderRadius:8,padding:"10px 12px",marginBottom:14}}>
         <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:4}}>Asunto</div>
