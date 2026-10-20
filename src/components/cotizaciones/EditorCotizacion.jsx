@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { C, T, R, iStyle, iMono, selStyle, fmt, MONO } from "../../lib/theme";
 import { Field, Modal } from "../ui/Basicos";
 import { HojaLateral, Pestanas, PanelPestana, Tarjeta, Badge, AvisoLinea, BotonPrincipal, BotonSecundario, FilaDato, Desplegable, Seccion } from "../ui/Sistema";
-import { calcularCotizacion, estadoParaPDF, destinoDe, direccionValida, invalidarDespachosPorDireccion, envioConfirmado, textoParaMercadoPublico, aplicarRecargoGeneral, aplicarRecargoProducto, itemVacio, envioVacio, nuevaClave, hoyISO, digitosValor, proveedorDeEnlace, ESTADOS_COTIZACION, ESTADOS_ENVIO, RECARGO_SUGERIDO } from "../../lib/cotizaciones";
+import { calcularCotizacion, formulaParaGuardar, formulaGuardadaExenta, esExentaAprobada, estadoParaPDF, destinoDe, direccionValida, invalidarDespachosPorDireccion, envioConfirmado, textoParaMercadoPublico, aplicarRecargoGeneral, aplicarRecargoProducto, itemVacio, envioVacio, nuevaClave, hoyISO, digitosValor, proveedorDeEnlace, ESTADOS_COTIZACION, ESTADOS_ENVIO, RECARGO_SUGERIDO } from "../../lib/cotizaciones";
 import { logoBFK } from "../../lib/cotizacionesDatos";
 import { generarPdfEETT, descargarBlob, huellaPDF } from "../../lib/eettPdf";
 import { EditorFicha } from "./EditorFicha";
@@ -59,7 +59,18 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
   const esAdmin = perfil?.rol === "admin";
   const protegido = estadoGuardado === "adjudicada";
   const cap = almacen.capacidades || {};
-  const calc = useMemo(() => calcularCotizacion(cot), [cot]);
+  // Fase 3 exentas: tratamiento tributario para el cálculo.
+  //  · Cotización adjudicada (guardada así): se conserva la fórmula con que se guardaron sus precios (afecta salvo que
+  //    se haya guardado exenta). Una clasificación posterior no cambia precios ofertados.
+  //  · Si no: la clasificación APROBADA vigente (del historial; la copia local puede ser anterior a la aprobación).
+  const [formulaGuardada, setFormulaGuardada] = useState(() => inicial.formula || null);
+  const aprobada = tributario?.historial ? tributario.historial.find((h) => h.ambito === "cotizacion" && String(h.cotizacion_id) === String(cot.id) && h.estado === "aprobada") : null;
+  const cotTrib = useMemo(() => {
+    const vig = aprobada ? { tratamiento_iva: aprobada.tratamiento, clasificacion_id: aprobada.id } : { tratamiento_iva: cot.tratamiento_iva ?? null, clasificacion_id: cot.clasificacion_id ?? null };
+    return protegido ? { ...cot, ...vig, _exenta_fija: formulaGuardadaExenta(formulaGuardada) } : { ...cot, ...vig };
+  }, [cot, aprobada?.id, aprobada?.tratamiento, protegido, formulaGuardada]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const calc = useMemo(() => calcularCotizacion(cotTrib), [cotTrib]);
+  const difiereTratamiento = protegido && esExentaAprobada(cotTrib) !== calc.exenta;
   const pdf = useMemo(() => estadoParaPDF(cot), [cot]);
   const cambiar = (fn) => { setCot((c) => fn(JSON.parse(JSON.stringify(c)))); setSucio(true); };
   const setCampo = (k, v) => cambiar((c) => { c[k] = v; return c; });
@@ -145,8 +156,9 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
 
   // ── Guardar ──
   const guardarInterno = async () => {
-    const enviada = cot; const { _idLocal, ...paraBFK } = enviada; // eslint-disable-line no-unused-vars
+    const enviada = cot; const { _idLocal, ...paraBFK } = { ...enviada, ...cotTrib, items: enviada.items, envios: enviada.envios }; // eslint-disable-line no-unused-vars
     const r = await almacen.guardarCotizacion(paraBFK);
+    setFormulaGuardada(formulaParaGuardar(paraBFK));
     const nueva = { ...enviada, id: r.id, version: r.version };
     // Lo escrito DURANTE el guardado se conserva (y sigue marcado como pendiente de guardar).
     const posterior = vivo.current.cot !== enviada;
@@ -417,19 +429,21 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
         </PanelPestana>
 
         <PanelPestana visible={pestana === "precios"} titulo="Precios">
+          {calc.exenta && <AvisoLinea tono="info" icono="⚖️" dato="cotizacion-exenta">Venta exenta aprobada ({cotTrib.tratamiento_iva === "exenta_fora" ? "FO.R.A., art. 101 Ley 18.948" : "exención legal"}): el recargo se aplica sobre el costo bruto (el IVA de las compras no se recupera) y la oferta no lleva IVA.</AvisoLinea>}
+          {difiereTratamiento && <AvisoLinea tono="warn" dato="tratamiento-difiere">La cotización está adjudicada: sus precios se mantienen con la fórmula con que se ofertaron ({calc.exenta ? "exenta" : "afecta"}), aunque la clasificación vigente sea otra.</AvisoLinea>}
           {!cot.items.length && <div style={{ fontSize: T.sm, color: C.inkFaint }}>Agrega productos para ver sus precios.</div>}
           {cot.items.map((it, i) => {
             const l = calc.lineas[i];
             return (
               <Tarjeta key={it.key} padding="14px" data-precio-item={i + 1} style={{ borderColor: l.avisos.length ? C.warn : C.teal }}>
                 <div style={{ fontSize: T.sm, fontWeight: 800, color: C.ink, lineHeight: 1.3 }}>{i + 1}. {it.ficha.nombre || "Producto"}</div>
-                <div style={{ fontSize: T.small, fontWeight: 800, color: C.tealDark, letterSpacing: 0.4, marginTop: 10 }}>VALOR UNITARIO NETO PARA MERCADO PÚBLICO</div>
+                <div style={{ fontSize: T.small, fontWeight: 800, color: C.tealDark, letterSpacing: 0.4, marginTop: 10 }}>{calc.exenta ? "VALOR UNITARIO EXENTO PARA MERCADO PÚBLICO" : "VALOR UNITARIO NETO PARA MERCADO PÚBLICO"}</div>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginTop: 2 }}>
                   <span data-unitario={i + 1} style={{ fontSize: 34, fontWeight: 900, color: l.avisos.length ? C.inkMuted : C.ink, fontFamily: MONO, letterSpacing: -0.5 }}>{m(l.unitario_neto)}</span>
                   <BotonPrincipal data-copiar-valor={i + 1} onClick={() => copiarUno(i)} disabled={!!l.avisos.length} style={{ minHeight: 40, opacity: l.avisos.length ? 0.5 : 1 }}>Copiar valor</BotonPrincipal>
                 </div>
                 <div style={{ fontSize: T.sm, color: C.inkMuted, marginTop: 6, lineHeight: 1.6 }}>
-                  Cantidad: <b style={{ color: C.ink }}>{l.cantidad}</b> · Subtotal neto: <b data-subtotal={i + 1} style={{ color: C.ink, fontFamily: MONO }}>{m(l.neto_linea)}</b><br />
+                  Cantidad: <b style={{ color: C.ink }}>{l.cantidad}</b> · {calc.exenta ? "Subtotal exento" : "Subtotal neto"}: <b data-subtotal={i + 1} style={{ color: C.ink, fontFamily: MONO }}>{m(l.neto_linea)}</b><br />
                   <span style={{ fontSize: T.small }}>El despacho ({m(l.envio_asignado)}) ya está incorporado en el valor unitario: el campo Despacho de Mercado Público va en $0.</span>
                 </div>
                 <div data-recargo-producto={i + 1} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.border}` }}>
@@ -454,11 +468,18 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
                 {Number(cot.recargo) !== RECARGO_SUGERIDO && !protegido && <button type="button" onClick={() => cambiarRecargoGeneral(RECARGO_SUGERIDO)} style={{ border: "none", background: "none", color: C.tealDark, textDecoration: "underline", cursor: "pointer", fontSize: T.small, padding: 0, minHeight: 32 }}>Usar sugerido 30%</button>}
               </div>
               <div style={{ padding: "8px 0", borderBottom: `1px solid ${C.border}` }}>
-                <div style={{ fontSize: T.sm, color: C.inkMuted, marginBottom: 4 }}>Precio unitario neto de cada producto</div>
+                <div style={{ fontSize: T.sm, color: C.inkMuted, marginBottom: 4 }}>{calc.exenta ? "Precio unitario exento de cada producto" : "Precio unitario neto de cada producto"}</div>
                 {cot.items.map((it, i) => <div key={it.key} style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: T.sm }}><span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{i + 1}. {it.ficha.nombre || "Producto"}{calc.lineas[i].recargo !== (cot.recargo === "" ? RECARGO_SUGERIDO : Number(cot.recargo)) ? ` (recargo ${pct(calc.lineas[i].recargo)})` : ""}</span><b style={{ fontFamily: MONO }}>{m(calc.lineas[i].unitario_neto)}</b></div>)}
               </div>
-              <FilaDato k="Total neto de la oferta" v={m(calc.totales.neto)} fuerte dato="neto" />
-              <FilaDato k="Total con IVA (19%)" v={m(calc.totales.total)} fuerte dato="total" />
+              {calc.exenta ? <>
+                <FilaDato k="IVA no recuperable incluido en el costo" v={m(calc.totales.iva_no_recuperable)} dato="iva-no-recuperable" />
+                <FilaDato k="Total exento" v={m(calc.totales.neto)} fuerte dato="neto" />
+                <FilaDato k="IVA de venta" v={m(0)} dato="iva-venta" />
+                <FilaDato k="Total de la oferta" v={m(calc.totales.total)} fuerte dato="total" />
+              </> : <>
+                <FilaDato k="Total neto de la oferta" v={m(calc.totales.neto)} fuerte dato="neto" />
+                <FilaDato k="Total con IVA (19%)" v={m(calc.totales.total)} fuerte dato="total" />
+              </>}
               <FilaDato k="Ganancia neta estimada" v={m(calc.totales.utilidad_neta)} tono={calc.totales.utilidad_neta >= 0 ? "ok" : "danger"} fuerte dato="utilidad" />
             </Tarjeta>
           )}

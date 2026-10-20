@@ -15,7 +15,7 @@ import { HojaLateral, BotonSecundario } from "../ui/Sistema";
 import { EtapasOC, FormPostventa } from "../ui/EtapasOC";
 import { diferenciasPendientes, tipoFinanciamiento, TIPOS_FINANCIAMIENTO } from "../../lib/finanzas";
 import { useEscritorio, useTopeFijo, SeccionFicha, IndiceFicha, ResumenFinanciero, FacturacionSII, FormNotaCredito, CobranzaFicha, ComunicacionesFicha } from "../ficha/FichaOC";
-import { montoTributarioVigente, ventaExentaPorDocumentos } from "../../lib/tributario";
+import { montoTributarioVigente, ventaExenta } from "../../lib/tributario";
 import { ClasificacionTributaria, resumenClasificacion } from "../ficha/ClasificacionTributaria";
 import { cotizacionVinculadaA } from "../../lib/clasificacionTributaria";
 import { BloqueoEstado, ComentariosOC, HistorialCambiosOC } from "../ui/Multiusuario";
@@ -442,7 +442,7 @@ export function DetalleOC({ oc, perfil, parte, onEditarLink, onEliminarLink, onG
                       {(()=>{
                         const tv=vendidos.reduce((s,l)=>s+(Number(l.precio_venta)||0),0);
                         // Fase 1 exentas: si sus facturas vigentes son DTE 34, el monto de la OC ya es neto (no se divide por 1,19).
-                        const exenta=ventaExentaPorDocumentos(oc);
+                        const exenta=ventaExenta(oc);   // fase 3: también por clasificación aprobada
                         const neto=exenta?(Number(oc.monto_total)||0):Math.round((Number(oc.monto_total)||0)/1.19);
                         return Math.abs(tv-neto)>1&&Math.abs(tv-(Number(oc.monto_total)||0))>1?(
                           <span style={{display:"block",fontSize:12,color:C.warnText,fontWeight:700}}>

@@ -1,4 +1,4 @@
-import { ventaExentaPorDocumentos } from "./tributario.js";
+import { ventaExenta } from "./tributario.js";
 // ═══════════════════════════════════════════════════════════════
 // Productos de una OC (oc_productos_link): edición parcial y reparto
 // de la inversión (Fase 4A). Funciones puras: no escriben datos.
@@ -62,7 +62,7 @@ export function repartirInversion(total, lineas) {
 // monto adjudicado (neto = monto/1,19, o el monto con IVA). Si no, se usa el monto total como referencia y
 // nunca se inventan precios unitarios. precio_venta de cada línea es el total de la línea (como lo entrega MP).
 export function ventaDeOC(oc) {
-  const exenta = ventaExentaPorDocumentos(oc);   // fase 1: venta exenta reconocida por sus facturas DTE 34
+  const exenta = ventaExenta(oc);   // venta exenta: clasificación aprobada (fase 3) o facturas DTE 34 vigentes (fase 1)
   const total = Number(oc?.monto_total) || 0;
   const vendidas = (oc?.oc_productos_link || []).filter((l) => (l.origen || "venta") === "venta" && String(l.descripcion || "").trim() && l.descripcion !== "Producto por completar")
     .slice().sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0));
