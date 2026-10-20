@@ -13,7 +13,8 @@
 --   · Funciones trib_*: solicitar, resolver (aprobar/rechazar), anular solicitud y heredar desde la cotización adjudicada.
 --   · cz_guardar_cotizacion_v2: igual que hoy, más (a) ignora cualquier intento del cliente de fijar la clasificación y
 --     (b) guarda en cada versión la clasificación vigente.
---   · Depósito privado de Storage «trib-respaldos» (documentos de respaldo; sin borrar ni reemplazar).
+--   · Depósito privado de Storage «trib-respaldos» (documentos de respaldo; sin borrar ni reemplazar). OBLIGATORIO:
+--     si no se puede crear y verificar (privado, límites, RLS, solo sus dos políticas), toda la migración se revierte.
 -- NO toca: fórmulas de cotización, facturas (tipo_dte), F29/IVA mensual, comisiones, costos, financiamiento, FIFO,
 -- conciliación, pagos ni datos existentes.
 -- ═══════════════════════════════════════════════════════════════════════════════════════════
@@ -391,13 +392,48 @@ do $$ declare f text; begin
 end $$;
 
 -- ── 8. Storage: documentos de respaldo (privado; se sube y se lee; no se reemplaza ni se borra) ─────
+-- OBLIGATORIO (autorización condicionada del 20/10/2026): si el depósito o sus políticas no se pueden crear Y verificar,
+-- se lanza una excepción y TODA la migración se revierte (una sola transacción). No hay instalación parcial.
 do $$ begin
-  if to_regclass('storage.objects') is null or to_regclass('storage.buckets') is null then raise notice 'TRIB|SIN_STORAGE|'; return; end if;
-  if exists (select 1 from storage.buckets where id = 'trib-respaldos') then raise exception 'TRIB: ya existe el depósito trib-respaldos; no se aplicó nada'; end if;
+  if to_regclass('storage.objects') is null or to_regclass('storage.buckets') is null or to_regprocedure('storage.foldername(text)') is null then
+    raise exception 'TRIB: Storage no disponible (storage.objects, storage.buckets o storage.foldername); no se aplicó nada'; end if;
+  if exists (select 1 from storage.buckets where id = 'trib-respaldos' or name = 'trib-respaldos') then
+    raise exception 'TRIB: ya existe el depósito trib-respaldos; no se aplicó nada'; end if;
+  if exists (select 1 from pg_policies where schemaname = 'storage' and policyname like 'trib\_%') then
+    raise exception 'TRIB: ya existen políticas trib_* en Storage; no se aplicó nada'; end if;
   insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
   values ('trib-respaldos', 'trib-respaldos', false, 10485760, array['application/pdf', 'image/png', 'image/jpeg']);
   execute $p$create policy trib_respaldo_subir on storage.objects for insert to authenticated
     with check (bucket_id = 'trib-respaldos' and public.cz_es_usuario() and (storage.foldername(name))[1] in ('cotizacion', 'oc'))$p$;
   execute $p$create policy trib_respaldo_leer on storage.objects for select to authenticated
     using (bucket_id = 'trib-respaldos' and public.cz_es_usuario())$p$;
+end $$;
+
+-- ── 9. Verificación de Storage (cualquier diferencia revierte TODA la migración) ─────────────────
+do $$ declare b record; v_txt text; begin
+  select * into b from storage.buckets where id = 'trib-respaldos';
+  if not found or b.name is distinct from 'trib-respaldos' or b.public is distinct from false or b.file_size_limit is distinct from 10485760
+     or b.allowed_mime_types is distinct from array['application/pdf', 'image/png', 'image/jpeg'] then
+    raise exception 'TRIB-VERIFICACION: el depósito trib-respaldos no quedó privado y con sus límites; se revierte toda la migración'; end if;
+  if not (select relrowsecurity from pg_class where oid = 'storage.objects'::regclass) then
+    raise exception 'TRIB-VERIFICACION: storage.objects no tiene RLS activa; se revierte toda la migración'; end if;
+  -- Exactamente dos políticas trib_*: subir (INSERT) y leer (SELECT), solo para authenticated, limitadas al depósito.
+  if (select count(*) from pg_policies where schemaname = 'storage' and policyname like 'trib\_%') <> 2
+     or not exists (select 1 from pg_policies where schemaname = 'storage' and tablename = 'objects' and policyname = 'trib_respaldo_subir'
+                    and cmd = 'INSERT' and permissive = 'PERMISSIVE' and roles = '{authenticated}'::name[] and qual is null
+                    and with_check like '%bucket_id = ''trib-respaldos''::text%' and with_check like '%cz_es_usuario()%' and with_check like '%foldername%')
+     or not exists (select 1 from pg_policies where schemaname = 'storage' and tablename = 'objects' and policyname = 'trib_respaldo_leer'
+                    and cmd = 'SELECT' and permissive = 'PERMISSIVE' and roles = '{authenticated}'::name[] and with_check is null
+                    and qual like '%bucket_id = ''trib-respaldos''::text%' and qual like '%cz_es_usuario()%') then
+    raise exception 'TRIB-VERIFICACION: las políticas trib_respaldo_subir / trib_respaldo_leer no quedaron como se definieron; se revierte toda la migración'; end if;
+  -- Ninguna otra política de storage.objects puede alcanzar el depósito: todas deben fijar depósitos explícitos
+  -- (bucket_id = ... sin negaciones) y ninguna puede nombrarlo. Así no hay lectura, reemplazo ni borrado por otra vía.
+  select string_agg(policyname, ', ') into v_txt from pg_policies
+   where schemaname = 'storage' and tablename = 'objects' and policyname not like 'trib\_%'
+     and (coalesce(qual, '') || coalesce(with_check, '') !~ 'bucket_id = '
+          or coalesce(qual, '') || coalesce(with_check, '') ~* '(trib-respaldos|<>|!=|\mnot\M)');
+  if v_txt is not null then
+    raise exception 'TRIB-VERIFICACION: la política % de storage.objects podría alcanzar el depósito trib-respaldos; se revierte toda la migración', v_txt; end if;
+  if exists (select 1 from storage.objects where bucket_id = 'trib-respaldos') then
+    raise exception 'TRIB-VERIFICACION: el depósito trib-respaldos no está vacío; se revierte toda la migración'; end if;
 end $$;

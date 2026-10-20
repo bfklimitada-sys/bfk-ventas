@@ -23,7 +23,14 @@ do $$ begin
   if to_regclass('storage.objects') is not null then
     drop policy if exists trib_respaldo_subir on storage.objects;
     drop policy if exists trib_respaldo_leer on storage.objects;
+    -- Supabase bloquea el DELETE directo en storage (disparador protect_delete) salvo con storage.allow_delete_query;
+    -- se habilita SOLO en esta transacción y solo para el depósito vacío (verificado arriba: 0 documentos).
+    perform set_config('storage.allow_delete_query', 'true', true);
     delete from storage.buckets where id = 'trib-respaldos';
+    perform set_config('storage.allow_delete_query', 'false', true);
+    if exists (select 1 from storage.buckets where id = 'trib-respaldos')
+       or exists (select 1 from pg_policies where schemaname = 'storage' and policyname like 'trib\_%') then
+      raise exception 'TRIB-DESHACER: no se pudo retirar el depósito o sus políticas; no se deshizo nada'; end if;
   end if;
 end $$;
 
