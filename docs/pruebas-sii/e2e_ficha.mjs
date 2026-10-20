@@ -49,8 +49,8 @@ for (const [modo, vp] of [["escritorio", { width: 1280, height: 900 }], ["movil"
   const f = page.locator('[data-ficha-oc="TEST-1-AG26"]');
   r.cabecera = await f.locator("[data-ficha-cabecera]").count() === 1;
   r.resumen_6 = await f.locator("[data-resumen-financiero] [data-tile]").count() === 6;
-  r.indice_9 = (await f.locator("[data-indice-ficha] button").count()) === 9;   // + «Seguimiento especial» (15/10/2026)
-  r.secciones_9 = (await f.locator("[data-seccion-ficha]").count()) === 9;
+  r.indice_10 = (await f.locator("[data-indice-ficha] button").count()) === 10;   // + «Seguimiento especial» (15/10/2026) + «Clasificación tributaria» (fase 2 exentas)
+  r.secciones_10 = (await f.locator("[data-seccion-ficha]").count()) === 10;
   if (modo === "movil") { r.movil_acordeon_cerrado = !(await f.locator('[data-seccion-ficha^="info-"] [data-ficha-pdf]').count()); }
   await f.locator("[data-indice-ficha] button", { hasText: "Facturación SII" }).click(); await page.waitForTimeout(600);
   const fact = f.locator("[data-facturacion-sii]");

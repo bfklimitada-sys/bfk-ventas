@@ -10,6 +10,7 @@ import { ImagenFicha } from "./ImagenFicha";
 import { ImportarCompraAgil } from "./ImportarCompraAgil";
 import { VistaPreviaEETT } from "./VistaPreviaEETT";
 import { EliminarCotizacion } from "./EliminarCotizacion";
+import { ClasificacionTributaria } from "../ficha/ClasificacionTributaria";
 import logoUrl from "../../assets/bfk-logo.jpg";
 import { guardarBorrador, borrarBorrador, idLocalDe } from "../../lib/borradoresCotizacion";
 
@@ -42,7 +43,7 @@ const limpiarEnvios = (c) => { c.envios = c.envios.filter((e) => c.items.some((i
 
 // recuperado: { actualizado, versionBFK } cuando se abre desde un borrador local (cambios NO guardados en BFK).
 // fichaRecuperada: { esNuevo, item, estado } de la ventana «Ingresar/Editar producto» que estaba abierta.
-export function EditorCotizacion({ almacen, inicial, token, perfil, entidadesCatalogo = [], showToast, onGuardada, onEliminada, onBibliotecaCambio, onCerrar, usuarioId, recuperado = null, pestanaInicial, fichaRecuperada = null, onDescartarBorrador }) {
+export function EditorCotizacion({ tributario = null, almacen, inicial, token, perfil, entidadesCatalogo = [], showToast, onGuardada, onEliminada, onBibliotecaCambio, onCerrar, usuarioId, recuperado = null, pestanaInicial, fichaRecuperada = null, onDescartarBorrador }) {
   const [cot, setCot] = useState(() => JSON.parse(JSON.stringify(inicial)));
   const [sucio, setSucio] = useState(!inicial.id || !!recuperado);
   const [estadoGuardado, setEstadoGuardado] = useState(inicial.id ? inicial.estado : null);
@@ -343,6 +344,8 @@ export function EditorCotizacion({ almacen, inicial, token, perfil, entidadesCat
           {cot.documentos_mp?.length > 0 && <div data-documentos-mp style={{ fontSize: T.small, color: C.inkMuted, marginBottom: 12 }}><b>Documentos adjuntos en Mercado Público:</b> {cot.documentos_mp.map((d) => d.nombre || d.id).join(", ")}</div>}
           <Field label="Estado"><select data-campo="estado" value={cot.estado} onChange={(e) => setCampo("estado", e.target.value)} disabled={protegido && !esAdmin} style={selStyle}>{Object.entries(ESTADOS_COTIZACION).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}</select></Field>
           {cot.estado === "adjudicada" && <Field label="OC adjudicada (opcional)" hint="Solo deja el vínculo: no crea ni modifica la OC."><input data-campo="oc_codigo" value={cot.oc_codigo || ""} disabled={protegido && !!inicial.oc_codigo && !esAdmin} onChange={(e) => setCampo("oc_codigo", e.target.value.trim().toUpperCase())} style={iMono} placeholder="1525570-1082-AG26" /></Field>}
+          {/* Fase 2 exentas: clasificación tributaria respaldada (solicitud + aprobación de un administrador). Solo cotizaciones ya guardadas. */}
+          {tributario && cot.id && <Seccion titulo="Clasificación tributaria"><ClasificacionTributaria ambito="cotizacion" objetivo={{ ...inicial, id: cot.id }} historial={tributario.historial} perfil={perfil} acciones={tributario} /></Seccion>}
           <Field label="Observaciones (internas)"><textarea rows={3} value={cot.observaciones} onChange={(e) => setCampo("observaciones", e.target.value)} style={{ ...iStyle, resize: "vertical" }} /></Field>
           {esAdmin && cot.id && cap.eliminar && (
             <div style={{ borderTop: `1px solid ${C.border}`, marginTop: 16, paddingTop: 12 }}>

@@ -190,7 +190,9 @@ export function crearAlmacen(token, modo, esquema = 1) {
         const l = calc.lineas[i]; const ficha = { ...fichaPublica(it.ficha), imagenes: await subirImagenes(tk(), (it.ficha?.imagenes || []).slice(0, 4)) };
         return { ...it, ficha, iva_compra: Math.round(l.iva_credito), envio_asignado: l.envio_asignado, costo_bruto: Math.round(l.costo_bruto), costo_neto: Math.round(l.costo_neto), unitario_venta_neto: l.unitario_neto };
       }));
-      return rpc(v2 ? "cz_guardar_cotizacion_v2" : "cz_guardar_cotizacion", { p: { ...cot, items, formula: FORMULA, subtotal_neto: calc.totales.neto, impuestos: calc.totales.iva_debito, total: calc.totales.total,
+      // Fase 2 exentas: la clasificación tributaria se gestiona aparte (trib_*): nunca viaja al guardar la cotización.
+      const { tratamiento_iva, fundamento_iva, respaldo_iva, tratamiento_aprobado_por, tratamiento_aprobado_en, clasificacion_id, ...cotSinTrib } = cot;   // eslint-disable-line no-unused-vars
+      return rpc(v2 ? "cz_guardar_cotizacion_v2" : "cz_guardar_cotizacion", { p: { ...cotSinTrib, items, formula: FORMULA, subtotal_neto: calc.totales.neto, impuestos: calc.totales.iva_debito, total: calc.totales.total,
         costo_neto: Math.round(calc.totales.costo_neto), iva_credito: Math.round(calc.totales.iva_credito) } });
     },
     // Biblioteca: página de fichas SIN imágenes (solo rutas); la miniatura se carga al mostrarse.

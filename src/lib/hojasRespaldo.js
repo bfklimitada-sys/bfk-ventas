@@ -32,5 +32,6 @@ export const HOJAS_RESPALDO = [
   { hoja:"Perfiles",                  tabla:"perfiles" },
   { hoja:"Notificaciones",            tabla:"notificaciones" },
   { hoja:"HistorialCambios",          tabla:"historial_cambios" },
-  { hoja:"DiferenciasHistoricas",     tabla:"fin_diferencias_historicas" },  // Fase 4B: diferencias congeladas pendientes de aprobación (solo lectura)
+  { hoja:"DiferenciasHistoricas",     tabla:"fin_diferencias_historicas" },
+  { hoja:"ClasificacionTributaria",   tabla:"trib_clasificaciones", opcional:true },  // Fase 2 exentas: solicitudes y aprobaciones (solo lectura; no importable)  // Fase 4B: diferencias congeladas pendientes de aprobación (solo lectura)
 ];

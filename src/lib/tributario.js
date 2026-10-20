@@ -136,6 +136,9 @@ export const netoDeVenta = (oc, monto) => (ventaExentaPorDocumentos(oc) ? Number
 // Registrar una factura afecta nueva (formulario actual, DTE 33) sobre una OC que ya tiene una factura exenta vigente
 // cambiaría su tratamiento tributario sin respaldo: se bloquea con este mensaje. null = se puede registrar como siempre.
 export const bloqueoFacturaPorExenta = (oc) => {
+  // Fase 2: OC clasificada exenta (aprobada por un administrador): no se registra como afecta; la DTE 34 llega en la fase 3.
+  if (["exenta_fora", "exenta_otra"].includes(oc?.tratamiento_iva))
+    return "Esta OC está clasificada como exenta. Este formulario registra solo facturas afectas (DTE 33); la factura exenta (DTE 34) se habilitará en la fase 3.";
   const t = tipoVentaPorDocumentos(oc);
   return t === "exenta" || t === "mixta"
     ? "Esta OC tiene una factura exenta (DTE 34) vigente. Reemitirla o agregar otra factura desde aquí la registraría como afecta (DTE 33); queda bloqueado hasta habilitar la clasificación tributaria aprobada (fase 2)."

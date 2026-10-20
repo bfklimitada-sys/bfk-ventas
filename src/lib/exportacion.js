@@ -48,7 +48,9 @@ export async function construirLibroRespaldo({ sel, token, hojas = HOJAS_RESPALD
       if (json.size) notas.push(`columnas JSON guardadas como texto JSON: ${[...json].join(", ")}`);
       resumen.push({ Hoja: h.hoja, Tabla: h.tabla, Filas: filas.length, Estado: "OK", Nota: notas.join(" · ") });
     } catch (e) {
-      resumen.push({ Hoja: h.hoja, Tabla: h.tabla, Filas: 0, Estado: "ERROR", Nota: e.message });
+      // Una hoja «opcional» cuya tabla aún no existe (migración no instalada) no es un error del respaldo.
+      if (h.opcional) resumen.push({ Hoja: h.hoja, Tabla: h.tabla, Filas: 0, Estado: "NO INSTALADA", Nota: "tabla aún no instalada" });
+      else resumen.push({ Hoja: h.hoja, Tabla: h.tabla, Filas: 0, Estado: "ERROR", Nota: e.message });
     }
   }
   // En el historial se agrega el nombre actual del usuario (para no cruzar UUID a mano).

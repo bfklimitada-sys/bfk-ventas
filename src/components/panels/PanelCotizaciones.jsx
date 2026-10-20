@@ -15,7 +15,7 @@ const POR_PAGINA = 20, POR_PAGINA_BIB = 30;
 // Flujo principal: Datos (Compra Ágil) → Productos («Ingresar manual») → Precios → EETT.
 // Los métodos alternativos de captura (capturas/OCR, atajo de Safari, lectura de enlaces, IA, pegar texto) quedan
 // fuera del flujo principal; su código y sus datos se conservan sin cambios.
-export function PanelCotizaciones({ token, perfil, entidadesCatalogo, showToast }) {
+export function PanelCotizaciones({ token, perfil, entidadesCatalogo, showToast, tributario }) {
   const [modo, setModo] = useState(null); const [almacen, setAlmacen] = useState(null);
   const [pestana, setPestana] = useState("cotizaciones");
   const [lista, setLista] = useState({ filas: [], total: 0 }); const [pagina, setPagina] = useState(0);
@@ -166,7 +166,7 @@ export function PanelCotizaciones({ token, perfil, entidadesCatalogo, showToast 
         {bib.filas.length < bib.total && <BotonSecundario onClick={() => setPaginaBib((p) => p + 1)} style={{ width: "100%", justifyContent: "center" }}>Ver más ({bib.total - bib.filas.length})</BotonSecundario>}
       </PanelPestana>
 
-      {abierta && almacen && <EditorCotizacion key={abierta.cot.id || abierta.cot._idLocal || "nueva"} almacen={almacen} inicial={abierta.cot} token={token} perfil={perfil} entidadesCatalogo={entidadesCatalogo} showToast={showToast}
+      {abierta && almacen && <EditorCotizacion key={abierta.cot.id || abierta.cot._idLocal || "nueva"} almacen={almacen} inicial={abierta.cot} token={token} perfil={perfil} tributario={almacen.modo === "base" ? tributario : null} entidadesCatalogo={entidadesCatalogo} showToast={showToast}
         usuarioId={usuarioId} recuperado={abierta.recuperado || null} pestanaInicial={abierta.pestana} fichaRecuperada={abierta.ficha || null}
         onDescartarBorrador={async (id) => { setAbierta(null); cargarBorradores(); try { setAbierta({ cot: await almacen.cargarCotizacion(id) }); } catch (e) { showToast?.(e.message, "error"); } }}
         onGuardada={() => { recargar(); cargarBorradores(); }} onBibliotecaCambio={() => { setPaginaBib(0); recargarBib(); }} onEliminada={(id) => { if (usuarioId && id) borrarBorrador(usuarioId, id).catch(() => {}); cerrarEditor(); }} onCerrar={cerrarEditor} />}
