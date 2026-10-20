@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════
 // Clasificación tributaria de cotizaciones y OC (fase 2 de ventas exentas, 20/10/2026).
-// La base (migración BORRADOR-2026-10-20-clasificacion-tributaria) es la única que decide: guarda el historial en
+// La base (migración 2026-10-20-clasificacion-tributaria, aplicada el 20/10/2026) es la única que decide: guarda el historial en
 // trib_clasificaciones y copia a la cotización/OC SOLO lo aprobado por un administrador. Aquí: lectura, textos y
 // validaciones previas (las mismas reglas que la base, para avisar antes de enviar).
 //  · Sin clasificación (null) = afecta histórica: todas las OC y cotizaciones existentes.
