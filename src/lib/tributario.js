@@ -106,3 +106,39 @@ export const cadenaDocumental = (oc) => {
 // Etiqueta corta de un documento: "Factura 203", "NC 44".
 export const nombreDocumento = (d) =>
   `${esNotaCredito(d) ? "NC" : esNotaDebito(d) ? "ND" : tipoDte(d) === 34 ? "Factura exenta" : "Factura"} ${txt(d.numero_factura) || "s/n"}`;
+
+// ── Fase 1 de ventas exentas (20/10/2026): IVA por documento, sin suponer 19% donde el documento dice otra cosa ──
+// Se reconoce una venta exenta SOLO por sus documentos ya registrados (DTE 34). Esto no habilita registrar
+// facturas exentas nuevas: eso requiere la clasificación tributaria respaldada y aprobada (fase 2).
+export const TASA_IVA = 0.19;
+export const esFacturaExenta = (d) => tipoDte(d) === 34;
+// IVA de UN documento (comisión de venta propia):
+//  · DTE 33 o sin tipo (todo el historial): monto − monto/1,19, exactamente el cálculo anterior, aunque más
+//    adelante se registre monto_iva (así ninguna comisión afecta pasada o futura cambia por este ajuste).
+//  · DTE 34: el IVA registrado en el documento (monto_iva) si existe; si no, 0 (una factura exenta no lleva IVA).
+export const ivaDeDocumento = (d) => {
+  const m = Number(d?.monto) || 0;
+  if (!esFacturaExenta(d)) return m - m / (1 + TASA_IVA);
+  const iva = d?.monto_iva;
+  return iva !== null && iva !== undefined && iva !== "" && Number.isFinite(Number(iva)) ? Number(iva) : 0;
+};
+// Tipo de venta según las facturas VIGENTES de la OC: "exenta" (todas DTE 34), "mixta" (33 y 34), "afecta" (sin DTE 34)
+// o null (sin facturas vigentes: no se puede saber todavía; se mantiene el supuesto histórico de venta afecta).
+export const tipoVentaPorDocumentos = (oc) => {
+  const vig = facturasVigentesDe(oc);
+  if (!vig.length) return null;
+  const ex = vig.filter(esFacturaExenta).length;
+  return ex === 0 ? "afecta" : ex === vig.length ? "exenta" : "mixta";
+};
+export const ventaExentaPorDocumentos = (oc) => tipoVentaPorDocumentos(oc) === "exenta";
+// Neto de un monto de venta de la OC: si sus documentos la muestran exenta, el monto ya es neto (sin IVA).
+export const netoDeVenta = (oc, monto) => (ventaExentaPorDocumentos(oc) ? Number(monto) || 0 : (Number(monto) || 0) / (1 + TASA_IVA));
+// Registrar una factura afecta nueva (formulario actual, DTE 33) sobre una OC que ya tiene una factura exenta vigente
+// cambiaría su tratamiento tributario sin respaldo: se bloquea con este mensaje. null = se puede registrar como siempre.
+export const bloqueoFacturaPorExenta = (oc) => {
+  const t = tipoVentaPorDocumentos(oc);
+  return t === "exenta" || t === "mixta"
+    ? "Esta OC tiene una factura exenta (DTE 34) vigente. Reemitirla o agregar otra factura desde aquí la registraría como afecta (DTE 33); queda bloqueado hasta habilitar la clasificación tributaria aprobada (fase 2)."
+    : null;
+};
+

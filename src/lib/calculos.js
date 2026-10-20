@@ -4,7 +4,7 @@
 // Estas funciones NO modifican datos: solo calculan.
 // ═══════════════════════════════════════════════════════════════
 import { C, fmt } from "./theme.js";
-import { facturasVigentesDe, montoTributarioVigente } from "./tributario.js";
+import { facturasVigentesDe, montoTributarioVigente, ivaDeDocumento } from "./tributario.js";
 
 // ── Facturas vigentes (regla 4, Fase 4B · modelo tributario SII) ──
 // La regla vive en lib/tributario.js (misma que la base, fin_facturas_vigentes):
@@ -170,7 +170,9 @@ export const calcularPagoVendedor = ({ vendedorId, ocs, anio, mes, ivaMensual = 
       fechaFactura: fv?.fecha || null, montoFacturas: montoFacts, venta: Number(o.monto_total) || 0, costo: Number(o.costo_total) || 0,
       utilidad: utilOC, ventaPropia: !!o.es_venta_propia, pagoVentaPropia: 0 };
     if (o.es_venta_propia) {
-      const ivaFactura = montoFacts - montoFacts / 1.19;
+      // IVA de su propia factura (fase 1 exentas, 20/10/2026): por documento vigente, el registrado o, si no hay,
+      // 0 para DTE 34 y monto − monto/1,19 para DTE 33 (idéntico al cálculo anterior para facturas afectas).
+      const ivaFactura = vigentes.reduce((ss, ef) => ss + ivaDeDocumento(ef), 0);
       linea.pagoVentaPropia = Math.max(0, Math.round(utilOC - ivaFactura));
       pagoVentasPropias += linea.pagoVentaPropia;
     } else {

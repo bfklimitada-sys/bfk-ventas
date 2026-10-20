@@ -15,7 +15,7 @@ import { HojaLateral, BotonSecundario } from "../ui/Sistema";
 import { EtapasOC, FormPostventa } from "../ui/EtapasOC";
 import { diferenciasPendientes, tipoFinanciamiento, TIPOS_FINANCIAMIENTO } from "../../lib/finanzas";
 import { useEscritorio, useTopeFijo, SeccionFicha, IndiceFicha, ResumenFinanciero, FacturacionSII, FormNotaCredito, CobranzaFicha, ComunicacionesFicha } from "../ficha/FichaOC";
-import { montoTributarioVigente } from "../../lib/tributario";
+import { montoTributarioVigente, ventaExentaPorDocumentos } from "../../lib/tributario";
 import { BloqueoEstado, ComentariosOC, HistorialCambiosOC } from "../ui/Multiusuario";
 import { bloqueoOC, useBloqueoOC } from "../../lib/bloqueoOCUso";
 import { mensajeVerificacion } from "../../lib/bloqueoOC";
@@ -439,14 +439,16 @@ export function DetalleOC({ oc, perfil, parte, onEditarLink, onEliminarLink, onG
                       </span>
                       {(()=>{
                         const tv=vendidos.reduce((s,l)=>s+(Number(l.precio_venta)||0),0);
-                        const neto=Math.round((Number(oc.monto_total)||0)/1.19);
+                        // Fase 1 exentas: si sus facturas vigentes son DTE 34, el monto de la OC ya es neto (no se divide por 1,19).
+                        const exenta=ventaExentaPorDocumentos(oc);
+                        const neto=exenta?(Number(oc.monto_total)||0):Math.round((Number(oc.monto_total)||0)/1.19);
                         return Math.abs(tv-neto)>1&&Math.abs(tv-(Number(oc.monto_total)||0))>1?(
                           <span style={{display:"block",fontSize:12,color:C.warnText,fontWeight:700}}>
                             <Ic n="⚠"/> la OC dice {fmt.money(oc.monto_total)}
                           </span>
                         ):(
-                          <span style={{display:"block",fontSize:12,color:C.inkFaint}}>
-                            con IVA {fmt.money(oc.monto_total)}
+                          <span data-total-vendido-base style={{display:"block",fontSize:12,color:C.inkFaint}}>
+                            {exenta?"exento (sin IVA)":"con IVA"} {fmt.money(oc.monto_total)}
                           </span>
                         );
                       })()}

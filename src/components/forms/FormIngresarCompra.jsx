@@ -6,6 +6,7 @@ import { entidadPorRut } from "../../lib/rut";
 import { mensajeDuplicado } from "../../lib/ocs";
 import { fmt } from "../../lib/theme";
 import { ventaDeOC } from "../../lib/productosOC";
+import { ventaExentaPorDocumentos } from "../../lib/tributario";
 
 // Valor del selector para "sin vendedor" elegido a propósito (distinto de "no elegido").
 const SIN_VENDEDOR="__sin_vendedor__";
@@ -44,6 +45,10 @@ export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, ent
   const utilidad=ventaOC-costoTotal;
   const margen=ventaOC>0?((utilidad/ventaOC)*100).toFixed(1):0;
   const difVenta=ocExistente&&ventaTotal>0&&Math.abs(ventaTotal-ventaOC)>1;
+  // Fase 1 exentas (20/10/2026): una OC cuyas facturas vigentes son todas DTE 34 se muestra como venta exenta (sin IVA).
+  // Solo se reconoce por documentos ya registrados; este formulario no crea ventas exentas.
+  const exenta=!!ocExistente&&ventaExentaPorDocumentos(ocExistente);
+  const rotVenta=exenta?"exenta (sin IVA)":"con IVA";
   // OC existente (14/10/2026): la venta viene de Mercado Público y NO se pide ni se modifica aquí.
   // Se muestra como referencia: por producto si el desglose es confiable; si no, solo el monto adjudicado.
   const venta=ocExistente?ventaDeOC(ocExistente):null;
@@ -213,7 +218,7 @@ export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, ent
                       <b style={{flexShrink:0}}>{fmt.money(l.total)}</b>
                     </div>
                   ))}
-                  <div style={{fontSize:12,color:C.inkMuted,marginTop:4}}>Valores {venta.base==="neto"?"netos (sin IVA)":"con IVA"} por línea, según Mercado Público.</div>
+                  <div style={{fontSize:12,color:C.inkMuted,marginTop:4}}>Valores {venta.base==="neto"?"netos (sin IVA)":venta.base==="exento"?"exentos (sin IVA)":"con IVA"} por línea, según Mercado Público.</div>
                 </div>
               ):(
                 <div data-venta-sin-desglose style={{fontSize:12,color:C.inkMuted,lineHeight:1.45}}>
@@ -221,7 +226,7 @@ export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, ent
                   Sin desglose confiable de precios por producto: se usa como referencia el monto adjudicado total.
                 </div>
               )}
-              <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginTop:6}}><span>Monto adjudicado de la OC (con IVA)</span><b data-monto-adjudicado>{fmt.money(ventaOC)}</b></div>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginTop:6}}><span>Monto adjudicado de la OC ({exenta?"exento, sin IVA":"con IVA"})</span><b data-monto-adjudicado>{fmt.money(ventaOC)}</b></div>
             </div>
             <div style={{fontSize:12,color:C.inkMuted,marginBottom:12}}>Registra lo que se compró: producto adquirido, cantidad, link o proveedor y precio de compra. <b>Los precios de compra van con IVA incluido.</b> El precio de venta ya viene de la OC.</div>
           </>):(
@@ -263,10 +268,11 @@ export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, ent
             <div data-resumen-paso2 style={{background:C.tealLight,borderRadius:8,padding:"10px 14px",fontSize:13}}>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4}}>
                 <div><div style={{color:C.inkMuted,fontSize:12}}>Costo total con IVA</div><div style={{fontWeight:700,color:C.ink}}>${costoTotal.toLocaleString("es-CL")}</div></div>
-                <div><div style={{color:C.inkMuted,fontSize:12}}>{ocExistente?"Venta de la OC con IVA":"Venta total con IVA"}</div><div style={{fontWeight:700,color:C.ink}}>${ventaOC.toLocaleString("es-CL")}</div></div>
+                <div><div style={{color:C.inkMuted,fontSize:12}}>{ocExistente?`Venta de la OC ${rotVenta}`:"Venta total con IVA"}</div><div style={{fontWeight:700,color:C.ink}}>${ventaOC.toLocaleString("es-CL")}</div></div>
                 <div><div style={{color:C.inkMuted,fontSize:12}}>Utilidad con IVA ({margen}%)</div><div style={{fontWeight:700,color:utilidad>=0?C.ok:C.danger}}>${utilidad.toLocaleString("es-CL")}</div></div>
               </div>
-              <div data-desglose-iva style={{fontSize:12,color:C.inkMuted,marginTop:6}}>Venta con IVA {fmt.money(ventaOC)} = neto {fmt.money(Math.round(ventaOC/1.19))} + IVA {fmt.money(ventaOC-Math.round(ventaOC/1.19))}</div>
+              {exenta?<div data-desglose-iva data-venta-exenta style={{fontSize:12,color:C.inkMuted,marginTop:6}}>Venta exenta {fmt.money(ventaOC)}: sin IVA (factura exenta DTE 34 registrada)</div>
+              :<div data-desglose-iva style={{fontSize:12,color:C.inkMuted,marginTop:6}}>Venta con IVA {fmt.money(ventaOC)} = neto {fmt.money(Math.round(ventaOC/1.19))} + IVA {fmt.money(ventaOC-Math.round(ventaOC/1.19))}</div>}
               {difVenta&&<div style={{background:C.warnLight,color:C.warnText,borderRadius:8,padding:"8px 12px",fontSize:12,marginTop:8,fontWeight:600}}>Los productos suman ${ventaTotal.toLocaleString("es-CL")} de venta; el monto de la OC (${ventaOC.toLocaleString("es-CL")}) no se modifica.</div>}
             </div>
           )}
@@ -297,7 +303,7 @@ export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, ent
             <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,marginBottom:8,textTransform:"uppercase"}}>Resumen financiero</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4,fontSize:13}}>
               <div><div style={{color:C.inkMuted,fontSize:12}}>Costo con IVA</div><div style={{fontWeight:700}}>${costoTotal.toLocaleString("es-CL")}</div></div>
-              <div><div style={{color:C.inkMuted,fontSize:12}}>Venta con IVA</div><div style={{fontWeight:700}}>${ventaOC.toLocaleString("es-CL")}</div></div>
+              <div><div style={{color:C.inkMuted,fontSize:12}}>{exenta?"Venta exenta (sin IVA)":"Venta con IVA"}</div><div style={{fontWeight:700}}>${ventaOC.toLocaleString("es-CL")}</div></div>
               <div><div style={{color:C.inkMuted,fontSize:12}}>Utilidad con IVA ({margen}%)</div><div style={{fontWeight:700,color:utilidad>=0?C.ok:C.danger}}>${utilidad.toLocaleString("es-CL")}</div></div>
             </div>
             {difVenta&&<div style={{background:C.warnLight,color:C.warnText,borderRadius:8,padding:"8px 12px",fontSize:12,marginTop:8,fontWeight:600}}>Los productos suman ${ventaTotal.toLocaleString("es-CL")} de venta; el monto de la OC (${ventaOC.toLocaleString("es-CL")}) no se modifica.</div>}
@@ -334,7 +340,7 @@ export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, ent
             <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:8}}>Resumen financiero</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4,fontSize:13}}>
               <div><div style={{color:C.inkMuted,fontSize:12}}>Costo con IVA</div><div style={{fontWeight:800}}>${costoTotal.toLocaleString("es-CL")}</div></div>
-              <div><div style={{color:C.inkMuted,fontSize:12}}>Venta con IVA</div><div style={{fontWeight:800}}>${ventaOC.toLocaleString("es-CL")}</div></div>
+              <div><div style={{color:C.inkMuted,fontSize:12}}>{exenta?"Venta exenta (sin IVA)":"Venta con IVA"}</div><div style={{fontWeight:800}}>${ventaOC.toLocaleString("es-CL")}</div></div>
               <div><div style={{color:C.inkMuted,fontSize:12}}>Utilidad con IVA</div><div style={{fontWeight:800,color:utilidad>=0?C.ok:C.danger}}>${utilidad.toLocaleString("es-CL")} ({margen}%)</div></div>
             </div>
             <div style={{marginTop:8,fontSize:12,color:C.inkMuted}}>

@@ -1,7 +1,7 @@
 // Datos de lectura para la vista general de Compras (19/10/2026): dirección de entrega y factura vigente.
 // Solo presentación: no consulta servicios externos ni modifica registros.
 import { facturaVigente, facturasVigentes } from "./calculos.js";
-import { esFactura } from "./tributario.js";
+import { esFactura, tipoDte } from "./tributario.js";
 
 const limpio = (t) => String(t || "").replace(/\s+/g, " ").trim();
 const norm = (t) => limpio(t).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
@@ -31,7 +31,8 @@ export function facturaVisibleOC(oc) {
   if (fv && limpio(fv.numero_factura)) {
     const otras = vig.length - 1, anuladas = docs.length - vig.length;
     const extra = [otras > 0 ? `+${otras} vigente${otras > 1 ? "s" : ""}` : "", anuladas > 0 ? `${anuladas} anulada${anuladas > 1 ? "s" : ""}` : ""].filter(Boolean).join(" · ");
-    return { texto: `Factura N.º ${limpio(fv.numero_factura)}`, extra, estado: "vigente", numero: limpio(fv.numero_factura) };
+    // Fase 1 exentas: una factura exenta (DTE 34) ya registrada se nombra como tal; las afectas e historial, igual que antes.
+    return { texto: `${tipoDte(fv) === 34 ? "Factura exenta" : "Factura"} N.º ${limpio(fv.numero_factura)}`, extra, estado: "vigente", numero: limpio(fv.numero_factura), exenta: tipoDte(fv) === 34 };
   }
   if (docs.length) return { texto: `Factura N.º ${limpio(docs[docs.length - 1].numero_factura)} anulada`, extra: "sin factura vigente", estado: "anulada", numero: null };
   if (oc?.estado_factura_propia === "emitida") return { texto: "Factura sin número", extra: "registro antiguo", estado: "sin_numero", numero: null };

@@ -1,3 +1,4 @@
+import { bloqueoFacturaPorExenta } from "./lib/tributario";
 import { useState, useEffect, useRef } from "react";
 import { LoginScreen } from "./components/auth/LoginScreen";
 import { RestablecerContrasena } from "./components/auth/RestablecerContrasena";
@@ -1222,6 +1223,8 @@ export default function App() {
   };
   const handleFactura=async(data)=>{
     const t=session.access_token; const oc=ocs.find(o=>o.id===data.ocId);
+    // Fase 1 exentas: misma regla que el formulario (no registrar como afecta sobre una OC con factura exenta vigente).
+    const bloqueo=oc?bloqueoFacturaPorExenta(oc):null; if(bloqueo) throw new Error(bloqueo);
     // Lo facturado (solo facturas vigentes) y el estado de cobro los recalcula la base (Fase 4B).
     await ins("eventos_factura",t,{id:genId("evf"),oc_id:data.ocId,fecha:data.fecha,numero_factura:data.numeroFactura,monto:data.monto,nota_credito:data.notaCredito||null,factura_anulada_numero:data.facturaAnuladaNumero||null,motivo_diferencia:data.motivoDiferencia||null,creado_por:session.user.id});
     await registrarCambio(t,{ocId:data.ocId,ocNumero:oc?.numero_oc,usuarioId:perfil?.id,
