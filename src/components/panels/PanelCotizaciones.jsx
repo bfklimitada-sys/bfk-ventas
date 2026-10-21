@@ -9,6 +9,7 @@ import { EditorFicha } from "../cotizaciones/EditorFicha";
 import { ImagenFicha } from "../cotizaciones/ImagenFicha";
 
 const POR_PAGINA = 20, POR_PAGINA_BIB = 30;
+const FILTROS_VACIOS = { q: "", estado: "", vendedor: "", sinVendedor: false };
 
 // Cotizaciones y EETT (módulo nuevo, octubre 2026): cotizaciones previas a la OC y biblioteca compartida de fichas.
 // Independiente del resto de BFK Datos: no lee ni modifica OCs, finanzas, IVA ni comisiones.
@@ -19,8 +20,8 @@ export function PanelCotizaciones({ token, perfil, entidadesCatalogo, showToast,
   const [modo, setModo] = useState(null); const [almacen, setAlmacen] = useState(null);
   const [pestana, setPestana] = useState("cotizaciones");
   const [lista, setLista] = useState({ filas: [], total: 0 }); const [pagina, setPagina] = useState(0);
-  const [filtros, setFiltros] = useState({ q: "", estado: "", vendedor: "" });
-  const [abiertas, setAbiertas] = useState(0); const [nBib, setNBib] = useState(0);
+  const [filtros, setFiltros] = useState(FILTROS_VACIOS);
+  const [abiertas, setAbiertas] = useState(0); const [nBib, setNBib] = useState(0); const [sinVend, setSinVend] = useState(null);
   const [bib, setBib] = useState({ filas: [], total: 0 }); const [paginaBib, setPaginaBib] = useState(0); const [buscaBib, setBuscaBib] = useState("");
   const [cargando, setCargando] = useState(true); const [error, setError] = useState("");
   const [abierta, setAbierta] = useState(null); const [ficha, setFicha] = useState(null);
@@ -68,8 +69,9 @@ export function PanelCotizaciones({ token, perfil, entidadesCatalogo, showToast,
   const recargar = useCallback(async () => {
     if (!almacen) return; setError(""); setCargando(true);
     try {
-      const [l, a, n] = await Promise.all([almacen.listarCotizaciones({ ...filtros, pagina, porPagina: POR_PAGINA }), almacen.contarAbiertas(), almacen.contarProductos()]);
-      setLista(l); setAbiertas(a); setNBib(n);
+      const [l, a, n, sv] = await Promise.all([almacen.listarCotizaciones({ ...filtros, pagina, porPagina: POR_PAGINA }), almacen.contarAbiertas(), almacen.contarProductos(),
+        almacen.contarPresentadasSinVendedor ? almacen.contarPresentadasSinVendedor().catch(() => null) : null]);
+      setLista(l); setAbiertas(a); setNBib(n); setSinVend(sv);
     } catch (e) { setError(e.message); } finally { setCargando(false); }
   }, [almacen, filtros, pagina]);
   useEffect(() => { const t = setTimeout(recargar, 250); return () => clearTimeout(t); }, [recargar]);
@@ -89,14 +91,17 @@ export function PanelCotizaciones({ token, perfil, entidadesCatalogo, showToast,
   const cerrarEditor = () => { setAbierta(null); recargar(); cargarBorradores(); };
   const guardarFichaBib = async (it) => { try { await almacen.guardarProducto(it.ficha, { id: it.producto_id }); showToast?.("Ficha actualizada en la biblioteca"); setFicha(null); setPaginaBib(0); recargarBib(); } catch (e) { showToast?.(e.message, "error"); } };
   const paginas = Math.max(1, Math.ceil(lista.total / POR_PAGINA));
-  const hayFiltro = filtros.q || filtros.estado || filtros.vendedor;
+  const conVendedores = !!almacen?.capacidades?.vendedores;
+  const hayFiltro = filtros.q || filtros.estado || filtros.vendedor || filtros.sinVendedor;
+  const verRegularizar = () => { setPestana("cotizaciones"); setFiltros({ ...FILTROS_VACIOS, estado: "presentada", sinVendedor: true }); setPagina(0); };
 
   return (
     <div data-panel-cotizaciones>
       {modo === "error" && <AvisoLinea tono="danger" dato="error-conexion" accion="Reintentar" onClick={() => setIntento((n) => n + 1)}>{detalleError}</AvisoLinea>}
       {modo === "prueba" && <AvisoLinea tono="info" dato="modo-prueba" icono="⚠">Modo prueba: el módulo aún no está instalado en la base de datos. Lo que guardes queda solo en este dispositivo.</AvisoLinea>}
-      <Indicadores columnas={2}>
+      <Indicadores columnas={conVendedores && sinVend !== null ? 3 : 2}>
         <Indicador dato="cotizaciones-abiertas" etiqueta="Cotizaciones en preparación" valor={String(abiertas)} tono={abiertas ? "info" : "neutro"} onClick={() => { setPestana("cotizaciones"); filtrar("estado", ""); }} />
+        {conVendedores && sinVend !== null && <Indicador dato="presentadas-sin-vendedor" etiqueta="Presentadas sin vendedor" valor={String(sinVend)} tono={sinVend ? "warn" : "ok"} nota={sinVend ? "Por regularizar" : "Al día"} onClick={verRegularizar} />}
         <Indicador dato="biblioteca" etiqueta="Fichas en la biblioteca" valor={String(nBib)} tono="neutro" onClick={() => setPestana("biblioteca")} />
       </Indicadores>
       <Pestanas etiqueta="Cotizaciones" activa={pestana} onCambiar={setPestana} items={[{ key: "cotizaciones", label: "Cotizaciones", n: lista.total || null }, { key: "biblioteca", label: "Biblioteca", n: nBib || null }]} />
@@ -124,8 +129,21 @@ export function PanelCotizaciones({ token, perfil, entidadesCatalogo, showToast,
             <option value="">Todos los estados</option>
             {Object.entries(ESTADOS_COTIZACION).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
           </select>
-          {almacen?.capacidades?.vendedores && <input data-filtro-vendedor value={filtros.vendedor} onChange={(e) => filtrar("vendedor", e.target.value)} placeholder="Vendedor" style={{ ...iStyle, flex: "1 1 160px", width: "auto" }} />}
+          {conVendedores && <input data-filtro-vendedor aria-label="Filtrar por vendedor" value={filtros.sinVendedor ? "" : filtros.vendedor} disabled={filtros.sinVendedor} onChange={(e) => filtrar("vendedor", e.target.value)} placeholder={filtros.sinVendedor ? "Filtrar por vendedor (no aplica)" : "Filtrar por vendedor"} style={{ ...iStyle, flex: "1 1 160px", width: "auto", opacity: filtros.sinVendedor ? 0.55 : 1 }} />}
+          {conVendedores && (
+            <label data-filtro-sin-vendedor style={{ display: "inline-flex", alignItems: "center", gap: 8, flex: "1 1 200px", minHeight: 40, padding: "0 12px", borderRadius: R.md, cursor: "pointer", userSelect: "none",
+              border: `1px solid ${filtros.sinVendedor ? C.warn : C.border}`, background: filtros.sinVendedor ? C.warnLight : C.card, color: filtros.sinVendedor ? C.warnText : C.ink, fontSize: T.sm, fontWeight: 700 }}>
+              <input type="checkbox" checked={filtros.sinVendedor} onChange={(e) => filtrar("sinVendedor", e.target.checked)} style={{ width: 18, height: 18, margin: 0 }} />
+              Sin vendedor asignado
+            </label>
+          )}
         </div>
+        {hayFiltro && !cargando && !error && (
+          <div data-resumen-filtros style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 10, fontSize: T.sm, color: C.inkMuted }}>
+            <span><b style={{ color: C.ink }}>{lista.total}</b> cotizaci{lista.total === 1 ? "ón" : "ones"} con estos filtros{filtros.sinVendedor && filtros.estado === "presentada" ? " · requieren asignar vendedor responsable (pestaña Datos)" : ""}</span>
+            <BotonSecundario data-quitar-filtros onClick={() => { setFiltros(FILTROS_VACIOS); setPagina(0); }} style={{ minHeight: 32, padding: "0 10px" }}>Quitar filtros</BotonSecundario>
+          </div>
+        )}
         {error && <AvisoLinea tono="danger" accion="Reintentar" onClick={recargar}>{error}</AvisoLinea>}
         {cargando && <div style={{ fontSize: T.sm, color: C.inkFaint }}>Cargando…</div>}
         {!cargando && modo !== "error" && !lista.filas.length && <Tarjeta><div style={{ fontSize: T.sm, color: C.inkMuted, lineHeight: 1.5 }}>{hayFiltro ? "No hay cotizaciones con esos filtros." : <>Aún no hay cotizaciones. El módulo parte vacío desde octubre de 2026: crea la primera con <b>Nueva cotización</b>.</>}</div></Tarjeta>}
@@ -133,7 +151,10 @@ export function PanelCotizaciones({ token, perfil, entidadesCatalogo, showToast,
           <Tarjeta key={c.id} onClick={() => abrir(c.id)} padding="12px 14px" data-cotizacion={c.id_externo || c.id}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
               <span style={{ fontSize: T.body, fontWeight: 800, color: C.ink }}>{c.id_externo || <span style={{ color: C.inkMuted }}>Sin código Mercado Público{!c.nombre ? ` · ID ${String(c.id || "").slice(0, 8).toUpperCase()}` : ""}</span>}</span>
-              <Badge tono={ESTADOS_COTIZACION[c.estado]?.tono}>{ESTADOS_COTIZACION[c.estado]?.label || c.estado}</Badge>
+              <span style={{ display: "inline-flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                {conVendedores && !c.vendedor_id && <span data-sin-vendedor><Badge tono="warn">Sin vendedor</Badge></span>}
+                <Badge tono={ESTADOS_COTIZACION[c.estado]?.tono}>{ESTADOS_COTIZACION[c.estado]?.label || c.estado}</Badge>
+              </span>
             </div>
             <div style={{ fontSize: T.sm, color: C.inkMuted, marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.institucion || "Sin institución"}{c.nombre ? ` · ${c.nombre}` : ""}</div>
             <div style={{ fontSize: T.small, color: C.inkFaint, marginTop: 3 }}>{c.n_items} producto{c.n_items === 1 ? "" : "s"} · neto {fmt.money(Number(c.subtotal_neto) || 0)} · {fmt.date(String(c.fecha || "").slice(0, 10))}{c.vendedor_nombre ? ` · ${c.vendedor_nombre}` : ""}</div>

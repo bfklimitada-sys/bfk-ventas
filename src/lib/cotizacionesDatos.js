@@ -112,14 +112,15 @@ export function crearAlmacen(token, modo, esquema = 1) {
 
   if (modo === "prueba") return {
     modo: "prueba", esquema: 2, capacidades: { vendedores: true, eliminar: true, datosCompraAgil: true, metadatosEETT: true }, ...comunes,
-    async listarCotizaciones({ q = "", estado = "", vendedor = "", pagina = 0, porPagina = 20 } = {}) {
-      const t = q.trim().toLowerCase(), v = vendedor.trim().toLowerCase();
-      const todas = leerLocal().cotizaciones.map((c) => ({ id: c.id, id_externo: c.id_externo, nombre: c.nombre, institucion: c.institucion, estado: c.estado, fecha: c.fecha, subtotal_neto: c.subtotal_neto, total: c.total, n_items: (c.items || []).length, actualizado_en: c.actualizado_en, vendedor_nombre: c.vendedor_nombre || "", oc_codigo: c.oc_codigo || "" }))
-        .filter((c) => (!t || `${c.id_externo} ${c.nombre} ${c.institucion}`.toLowerCase().includes(t)) && (!estado || c.estado === estado) && (!v || String(c.vendedor_nombre).toLowerCase().includes(v)))
+    async listarCotizaciones({ q = "", estado = "", vendedor = "", sinVendedor = false, pagina = 0, porPagina = 20 } = {}) {
+      const t = q.trim().toLowerCase(), v = sinVendedor ? "" : vendedor.trim().toLowerCase();
+      const todas = leerLocal().cotizaciones.map((c) => ({ id: c.id, id_externo: c.id_externo, nombre: c.nombre, institucion: c.institucion, estado: c.estado, fecha: c.fecha, subtotal_neto: c.subtotal_neto, total: c.total, n_items: (c.items || []).length, actualizado_en: c.actualizado_en, vendedor_id: c.vendedor_id || null, vendedor_nombre: c.vendedor_nombre || "", oc_codigo: c.oc_codigo || "" }))
+        .filter((c) => (!t || `${c.id_externo} ${c.nombre} ${c.institucion}`.toLowerCase().includes(t)) && (!estado || c.estado === estado) && (!v || String(c.vendedor_nombre).toLowerCase().includes(v)) && (!sinVendedor || !c.vendedor_id))
         .sort((a, b) => String(b.actualizado_en).localeCompare(String(a.actualizado_en)));
       return { filas: todas.slice(pagina * porPagina, (pagina + 1) * porPagina), total: todas.length };
     },
     async contarAbiertas() { return leerLocal().cotizaciones.filter((c) => ["borrador", "lista"].includes(c.estado)).length; },
+    async contarPresentadasSinVendedor() { return leerLocal().cotizaciones.filter((c) => c.estado === "presentada" && !c.vendedor_id).length; },
     async cargarCotizacion(id) { const c = leerLocal().cotizaciones.find((x) => x.id === id); if (!c) throw new Error("Cotización no encontrada"); return JSON.parse(JSON.stringify(c)); },
     async guardarCotizacion(cot) {
       const d = leerLocal(); const i = cot.id ? d.cotizaciones.findIndex((x) => x.id === cot.id) : -1;
@@ -164,15 +165,20 @@ export function crearAlmacen(token, modo, esquema = 1) {
   const v2 = esquema >= 2;
   return {
     modo: "base", esquema, capacidades: { vendedores: v2, eliminar: v2, datosCompraAgil: v2, metadatosEETT: v2 }, ...comunes,
-    async listarCotizaciones({ q = "", estado = "", vendedor = "", pagina = 0, porPagina = 20 } = {}) {
-      const t = limpiarQ(q), v = limpiarQ(vendedor);
-      const campos = `id,id_externo,nombre,institucion,estado,fecha,subtotal_neto,total,actualizado_en,oc_codigo${v2 ? ",vendedor_nombre" : ""},cotizacion_items(count)`;
+    // Filtros en el SERVIDOR (consulta paginada): búsqueda por código/nombre/institución, estado, vendedor y
+    // «Sin vendedor asignado» (vendedor_id vacío). Se combinan entre sí; «Sin vendedor» deja sin efecto el de vendedor.
+    async listarCotizaciones({ q = "", estado = "", vendedor = "", sinVendedor = false, pagina = 0, porPagina = 20 } = {}) {
+      const t = limpiarQ(q), v = sinVendedor ? "" : limpiarQ(vendedor);
+      const campos = `id,id_externo,nombre,institucion,estado,fecha,subtotal_neto,total,actualizado_en,oc_codigo${v2 ? ",vendedor_id,vendedor_nombre" : ""},cotizacion_items(count)`;
       const filtros = [t && `or=(id_externo.ilike.*${encodeURIComponent(t)}*,nombre.ilike.*${encodeURIComponent(t)}*,institucion.ilike.*${encodeURIComponent(t)}*)`,
-        estado && `estado=eq.${encodeURIComponent(estado)}`, v && v2 && `vendedor_nombre=ilike.*${encodeURIComponent(v)}*`].filter(Boolean).join("&");
+        estado && `estado=eq.${encodeURIComponent(estado)}`, v && v2 && `vendedor_nombre=ilike.*${encodeURIComponent(v)}*`,
+        sinVendedor && v2 && "vendedor_id=is.null"].filter(Boolean).join("&");
       const { filas, total } = await leer("cotizaciones", `select=${campos}${filtros ? `&${filtros}` : ""}&order=actualizado_en.desc&limit=${porPagina}&offset=${pagina * porPagina}`, { contar: true });
       return { filas: filas.map((c) => ({ ...c, n_items: c.cotizacion_items?.[0]?.count ?? 0 })), total };
     },
     async contarAbiertas() { return (await leer("cotizaciones", "select=id&estado=in.(borrador,lista)&limit=1", { contar: true })).total; },
+    // Presentadas sin vendedor responsable (requieren regularización). null si la base no tiene vendedores (esquema 1).
+    async contarPresentadasSinVendedor() { return v2 ? (await leer("cotizaciones", "select=id&estado=eq.presentada&vendedor_id=is.null&limit=1", { contar: true })).total : null; },
     async cargarCotizacion(id) {
       const [c] = await leer("cotizaciones", `select=*&id=eq.${encodeURIComponent(id)}`);
       if (!c) throw new Error("Cotización no encontrada");

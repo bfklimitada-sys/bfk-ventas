@@ -67,6 +67,13 @@ export function moduloSimulado(esquema) {
       let todas = [...M.cots.values()].sort((a, b) => String(b.actualizado_en).localeCompare(String(a.actualizado_en)));
       if (q.get("estado")?.startsWith("eq.")) todas = todas.filter((c) => c.estado === q.get("estado").slice(3));
       if (q.get("estado")?.startsWith("in.")) todas = todas.filter((c) => ["borrador", "lista"].includes(c.estado));
+      // Filtros del listado como los aplica PostgREST: or=(…ilike…), vendedor_nombre=ilike.*x*, vendedor_id=is.null.
+      const sinAst = (x) => String(x || "").replace(/^\*|\*$/g, "").toLowerCase();
+      const mOr = (q.get("or") || "").match(/^\((.*)\)$/);
+      if (mOr) { const conds = mOr[1].split(",").map((x) => x.match(/^(\w+)\.ilike\.(.*)$/)).filter(Boolean); todas = todas.filter((c) => conds.some(([, col, pat]) => String(c[col] || "").toLowerCase().includes(sinAst(pat)))); }
+      if (q.get("vendedor_nombre")?.startsWith("ilike.")) { const pat = sinAst(q.get("vendedor_nombre").slice(6)); todas = todas.filter((c) => String(c.vendedor_nombre || "").toLowerCase().includes(pat)); }
+      if (q.get("vendedor_id") === "is.null") todas = todas.filter((c) => !c.vendedor_id);
+      M.consultasLista = [...(M.consultasLista || []), decodeURIComponent(u.search)];
       const off = Number(q.get("offset") || 0), lim = Number(q.get("limit") || 1000);
       return json(todas.slice(off, off + lim).map((c) => ({ ...fila(c), cotizacion_items: [{ count: c.items.length }] })), { "content-range": `${off}-${off + lim - 1}/${todas.length}` });
     }
