@@ -1,0 +1,20 @@
+// Pruebas unitarias de la recuperación controlada de módulos bajo demanda (src/lib/cargaModulos.js).
+import { esErrorDeCargaDeModulo, puedeRecargar, recargarPorVersionNueva, importarModulo, CLAVE_RECARGA } from "../../src/lib/cargaModulos.js";
+let nOk = 0; const F = []; const ok = (k, v) => { if (v) { nOk++; console.log("OK    " + k); } else { F.push(k); console.log("FALLA " + k); } };
+const mem = () => { const m = new Map(); return { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => m.set(k, String(v)) }; };
+ok("U01_chrome", esErrorDeCargaDeModulo(new TypeError("Failed to fetch dynamically imported module: https://x/assets/jspdf.es.min-DL85aqkw.js")));
+ok("U02_firefox", esErrorDeCargaDeModulo(new TypeError("error loading dynamically imported module: https://x/assets/a.js")));
+ok("U03_safari", esErrorDeCargaDeModulo(new TypeError("Importing a module script failed.")));
+ok("U04_otros_errores_no", !esErrorDeCargaDeModulo(new Error("Cannot read properties of undefined")) && !esErrorDeCargaDeModulo(null));
+const a = mem(); let n = 0; const r = () => n++;
+ok("U05_primera_recarga_permitida", recargarPorVersionNueva({ ahora: 1000, almacen: a, recargar: r }) === true && n === 1 && a.getItem(CLAVE_RECARGA) === "1000");
+ok("U06_segunda_dentro_de_5_min_bloqueada", recargarPorVersionNueva({ ahora: 1000 + 60_000, almacen: a, recargar: r }) === false && n === 1);
+ok("U07_despues_de_5_min_se_permite", puedeRecargar(1000 + 5 * 60_000 + 1, a));
+ok("U08_sin_almacenamiento_no_rompe", puedeRecargar(1, { getItem: () => { throw new Error("bloqueado"); } }) === true);
+globalThis.window = { dispatchEvent: () => true, location: {} }; globalThis.CustomEvent = class { constructor(t, o) { this.type = t; this.detail = o?.detail; } };
+const e1 = await importarModulo(() => Promise.reject(new TypeError("Failed to fetch dynamically imported module: x"))).catch((e) => e);
+ok("U09_error_claro_con_marca", e1.versionNueva === true && /se actualizó/.test(e1.message) && /Failed to fetch/.test(e1.causa.message));
+const e2 = await importarModulo(() => Promise.reject(new Error("otro"))).catch((e) => e);
+ok("U10_otros_errores_pasan_igual", e2.message === "otro" && !e2.versionNueva);
+ok("U11_exito_devuelve_el_modulo", (await importarModulo(() => Promise.resolve({ jsPDF: 1 }))).jsPDF === 1);
+console.log(`RESUMEN carga de módulos: ${nOk} OK, ${F.length} FALLA(S)`); process.exit(F.length ? 1 : 0);

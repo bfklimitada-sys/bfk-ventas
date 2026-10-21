@@ -33,6 +33,7 @@ import { cambiosProducto } from "./lib/productosOC";
 import { CLAVE_REVISION_AUTO, LIMITE_USO_DIARIO, PREFIJO_FOTO_MP, cambiosOCDesdeMP, claveFotoMP, elegirRevisionAutomatica, fotoMP, lineaVentaDesdeMP, mpCancelada, planProductosVenta, toca } from "./lib/mercadoPublico";
 import { alimentarCatalogoDesdeOC } from "./lib/entidadesOC";
 import { ContactosContext } from "./components/ficha/ContactosInstitucion";
+import { AvisoVersionNueva } from "./components/ui/AvisoVersionNueva";
 import { avisosConciliacion } from "./lib/contactosInstitucionales";
 import { rpcConciliarContactosOC, rpcGuardarContacto, rpcResolverContacto, rpcContactoObsoleto, rpcResolverPropuesta, rpcFusionarContactos, rpcCorreoCobranza } from "./lib/supabase";
 import { rpcCartola, rpcArchivarOC, rpcRestaurarOC, cargarCorreosBfk, rpcMarcarCorreo, rpcAsignarVendedor, rpcAsignarFinanciador } from "./lib/supabase";
@@ -1939,6 +1940,7 @@ export default function App() {
       {accion==="compra_manual"&&<Modal title="Nueva OC — manual" onClose={()=>setAccion(null)}><FormIngresarCompra perfil={perfil} ocs={ocs} financiadores={financiadores} vendedores={vendedores} entidadesCatalogo={entidadesCatalogo} buscarDuplicado={buscarDuplicadoOC} onSave={handleIngresarCompra} /></Modal>}
 
       <Toast toast={toast} />
+      <AvisoVersionNueva />
     </>
   );
 

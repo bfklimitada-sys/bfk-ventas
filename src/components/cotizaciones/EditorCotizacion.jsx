@@ -184,7 +184,8 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
   const verPrevia = async () => {
     if (!cot.items.length) return; setGenerando("previa");
     try { setPreview(await construirPdf(cot, { conVersion: !sucio && !!cot.id })); } // no guarda nada
-    catch (e) { showToast?.(`No se pudo preparar la vista previa: ${e.message}`, "error"); } finally { setGenerando(""); }
+    catch (e) { showToast?.(e.versionNueva ? `No se pudo preparar la vista previa: ${e.message}${sucio ? " Tus cambios aún NO están guardados: pulsa Guardar antes de actualizar." : ""}` : `No se pudo preparar la vista previa: ${e.message}`, "error"); }
+    finally { setGenerando(""); }
   };
   const descargarDe = async (base) => {
     const r = await construirPdf(base, { conVersion: true });

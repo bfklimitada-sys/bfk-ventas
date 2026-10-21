@@ -20,6 +20,12 @@ const copiarOCR = () => ({
   },
 });
 
+// Ayudantes internos de Vite/Rollup en un archivo propio: así los módulos que se cargan bajo demanda (jsPDF, html2canvas,
+// lector de PDF) no dependen del archivo principal de la app y conservan su nombre entre publicaciones. Una pestaña que
+// quedó abierta con una versión anterior sigue encontrando esos archivos (antes cambiaban de nombre en cada despliegue).
+const ayudantesAparte = (id) => (id.includes("vite/preload-helper") || id.includes("commonjsHelpers") ? "vite-ayudantes" : undefined);
+
 export default defineConfig({
   plugins: [react(), copiarOCR()],
+  build: { rollupOptions: { output: { manualChunks: ayudantesAparte } } },
 });

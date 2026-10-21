@@ -1,3 +1,4 @@
+import { importarModulo } from "./cargaModulos.js";
 // Genera un PDF (A4) con las pantallas indicadas, dentro del navegador (iPhone incluido).
 // Solo lee lo que ya está dibujado en pantalla: no consulta ni modifica datos.
 
@@ -55,7 +56,7 @@ function calcularCortes(alto, altoPaginaCss, zonas) {
 }
 
 export async function generarPdfPantallas(elementos, { fondo = "#F8FAFC", alMedida } = {}) {
-  const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import("html2canvas"), import("jspdf")]);
+  const [{ default: html2canvas }, { jsPDF }] = await importarModulo(() => Promise.all([import("html2canvas"), import("jspdf")]));
   const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
   const M = 10, W = 210 - 2 * M, H = 297 - 2 * M;
   let primera = true;

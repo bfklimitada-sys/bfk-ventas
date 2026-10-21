@@ -1,3 +1,4 @@
+import { importarModulo } from "./cargaModulos.js";
 // ═══════════════════════════════════════════════════════════════
 // PDF de EETT (Información técnica de productos) — reproduce la plantilla oficial de BFK
 // «Copia de INFORMACIÓN TÉCNICA DE PRODUCTOS BFK(1).xlsx», hoja «Pág.1» (octubre 2026):
@@ -378,7 +379,7 @@ export const nombreArchivoEETT = (cot, version) => {
 // Navegador: carga jsPDF bajo demanda y genera el PDF en memoria (sin descargar ni guardar).
 // La vista previa y la descarga usan exactamente esta misma función.
 export async function generarPdfEETT(cot, items, { logo, elaboracion, version } = {}) {
-  const { jsPDF } = await import("jspdf");
+  const { jsPDF } = await importarModulo(() => import("jspdf"));
   const doc = crearPdfEETT(cot, items, { jsPDF, logo, elaboracion });
   return { blob: doc.output("blob"), nombre: nombreArchivoEETT(cot, version), paginas: doc.getNumberOfPages() };
 }

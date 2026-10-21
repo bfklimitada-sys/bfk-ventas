@@ -1,3 +1,4 @@
+import { importarModulo } from "./cargaModulos.js";
 // Lectura de capturas de pantalla en el navegador (iPhone, Android o PC).
 // 1) Si el servidor tiene la IA habilitada (clave autorizada), se interpreta con IA.
 // 2) Si no, o si la IA falla, se lee el texto con OCR en el mismo dispositivo (Tesseract.js, gratuito; las
@@ -24,7 +25,7 @@ async function conIA(token, imagenes, enlace) {
 const conLimite = (promesa, ms, mensaje) => Promise.race([promesa, new Promise((_, mal) => setTimeout(() => mal(new Error(mensaje)), ms))]);
 
 async function conOCR(imagenes, enlace, onProgreso) {
-  const { createWorker } = await import("tesseract.js");
+  const { createWorker } = await importarModulo(() => import("tesseract.js"));
   onProgreso?.("Preparando la lectura de texto (la primera vez descarga unos MB)…");
   // Archivos del lector servidos desde el mismo dominio de BFK Datos (vite.config.js los copia a /ocr al compilar).
   const worker = await conLimite(createWorker("spa", 1, {

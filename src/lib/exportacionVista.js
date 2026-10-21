@@ -1,3 +1,4 @@
+import { importarModulo } from "./cargaModulos.js";
 // ═══════════════════════════════════════════════════════════════
 // Fase 4C: Excel de la vista filtrada de Compras y ficha PDF de una OC.
 // Solo LEEN lo que la pantalla ya tiene cargado: no consultan ni modifican datos.
@@ -128,7 +129,7 @@ export function contenidoFicha(oc) {
 }
 
 export async function generarFichaPDF(oc) {
-  const { jsPDF } = await import("jspdf");
+  const { jsPDF } = await importarModulo(() => import("jspdf"));
   const pdf = new jsPDF({ unit: "mm", format: "a4" });
   const M = 14, W = 210 - 2 * M, ALTO = 297 - 14;
   let y = 16;

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { C, T, R } from "../../lib/theme";
 import { HojaLateral, AvisoLinea, BotonSecundario } from "../ui/Sistema";
+import { importarModulo } from "../../lib/cargaModulos";
 
 // Vista previa de la EETT dentro de BFK Datos (PC y celular), con TODAS las páginas.
 // Muestra exactamente el PDF que entrega el mismo generador de la descarga (blob en memoria).
@@ -17,7 +18,7 @@ export function VistaPreviaEETT({ blob, nombre, paginas, onCerrar, onDescargar }
     let vivo = true; let tarea = null;
     (async () => {
       try {
-        const [lib, w] = await Promise.all([import("pdfjs-dist"), import("pdfjs-dist/build/pdf.worker.min.js?url")]);
+        const [lib, w] = await importarModulo(() => Promise.all([import("pdfjs-dist"), import("pdfjs-dist/build/pdf.worker.min.js?url")]));
         lib.GlobalWorkerOptions.workerSrc = w.default;
         tarea = lib.getDocument({ data: new Uint8Array(await blob.arrayBuffer()), isEvalSupported: false });
         const pdf = await tarea.promise;
