@@ -1,16 +1,21 @@
 import { anioMesDe } from "../../lib/calculos";
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { C, MONO, SANS, btnP, btnG, fmt } from "../../lib/theme";
 import { Ic, I } from "../ui/Iconos";
 import { leerCartolaBancoEstado, totalesPorMes, unirCartolas } from "../../lib/cartolas";
-import { CIERRE_CONCILIACION, ESTADOS, conciliarMovimientos, opcionesAbono } from "../../lib/conciliacion";
+import { CIERRE_CONCILIACION, TABLA_REGISTRO, conciliarMovimientos, opcionesAbono } from "../../lib/conciliacion";
+import { textoRegistro, vistaConciliacion } from "../../lib/conciliacionVista";
 import { esConflictoDuplicado, esFuncionNoDisponible, esPosibleDuplicadoManual, idsDelMensaje, marcaCartola, verificarRegistro } from "../../lib/registroCartola";
 
 // ═══════════════════════════════════════════════════════════════
-// Cartola BancoEstado · conciliación (2026-10)
+// Cartola BancoEstado · conciliación (2026-10; vista simple 21/10/2026)
+//  Tres grupos: «Por revisar» y «Sin registrar» (visibles) y «Ya registrados» (botón «Ver conciliados»). Aparte:
+//  «Registrado en BFK, pendiente de verificar en banco» y lo anterior al cierre (solo consulta).
+//  «Es este registro» / «No corresponde» guardan una DECISIÓN (conciliacion_decisiones): no crean ni cambian
+//  registros financieros. Registrar algo nuevo sigue siendo solo para lo «Sin registrar», con confirmación.
 //  Etapa 1 (consulta): lee y valida ambos formatos, deduplica entre archivos, avisa cartolas faltantes y muestra
-//    TODOS los movimientos con su estado (Conciliado · Posible registrado · Pendiente · Neutro). No preselecciona nada.
+//    los movimientos en tres grupos (Ya registrados · Por revisar · Sin registrar). No preselecciona nada.
 //  Etapa 2 (registro seguro): solo movimientos PENDIENTES posteriores al cierre (07/10/2026), uno a la vez, con
 //    destino elegido a mano y confirmación explícita. Antes de escribir se vuelve a conciliar con los registros
 //    RECIÉN leídos de la base y la escritura la hace una función de la base con la marca del movimiento: un mismo
@@ -64,12 +69,20 @@ const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "
 const caja = (extra) => ({ width: "100%", padding: "7px 9px", borderRadius: 8, fontSize: 13, border: `1px solid ${C.border}`, background: C.card, color: C.ink, fontFamily: SANS, ...extra });
 
 export function ImportarCartola({ ocs, financiadores, vendedores, categorias, gastos = [], pagosVendedor = [], pagoFinSueltos = [], aportes = [],
-  onRegistrar, onRegistrarEgresos, onRegistrarRetiro, onLeerDatosFrescos, onRecargar, cierre = CIERRE_CONCILIACION }) {
+  onRegistrar, onRegistrarEgresos, onRegistrarRetiro, onLeerDatosFrescos, onRecargar, onLeerDecisiones, onDecidir, onAnularDecision, cierre = CIERRE_CONCILIACION }) {
   const [cartolas, setCartolas] = useState([]);
   const [leyendo, setLeyendo] = useState(false);
   const [err, setErr] = useState("");
-  const [filtro, setFiltro] = useState("todos");     // todos | conciliado | posible | pendiente | neutro | registrable
-  const [sentido, setSentido] = useState("ambos");   // ambos | entra | sale
+  const [verConciliados, setVerConciliados] = useState(false);
+  const [verAnteriores, setVerAnteriores] = useState(false);
+  const [decisiones, setDecisiones] = useState(null); // null = la base aún no guarda decisiones (actualización pendiente)
+  const [decidiendo, setDecidiendo] = useState(null);
+  const lectorDecisiones = useRef(onLeerDecisiones); lectorDecisiones.current = onLeerDecisiones;   // la app recrea la función en cada render
+  const leerDecisiones = useCallback(async () => {
+    if (!lectorDecisiones.current) { setDecisiones(null); return; }
+    try { setDecisiones(await lectorDecisiones.current()); } catch { setDecisiones(null); }
+  }, []);
+  useEffect(() => { leerDecisiones(); }, [leerDecisiones]);
   const [abierto, setAbierto] = useState(null);      // clave del movimiento con el registro en preparación
   const [borrador, setBorrador] = useState({});      // datos del registro en preparación (sin preselección)
   const [confirmo, setConfirmo] = useState(false);
@@ -78,10 +91,11 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, ga
   const enCurso = useRef(false);                     // bloqueo inmediato contra doble envío (no espera al re-render)
   const [duplicado, setDuplicado] = useState(null);  // { clave, registros }: la base encontró un registro manual parecido
 
-  const datos = useMemo(() => ({ ocs, financiadores, vendedores, gastos, pagosVendedor, pagoFinSueltos, aportes }),
-    [ocs, financiadores, vendedores, gastos, pagosVendedor, pagoFinSueltos, aportes]);
+  const datos = useMemo(() => ({ ocs, financiadores, vendedores, gastos, pagosVendedor, pagoFinSueltos, aportes, decisiones: decisiones || [] }),
+    [ocs, financiadores, vendedores, gastos, pagosVendedor, pagoFinSueltos, aportes, decisiones]);
   const union = useMemo(() => unirCartolas(cartolas), [cartolas]);
   const conc = useMemo(() => conciliarMovimientos(union.movs, datos, { cierre }), [union, datos, cierre]);
+  const vista = useMemo(() => vistaConciliacion(conc, { ocs, categorias, cierre }), [conc, ocs, categorias, cierre]);
 
   const procesar = async (files) => {
     if (!files?.length) return;
@@ -97,10 +111,27 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, ga
   };
 
   const movs = union.movs;
-  const lista = conc.movimientos.filter((x) => (sentido === "ambos" || x.dir === sentido)
-    && (filtro === "todos" || (filtro === "registrable" ? x.registrable : x.estado === filtro)));
-  const cuenta = (e, dir) => conc.movimientos.filter((x) => x.estado === e && (!dir || x.dir === dir)).length;
-  const nRegistrables = conc.movimientos.filter((x) => x.registrable).length;
+
+  // Decisión del usuario sobre una coincidencia: se guarda aparte (no crea ni cambia registros financieros).
+  const decidir = async (item, decision, registros) => {
+    if (enCurso.current || !onDecidir) return;
+    const grupos = new Map();
+    for (const r of registros) { const t = r.tabla || TABLA_REGISTRO[r.tipo]; (grupos.get(t) || grupos.set(t, []).get(t)).push(String(r.id)); }
+    if (decision === "vinculado" && grupos.size !== 1) { setErr("Un movimiento se vincula con registros de un solo tipo."); return; }
+    enCurso.current = true; setDecidiendo(item.marca); setErr("");
+    try {
+      for (const [tabla, ids] of grupos) await onDecidir({ marca: item.marca, decision, tabla, ids, operacion: item.operacion || null, descripcion: item.descripcion || null });
+      await leerDecisiones();
+    } catch (e) { setErr(mensajeDecision(e)); await leerDecisiones(); }
+    finally { enCurso.current = false; setDecidiendo(null); }
+  };
+  const anular = async (ids) => {
+    if (enCurso.current || !onAnularDecision) return;
+    if (!window.confirm("¿Deshacer esta decisión? El movimiento vuelve a revisarse. No cambia ningún registro de BFK.")) return;
+    enCurso.current = true; setErr("");
+    try { for (const id of ids) await onAnularDecision(id); await leerDecisiones(); } catch (e) { setErr(mensajeDecision(e)); }
+    finally { enCurso.current = false; }
+  };
 
   const resumenCartola = () => {
     if (!movs.length) return null;
@@ -172,6 +203,24 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, ga
     } finally { enCurso.current = false; setGuardando(false); }
   };
 
+  const sugerenciaCargo = (it) => {
+    if (it.dir !== "sale") return "";
+    const sg = clasificarCargo(it.x.m, financiadores, vendedores);
+    return sg.seguro ? `${sg.nombre} (sugerencia, no se aplica sola)` : "";
+  };
+  const renderPreparar = (x) => abierto !== x.m.clave
+    ? <button data-preparar={x.m.clave} onClick={() => abrir(x)} style={{ ...btnG, width: "100%", marginTop: 7, fontSize: 12, padding: "7px" }}>Preparar registro…</button>
+    : (<>
+      <PrepararRegistro x={x} ocs={ocs} financiadores={financiadores} vendedores={vendedores} categorias={categorias}
+        borrador={borrador} setBorrador={(p) => { setBorrador((b) => ({ ...b, ...p })); setConfirmo(false); }}
+        confirmo={confirmo} setConfirmo={setConfirmo} problema={problemaBorrador(x)} guardando={guardando}
+        onCancelar={cerrar} onRegistrar={() => registrar(x)} />
+      {duplicado?.clave === x.m.clave && (
+        <DuplicadoManual dup={duplicado} guardando={guardando}
+          onVincular={() => registrar(x, { vincular: duplicado.ids })} onDistinto={() => registrar(x, { confirmoDistinto: true })} />
+      )}
+    </>);
+
   // ── Pantalla inicial ──
   if (!cartolas.length) {
     return (
@@ -220,69 +269,90 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, ga
         </div>
       )}
 
-      {/* Estados */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6, marginBottom: 8 }}>
-        {Object.keys(ESTADOS).map((e) => (
-          <button key={e} data-filtro={e} onClick={() => setFiltro(filtro === e ? "todos" : e)}
-            style={{ padding: "7px 4px", borderRadius: 8, cursor: "pointer", border: `1.5px solid ${filtro === e ? TONO[e].borde : C.border}`, background: filtro === e ? TONO[e].fondo : C.card, color: TONO[e].texto, fontSize: 12, fontWeight: 700, lineHeight: 1.3 }}>
-            {ESTADOS[e]}<br /><span data-cuenta={e} style={{ fontFamily: MONO, fontSize: 13 }}>{cuenta(e)}</span>
-          </button>
-        ))}
+      {/* Resumen: tres grupos */}
+      <div data-resumen-grupos style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 6, marginBottom: 8 }}>
+        <Contador dato="revisar" etiqueta="Por revisar" n={vista.revisar.length} tono={vista.revisar.length ? "posible" : "neutro"} />
+        <Contador dato="sin-registrar" etiqueta="Sin registrar" n={vista.sinRegistrar.length} tono={vista.sinRegistrar.length ? "pendiente" : "neutro"} />
+        <Contador dato="ya" etiqueta="Ya registrados" n={vista.ya.length} tono="conciliado" />
       </div>
-      <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
-        {[["ambos", `Todo · ${conc.movimientos.length}`], ["entra", `Entra · ${conc.movimientos.filter(x => x.dir === "entra").length}`], ["sale", `Sale · ${conc.movimientos.filter(x => x.dir === "sale").length}`]].map(([k, t]) => (
-          <button key={k} data-sentido={k} onClick={() => setSentido(k)} style={{ flex: 1, padding: "7px", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 700, border: `1.5px solid ${sentido === k ? C.tealDark : C.border}`, background: sentido === k ? C.paper : C.card, color: sentido === k ? C.tealDark : C.inkMuted }}>{t}</button>
-        ))}
-        <button data-filtro="registrable" onClick={() => setFiltro(filtro === "registrable" ? "todos" : "registrable")} style={{ flex: 1, padding: "7px", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 700, border: `1.5px solid ${filtro === "registrable" ? C.warn : C.border}`, background: filtro === "registrable" ? C.warnLight : C.card, color: C.warnText }}>Por registrar · {nRegistrables}</button>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+        <button data-ver-conciliados onClick={() => setVerConciliados((v) => !v)} style={{ ...btnG, flex: "1 1 160px", fontSize: 12, padding: "7px" }}>
+          {verConciliados ? "Ocultar conciliados" : `Ver conciliados (${vista.ya.length})`}
+        </button>
+        {vista.anteriores.length > 0 && (
+          <button data-ver-anteriores onClick={() => setVerAnteriores((v) => !v)} style={{ ...btnG, flex: "1 1 160px", fontSize: 12, padding: "7px" }}>
+            {verAnteriores ? "Ocultar anteriores al cierre" : `Antes del ${fmt.date(cierre)} (${vista.anteriores.length})`}
+          </button>
+        )}
       </div>
       <div style={{ fontSize: 12, color: C.inkFaint, marginBottom: 10, lineHeight: 1.5 }}>
-        Consulta: nada viene marcado ni se registra solo. Lo anterior al {fmt.date(cierre)} ya está en los saldos y en el FIFO histórico y no se registra desde aquí.
-        {conc.sinLinea.length > 0 && <span data-control-inverso style={{ display: "block", color: C.dangerText, fontWeight: 700 }}>Hay {conc.sinLinea.length} registro(s) BFK posterior(es) al cierre sin movimiento bancario: revisa si están duplicados ({conc.sinLinea.slice(0, 3).map((r) => `${TIPO_REG[r.tipo] || r.tipo} ${fmt.date(r.fecha)} ${fmt.money(r.monto)}`).join("; ")}).</span>}
+        Nada se registra solo. «Es este registro» y «No corresponde» solo guardan tu decisión: no crean ni cambian cobros, gastos ni pagos.
+        {decisiones === null && <span data-decisiones-no-disponibles style={{ display: "block", color: C.warnText, fontWeight: 600 }}>Para guardar estas decisiones falta instalar la actualización de la base (pendiente de autorización). Mientras tanto puedes consultar y registrar lo «Sin registrar».</span>}
       </div>
 
       {err && <div data-error style={{ background: C.dangerLight, color: C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 13, margin: "0 0 10px", fontWeight: 600 }}>{err}</div>}
 
-      {/* Movimientos */}
-      {lista.length === 0 && <div style={{ textAlign: "center", padding: "20px 0", color: C.inkFaint, fontSize: 13 }}>Sin movimientos con este filtro</div>}
-      {lista.map((x) => {
-        const m = x.m, t = TONO[x.estado], esAbierto = abierto === m.clave;
-        return (
-          <div key={m.clave + "|" + x.i} data-mov={m.clave} data-estado={x.estado} style={{ background: C.card, border: `1px solid ${esAbierto ? C.tealDark : C.border}`, borderLeft: `4px solid ${t.borde}`, borderRadius: 12, padding: "9px 12px", marginBottom: 6 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
-              <span style={{ fontSize: 12, color: C.inkMuted, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {fmt.date(m.fecha)}{m.operacion ? ` · op. ${m.operacion}` : ""} · {m.descripcion}
-              </span>
-              <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: 13, color: x.dir === "entra" ? C.okText : C.dangerText, flexShrink: 0 }}>
-                {x.dir === "entra" ? "+" : "−"}{fmt.money(x.monto)}
-              </span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginTop: 3, fontSize: 12 }}>
-              <span style={{ color: t.texto, fontWeight: 700 }}>{ESTADOS[x.estado]}{x.evidencia.length ? ` · ${x.evidencia.join(", ")}` : ""}</span>
-              <span style={{ color: C.inkFaint, fontFamily: MONO, flexShrink: 0 }}>saldo {fmt.money(m.saldo)}</span>
-            </div>
-            {x.registros.length > 0 && (
-              <div style={{ fontSize: 12, color: C.inkMuted, marginTop: 3 }}>
-                {x.registros.slice(0, 4).map((r) => `${TIPO_REG[r.tipo] || r.tipo}${r.oc ? " " + r.oc : ""} ${fmt.date(r.fecha)} ${fmt.money(r.monto)}`).join(" · ")}{x.registros.length > 4 ? ` · y ${x.registros.length - 4} más` : ""}
+      <Seccion dato="revisar" titulo="Por revisar" ayuda="Hay un registro en BFK que podría ser este movimiento. Confirma o descarta." vacio="Nada por revisar.">
+        {vista.revisar.map((it) => (
+          <Movimiento key={it.marca} it={it} abierto={abierto === it.x.m.clave}>
+            {it.tipo === "coincidencia" && it.opciones.map((op, k) => (
+              <div key={k} data-opcion-revision style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginTop: 6, paddingTop: 6, borderTop: `1px dashed ${C.border}` }}>
+                <span style={{ flex: "1 1 200px", fontSize: 12, color: C.ink }}>{op.grupo ? `Estos ${op.registros.length} registros juntos` : "Registro"}: {op.registros.map((r) => textoRegistro(r, categorias)).join(" + ")}</span>
+                <button data-vincular-registro={op.registros.map((r) => r.id).join(",")} disabled={decisiones === null || !!decidiendo} onClick={() => decidir(it, "vinculado", op.registros)}
+                  style={{ ...btnG, fontSize: 12, padding: "6px 10px", borderColor: C.ok, color: C.okText, opacity: decisiones === null ? 0.5 : 1 }}>Es este registro</button>
+                <button data-rechazar={op.registros.map((r) => r.id).join(",")} disabled={decisiones === null || !!decidiendo} onClick={() => decidir(it, "rechazado", op.registros)}
+                  style={{ ...btnG, fontSize: 12, padding: "6px 10px", opacity: decisiones === null ? 0.5 : 1 }}>No corresponde</button>
               </div>
+            ))}
+            {it.tipo === "coincidencia" && (it.opciones.length > 1 || !it.opciones.length) && (it.x.candidatos || []).length > 0 && (
+              <button data-rechazar-todos disabled={decisiones === null || !!decidiendo} onClick={() => decidir(it, "rechazado", it.x.candidatos)}
+                style={{ ...btnG, width: "100%", marginTop: 6, fontSize: 12, padding: "6px", opacity: decisiones === null ? 0.5 : 1 }}>Ninguno corresponde (pasa a «Sin registrar»)</button>
             )}
-            {x.estado !== "conciliado" && x.nota && <div style={{ fontSize: 12, color: C.inkFaint, marginTop: 2 }}>{x.nota}</div>}
-            {x.anteriorCierre && x.estado === "pendiente" && <div style={{ fontSize: 12, color: C.inkFaint, marginTop: 2 }}>Anterior al cierre: queda visible como pendiente; no se registra desde la cartola.</div>}
-            {x.registrable && !esAbierto && (
-              <button data-preparar={m.clave} onClick={() => abrir(x)} style={{ ...btnG, width: "100%", marginTop: 7, fontSize: 12, padding: "7px" }}>Preparar registro…</button>
+            {it.tipo === "vinculo_roto" && (
+              <button data-anular-vinculo onClick={() => anular(it.decisiones.map((d) => d.id))} style={{ ...btnG, width: "100%", marginTop: 6, fontSize: 12, padding: "6px" }}>Anular el vínculo</button>
             )}
-            {x.registrable && esAbierto && (<>
-              <PrepararRegistro x={x} ocs={ocs} financiadores={financiadores} vendedores={vendedores} categorias={categorias}
-                borrador={borrador} setBorrador={(p) => { setBorrador((b) => ({ ...b, ...p })); setConfirmo(false); }}
-                confirmo={confirmo} setConfirmo={setConfirmo} problema={problemaBorrador(x)} guardando={guardando}
-                onCancelar={cerrar} onRegistrar={() => registrar(x)} />
-              {duplicado?.clave === x.m.clave && (
-                <DuplicadoManual dup={duplicado} guardando={guardando}
-                  onVincular={() => registrar(x, { vincular: duplicado.ids })} onDistinto={() => registrar(x, { confirmoDistinto: true })} />
+            {it.tipo === "vale_vista" && it.x.registrable && renderPreparar(it.x)}
+          </Movimiento>
+        ))}
+      </Seccion>
+
+      <Seccion dato="sin-registrar" titulo="Sin registrar" ayuda="Movimientos nuevos: identifícalos y regístralos (se pide confirmación)." vacio="No hay movimientos nuevos por registrar.">
+        {vista.sinRegistrar.map((it) => (
+          <Movimiento key={it.marca} it={{ ...it, posible: it.posible || sugerenciaCargo(it) }} abierto={abierto === it.x.m.clave}>
+            {it.x.registrable && renderPreparar(it.x)}
+          </Movimiento>
+        ))}
+      </Seccion>
+
+      {vista.registradosSinBanco.length > 0 && (
+        <Seccion dato="registrado-sin-banco" titulo="Registrado en BFK, pendiente de verificar en banco" ayuda="Registros posteriores al cierre sin un movimiento en esta cartola. No se tratan como duplicados.">
+          {vista.registradosSinBanco.map((s) => (
+            <div key={s.r.tabla + s.r.id} data-registrado-sin-banco={s.r.id} data-pista={s.tipoPista} style={{ background: C.card, border: `1px solid ${C.border}`, borderLeft: `4px solid ${C.info}`, borderRadius: 12, padding: "9px 12px", marginBottom: 6 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>{s.texto}</div>
+              <Linea k="Qué pasa" v={s.pista} />
+              <Linea k="Acción" v={s.accion} />
+            </div>
+          ))}
+        </Seccion>
+      )}
+
+      {verConciliados && (
+        <Seccion dato="ya" titulo="Ya registrados" ayuda="Solo informativo: estos movimientos ya están en BFK y no crean nada nuevo." vacio="Ninguno.">
+          {vista.ya.map((it) => (
+            <Movimiento key={it.marca} it={it}>
+              {it.x.origen === "decision" && onAnularDecision && (
+                <button data-deshacer-vinculo onClick={() => anular(it.x.decisiones.map((d) => d.id))} style={{ ...btnG, marginTop: 6, fontSize: 11, padding: "4px 10px" }}>Deshacer vínculo</button>
               )}
-            </>)}
-          </div>
-        );
-      })}
+            </Movimiento>
+          ))}
+        </Seccion>
+      )}
+
+      {verAnteriores && (
+        <Seccion dato="anteriores" titulo={`Antes del cierre (${fmt.date(cierre)})`} ayuda="Solo consulta: ya están incluidos en los saldos y el FIFO históricos.">
+          {vista.anteriores.map((it) => <Movimiento key={it.marca} it={it} />)}
+        </Seccion>
+      )}
 
       {/* Totales del banco: también requieren confirmación (escriben banco_mensual y el registro de la cartola) */}
       {movs.length > 0 && onRegistrar && (
@@ -305,9 +375,64 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, ga
         {leyendo ? "Leyendo…" : "Agregar otra cartola"}
         <input type="file" accept=".xlsx,.xls" multiple disabled={leyendo} onChange={e => procesar(Array.from(e.target.files || []))} style={{ display: "none" }} />
       </label>
-      <button onClick={() => { setCartolas([]); cerrar(); setFiltro("todos"); setSentido("ambos"); setErr(""); }} style={{ ...btnG, width: "100%", marginTop: 8, fontSize: 12 }}>
+      <button onClick={() => { setCartolas([]); cerrar(); setVerConciliados(false); setVerAnteriores(false); setErr(""); }} style={{ ...btnG, width: "100%", marginTop: 8, fontSize: 12 }}>
         Empezar de nuevo
       </button>
+    </div>
+  );
+}
+
+const mensajeDecision = (e) => {
+  const t = String(e?.rpcCuerpo?.message || e?.message || e || "");
+  if (/PGRST202|Could not find the function/i.test(t)) return "La base aún no guarda decisiones de conciliación (actualización pendiente): no se guardó nada.";
+  return t.replace(/^CONC:\s*/, "") || "No se pudo guardar la decisión.";
+};
+
+function Contador({ dato, etiqueta, n, tono }) {
+  const t = TONO[tono] || TONO.neutro;
+  return (
+    <div data-contador={dato} style={{ padding: "8px 10px", borderRadius: 10, border: `1.5px solid ${n ? t.borde : C.border}`, background: n ? t.fondo : C.card }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: n ? t.texto : C.inkMuted }}>{etiqueta}</div>
+      <div data-cuenta={dato} style={{ fontFamily: MONO, fontWeight: 800, fontSize: 18, color: n ? t.texto : C.inkMuted }}>{n}</div>
+    </div>
+  );
+}
+
+function Seccion({ dato, titulo, ayuda, vacio, children }) {
+  const hijos = (Array.isArray(children) ? children.flat() : [children]).filter(Boolean);
+  return (
+    <section data-grupo-seccion={dato} style={{ marginBottom: 14 }}>
+      <div style={{ fontSize: 14, fontWeight: 800, color: C.ink }}>{titulo}</div>
+      {ayuda && <div style={{ fontSize: 12, color: C.inkFaint, marginBottom: 6 }}>{ayuda}</div>}
+      {hijos.length ? hijos : vacio ? <div style={{ fontSize: 12, color: C.inkFaint, padding: "6px 0" }}>{vacio}</div> : null}
+    </section>
+  );
+}
+
+const Linea = ({ k, v, dato }) => v ? (
+  <div data-linea={dato} style={{ display: "flex", gap: 6, fontSize: 12, marginTop: 3, lineHeight: 1.4 }}>
+    <span style={{ color: C.inkFaint, flexShrink: 0, minWidth: 92 }}>{k}</span><span style={{ color: C.inkMuted, minWidth: 0, overflowWrap: "anywhere" }}>{v}</span>
+  </div>) : null;
+
+const TONO_GRUPO = { ya: "conciliado", revisar: "posible", "sin-registrar": "pendiente", anteriores: "neutro" };
+function Movimiento({ it, abierto, children }) {
+  const x = it.x, m = x.m;
+  const grupo = x.estado === "conciliado" || x.estado === "neutro" ? "ya" : x.anteriorCierre ? "anteriores" : it.tipo ? "revisar" : "sin-registrar";
+  const t = TONO[TONO_GRUPO[grupo]];
+  return (
+    <div data-mov={m.clave} data-estado={x.estado} data-grupo={grupo} data-tipo-revision={it.tipo || ""} style={{ background: C.card, border: `1px solid ${abierto ? C.tealDark : C.border}`, borderLeft: `4px solid ${t.borde}`, borderRadius: 12, padding: "9px 12px", marginBottom: 6 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+        <span style={{ fontSize: 12, color: C.inkMuted, minWidth: 0, overflowWrap: "anywhere" }}>{fmt.date(m.fecha)}{m.operacion ? ` · op. ${m.operacion}` : ""} · {m.descripcion}</span>
+        <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: 13, color: x.dir === "entra" ? C.okText : C.dangerText, flexShrink: 0 }}>{x.dir === "entra" ? "+" : "−"}{fmt.money(x.monto)}</span>
+      </div>
+      <div data-titulo-mov style={{ fontSize: 13, fontWeight: 700, color: t.texto, marginTop: 3 }}>{it.titulo}</div>
+      <Linea dato="posible" k="Posible OC o categoría" v={it.posible} />
+      <Linea dato="registro" k="Registro BFK" v={it.registros?.join(" · ")} />
+      <Linea dato="motivo" k="Motivo" v={it.motivo} />
+      {it.nota && it.nota !== it.registros?.join(" · ") && <Linea dato="nota" k="Detalle" v={it.nota} />}
+      <Linea dato="accion" k="Acción" v={it.accion} />
+      {it.aviso && <div data-aviso-gemelo style={{ fontSize: 12, color: C.warnText, marginTop: 4, fontWeight: 600 }}>{it.aviso}</div>}
+      {children}
     </div>
   );
 }

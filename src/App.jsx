@@ -1186,11 +1186,27 @@ export default function App() {
   // Si una lectura falla, lanza el error y NO se registra nada.
   const leerDatosConciliacion=async()=>{
     const t=session.access_token;
-    const [ocsD,finD,vendD,gastD,pagVD,pagoFinSueltosD,aporD]=await Promise.all([
+    const [ocsD,finD,vendD,gastD,pagVD,pagoFinSueltosD,aporD,decD]=await Promise.all([
       selOCs(t), sel("financiadores",t), sel("vendedores",t), sel("gastos_indirectos",t),
       sel("pagos_vendedor",t), sel("eventos_pago_financiamiento",t,"&oc_id=is.null"), sel("aportes_socios",t),
+      leerDecisionesConciliacion().catch(()=>null),
     ]);
-    return {ocs:ocsD,financiadores:finD,vendedores:vendD,gastos:gastD,pagosVendedor:pagVD,pagoFinSueltos:pagoFinSueltosD,aportes:aporD};
+    return {ocs:ocsD,financiadores:finD,vendedores:vendD,gastos:gastD,pagosVendedor:pagVD,pagoFinSueltos:pagoFinSueltosD,aportes:aporD,decisiones:decD||[]};
+  };
+
+  // Decisiones de conciliación (21/10/2026): «es este registro» / «no corresponde». Se guardan aparte con una función
+  // de la base (no crean ni cambian registros financieros). Sin la actualización de la base → null (solo consulta).
+  const leerDecisionesConciliacion=async()=>{
+    try{ return await sel("conciliacion_decisiones",session.access_token,"&anulado_en=is.null&order=id"); }
+    catch{ return null; }
+  };
+  const decidirConciliacion=async({marca,decision,tabla,ids,operacion,descripcion})=>{
+    await rpcCartola(session.access_token,"conciliacion_decidir",{p_marca:marca,p_decision:decision,p_tabla:tabla,p_ids:ids,p_operacion:operacion||null,p_descripcion:descripcion||null});
+    showToast(decision==="vinculado"?"Conciliado con el registro existente (no se creó nada)":"Coincidencia descartada para este movimiento");
+  };
+  const anularDecisionConciliacion=async(id)=>{
+    await rpcCartola(session.access_token,"conciliacion_anular",{p_id:id,p_motivo:"Deshecho desde la cartola"});
+    showToast("Decisión deshecha");
   };
 
   // ─── ABONO A FINANCIADOR con reparto FIFO ────────────────────
@@ -1939,7 +1955,7 @@ export default function App() {
           <FormSaldoBanco actual={saldoBanco} onSave={handleGuardarSaldoBanco} />
         </Modal>
       )}
-      {accion==="cartola"&&<Modal title="Cartola del banco: conciliar" onClose={()=>setAccion(null)}><ImportarCartola ocs={ocs} financiadores={financiadores} vendedores={vendedores} categorias={categoriasGasto} gastos={gastos} pagosVendedor={pagosVendedor} pagoFinSueltos={pagoFinSueltos} aportes={aportes} onRegistrar={handleCobrosDesdeCartola} onRegistrarEgresos={handleEgresosDesdeCartola} onRegistrarRetiro={handleRetiroDesdeCartola} onLeerDatosFrescos={leerDatosConciliacion} onRecargar={cargarTodo} /></Modal>}
+      {accion==="cartola"&&<Modal title="Cartola del banco: conciliar" onClose={()=>setAccion(null)}><ImportarCartola ocs={ocs} financiadores={financiadores} vendedores={vendedores} categorias={categoriasGasto} gastos={gastos} pagosVendedor={pagosVendedor} pagoFinSueltos={pagoFinSueltos} aportes={aportes} onRegistrar={handleCobrosDesdeCartola} onRegistrarEgresos={handleEgresosDesdeCartola} onRegistrarRetiro={handleRetiroDesdeCartola} onLeerDatosFrescos={leerDatosConciliacion} onRecargar={cargarTodo} onLeerDecisiones={leerDecisionesConciliacion} onDecidir={decidirConciliacion} onAnularDecision={anularDecisionConciliacion} /></Modal>}
       {accion==="abono_fin"&&<Modal title="Abonar a financiador" onClose={()=>setAccion(null)}><FormAbonoFinanciador ocs={ocs} financiadores={financiadores} financiadorInicial={abonoFinId} onSave={handleAbonoFinanciador} difsHistoricas={difsHistoricas} /></Modal>}
       {accion==="pago_cliente"&&<Modal title="Ingresar pago" onClose={()=>setAccion(null)}><FormPagoCliente ocs={ocs} onSave={handlePagoCliente} /></Modal>}
       {accion==="compra_manual"&&<Modal title="Nueva OC — manual" onClose={()=>setAccion(null)}><FormIngresarCompra perfil={perfil} ocs={ocs} financiadores={financiadores} vendedores={vendedores} entidadesCatalogo={entidadesCatalogo} buscarDuplicado={buscarDuplicadoOC} onSave={handleIngresarCompra} /></Modal>}

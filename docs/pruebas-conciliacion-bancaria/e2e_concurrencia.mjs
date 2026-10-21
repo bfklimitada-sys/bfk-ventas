@@ -106,6 +106,7 @@ const texto = (p) => p.locator("[role=dialog]").innerText().catch(() => "");
   await A.p.locator("[role=dialog] [data-cartola-archivos]").waitFor({ state: "attached", timeout: 15000 });
   await A.p.locator("[role=dialog] [data-cartola-archivos]").setInputFiles([rHist, rLinea, rLinea]);
   await A.p.locator("[data-cartola-conciliacion]").waitFor({ timeout: 15000 }); await A.p.waitForTimeout(400);
+  await A.p.locator("[data-ver-conciliados]").click(); await A.p.waitForTimeout(200);   // vista simple: lo conciliado se ve con «Ver conciliados»
   ok("X3_reimportar_no_vuelve_a_proponer", (await A.p.locator(`[data-preparar="${K.gasto}"]`).count()) === 0
     && (await A.p.locator(`[data-mov="${K.gasto}"]`).first().getAttribute("data-estado")) !== "pendiente");
   ok("X3_reimportar_no_escribe", b.escr.slice(n1).filter((w) => w.metodo !== "GET").length === 0);

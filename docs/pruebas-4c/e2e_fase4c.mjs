@@ -216,9 +216,10 @@ await escenario("C7", async () => {
     await p.locator("[role=dialog] [data-cartola-archivos]").setInputFiles(ruta); await p.locator("[data-cartola-conciliacion]").waitFor({ timeout: 15000 }); await espera(p, 400); };
   await cargar();
   ok("C7_tres_abonos_por_registrar", (await p.locator("[data-preparar]").count()) === 3);
-  const opciones = async (k) => { await p.locator("[data-preparar]").nth(k).click(); await espera(p, 300);
+  // Vista simple (21/10/2026): el depósito de vale vista va en «Por revisar» (arriba); se elige cada abono por su monto.
+  const opciones = async (abono) => { await p.locator(`[data-preparar*="|0|${abono}|"]`).click(); await espera(p, 300);
     return p.locator("[data-opcion-abono]").evaluate((e) => ({ v: e.value, ops: [...e.options].map((o) => o.text) })); };
-  let sel = await opciones(0);
+  let sel = await opciones(2440000);
   ok("C7_varias_facturas_ofrecida_sin_preseleccion", sel.v === "" && sel.ops.some((o) => /2 facturas/.test(o)), sel);
   const idVarias = await p.locator("[data-opcion-abono]").evaluate((e) => [...e.options].find((o) => /2 facturas/.test(o.text)).value);
   await p.locator("[data-opcion-abono]").selectOption(idVarias); await espera(p, 200);
@@ -234,10 +235,10 @@ await escenario("C7", async () => {
   ok("C7_estados_recalculados", oc("oc2").estado_pago_cliente === "pagado" && oc("oc4").estado_pago_cliente === "pagado", ["oc2", "oc4"].map((i) => [oc(i).estado_pago_cliente, oc(i).monto_cobrado]));
   await cargar();
   ok("C7_abono_registrado_ya_no_se_ofrece", (await p.locator("[data-preparar]").count()) === 2);
-  sel = await opciones(0);
+  sel = await opciones(100000);
   ok("C7_parcial_ofrecido_sin_preseleccion", sel.v === "" && sel.ops.some((o) => /Abono parcial/.test(o)), sel);
   await p.getByRole("button", { name: "Cancelar" }).click(); await espera(p, 200);
-  sel = await opciones(1);
+  sel = await opciones(500000);
   ok("C7_vale_vista_ofrecido_sin_preseleccion", sel.v === "" && sel.ops.some((o) => /Vale vista/.test(o)), sel);
   const idVV = await p.locator("[data-opcion-abono]").evaluate((e) => [...e.options].find((o) => /Vale vista/.test(o.text)).value);
   await p.locator("[data-opcion-abono]").selectOption(idVV); await p.locator("[data-confirmo]").check(); await p.locator("[data-registrar]").click(); await espera(p, 3000);

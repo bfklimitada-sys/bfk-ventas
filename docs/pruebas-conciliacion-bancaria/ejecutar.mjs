@@ -5,6 +5,10 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 const D = path.dirname(fileURLToPath(import.meta.url));
-const salida = path.join(process.env.TMPDIR || "/tmp", "reglas_conciliacion_bancaria.bundle.mjs");
-await build({ entryPoints: [path.join(D, "reglas.test.mjs")], bundle: true, platform: "node", format: "esm", outfile: salida, logLevel: "error", banner: { js: "import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);" }, jsx: "automatic", loader: { ".js": "jsx" } });
-execFileSync(process.execPath, [salida], { stdio: "inherit" });
+let fallo = false;
+for (const t of ["reglas.test.mjs", "simple.test.mjs"]) {
+  const salida = path.join(process.env.TMPDIR || "/tmp", `${t}.conciliacion.bundle.mjs`);
+  await build({ entryPoints: [path.join(D, t)], bundle: true, platform: "node", format: "esm", outfile: salida, logLevel: "error", banner: { js: "import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);" }, jsx: "automatic", loader: { ".js": "jsx" } });
+  try { execFileSync(process.execPath, [salida], { stdio: "inherit" }); } catch { fallo = true; }
+}
+if (fallo) process.exitCode = 1;

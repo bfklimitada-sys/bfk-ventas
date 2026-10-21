@@ -7,16 +7,10 @@
 //    y reconoce las respuestas de la base: 23505 (ya registrado), BFK01 (posible duplicado de un registro
 //    manual: vincular o confirmar que es otra operación) y PGRST202 (función aún no instalada).
 // ═══════════════════════════════════════════════════════════════
-import { CIERRE_CONCILIACION, ESTADOS, conciliarMovimientos } from "./conciliacion.js";
+import { CIERRE_CONCILIACION, ESTADOS, conciliarMovimientos, marcaCartola } from "./conciliacion.js";
 
-// Marca del movimiento: cart:AAAAMMDD:cargo:abono:saldo:ocurrencia. La ocurrencia distingue dos líneas idénticas
-// (mismo día, monto y saldo), que al unir cartolas se conservan las dos.
-export function marcaCartola(movs, i) {
-  const m = movs?.[i];
-  if (!m) return null;
-  const ocurrencia = movs.slice(0, i).filter((x) => x.clave === m.clave).length + 1;
-  return `cart:${String(m.fecha).replace(/-/g, "")}:${Number(m.cargo) || 0}:${Number(m.abono) || 0}:${Number(m.saldo)}:${ocurrencia}`;
-}
+// La marca del movimiento vive en conciliacion.js (la usa también la conciliación); se reexporta aquí.
+export { marcaCartola };
 
 // Marcas vigentes en los datos (un pago a vendedor anulado no cuenta).
 export function marcasVigentes({ ocs = [], gastos = [], pagosVendedor = [], pagoFinSueltos = [], aportes = [] } = {}) {
@@ -37,6 +31,7 @@ export function verificarRegistro(movs, i, datosFrescos, { cierre = CIERRE_CONCI
   if (!x) return { ok: false, motivo: "El movimiento ya no está en la cartola cargada." };
   if (x.anteriorCierre) return { ok: false, motivo: "Movimiento anterior al cierre: solo consulta." };
   if (marcasVigentes(datosFrescos).has(marcaCartola(movs, i))) return { ok: false, motivo: "Este movimiento ya fue registrado desde la cartola (otra sesión): no se registra de nuevo." };
+  if (x.estado === "conciliado" && x.origen === "decision") return { ok: false, motivo: "Este movimiento ya está conciliado con un registro existente de BFK (vínculo confirmado): no se registra de nuevo." };
   if (!x.registrable && !decidido) return { ok: false, motivo: `Este movimiento ya tiene un registro en BFK (${ESTADOS[x.estado] || x.estado}): no se registra de nuevo.` };
   return { ok: true, motivo: "" };
 }

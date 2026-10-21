@@ -53,6 +53,10 @@ async function abrirCartola(p, archivos) {
   await p.locator("[data-cartola-conciliacion]").waitFor({ timeout: 15000 }); await espera(p, 500);
 }
 const estado = (p, clave) => p.locator(`[data-mov="${clave}"]`).first().getAttribute("data-estado");
+// Vista simple (21/10/2026): por defecto solo «Por revisar» y «Sin registrar»; esto muestra también conciliados y anteriores.
+async function verTodo(p) {
+  for (const b of ["[data-ver-conciliados]", "[data-ver-anteriores]"]) if (await p.locator(b).count()) { await p.locator(b).click(); await espera(p, 200); }
+}
 
 // ── E1: cargar y consultar no escribe nada; deduplica; muestra todo; nada preseleccionado ──
 {
@@ -60,6 +64,8 @@ const estado = (p, clave) => p.locator(`[data-mov="${clave}"]`).first().getAttri
   const { page: p, errs, ctx } = await abrir(browser, b, { url: URL_APP, ...escritorio, espera: 3000 });
   const n0 = b.escr.length;
   await abrirCartola(p, [rHist, rHist2, rLinea]);
+  ok("E1_por_defecto_oculta_conciliados_y_anteriores", (await p.locator("[data-mov]").count()) === 2 && (await p.locator('[data-grupo="ya"]').count()) === 0);
+  await verTodo(p);
   const nMov = await p.locator("[data-mov]").count();
   ok("E1_muestra_todos_los_movimientos_sin_duplicar", nMov === 5, nMov);
   ok("E1_informa_duplicados", /no se cuentan dos veces/.test(await p.locator("[data-duplicados]").innerText().catch(() => "")));
@@ -72,7 +78,7 @@ const estado = (p, clave) => p.locator(`[data-mov="${clave}"]`).first().getAttri
   await p.locator("[data-tipo-egreso]").selectOption("vendedor"); await p.locator("[data-destino]").selectOption("v1"); await espera(p, 200);
   ok("E1_sin_confirmacion_no_se_puede_registrar", await p.locator("[data-registrar]").isDisabled());
   ok("E1_confirmacion_resume_lo_que_se_escribira", /Pago a Luis Ejemplo Soto por \$480\.000/.test(await p.locator("[data-confirmacion]").innerText()));
-  for (const f of ["conciliado", "posible", "pendiente", "neutro"]) { await p.locator(`[data-filtro="${f}"]`).click(); await espera(p, 150); await p.locator(`[data-filtro="${f}"]`).click(); }
+  for (let k = 0; k < 2; k++) { await p.locator("[data-ver-conciliados]").click(); await espera(p, 150); await p.locator("[data-ver-anteriores]").click(); await espera(p, 150); }
   ok("E1_consultar_no_escribe_nada", escriturasFinancieras(b, n0).length === 0 && b.escr.slice(n0).filter((w) => w.metodo !== "GET").length === 0, b.escr.slice(n0).filter((w) => w.metodo !== "GET"));
   ok("E1_totales_requieren_confirmacion", await p.locator("[data-guardar-totales]").isDisabled());
   ok("E1_sin_errores", errs.length === 0, errs);
@@ -98,6 +104,7 @@ const estado = (p, clave) => p.locator(`[data-mov="${clave}"]`).first().getAttri
   ok("E2_pago_con_total_y_operacion_bancaria", fila && Number(fila.monto_transferido) === 480000 && fila.referencia_bancaria === "8811" && Number(fila.mes) === 8 && fila.fecha === "2026-10-12"
     && pv[0].cuerpo.p_marca === "cart:20261012:480000:0:2663003:1", pv[0]?.cuerpo);
   await abrirCartola(p, [rHist, rLinea, rHist]);
+  await verTodo(p);
   ok("E2_reimportado_queda_conciliado_y_no_se_vuelve_a_proponer", (await estado(p, "2026-10-12|480000|0|2663003")) === "conciliado" && (await p.locator('[data-preparar="2026-10-12|480000|0|2663003"]').count()) === 0);
   ok("E2_reimportar_no_escribe", escriturasFinancieras(b, n0).length === w.length);
   ok("E2_sin_errores", errs.length === 0, errs);
@@ -131,6 +138,7 @@ const estado = (p, clave) => p.locator(`[data-mov="${clave}"]`).first().getAttri
   await abrirCartola(p, [rHist, rHueco, rRota]);
   ok("E4_aviso_de_cartola_faltante", /Falta\(n\) cartola\(s\)/.test(await p.locator("[data-cartolas-faltantes]").innerText().catch(() => "")));
   ok("E4_cartola_con_error_rechazada", (await p.locator('[data-archivo="rechazado"]').count()) === 1);
+  await verTodo(p);
   ok("E4_solo_movimientos_validos", (await p.locator("[data-mov]").count()) === 4);
   ok("E4_no_escribe", b.escr.slice(n0).filter((w) => w.metodo !== "GET").length === 0);
   ok("E4_sin_errores", errs.length === 0, errs);
