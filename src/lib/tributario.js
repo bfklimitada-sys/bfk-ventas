@@ -132,16 +132,41 @@ export const tipoVentaPorDocumentos = (oc) => {
 };
 export const ventaExentaPorDocumentos = (oc) => tipoVentaPorDocumentos(oc) === "exenta";
 // Neto de un monto de venta de la OC: si sus documentos la muestran exenta, el monto ya es neto (sin IVA).
-export const netoDeVenta = (oc, monto) => (ventaExentaPorDocumentos(oc) ? Number(monto) || 0 : (Number(monto) || 0) / (1 + TASA_IVA));
-// Registrar una factura afecta nueva (formulario actual, DTE 33) sobre una OC que ya tiene una factura exenta vigente
-// cambiaría su tratamiento tributario sin respaldo: se bloquea con este mensaje. null = se puede registrar como siempre.
+export const netoDeVenta = (oc, monto) => (ventaExenta(oc) ? Number(monto) || 0 : (Number(monto) || 0) / (1 + TASA_IVA));
+// ── Fase 3 (20/10/2026): facturación según la clasificación tributaria APROBADA de la OC ──
+// OC exenta aprobada (tratamiento exento + clasificacion_id, copiados por la base al aprobar) → solo DTE 34.
+// OC afecta (o sin clasificación: todo el historial) → solo DTE 33, registrada exactamente como antes.
+export const esOCExentaAprobada = (oc) => ["exenta_fora", "exenta_otra"].includes(oc?.tratamiento_iva) && !!oc?.clasificacion_id;
+export const tipoFacturaDeOC = (oc) => (esOCExentaAprobada(oc) ? 34 : 33);
+// Venta exenta para pantallas: por su clasificación aprobada o (historial) por sus facturas DTE 34 vigentes.
+export const ventaExenta = (oc) => esOCExentaAprobada(oc) || ventaExentaPorDocumentos(oc);
+// Motivo por el que NO se puede registrar una factura nueva en la OC con el tipo que le corresponde (null = se puede).
 export const bloqueoFacturaPorExenta = (oc) => {
-  // Fase 2: OC clasificada exenta (aprobada por un administrador): no se registra como afecta; la DTE 34 llega en la fase 3.
-  if (["exenta_fora", "exenta_otra"].includes(oc?.tratamiento_iva))
-    return "Esta OC está clasificada como exenta. Este formulario registra solo facturas afectas (DTE 33); la factura exenta (DTE 34) se habilitará en la fase 3.";
+  const vig = facturasVigentesDe(oc);
+  if (esOCExentaAprobada(oc)) {
+    const af = vig.filter((f) => !esFacturaExenta(f)).map((f) => f.numero_factura).filter(Boolean);
+    return af.length ? `La OC está clasificada exenta pero tiene factura afecta vigente (N.º ${af.join(", ")}): anúlala con nota de crédito antes de registrar la factura exenta.` : null;
+  }
   const t = tipoVentaPorDocumentos(oc);
   return t === "exenta" || t === "mixta"
-    ? "Esta OC tiene una factura exenta (DTE 34) vigente. Reemitirla o agregar otra factura desde aquí la registraría como afecta (DTE 33); queda bloqueado hasta habilitar la clasificación tributaria aprobada (fase 2)."
+    ? "Esta OC tiene una factura exenta (DTE 34) vigente pero no tiene una clasificación exenta aprobada: registrar otra factura la dejaría inconsistente. Solicita y aprueba la clasificación tributaria primero."
     : null;
 };
-
+// Validación del registro de una factura (la usa el formulario y, otra vez, el guardado). null = válido.
+export function validarRegistroFactura(oc, { tipoDte = 33, numero, fecha, monto, confirmaEmitida } = {}) {
+  const b = bloqueoFacturaPorExenta(oc); if (b) return b;
+  const esperado = tipoFacturaDeOC(oc);
+  if (Number(tipoDte) === 34 && esperado !== 34) return "Esta OC no tiene una clasificación exenta aprobada: no se puede registrar una factura exenta (DTE 34).";
+  if (Number(tipoDte) !== 34 && esperado === 34) return "Esta OC está clasificada exenta: solo admite factura exenta (DTE 34).";
+  if (!String(numero || "").trim()) return "Indica el número de factura";
+  if (esperado === 34 && !String(fecha || "").trim()) return "Indica la fecha de emisión de la factura exenta";
+  if (!(Number(monto) > 0)) return "Indica el monto";
+  if (esperado === 34 && !confirmaEmitida) return "Confirma que la factura exenta ya fue emitida en el SII (BFK solo la registra; no la emite).";
+  return null;
+}
+// Fila a insertar en eventos_factura para una factura exenta (DTE 34): monto exento = monto, IVA de venta = 0 y la
+// referencia a la clasificación tributaria de la OC (fundamento y respaldo quedan en la clasificación aprobada).
+export const camposFacturaExenta = (oc, monto) => ({
+  tipo_dte: 34, monto_exento: Number(monto) || 0, monto_iva: 0,
+  notas: `DTE 34 exenta · ${oc?.fundamento_iva || "clasificación aprobada"} · clasificación ${oc?.clasificacion_id || "—"}`.slice(0, 500),
+});

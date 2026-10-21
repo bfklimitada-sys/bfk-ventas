@@ -81,8 +81,27 @@ export function repartirEnvios(items, envios, prorrateo = FORMULA.prorrateo) {
   return out;
 }
 
+// ── Cotización exenta (fase 3 ventas exentas, 20/10/2026) ──
+// Solo con una clasificación tributaria APROBADA (tratamiento exento + clasificacion_id, que la base copia al aprobar).
+// Nunca por «IVA 0%» en las bases ni por impuestos $0 en Mercado Público.
+export const TRATAMIENTOS_EXENTOS = ["exenta_fora", "exenta_otra"];
+export const esExentaAprobada = (cot) => TRATAMIENTOS_EXENTOS.includes(cot?.tratamiento_iva) && !!cot?.clasificacion_id;
+// Qué fórmula usa el cálculo: `_exenta_fija` (precios ya ofertados de una cotización adjudicada: se conserva la fórmula
+// con que se guardó) o, si no, la clasificación aprobada vigente.
+export const calculoExento = (cot) => (cot && Object.prototype.hasOwnProperty.call(cot, "_exenta_fija") ? cot._exenta_fija === true : esExentaAprobada(cot));
+// Fórmula que se guarda con la cotización: idéntica a la actual para afectas; las exentas lo dejan registrado.
+export const formulaParaGuardar = (cot) => (calculoExento(cot) ? { ...FORMULA, exenta: true, base_exenta: "costo_bruto" } : FORMULA);
+// ¿Con qué fórmula se guardó? (para conservar los precios de una cotización adjudicada)
+export const formulaGuardadaExenta = (formulaGuardada) => !!(formulaGuardada && typeof formulaGuardada === "object" && formulaGuardada.exenta === true);
+
 // Cálculo completo de la cotización con desglose explícito. recargo: fracción (0,30 = 30%).
+//  · AFECTA (sin cambios): recargo sobre el costo neto real (el IVA de compras con factura se recupera como crédito),
+//    unitario neto redondeado hacia arriba, IVA de venta 19%.
+//  · EXENTA aprobada: el IVA de las compras NO se recupera (art. 23 N.º 2 LIVS) y es costo; recargo sobre el costo
+//    bruto de adquisición (productos + despacho asignado, una sola vez), unitario exento redondeado hacia arriba,
+//    IVA de venta $0, total = total exento.
 export function calcularCotizacion(cot, formula = FORMULA) {
+  const exenta = calculoExento(cot);
   const items = cot?.items || []; const envios = cot?.envios || [];
   const asignado = repartirEnvios(items, envios, formula.prorrateo);
   const recargoCot = cot?.recargo == null || cot.recargo === "" ? RECARGO_SUGERIDO : num(cot.recargo);
@@ -97,8 +116,11 @@ export function calcularCotizacion(cot, formula = FORMULA) {
     const envNeto = env && env.con_factura === false ? envBruto : envBruto / (1 + IVA);
     const costoBruto = prodBruto + envBruto;
     const costoNeto = prodNeto + envNeto;
-    const ivaCredito = costoBruto - costoNeto;
-    const baseRecargo = formula.base === "bruto" ? costoBruto / (1 + IVA) : costoNeto;
+    // Exenta: el IVA soportado no es crédito fiscal → costo real = costo bruto; afecta: costo real = costo neto.
+    const ivaCredito = exenta ? 0 : costoBruto - costoNeto;
+    const ivaNoRecuperable = exenta ? costoBruto - costoNeto : 0;
+    const costoReal = exenta ? costoBruto : costoNeto;
+    const baseRecargo = exenta ? costoBruto : formula.base === "bruto" ? costoBruto / (1 + IVA) : costoNeto;
     const ventaNetaTeorica = baseRecargo * (1 + recargo);
     const unitarioNeto = q > 0 ? redondear(ventaNetaTeorica / q, formula.redondeo) : 0;
     const netoLinea = unitarioNeto * q;
@@ -114,11 +136,11 @@ export function calcularCotizacion(cot, formula = FORMULA) {
     pendientes.push(...avisos);
     return { key: it.key, cantidad: q, recargo, costo_producto_bruto: prodBruto, envio_asignado: envBruto, costo_bruto: costoBruto, costo_neto: costoNeto,
       iva_credito: ivaCredito, venta_neta_teorica: ventaNetaTeorica, unitario_neto: unitarioNeto, neto_linea: netoLinea,
-      utilidad_neta: netoLinea - costoNeto, avisos };
+      utilidad_neta: netoLinea - costoReal, costo_real: costoReal, iva_no_recuperable: ivaNoRecuperable, avisos };
   });
   const s = (k) => lineas.reduce((a, l) => a + l[k], 0);
-  const neto = s("neto_linea"); const ivaDebito = Math.round(neto * IVA);
-  const costoNeto = s("costo_neto"); const ivaCredito = s("iva_credito");
+  const neto = s("neto_linea"); const ivaDebito = exenta ? 0 : Math.round(neto * IVA);
+  const costoNeto = s("costo_neto"); const ivaCredito = s("iva_credito"); const costoReal = s("costo_real");
   const envSinUso = envios.filter((e) => !items.some((it) => it.envio_key === e.key) && num(e.monto) > 0);
   for (const e of envSinUso) pendientes.push(`El envío de ${e.proveedor || "proveedor"} no está asignado a ningún producto.`);
   if (!items.length) pendientes.push("La cotización no tiene productos.");
@@ -127,11 +149,13 @@ export function calcularCotizacion(cot, formula = FORMULA) {
     totales: {
       costo_bruto: s("costo_bruto"), costo_neto: costoNeto, iva_credito: ivaCredito, envios: s("envio_asignado"),
       neto, iva_debito: ivaDebito, total: neto + ivaDebito,
-      utilidad_neta: neto - costoNeto, iva_a_pagar: ivaDebito - ivaCredito,
-      margen_sobre_venta: neto > 0 ? (neto - costoNeto) / neto : 0,
-      recargo_efectivo: costoNeto > 0 ? neto / costoNeto - 1 : 0,
+      utilidad_neta: neto - costoReal, iva_a_pagar: ivaDebito - ivaCredito,
+      margen_sobre_venta: neto > 0 ? (neto - costoReal) / neto : 0,
+      recargo_efectivo: costoReal > 0 ? neto / costoReal - 1 : 0,
       despacho_mercado_publico: 0, // modalidad A: el envío va dentro de los unitarios
+      costo_real: costoReal, iva_no_recuperable: s("iva_no_recuperable"),
     },
+    exenta, tratamiento: exenta ? (cot?.tratamiento_iva || "exenta") : "afecta",
     pendientes, listo: pendientes.length === 0,
   };
 }
@@ -157,13 +181,13 @@ export const margenDeRecargo = (r) => (1 + num(r) > 0 ? num(r) / (1 + num(r)) : 
 
 // Texto tabulado para copiar los unitarios a Mercado Público (o a Excel) desde el celular.
 export function textoParaMercadoPublico(cot, calc) {
-  const filas = [["N°", "Producto", "Cantidad", "Precio unitario neto", "Total neto"].join("\t")];
+  const filas = [["N°", "Producto", "Cantidad", calc.exenta ? "Precio unitario exento" : "Precio unitario neto", calc.exenta ? "Total exento" : "Total neto"].join("\t")];
   (cot.items || []).forEach((it, i) => {
     const l = calc.lineas[i];
     filas.push([i + 1, (it.ficha?.nombre || "").replace(/\s+/g, " ").trim(), l.cantidad, l.unitario_neto, l.neto_linea].join("\t"));
   });
   filas.push(["", "Despacho (modalidad A)", "", "", 0].join("\t"));
-  filas.push(["", "Total neto", "", "", calc.totales.neto].join("\t"));
+  filas.push(["", calc.exenta ? "Total exento (IVA $0)" : "Total neto", "", "", calc.totales.neto].join("\t"));
   return filas.join("\n");
 }
 

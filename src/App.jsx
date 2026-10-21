@@ -1,4 +1,4 @@
-import { bloqueoFacturaPorExenta } from "./lib/tributario";
+import { validarRegistroFactura, tipoFacturaDeOC, camposFacturaExenta } from "./lib/tributario";
 import { cargarClasificaciones, solicitarClasificacion, resolverClasificacion, anularSolicitud, heredarDeCotizacion, subirRespaldo, abrirRespaldo } from "./lib/clasificacionTributariaApi";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { LoginScreen } from "./components/auth/LoginScreen";
@@ -1248,13 +1248,17 @@ export default function App() {
   };
   const handleFactura=async(data)=>{
     const t=session.access_token; const oc=ocs.find(o=>o.id===data.ocId);
-    // Fase 1 exentas: misma regla que el formulario (no registrar como afecta sobre una OC con factura exenta vigente).
-    const bloqueo=oc?bloqueoFacturaPorExenta(oc):null; if(bloqueo) throw new Error(bloqueo);
+    // Fase 3 exentas: mismas reglas que el formulario. El tipo lo fija la clasificación APROBADA de la OC
+    // (exenta → DTE 34 con monto exento e IVA $0; afecta o histórica → DTE 33, fila idéntica a la de siempre).
+    if(!oc) throw new Error("OC no encontrada");
+    const tipo=tipoFacturaDeOC(oc);
+    const v=validarRegistroFactura(oc,{tipoDte:data.tipoDte??33,numero:data.numeroFactura,fecha:data.fecha,monto:data.monto,confirmaEmitida:data.confirmaEmitida}); if(v) throw new Error(v);
     // Lo facturado (solo facturas vigentes) y el estado de cobro los recalcula la base (Fase 4B).
-    await ins("eventos_factura",t,{id:genId("evf"),oc_id:data.ocId,fecha:data.fecha,numero_factura:data.numeroFactura,monto:data.monto,nota_credito:data.notaCredito||null,factura_anulada_numero:data.facturaAnuladaNumero||null,motivo_diferencia:data.motivoDiferencia||null,creado_por:session.user.id});
+    await ins("eventos_factura",t,{id:genId("evf"),oc_id:data.ocId,fecha:data.fecha,numero_factura:data.numeroFactura,monto:data.monto,nota_credito:data.notaCredito||null,factura_anulada_numero:data.facturaAnuladaNumero||null,motivo_diferencia:data.motivoDiferencia||null,creado_por:session.user.id,
+      ...(tipo===34?camposFacturaExenta(oc,data.monto):{})});
     await registrarCambio(t,{ocId:data.ocId,ocNumero:oc?.numero_oc,usuarioId:perfil?.id,
-      usuarioNombre:perfil?.nombre,accion:data.esReemision?"Factura reemitida":"Factura registrada",campo:"numero_factura",valorNuevo:`N°${data.numeroFactura} · ${fmt.money(data.monto)}`});
-    showToast(data.esReemision?`Factura reemitida (anula N°${data.facturaAnuladaNumero} con NC ${data.notaCredito})`:"Factura registrada"); setAccion(null); await cargarTodo();
+      usuarioNombre:perfil?.nombre,accion:data.esReemision?"Factura reemitida":"Factura registrada",campo:"numero_factura",valorNuevo:`${tipo===34?"DTE 34 ":""}N°${data.numeroFactura} · ${fmt.money(data.monto)}`});
+    showToast(data.esReemision?`Factura${tipo===34?" exenta":""} reemitida (anula N°${data.facturaAnuladaNumero} con NC ${data.notaCredito})`:tipo===34?"Factura exenta (DTE 34) registrada":"Factura registrada"); setAccion(null); await cargarTodo();
   };
   // Fase SII: nota de crédito como documento tributario propio (código de referencia 1/2/3).
   // Lo facturado lo recalcula la base con la regla del modelo tributario (una NC código 2 no cambia nada).
@@ -1728,6 +1732,8 @@ export default function App() {
     } else if (tabla==="eventos_pago_financiamiento") {
       await editarPagoFinanciador(t,{eventoId:eventoOriginal.id,fecha:cambios.fecha??eventoOriginal.fecha,monto:cambios.monto??eventoOriginal.monto});
     } else {
+      // Fase 3: en una factura exenta (DTE 34) el monto exento sigue al monto y el IVA de venta queda en $0.
+      if(tabla==="eventos_factura"&&Number(eventoOriginal.tipo_dte)===34&&cambios.monto!=null) cambios={...cambios,monto_exento:Number(cambios.monto)||0,monto_iva:0};
       const filas=await upd(tabla, t, eventoOriginal.id, cambios);
       if(!Array.isArray(filas)||!filas.length) throw new Error("La base no guardó la corrección (sin permiso o el registro ya no existe). No se modificó nada.");
       const nombre={eventos_factura:"Factura corregida",eventos_pago_cliente:"Cobro corregido",eventos_entrega:"Entrega corregida"}[tabla];

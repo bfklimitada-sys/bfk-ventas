@@ -6,7 +6,7 @@
 import { chromium, CHROME, crearBase, abrir } from "./mock_estado.mjs";
 import { crearDatos, RESPUESTAS_MP } from "./datos_oc.mjs";
 import { validarSolicitud, motivoIncompatibleOC, etiquetaTratamiento, cotizacionVinculadaA, historialDe } from "../../src/lib/clasificacionTributaria.js";
-import { bloqueoFacturaPorExenta } from "../../src/lib/tributario.js";
+import { bloqueoFacturaPorExenta, validarRegistroFactura } from "../../src/lib/tributario.js";
 
 const URL_APP = process.argv[2] || "http://127.0.0.1:4190/";
 const F = []; let nOk = 0;
@@ -24,7 +24,9 @@ const TRIB_COLS = ["tratamiento_iva", "fundamento_iva", "respaldo_iva", "tratami
   ok("U3_factura_afecta_vigente_bloquea", /factura afecta vigente \(N\.º 702\)/.test(motivoIncompatibleOC(O("oc2"), "exenta_fora", "x".repeat(20))));
   ok("U4_documentos_exigen_procedimiento", /procedimiento documental/.test(motivoIncompatibleOC({ ...O("oc3"), eventos_factura: [{ numero_factura: "1", monto: 1, tipo_dte: 33 }, { numero_factura: "2", monto: 1, tipo_dte: 61, ref_folio: "1", ref_codigo: 1 }] }, "exenta_fora", "")));
   ok("U5_mp_con_impuestos_bloquea", /Mercado Público informa impuestos/.test(motivoIncompatibleOC({ ...O("oc3"), mp: { iva: 190000 } }, "exenta_fora")) && motivoIncompatibleOC({ ...O("oc3"), mp: { iva: 0 } }, "exenta_fora") === null);
-  ok("U6_oc_exenta_bloquea_factura_afecta", /clasificada como exenta/.test(bloqueoFacturaPorExenta({ ...O("oc3"), tratamiento_iva: "exenta_fora" })) && bloqueoFacturaPorExenta(O("oc3")) === null);
+  // Fase 3: una OC exenta APROBADA solo admite DTE 34 (la afecta queda bloqueada); sin aprobación se trata como afecta.
+  ok("U6_oc_exenta_solo_admite_dte34", /solo admite factura exenta/.test(validarRegistroFactura({ ...O("oc3"), tratamiento_iva: "exenta_fora", clasificacion_id: "k" }, { tipoDte: 33, numero: "1", monto: 1 }))
+    && bloqueoFacturaPorExenta({ ...O("oc3"), tratamiento_iva: "exenta_fora", clasificacion_id: "k" }) === null && bloqueoFacturaPorExenta(O("oc3")) === null);
   ok("U7_vinculo_cotizacion_explicito", cotizacionVinculadaA({ numero_oc: "2003-103-SE26" }, [{ estado: "adjudicada", oc_codigo: "2003 103 se26", tratamiento_iva: "exenta_fora" }])?.tratamiento_iva === "exenta_fora"
     && cotizacionVinculadaA({ numero_oc: "2003-103-SE26" }, [{ estado: "presentada", oc_codigo: "2003-103-SE26" }]) === null);
   ok("U8_historial_por_objetivo", historialDe([{ ambito: "oc", oc_id: "oc3", solicitado_en: "1" }, { ambito: "oc", oc_id: "oc4", solicitado_en: "2" }], "oc", "oc3").length === 1);
@@ -144,11 +146,12 @@ for (const [pref, movil] of [["E", false], ["M", true]]) {
     ok(`${pref}C1_aprobacion_enviada`, r && r.p_decision === "aprobar" && r.p_observacion === "Certificado revisado", r);
     await abrirOC(p, "2003-103-SE26");
     const t = await seccion(p).innerText().catch(() => "");
-    ok(`${pref}C2_vigente_exenta_con_respaldo`, /Exenta FO\.R\.A\. \(art\. 101, Ley 18\.948\)/.test(t) && /Fundamento: Art\. 101/.test(t) && /fase 3/.test(t) && /Aprobada/.test(t), t);
+    ok(`${pref}C2_vigente_exenta_con_respaldo`, /Exenta FO\.R\.A\. \(art\. 101, Ley 18\.948\)/.test(t) && /Fundamento: Art\. 101/.test(t) && /factura exenta \(DTE 34/.test(t) && /Aprobada/.test(t), t);
     await p.locator("[data-indice-ficha] button", { hasText: "Facturación SII" }).first().click(); await espera(p, 400);
     await p.locator("[data-hoja-lateral]").last().getByRole("button", { name: /Emitir factura$/ }).first().click(); await espera(p, 500);
     const m = p.locator("[role=dialog]").last();
-    ok(`${pref}C3_factura_afecta_bloqueada_en_oc_exenta`, /clasificada como exenta/.test(await m.locator("[data-bloqueo-exenta]").innerText().catch(() => "")) && await m.getByRole("button", { name: /Registrar factura/ }).isDisabled());
+    // Fase 3: la OC exenta aprobada registra factura exenta (DTE 34); la afecta no se ofrece.
+    ok(`${pref}C3_oc_exenta_solo_factura_exenta`, (await m.locator("[data-factura-exenta]").count()) === 1 && !(await m.locator("[data-nota-dte33]").count()) && (await m.getByRole("button", { name: /Registrar factura exenta/ }).count()) === 1);
     await p.keyboard.press("Escape"); await espera(p, 300);
     // Una OC histórica sigue igual (sin clasificación ni aviso).
     await abrirOC(p, "2004-104-SE26");

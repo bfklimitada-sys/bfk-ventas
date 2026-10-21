@@ -55,8 +55,8 @@ export function ClasificacionTributaria({ ambito, objetivo, historial, perfil, o
             Aprobado el {fecha(vig.tratamiento_aprobado_en)}{hist.find((h) => h.id === vig.clasificacion_id)?.resuelto_por_nombre ? ` por ${hist.find((h) => h.id === vig.clasificacion_id).resuelto_por_nombre}` : ""}
           </div>
         )}
-        {esExentaClasificada(vig) && <div data-trib-aviso-fase style={{ fontSize: 12, color: C.warnText, marginTop: 6, fontWeight: 600 }}>
-          <Ic n="⚠" /> {ambito === "oc" ? "La factura exenta (DTE 34) se registrará cuando se habilite su emisión (fase 3); hasta entonces no se registran facturas afectas en esta OC." : "La fórmula de la cotización sigue con IVA 19% hasta la fase 3 (precio exento sobre costo bruto)."}
+        {esExentaClasificada(vig) && <div data-trib-aviso-fase style={{ fontSize: 12, color: C.info, marginTop: 6, fontWeight: 600 }}>
+          <Ic n="⚖️" /> {ambito === "oc" ? "Esta OC se registra con factura exenta (DTE 34, IVA de venta $0), emitida en el SII; no admite factura afecta." : "La cotización se calcula como exenta: recargo sobre el costo bruto (el IVA de compras no se recupera) y sin IVA de venta. Los precios de una cotización ya adjudicada no cambian."}
         </div>}
         {aviso && <div style={{ fontSize: 12, color: C.inkMuted, marginTop: 6 }}>{aviso}</div>}
       </div>

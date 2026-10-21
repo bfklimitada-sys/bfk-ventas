@@ -1,6 +1,6 @@
 import { facturaVigente } from "../../lib/calculos";
 import { estaEntregada } from "../../lib/ocs";
-import { bloqueoFacturaPorExenta } from "../../lib/tributario";
+import { bloqueoFacturaPorExenta, tipoFacturaDeOC, validarRegistroFactura } from "../../lib/tributario";
 import { useState, useEffect } from "react";
 import { BuscadorOC, Field } from "../ui/Basicos";
 import { C, MONO, btnP, fmt, iMono, iStyle, selStyle } from "../../lib/theme";
@@ -30,9 +30,12 @@ export function FormEmitirFactura({ ocs, onSave, ocPreseleccionada }) {
   const selected=ocs.find(o=>o.id===ocId);
   const facturaAnterior=selected?facturaVigente(selected):undefined;
   const esReemision=!!facturaAnterior;
-  // Fase 1 exentas (20/10/2026): este formulario registra solo facturas afectas (DTE 33, como siempre). Si la OC ya tiene
-  // una factura exenta (DTE 34) vigente, no se permite reemitir como afecta: eso queda para la fase 2 (clasificación aprobada).
+  // Fase 3 exentas (20/10/2026): el tipo de documento lo fija la clasificación APROBADA de la OC, no el usuario:
+  // OC exenta aprobada → factura exenta DTE 34; OC afecta o histórica → DTE 33 (registro idéntico al de siempre).
+  // BFK solo REGISTRA facturas ya emitidas en el SII; no las emite.
   const bloqueoExenta=selected?bloqueoFacturaPorExenta(selected):null;
+  const tipoDte=selected?tipoFacturaDeOC(selected):33;
+  const [confirmaEmitida,setConfirmaEmitida]=useState(false);
   useEffect(()=>{ if(selected&&!monto) setMonto(String(selected.monto_total||"")); },[selected]);
 
   // Diferencia entre lo facturado y lo que dice la OC (ajustes del SII, redondeos)
@@ -52,10 +55,11 @@ export function FormEmitirFactura({ ocs, onSave, ocPreseleccionada }) {
       setErr("Esta OC no tiene la entrega registrada. Regístrala primero, o marca la casilla para continuar igual.");return;}
     if(!numFact.trim()){setErr("Indica el número de factura");return;}
     if(!monto||montoFact<=0){setErr("Indica el monto");return;}
+    { const v=validarRegistroFactura(selected,{tipoDte,numero:numFact,fecha,monto:montoFact,confirmaEmitida}); if(v){setErr(v);return;} }
     if(esReemision&&!notaCredito.trim()){setErr("Esta OC ya tiene una factura — indica el N° de nota de crédito que la anula");return;}
     if(difGrande&&!motivoDif.trim()){setErr("La diferencia con la OC es grande — explica el motivo");return;}
     setErr(""); setSaving(true);
-    try{await onSave({ocId,fecha,numeroFactura:numFact.trim(),monto:montoFact,esReemision,notaCredito:notaCredito.trim(),facturaAnuladaNumero:facturaAnterior?.numero_factura,motivoDiferencia:hayDif?(motivoDif.trim()||null):null});}
+    try{await onSave({ocId,tipoDte,confirmaEmitida,fecha,numeroFactura:numFact.trim(),monto:montoFact,esReemision,notaCredito:notaCredito.trim(),facturaAnuladaNumero:facturaAnterior?.numero_factura,motivoDiferencia:hayDif?(motivoDif.trim()||null):null});}
     catch(e){setErr(e.message);}finally{setSaving(false);};
   };
   return (
@@ -99,8 +103,19 @@ export function FormEmitirFactura({ ocs, onSave, ocPreseleccionada }) {
       )}
       {esReemision&&<Field label="N° Nota de crédito (anula factura anterior)" required><input style={iMono} value={notaCredito} onChange={e=>setNotaCredito(e.target.value)} placeholder="ej: 123" /></Field>}
       {err&&<div style={{background:C.dangerLight,color:C.dangerText,borderRadius:8,padding:"8px 12px",fontSize:13,marginBottom:10,fontWeight:600}}>{err}</div>}
-      <div data-nota-dte33 style={{fontSize:12,color:C.inkMuted,lineHeight:1.45,marginBottom:10}}>Se registra como <b>factura afecta (DTE 33)</b>. Las facturas exentas (DTE 34) se habilitarán cuando la OC tenga una clasificación tributaria respaldada y aprobada; un impuesto $0 en Mercado Público no basta.</div>
-      <button onClick={handleSave} disabled={saving||!!bloqueoExenta} style={btnP(saving||bloqueoExenta?C.inkFaint:C.info)}>{saving?"Guardando…":esReemision?"✓ Reemitir factura":"✓ Registrar factura"}</button>
+      {tipoDte===34?(
+        <div data-factura-exenta style={{background:C.infoLight,border:`1px solid ${C.info}55`,borderRadius:8,padding:"10px 12px",marginBottom:10}}>
+          <div style={{fontSize:12,fontWeight:800,color:C.info}}>Factura exenta (DTE 34) · IVA de venta $0</div>
+          <div style={{fontSize:12,color:C.ink,lineHeight:1.45,marginTop:4}}>Clasificación aprobada: {selected?.tratamiento_iva==="exenta_fora"?"exenta FO.R.A.":"exenta (otra exención legal)"}{selected?.fundamento_iva?` · ${selected.fundamento_iva}`:""}. Se registra el monto como exento y el IVA en $0.</div>
+          <label style={{display:"flex",alignItems:"flex-start",gap:7,cursor:"pointer",marginTop:8}}>
+            <input data-confirma-emitida type="checkbox" checked={confirmaEmitida} onChange={e=>{setConfirmaEmitida(e.target.checked);setErr("");}} style={{marginTop:2}} />
+            <span style={{fontSize:12,color:C.ink,fontWeight:600}}>Confirmo que esta factura exenta ya fue emitida en el SII con el folio y la fecha indicados (BFK solo la registra; no la emite).</span>
+          </label>
+        </div>
+      ):(
+        <div data-nota-dte33 style={{fontSize:12,color:C.inkMuted,lineHeight:1.45,marginBottom:10}}>Se registra como <b>factura afecta (DTE 33)</b>. Una factura exenta (DTE 34) solo se registra en una OC con clasificación tributaria exenta aprobada; un impuesto $0 en Mercado Público no basta.</div>
+      )}
+      <button onClick={handleSave} disabled={saving||!!bloqueoExenta} style={btnP(saving||bloqueoExenta?C.inkFaint:C.info)}>{saving?"Guardando…":esReemision?(tipoDte===34?"✓ Reemitir factura exenta":"✓ Reemitir factura"):(tipoDte===34?"✓ Registrar factura exenta":"✓ Registrar factura")}</button>
     </div>
   );
 }

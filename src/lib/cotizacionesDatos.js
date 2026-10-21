@@ -11,7 +11,7 @@
 // No toca ninguna tabla existente de BFK (la tabla "vendedores" solo se LEE para reutilizar el catálogo).
 // ═══════════════════════════════════════════════════════════════
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./supabase.jsx";
-import { fichaPublica, calcularCotizacion, FORMULA } from "./cotizaciones.js";
+import { fichaPublica, calcularCotizacion, FORMULA, formulaParaGuardar } from "./cotizaciones.js";
 
 const CLAVE_LOCAL = "bfk_cotizaciones_prueba_v1";
 export const DEP_IMG = "cz-productos"; // depósito propio del módulo (imágenes de fichas)
@@ -191,8 +191,9 @@ export function crearAlmacen(token, modo, esquema = 1) {
         return { ...it, ficha, iva_compra: Math.round(l.iva_credito), envio_asignado: l.envio_asignado, costo_bruto: Math.round(l.costo_bruto), costo_neto: Math.round(l.costo_neto), unitario_venta_neto: l.unitario_neto };
       }));
       // Fase 2 exentas: la clasificación tributaria se gestiona aparte (trib_*): nunca viaja al guardar la cotización.
-      const { tratamiento_iva, fundamento_iva, respaldo_iva, tratamiento_aprobado_por, tratamiento_aprobado_en, clasificacion_id, ...cotSinTrib } = cot;   // eslint-disable-line no-unused-vars
-      return rpc(v2 ? "cz_guardar_cotizacion_v2" : "cz_guardar_cotizacion", { p: { ...cotSinTrib, items, formula: FORMULA, subtotal_neto: calc.totales.neto, impuestos: calc.totales.iva_debito, total: calc.totales.total,
+      // Fase 3: la fórmula guardada registra si los precios se calcularon como exentos (afecta: FORMULA idéntica a la actual).
+      const { tratamiento_iva, fundamento_iva, respaldo_iva, tratamiento_aprobado_por, tratamiento_aprobado_en, clasificacion_id, _exenta_fija, ...cotSinTrib } = cot;   // eslint-disable-line no-unused-vars
+      return rpc(v2 ? "cz_guardar_cotizacion_v2" : "cz_guardar_cotizacion", { p: { ...cotSinTrib, items, formula: formulaParaGuardar(cot), subtotal_neto: calc.totales.neto, impuestos: calc.totales.iva_debito, total: calc.totales.total,
         costo_neto: Math.round(calc.totales.costo_neto), iva_credito: Math.round(calc.totales.iva_credito) } });
     },
     // Biblioteca: página de fichas SIN imágenes (solo rutas); la miniatura se carga al mostrarse.

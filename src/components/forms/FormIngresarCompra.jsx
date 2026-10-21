@@ -6,7 +6,7 @@ import { entidadPorRut } from "../../lib/rut";
 import { mensajeDuplicado } from "../../lib/ocs";
 import { fmt } from "../../lib/theme";
 import { ventaDeOC } from "../../lib/productosOC";
-import { ventaExentaPorDocumentos } from "../../lib/tributario";
+import { ventaExenta } from "../../lib/tributario";
 
 // Valor del selector para "sin vendedor" elegido a propósito (distinto de "no elegido").
 const SIN_VENDEDOR="__sin_vendedor__";
@@ -47,7 +47,7 @@ export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, ent
   const difVenta=ocExistente&&ventaTotal>0&&Math.abs(ventaTotal-ventaOC)>1;
   // Fase 1 exentas (20/10/2026): una OC cuyas facturas vigentes son todas DTE 34 se muestra como venta exenta (sin IVA).
   // Solo se reconoce por documentos ya registrados; este formulario no crea ventas exentas.
-  const exenta=!!ocExistente&&ventaExentaPorDocumentos(ocExistente);
+  const exenta=!!ocExistente&&ventaExenta(ocExistente);
   const rotVenta=exenta?"exenta (sin IVA)":"con IVA";
   // OC existente (14/10/2026): la venta viene de Mercado Público y NO se pide ni se modifica aquí.
   // Se muestra como referencia: por producto si el desglose es confiable; si no, solo el monto adjudicado.
