@@ -36,6 +36,19 @@ export function moduloSimulado(esquema) {
       if (t === "cz_guardar_cotizacion" || t === "cz_guardar_cotizacion_v2") {
         const p = b.p; const prev = p.id ? M.cots.get(p.id) : null;
         if (prev && prev.version !== p.version) return route.fulfill({ status: 409, json: { message: "CZ409: otra persona guardó cambios" } });
+        // Vendedor responsable (opt-in: M.reglaVendedor = { catalogo: [{id,nombre}], admins: ["u1"] }): misma regla que el
+        // disparador cz_vendedor_responsable de la base (presentar/adjudicar exige vendedor; cambio en presentada solo admin).
+        if (M.reglaVendedor) {
+          const yo = String(req.headers().authorization || "").replace(/^Bearer t/, ""); const admin = (M.reglaVendedor.admins || ["u1"]).includes(yo);
+          const vid = String(p.vendedor_id || "").trim() || null; const cambio = !prev || vid !== (prev.vendedor_id || null);
+          const err = (m) => route.fulfill({ status: 400, json: { code: "P0001", message: "CZ_VENDEDOR: " + m } });
+          const cat = [...(M.reglaVendedor.catalogo || []), ...M.vend.map((x) => ({ id: `cz:${x.id}`, nombre: x.nombre }))];
+          if (cambio && vid) { const c = cat.find((x) => x.id === vid); if (!c) return err("el vendedor elegido no existe o no está activo en el catálogo de BFK."); p.vendedor_nombre = c.nombre; }
+          if (cambio && !vid) p.vendedor_nombre = null;
+          if (["presentada", "adjudicada"].includes(p.estado) && !vid && (!prev || prev.estado !== p.estado || prev.vendedor_id)) return err(`no se puede ${p.estado === "presentada" ? "presentar" : "adjudicar"} una cotización sin vendedor responsable. Asígnalo en Datos.`);
+          if (prev && cambio && prev.vendedor_id && ["presentada", "adjudicada"].includes(prev.estado) && !admin) return err(`la cotización ya fue ${prev.estado}; solo un administrador puede cambiar su vendedor responsable.`);
+          if (cambio && (prev || vid)) (M.histVend ||= []).push({ id: (M.histVend?.length || 0) + 1, cotizacion_id: p.id || `c-${M.sec + 1}`, estado: p.estado, anterior_id: prev?.vendedor_id || null, anterior_nombre: prev?.vendedor_nombre || null, nuevo_id: vid, nuevo_nombre: p.vendedor_nombre || null, usuario: yo, es_admin: admin, creado_en: new Date().toISOString() });
+        }
         const id = p.id || `c-${++M.sec}`; const v = (prev?.version || 0) + 1;
         M.cots.set(id, { ...(esquema < 2 ? Object.fromEntries(Object.entries(p).filter(([k]) => !["vendedor_id", "vendedor_nombre", "descripcion", "unidad_compra", "region", "presupuesto_estimado", "fecha_publicacion", "fecha_cierre", "requerimientos", "documentos_mp", "mp_consultado_en"].includes(k))) : p), id, version: v, actualizado_en: new Date().toISOString() });
         return json({ id, version: v });
@@ -44,6 +57,7 @@ export function moduloSimulado(esquema) {
       if (t === "cz_registrar_eett_v2" || t === "cz_registrar_eett") { const c = M.cots.get(b.p?.cotizacion_id || b.p_cotizacion); M.eett.push({ id: `e-${M.eett.length + 1}`, cotizacion_id: c.id, version: b.p?.version ?? b.p_version, paginas: b.p?.paginas ?? b.p_paginas, nombre_documento: b.p?.nombre_documento, generado_por_nombre: "Admin Prueba", vendedor_nombre: c.vendedor_nombre, fecha: new Date().toISOString(), ubicacion_pdf: b.p_ruta ?? null }); return json(`e-${M.eett.length}`); }
       if (t === "cz_registrar_vendedor") { const v = { id: `u${M.vend.length + 1}`, nombre: b.p_nombre }; M.vend.push(v); return json(v); }
       if (t === "cz_eliminar_cotizacion") { const c = M.cots.get(b.p_id); if (c.estado === "adjudicada") return route.fulfill({ status: 400, json: { message: "CZ423: una cotización adjudicada o vinculada a una OC no se puede eliminar." } }); M.cots.delete(b.p_id); return json({ eliminada: b.p_id }); }
+      if (t === "cz_transferir_vendedor_a_oc") return route.fallback();   // la resuelve la base simulada de OC de cada prueba
       return json(null);
     }
     if (t === "cotizaciones") {
@@ -62,6 +76,7 @@ export function moduloSimulado(esquema) {
     if (t === "eett_documentos") return json(M.eett.filter((e) => e.cotizacion_id === cid).reverse());
     if (t === "productos_catalogo") return json(M.prods.map((p, i) => ({ id: `p-${i + 1}`, nombre: p.nombre, marca: p.marca, modelo: p.modelo, caracteristicas: p.generales, especificaciones: p.especificaciones, imagenes: p.imagenes, ultima_revision: "2026-10-13" })), { "content-range": `0-0/${M.prods.length}` });
     if (t === "cotizacion_vendedores") return json(M.vend);
+    if (t === "cotizacion_vendedor_historial") return M.reglaVendedor ? json((M.histVend || []).filter((h) => h.cotizacion_id === cid).reverse()) : route.fulfill({ status: 404, json: { message: "relation does not exist" } });
     return route.fallback(); // "vendedores" y el resto: base simulada general (solo lectura)
   };
   return M;

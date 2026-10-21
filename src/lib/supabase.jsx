@@ -94,6 +94,8 @@ async function rpcSimple(t, fn, body) {
 // Registro desde la cartola (funciones de la base con la garantía atómica). El error conserva el código
 // (23505 = ya registrado; BFK01 = posible duplicado de un registro manual; PGRST202 = función aún no instalada).
 export const rpcCartola = (t, fn, body) => rpcSimple(t, fn, body);
+// Vendedor responsable: pasa el vendedor de la cotización adjudicada a su OC (solo si es inequívoco y la OC no tiene).
+export const rpcTransferirVendedor = (t, cotizacionId) => rpcSimple(t, "cz_transferir_vendedor_a_oc", { p_cotizacion_id: cotizacionId });
 // Contactos institucionales (21/10/2026): toda escritura pasa por RPC (la base valida RUT, duplicados y prioridad).
 export const rpcConciliarContactosOC = (t, ocId, origen = "mp", cargo = null) => rpcSimple(t, "conciliar_contactos_oc", { p_oc_id: ocId, p_origen: origen, p_cargo: cargo || null });
 export const rpcGuardarContacto = (t, { id = null, rut = null, datos, ocId = null }) => rpcSimple(t, "guardar_contacto_institucional", { p_id: id, p_rut: rut, p_datos: datos, p_oc_id: ocId });

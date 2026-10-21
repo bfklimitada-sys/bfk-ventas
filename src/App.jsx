@@ -35,6 +35,7 @@ import { alimentarCatalogoDesdeOC } from "./lib/entidadesOC";
 import { ContactosContext } from "./components/ficha/ContactosInstitucion";
 import { AvisoVersionNueva } from "./components/ui/AvisoVersionNueva";
 import { avisosConciliacion } from "./lib/contactosInstitucionales";
+import { rpcTransferirVendedor } from "./lib/supabase";
 import { rpcConciliarContactosOC, rpcGuardarContacto, rpcResolverContacto, rpcContactoObsoleto, rpcResolverPropuesta, rpcFusionarContactos, rpcCorreoCobranza } from "./lib/supabase";
 import { rpcCartola, rpcArchivarOC, rpcRestaurarOC, cargarCorreosBfk, rpcMarcarCorreo, rpcAsignarVendedor, rpcAsignarFinanciador } from "./lib/supabase";
 import { contarCorreosAccion, desdeCorreos, reemplazarCorreo } from "./lib/correosBfk";
@@ -76,7 +77,7 @@ export default function App() {
   const [reinicio,setReinicio]=useState(0);
   const [toast,setToast]=useState(null);
   const [exportando,setExportando]=useState(false);
-  const [clasificaciones,setClasificaciones]=useState(null); const [cotizacionesClasificadas,setCotizacionesClasificadas]=useState([]);   // fase 2 exentas
+  const [clasificaciones,setClasificaciones]=useState(null); const [cotizacionesClasificadas,setCotizacionesClasificadas]=useState([]); const [cotizacionesConOC,setCotizacionesConOC]=useState([]);   // fase 2 exentas
   const [ocs,setOcs]=useState([]); const [ocsArchivadas,setOcsArchivadas]=useState([]); const [financiadores,setFinanciadores]=useState([]); const [vendedores,setVendedores]=useState([]);
   const [categoriasGasto,setCategoriasGasto]=useState([]); const [gastos,setGastos]=useState([]); const [ivaMensual,setIvaMensual]=useState([]);
   const [pagosVendedor,setPagosVendedor]=useState([]); const [ajustesSaldo,setAjustesSaldo]=useState([]); const [perfiles,setPerfiles]=useState([]);
@@ -323,7 +324,7 @@ export default function App() {
     if(!session) return;
     const t=session.access_token;
     try {
-      const [ocsD,finD,vendD,catD,gastD,ivaD,pagVD,ajuD,perfD,contD,entD,pagoFinSueltosD,notifD,histD,reclamosD,respD,pvD,aporD,cartD,sbD,bmD,difD,fotosD,correosD,segD,segHistD,tribD,tribCotD,ciD,ciOcD]=await enLotes([
+      const [ocsD,finD,vendD,catD,gastD,ivaD,pagVD,ajuD,perfD,contD,entD,pagoFinSueltosD,notifD,histD,reclamosD,respD,pvD,aporD,cartD,sbD,bmD,difD,fotosD,correosD,segD,segHistD,tribD,tribCotD,ciD,ciOcD,cotOcD]=await enLotes([
         ()=>conReintento(()=>selOCs(t)),
         ()=>sel("financiadores",t,"&order=nombre").catch(()=>[]),
         ()=>sel("vendedores",t,"&order=nombre").catch(()=>[]),
@@ -354,6 +355,7 @@ export default function App() {
         ()=>sel("cotizaciones",t,"&estado=eq.adjudicada&tratamiento_iva=not.is.null&limit=500").catch(()=>[]),   // cotizaciones adjudicadas ya clasificadas (para heredar a la OC)
         ()=>sel("contactos_institucionales",t,"&order=rut_clave").catch(()=>null),   // contactos institucionales (null = no instalado)
         ()=>sel("contactos_institucionales_oc",t).catch(()=>[]),
+        ()=>sel("cotizaciones",t,"&estado=eq.adjudicada&oc_codigo=not.is.null&limit=1000").catch(()=>[]),   // vendedor responsable de la cotización adjudicada → OC
       ]);
       const reclamosPorOC={}, respPorOC={}, pvPorOC={}, segPorOC={};
       const bitacoraSeg={}; for(const h of (segHistD||[])){ const k=String(h.campo||"").slice(12); if(k) (bitacoraSeg[k]||=[]).push(h); }
@@ -367,7 +369,7 @@ export default function App() {
       setOcs(ocsConReclamos.filter(o=>!o.archivada)); setOcsArchivadas(ocsConReclamos.filter(o=>o.archivada)); setFinanciadores(finD); setVendedores(vendD); setCategoriasGasto(catD);
       setGastos(gastD); setIvaMensual(ivaD); setPagosVendedor(pagVD); setAjustesSaldo(ajuD); setPerfiles(perfD);
       setContactos(contD); setEntidadesCatalogo(entD); setPagoFinSueltos(pagoFinSueltosD);
-      ciDisponible.current=Array.isArray(ciD); setContactosInst(Array.isArray(ciD)?ciD:null); setVinculosInst(Array.isArray(ciOcD)?ciOcD:[]);
+      setCotizacionesConOC(Array.isArray(cotOcD)?cotOcD:[]); ciDisponible.current=Array.isArray(ciD); setContactosInst(Array.isArray(ciD)?ciD:null); setVinculosInst(Array.isArray(ciOcD)?ciOcD:[]);
       setClasificaciones(Array.isArray(tribD)?tribD:null); setCotizacionesClasificadas(Array.isArray(tribCotD)?tribCotD:[]); setNotificaciones(notifD); setHistorialCambios(histD); setAportes(aporD); setUltimaCartola((cartD||[])[0]||null); setSaldoBanco((sbD||[])[0]||null); setBancoMensual(bmD||[]); setDifsHistoricas(difD||[]); setCorreosBfk(correosD||[]);
 
       // Reintentar completar las OCs que se guardaron antes de ser aceptadas
@@ -1276,6 +1278,9 @@ export default function App() {
   // Fase 2 exentas: clasificación tributaria (la base valida permisos, respaldo y compatibilidad con los documentos SII).
   const tributario={
     historial:clasificaciones, cotizaciones:cotizacionesClasificadas,
+    // Vendedor responsable (21/10/2026): cotizaciones adjudicadas vinculadas a una OC y transferencia controlada a la OC.
+    cotizacionesConOC,
+    transferirVendedor:async(cotId)=>{ const r=await rpcTransferirVendedor(session.access_token,cotId); showToast(r?.sin_cambios?"La OC ya tenía ese vendedor":`Vendedor asignado a la OC: ${r?.despues||""}`); await cargarTodo(); },
     solicitar:async(p)=>{ await solicitarClasificacion(session.access_token,p); showToast("Solicitud de clasificación tributaria enviada"); await cargarTodo(); },
     resolver:async(id,decision,obs)=>{ await resolverClasificacion(session.access_token,id,decision,obs); showToast(decision==="aprobar"?"Clasificación tributaria aprobada":"Solicitud rechazada"); await cargarTodo(); },
     anular:async(id)=>{ await anularSolicitud(session.access_token,id); showToast("Solicitud anulada"); await cargarTodo(); },

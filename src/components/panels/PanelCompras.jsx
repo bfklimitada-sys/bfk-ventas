@@ -35,6 +35,7 @@ import { FILTROS_PANEL, esFiltroPanel, esVenta, estaCobrada, estaComprada, estaE
 import { repartirInversion as calcularReparto, productosVendidos, textoProductosVendidos } from "../../lib/productosOC";
 import { MEDIOS_PAGO, esDocumentoBancario, esCobroFueraDeBanco } from "../../lib/mediosPago";
 import { AsignacionesOC } from "../ficha/AsignacionesOC";
+import { VendedorCotizacionOC } from "../ficha/VendedorCotizacionOC";
 import { ContactosOC, useContactos } from "../ficha/ContactosInstitucion";
 import { contactosDeInstitucion } from "../../lib/contactosInstitucionales";
 import { faltaFinanciador, faltaVendedor, nombreFinanciador, nombreVendedor, primerNombre } from "../../lib/asignaciones";
@@ -1108,6 +1109,7 @@ export function FilaOC({ tributario, notaVista, onCrearSeguimiento, onActualizar
 [data-solo-lectura] input:not([data-consulta] *),[data-solo-lectura] select:not([data-consulta] *),[data-solo-lectura] textarea:not([data-consulta] *){pointer-events:none;opacity:.5}`}</style>
 
           <AsignacionesOC oc={oc} vendedores={vendedores} financiadores={financiadores} pagosVendedor={pagosVendedor} onAsignarVendedor={onAsignarVendedor} onAsignarFinanciador={onAsignarFinanciador} />
+          {tributario?.cotizacionesConOC&&<VendedorCotizacionOC oc={oc} cotizaciones={tributario.cotizacionesConOC} vendedores={vendedores} onTransferir={prot(tributario.transferirVendedor)} />}
           <div style={{marginBottom:12}}><ResumenFinanciero oc={oc} /></div>
 
           {sec("info",<>

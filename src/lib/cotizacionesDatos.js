@@ -142,6 +142,7 @@ export function crearAlmacen(token, modo, esquema = 1) {
       escribirLocal(d); return p.id;
     },
     async registrarEETT(meta) { const d = leerLocal(); d.eett.push({ ...meta, id: uuid(), fecha: new Date().toISOString() }); escribirLocal(d); return true; },
+    async historialVendedor() { return []; },
     async listarEETT(cotId) { return leerLocal().eett.filter((e) => e.cotizacion_id === cotId).sort((a, b) => String(b.fecha).localeCompare(String(a.fecha))); },
     async listarVendedores() { return leerLocal().vendedores.map((v) => ({ ...v, origen: "cotizaciones" })); },
     async registrarVendedor(nombre) {
@@ -213,6 +214,11 @@ export function crearAlmacen(token, modo, esquema = 1) {
     async registrarEETT(meta) {
       if (v2) return rpc("cz_registrar_eett_v2", { p: meta });
       return rpc("cz_registrar_eett", { p_cotizacion: meta.cotizacion_id, p_version: meta.version, p_ruta: null, p_hash: meta.hash, p_paginas: meta.paginas });
+    },
+    // Bitácora de asignaciones y cambios de vendedor (vacía si la migración del vendedor responsable no está instalada).
+    async historialVendedor(cotId) {
+      if (!cotId) return [];
+      return leer("cotizacion_vendedor_historial", `select=*&cotizacion_id=eq.${encodeURIComponent(cotId)}&order=creado_en.desc&limit=50`).catch(() => []);
     },
     async listarEETT(cotId) {
       return leer("eett_documentos", `select=id,version,fecha,paginas,hash,estado${v2 ? ",nombre_documento,generado_por_nombre,vendedor_nombre" : ""}&cotizacion_id=eq.${encodeURIComponent(cotId)}&order=fecha.desc&limit=20`);

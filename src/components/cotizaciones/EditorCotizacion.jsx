@@ -9,6 +9,7 @@ import { EditorFicha } from "./EditorFicha";
 import { ImagenFicha } from "./ImagenFicha";
 import { ImportarCompraAgil } from "./ImportarCompraAgil";
 import { VistaPreviaEETT } from "./VistaPreviaEETT";
+import { bloqueoPorVendedor, exigeVendedor, mensajeVendedor, vendedorProtegido } from "../../lib/vendedorCotizacion";
 import { EliminarCotizacion } from "./EliminarCotizacion";
 import { ClasificacionTributaria } from "../ficha/ClasificacionTributaria";
 import logoUrl from "../../assets/bfk-logo.jpg";
@@ -47,6 +48,9 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
   const [cot, setCot] = useState(() => JSON.parse(JSON.stringify(inicial)));
   const [sucio, setSucio] = useState(!inicial.id || !!recuperado);
   const [estadoGuardado, setEstadoGuardado] = useState(inicial.id ? inicial.estado : null);
+  // Lo último guardado del vendedor responsable (para las reglas de presentación y de cambio autorizado).
+  const [guardada, setGuardada] = useState(inicial.id ? { estado: inicial.estado, vendedor_id: inicial.vendedor_id || null, vendedor_nombre: inicial.vendedor_nombre || "" } : null);
+  const [histVend, setHistVend] = useState([]);
   const [pestana, setPestana] = useState(pestanaInicial || (inicial.id ? "productos" : "datos"));
   const [editor, setEditor] = useState(() => (fichaRecuperada?.item ? { item: fichaRecuperada.item, esNuevo: !!fichaRecuperada.esNuevo, respaldo: fichaRecuperada.estado || null } : null)); // { item, esNuevo, respaldo }
   const [aviso, setAviso] = useState(recuperado); // banner «Borrador recuperado localmente»
@@ -114,6 +118,8 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
   useEffect(() => { almacen.listarVendedores?.().then(setVendedores).catch(() => setVendedores([])); }, [almacen]);
   const cargarHistorial = (id = cot.id) => { if (id) almacen.listarEETT?.(id).then(setHistorial).catch(() => {}); };
   useEffect(() => { cargarHistorial(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const cargarHistVend = (id = cot.id) => { if (id) almacen.historialVendedor?.(id).then((h) => setHistVend(h || [])).catch(() => {}); };
+  useEffect(() => { cargarHistVend(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Productos (ingreso manual) ──
   const abrirNuevo = (item) => { fichaEstado.current = null; setEditor({ esNuevo: true, item }); };
@@ -156,6 +162,8 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
 
   // ── Guardar ──
   const guardarInterno = async () => {
+    const bloqueo = bloqueoPorVendedor(cot, guardada);
+    if (bloqueo) { setPestana("datos"); throw Object.assign(new Error(bloqueo), { vendedor: true }); }
     const enviada = cot; const { _idLocal, ...paraBFK } = { ...enviada, ...cotTrib, items: enviada.items, envios: enviada.envios }; // eslint-disable-line no-unused-vars
     const r = await almacen.guardarCotizacion(paraBFK);
     setFormulaGuardada(formulaParaGuardar(paraBFK));
@@ -163,6 +171,7 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
     // Lo escrito DURANTE el guardado se conserva (y sigue marcado como pendiente de guardar).
     const posterior = vivo.current.cot !== enviada;
     setCot((c) => ({ ...c, id: r.id, version: r.version })); setSucio(posterior); setEstadoGuardado(nueva.estado); onGuardada?.(nueva);
+    setGuardada({ estado: nueva.estado, vendedor_id: nueva.vendedor_id || null, vendedor_nombre: nueva.vendedor_nombre || "" }); cargarHistVend(r.id);
     const anterior = idLocal.current; idLocal.current = r.id;
     if (usuarioId && anterior && anterior !== r.id) borrarBorrador(usuarioId, anterior).catch(() => {});
     setAviso(null);
@@ -171,7 +180,7 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
   const guardar = async () => {
     setGuardando(true);
     try { await guardarInterno(); showToast?.("Cotización guardada"); }
-    catch (e) { showToast?.(`No se guardó: ${e.message}`, "error"); } finally { setGuardando(false); }
+    catch (e) { showToast?.(`No se guardó: ${mensajeVendedor(e)}`, "error"); if (/vendedor/i.test(e.message)) setPestana("datos"); } finally { setGuardando(false); }
   };
 
   // ── EETT: mismo generador para vista previa y descarga ──
@@ -202,7 +211,7 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
     setGenerando("descarga"); setFalla(null);
     let base = cot;
     try { if (!cot.id || sucio) base = await guardarInterno(); }
-    catch (e) { setGenerando(""); showToast?.(`No se guardó la cotización: ${e.message} No se generó la EETT.`, "error"); return; }
+    catch (e) { setGenerando(""); showToast?.(`No se guardó la cotización: ${mensajeVendedor(e)} No se generó la EETT.`, "error"); return; }
     try {
       const r = await descargarDe(base);
       showToast?.(`Cotización guardada (versión ${base.version}) y EETT descargada: ${r.paginas} página${r.paginas === 1 ? "" : "s"}`);
@@ -253,7 +262,13 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
     cambiar((c) => { c.institucion = nombre; if (e) { if (!c.rut) c.rut = e.rut || ""; if (!c.comuna) c.comuna = e.comuna || ""; } return c; });
   };
   const aplicarCompraAgil = (cambios) => { if (!Object.keys(cambios).length) return; setDireccion(cambios); showToast?.("Datos de la Compra Ágil aplicados: revísalos y guarda"); };
-  const elegirVendedor = (id) => { const v = vendedores.find((x) => x.id === id); cambiar((c) => { c.vendedor_id = v?.id || null; c.vendedor_nombre = v?.nombre || ""; return c; }); };
+  const elegirVendedor = (id) => {
+    const v = vendedores.find((x) => x.id === id);
+    // Cambio autorizado (administrador) en una cotización ya presentada o adjudicada: se confirma y queda en la bitácora.
+    if (esAdmin && guardada && exigeVendedor(guardada.estado) && guardada.vendedor_id && (v?.id || null) !== guardada.vendedor_id
+        && !window.confirm(`La cotización ya está ${guardada.estado === "adjudicada" ? "adjudicada" : "presentada"}. ¿Cambiar el vendedor responsable de «${guardada.vendedor_nombre || guardada.vendedor_id}» a «${v?.nombre || "Sin asignar"}»? El cambio queda registrado con tu usuario al guardar.`)) return;
+    cambiar((c) => { c.vendedor_id = v?.id || null; c.vendedor_nombre = v?.nombre || ""; return c; });
+  };
   const registrarVendedor = async () => {
     try { const v = await almacen.registrarVendedor(nuevoVend); setVendedores((l) => [...l, v].sort((a, b) => a.nombre.localeCompare(b.nombre))); cambiar((c) => { c.vendedor_id = v.id; c.vendedor_nombre = v.nombre; return c; }); setNuevoVend(null); showToast?.("Vendedor registrado"); }
     catch (e) { showToast?.(e.message, "error"); }
@@ -262,7 +277,8 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
 
   const nPend = calc.pendientes.length; const nRev = pdf.porItem.filter((p) => !p.aprobado).length;
   const titulo = cot.id_externo || (cot.id ? (cot.nombre || cot.institucion || "Cotización sin código") : "Nueva cotización");
-  const vendedorBloqueado = protegido && !esAdmin;
+  const vendedorBloqueado = vendedorProtegido(guardada, esAdmin);
+  const faltaVendedorPresentar = exigeVendedor(cot.estado) && !cot.vendedor_id && !!bloqueoPorVendedor(cot, guardada);
   const sinEsquema = !cap.datosCompraAgil && (cot.vendedor_nombre || cot.requerimientos?.length || cot.descripcion || cot.unidad_compra || cot.region);
 
   return (
@@ -307,7 +323,9 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
           <ImportarCompraAgil cot={cot} token={token} onAplicar={aplicarCompraAgil} deshabilitado={protegido} />
           {sinEsquema && <AvisoLinea tono="warn" dato="esquema-pendiente">El vendedor responsable y los datos importados de la Compra Ágil se guardarán cuando se instale la actualización de la base del módulo (pendiente de autorización). El resto de la cotización se guarda normalmente.</AvisoLinea>}
 
-          <Field label="Vendedor responsable" hint={cap.vendedores ? "Puede ser distinto de quien genera la EETT." : "Catálogo de vendedores de BFK (solo lectura)."}>
+          {!faltaVendedorPresentar && exigeVendedor(cot.estado) && !cot.vendedor_id && <AvisoLinea tono="warn" dato="historica-sin-vendedor">Esta cotización ya figuraba {cot.estado === "adjudicada" ? "adjudicada" : "presentada"} sin vendedor responsable. Asígnalo para completar el registro.</AvisoLinea>}
+          {faltaVendedorPresentar && <AvisoLinea tono="danger" dato="falta-vendedor">Falta el vendedor responsable: no se puede {cot.estado === "adjudicada" ? "adjudicar" : "presentar"} la cotización sin él. Elígelo abajo (un borrador sí se puede guardar sin vendedor).</AvisoLinea>}
+          <Field label="Vendedor responsable" required={exigeVendedor(cot.estado)} hint={vendedorBloqueado ? `La cotización ya está ${guardada?.estado === "adjudicada" ? "adjudicada" : "presentada"}: solo un administrador puede cambiar el vendedor (queda registrado).` : !cot.vendedor_id ? "Obligatorio para presentar la cotización. Elígelo expresamente: no se asigna solo." : cap.vendedores ? "Puede ser distinto de quien genera la EETT." : "Catálogo de vendedores de BFK (solo lectura)."}>
             {nuevoVend === null ? (
               <div style={{ display: "flex", gap: 6 }}>
                 <select data-campo="vendedor" value={cot.vendedor_id || ""} disabled={vendedorBloqueado} onChange={(e) => elegirVendedor(e.target.value)} style={{ ...selStyle, flex: 1 }}>
@@ -325,6 +343,9 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
               </div>
             )}
           </Field>
+          {histVend.length > 0 && <div data-historial-vendedor style={{ fontSize: T.small, color: C.inkMuted, margin: "-6px 0 12px", lineHeight: 1.5 }}>
+            {histVend.slice(0, 5).map((h) => <div key={h.id}>{String(h.creado_en || "").slice(0, 10).split("-").reverse().join("-")} · {h.anterior_nombre || "Sin asignar"} → {h.nuevo_nombre || "Sin asignar"}{h.es_admin ? " (administrador)" : ""}</div>)}
+          </div>}
 
           <Field label="Código Mercado Público (opcional)" hint="Puedes agregarlo después: si falta, se omite del encabezado del PDF. Un código COT no es una OC."><input data-campo="id_externo" value={cot.id_externo} onChange={(e) => setCampo("id_externo", e.target.value.trim().toUpperCase())} style={iMono} placeholder="3390-246-COT26" /></Field>
           <Field label="Nombre de la licitación / compra ágil"><input data-campo="nombre_licitacion" value={cot.nombre} onChange={(e) => setCampo("nombre", e.target.value)} style={iStyle} /></Field>

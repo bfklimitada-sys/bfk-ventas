@@ -1,0 +1,23 @@
+// Pruebas unitarias de las reglas de vendedor responsable (src/lib/vendedorCotizacion.js).
+import { bloqueoPorVendedor, vendedorProtegido, vendedorCotizacionParaOC, mensajeVendedor, exigeVendedor } from "../../src/lib/vendedorCotizacion.js";
+let nOk = 0; const F = []; const ok = (k, v) => { if (v) { nOk++; console.log("OK    " + k); } else { F.push(k); console.log("FALLA " + k); } };
+ok("U01_borrador_sin_vendedor_ok", bloqueoPorVendedor({ estado: "borrador", vendedor_id: null }, null) === null);
+ok("U02_nueva_presentada_sin_vendedor_bloquea", /presentar/.test(bloqueoPorVendedor({ estado: "presentada", vendedor_id: "" }, null)));
+ok("U03_pasar_a_presentada_sin_vendedor_bloquea", !!bloqueoPorVendedor({ estado: "presentada", vendedor_id: null }, { estado: "borrador", vendedor_id: null }));
+ok("U04_adjudicar_sin_vendedor_bloquea", /adjudicar/.test(bloqueoPorVendedor({ estado: "adjudicada", vendedor_id: null }, { estado: "presentada", vendedor_id: null })));
+ok("U05_historica_presentada_sin_vendedor_editable", bloqueoPorVendedor({ estado: "presentada", vendedor_id: null }, { estado: "presentada", vendedor_id: null }) === null);
+ok("U06_quitar_vendedor_a_presentada_bloquea", !!bloqueoPorVendedor({ estado: "presentada", vendedor_id: null }, { estado: "presentada", vendedor_id: "v1" }));
+ok("U07_presentada_con_vendedor_ok", bloqueoPorVendedor({ estado: "presentada", vendedor_id: "v1" }, { estado: "borrador", vendedor_id: null }) === null);
+ok("U08_protegido_para_usuario_no_admin", vendedorProtegido({ estado: "presentada", vendedor_id: "v1" }, false) && !vendedorProtegido({ estado: "presentada", vendedor_id: "v1" }, true));
+ok("U09_borrador_e_historica_sin_vendedor_no_protegidos", !vendedorProtegido({ estado: "borrador", vendedor_id: "v1" }, false) && !vendedorProtegido({ estado: "presentada", vendedor_id: null }, false) && !vendedorProtegido(null, false));
+const cats = [{ estado: "adjudicada", oc_codigo: "1-1-AG26", vendedor_id: "v1", vendedor_nombre: "Uno", id: "c1" }];
+const V = [{ id: "v1" }, { id: "v2" }];
+ok("U10_oc_sin_vendedor_transferible", vendedorCotizacionParaOC({ numero_oc: "1-1-ag26 ", vendedor_id: null }, cats, V).estado === "transferible");
+ok("U11_oc_mismo_vendedor_nada", vendedorCotizacionParaOC({ numero_oc: "1-1-AG26", vendedor_id: "v1" }, cats, V).estado === "igual");
+ok("U12_oc_otro_vendedor_diferente", vendedorCotizacionParaOC({ numero_oc: "1-1-AG26", vendedor_id: "v2" }, cats, V).estado === "diferente");
+ok("U13_capitalizacion_no_se_sobrescribe", vendedorCotizacionParaOC({ numero_oc: "1-1-AG26", vendedor_id: null, capitalizacion_bfk: true }, cats, V).estado === "diferente");
+ok("U14_vendedor_solo_cotizaciones", vendedorCotizacionParaOC({ numero_oc: "1-1-AG26" }, [{ ...cats[0], vendedor_id: "cz:x" }], V).estado === "solo_cotizaciones");
+ok("U15_dos_cotizaciones_ambigua", vendedorCotizacionParaOC({ numero_oc: "1-1-AG26" }, [cats[0], { ...cats[0], id: "c2" }], V).estado === "ambigua");
+ok("U16_sin_vinculo_o_no_adjudicada", vendedorCotizacionParaOC({ numero_oc: "9-9-AG26" }, cats, V).estado === "sin_cotizacion" && vendedorCotizacionParaOC({ numero_oc: "1-1-AG26" }, [{ ...cats[0], estado: "presentada" }], V).estado === "sin_cotizacion");
+ok("U17_mensaje_sin_prefijo", mensajeVendedor(new Error("CZ_VENDEDOR: no se puede presentar")) === "no se puede presentar" && exigeVendedor("adjudicada") && !exigeVendedor("lista"));
+console.log(`RESUMEN vendedor responsable (unitarias): ${nOk} OK, ${F.length} FALLA(S)`); process.exit(F.length ? 1 : 0);
