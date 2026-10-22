@@ -116,5 +116,66 @@ eq("C05 cierre histórico sin cambios", CIERRE_CONCILIACION, "2026-10-07");
 eq("C06 conciliar (con y sin decisiones) no modifica los datos (huella)", JSON.stringify(d0), h0);
 eq("C07 nunca se crea un movimiento: nada queda «registrado» por la conciliación (solo propuestas)", [...V0.sinRegistrar, ...V1.sinRegistrar].every((i) => i.x.estado === "pendiente"), true);
 
+// ── Verificaciones previas a la publicación (22/10/2026) ──
+// P1. Monto y fecha por sí solos NUNCA concilian: un registro único de cada tipo, mismo monto y MISMA fecha, con detalles genéricos.
+{
+  const GLOSAS_E = ["DEPOSITO CON DOCUMENTOS", "OTROS ABONOS", "ABONO PAGO A PROVEEDORES", "TEF DE 1800255 BCI", "PAGOS VARIOS RUT"];
+  const GLOSAS_S = ["TEF A DESCONOCIDO SPA", "PAGO EN LINEA", "CARGO POR TRANSFERENCIA", "TEF A EMPRESA SIN REGISTRO LTDA", "COMPRA NACIONAL"];
+  const d = base(); d.ocs = []; d.gastos = []; d.pagosVendedor = []; d.aportes = [];
+  const L = []; let k = 0;
+  for (const g of GLOSAS_E) { const monto = 300000 + ++k * 1111;
+    d.ocs.push(cobrada("p" + k, "P-" + k, "CLIENTE GENERICO " + k, "60.000.00" + k + "-1", "2026-10-15", monto)); L.push({ fecha: "2026-10-15", op: String(900 + k), desc: g, abono: monto }); }
+  for (const g of GLOSAS_S) { const monto = 300000 + ++k * 1111; const t = k % 4;
+    if (t === 0) d.gastos.push({ id: "pg" + k, categoria_id: "cat_impuesto", subcategoria: "IVA Mensual", monto, fecha: "2026-10-15" });
+    if (t === 1) d.gastos.push({ id: "pg" + k, categoria_id: "cat_otro", monto, fecha: "2026-10-15" });
+    if (t === 2) d.pagosVendedor.push({ id: "pv" + k, vendedor_id: "vmat", fecha: "2026-10-15", monto_pagado: monto, monto_extra_gestion: 0, monto_transferido: monto });
+    if (t === 3) d.pagoFinSueltos.push({ id: "pf" + k, financiador_id: "fbyron", fecha: "2026-10-15", monto });
+    L.push({ fecha: "2026-10-15", op: String(900 + k), desc: g, cargo: monto }); }
+  const C = conciliarMovimientos(unirCartolas([leerCartolaBancoEstado(idaYVuelta(cartolaEnLinea(L, { saldoInicial: 9000000 })), "p1.xlsx")]).movs, d);
+  eq("P1 monto + fecha idénticos, sin otro dato → ningún movimiento queda «Ya registrado»", C.movimientos.filter((x) => x.estado === "conciliado").map((x) => x.m.descripcion), []);
+  eq("P1 (no vacía) 10 movimientos: 9 con su registro como alternativa por revisar; el pago a un vendedor no se ofrece porque el banco nombra a otro destinatario", [C.movimientos.length, C.movimientos.filter((x) => (x.candidatos || []).length === 1).length, C.movimientos.find((x) => x.m.descripcion === "TEF A DESCONOCIDO SPA").estado], [10, 9, "pendiente"]);
+}
+// P2. Código de pagador confirmado para Maule, pero otro cliente tiene un cobro del mismo monto → no se concilia solo.
+{
+  const d = JSON.parse(JSON.stringify(d1)); d.ocs.push(cobrada("o12", "1000-12-AG26", "OTRA MUNICIPALIDAD", "69.000.000-5", "2026-10-21", 333333));
+  d.ocs.push(cobrada("o13", "1000-13-AG26", "I MUNICIPALIDAD DE MAULE", "69.110.900-3", "2026-10-21", 333333));
+  const L = [...LINEA, { fecha: "2026-10-22", op: "220622", desc: "ABONO PAGO A PROVEEDORES", abono: 333333 }];
+  const C = conciliarMovimientos(unirCartolas([leerCartolaBancoEstado(idaYVuelta(cartolaEnLinea(L, { saldoInicial: 5000000 })), "p2.xlsx")]).movs, d);
+  const x = C.movimientos.find((y) => y.monto === 333333);
+  eq("P2 código reutilizable: con un cobro igual de otro cliente → Por revisar, no automático", [x.estado, (x.candidatos || []).map((r) => r.id).sort()], ["posible", ["c_o12", "c_o13"]]);
+  const d2b = JSON.parse(JSON.stringify(d)); d2b.ocs = d2b.ocs.filter((o) => o.id !== "o12");
+  const x2 = conciliarMovimientos(unirCartolas([leerCartolaBancoEstado(idaYVuelta(cartolaEnLinea(L, { saldoInicial: 5000000 })), "p2.xlsx")]).movs, d2b).movimientos.find((y) => y.monto === 333333);
+  eq("P2 sin alternativa de otro cliente → reconocido por la referencia confirmada", [x2.estado, x2.origen], ["conciliado", "aprendido"]);
+}
+// P3. Solo se aprenden destinos concretos (categoría o persona): nunca «cualquier devolución» ni compras.
+{
+  const d = base(); d.pagoFinSueltos.push({ id: "pf_sin", financiador_id: "fbfk", fecha: "2026-10-10", monto: 99000 });
+  d.ocs.push(oc("o14", "1000-14-AG26", "CLIENTE X", "76.000.001-1", { financiador_id: "fbfk", eventos_compra: [{ id: "k_bfk", fecha: "2026-10-10", costo_compra: 88000, financiador_id: "fbfk", proveedor: "PROV" }] }));
+  d.decisiones = [{ marca: "m1", decision: "vinculado", tabla: "eventos_pago_financiamiento", registro_id: "pf_sin", mov_descripcion: "TEF A INVERSIONES ACME LIMITADA" },
+    { marca: "m2", decision: "vinculado", tabla: "eventos_compra", registro_id: "k_bfk", mov_descripcion: "TEF A PROVEEDOR COMPRAS SPA" }];
+  const a = referenciasAprendidas(d, registrosBancarios(d));
+  eq("P3 devolución sin persona y compra → no generan referencia aprendida", [a.destinatarios.size], [0]);
+}
+// P4. Destinatario confirmado (SII) pero existe otro registro del mismo monto y fecha → Por revisar.
+{
+  const d = JSON.parse(JSON.stringify(d1)); d.pagosVendedor.push({ id: "pv_igual", vendedor_id: "vmat", fecha: "2026-10-19", monto_pagado: 45000, monto_extra_gestion: 0, monto_transferido: 45000 });
+  const x = correr(d).C.movimientos.find((y) => y.m.operacion === "7086800");
+  eq("P4 destinatario aprendido con alternativa real del mismo monto → no automático", x.estado !== "conciliado", true);
+}
+// P5. Byron $1.800.000 sin registro: no se propone ni crea devolución FIFO; registrar exige confirmación.
+{
+  const L = [...LINEA, { fecha: "2026-10-21", op: "7078093", desc: "TEF A VEGAS FICTICIO BYRON", cargo: 1800000 }];
+  const d = base(); const h = JSON.stringify(d);
+  const C = conciliarMovimientos(unirCartolas([leerCartolaBancoEstado(idaYVuelta(cartolaEnLinea(L, { saldoInicial: 5000000 })), "p5.xlsx")]).movs, d);
+  const x = C.movimientos.find((y) => y.monto === 1800000); const V = vistaConciliacion(C, { ocs: d.ocs, categorias }); const it = V.sinRegistrar.find((i) => i.x === x);
+  eq("P5 Byron $1.800.000 → Sin registrar, sin candidatos ni propuesta, datos intactos", [x.estado, x.candidatos, it?.propuesta ?? null, JSON.stringify(d) === h], ["pendiente", undefined, null, true]);
+}
+
+// P6. «Abono pago a proveedores» sin N° de operación (0): no genera ni usa una referencia aprendida.
+{
+  const d = base(); d.decisiones = [{ marca: "m0", decision: "vinculado", tabla: "eventos_pago_cliente", registro_id: "c_o1", mov_operacion: "0", mov_descripcion: "ABONO PAGO A PROVEEDORES" }];
+  eq("P6 operación 0 → sin referencia aprendida", referenciasAprendidas(d, registrosBancarios(d)).pagadores.size, 0);
+}
+
 console.log(`\nRESUMEN conciliación automática: ${n} OK, ${F.length} FALLA(S)`);
 if (F.length) process.exitCode = 1;

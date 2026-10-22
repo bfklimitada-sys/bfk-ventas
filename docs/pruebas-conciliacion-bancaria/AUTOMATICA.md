@@ -7,6 +7,8 @@ Regla: **conciliar no es registrar**. Nada se crea solo; lo reconocido se puede 
   - código de pagador de «Abono pago a proveedores» (el banco repite el código por institución) → cliente (RUT);
   - destinatario de una transferencia («TEF A …») → categoría de gasto, persona o tipo de registro.
   - Si una referencia apuntó a dos destinos distintos, se ignora.
+  - Solo destinos concretos (categoría de gasto o persona); nunca «cualquier devolución» ni compras. Sin N° de operación no hay referencia.
+  - Aunque la referencia esté confirmada, si hay otro registro del mismo monto de otro cliente o destino en el período, queda «Por revisar».
 - **Ya registrado automático** solo con referencia aprendida + registro único del mismo monto (cobro −10/+60 días; cargo ±5 días; IVA+PPM con combinación única).
 - **Propuestas** de factura pendiente con la evidencia usada; «pagador identificado» solo con RUT, nombre o referencia aprendida. Una factura del mismo monto, sola, se propone como «no identificada» y se explica qué falta.
 - **Filtros de contradicción**: no se ofrece un cobro cuyo RUT contradice el RUT del detalle, ni un registro de una persona cuando el detalle nombra a otro destinatario.
@@ -20,7 +22,7 @@ Usa la tabla `conciliacion_decisiones` existente (`mov_operacion`, `mov_descripc
 ## Pruebas
 | Prueba | Resultado |
 |---|---|
-| `automatica.test.mjs` (reglas, sección 7, huella) | 27/27 |
+| `automatica.test.mjs` (reglas, sección 7, huella, monto+fecha nunca concilian, código reutilizado, Byron sin devolución) | 35/35 |
 | `e2e_automatica.mjs` (PC 1280 y celular 390) | 20/20 |
 | `docs/migraciones/pruebas/conciliacion/concurrencia.sh` (dos sesiones simultáneas, base desechable) | 4/4 |
 | SQL de decisiones (`ejecutar.sh`) | 30/30 + instalación/reversión |

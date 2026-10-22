@@ -75,7 +75,9 @@ function faltaDe(x) {
   const nCand = (x.candidatos || []).length;
   const partes = [];
   if (x.dir === "entra") {
-    if (esPagoProveedores(x.m.descripcion)) partes.push("Es un «Abono pago a proveedores»: el banco no indica qué institución pagó. Cuando confirmes uno de esa institución, su código de pagador (op. " + (x.m.operacion || "—") + ") se reconocerá solo en los próximos pagos.");
+    if (esPagoProveedores(x.m.descripcion)) partes.push(String(x.m.operacion || "").replace(/^0+/, "")
+      ? "Es un «Abono pago a proveedores»: el banco no indica qué institución pagó. Cuando confirmes uno de esa institución, su código de pagador (op. " + x.m.operacion + ") se reconocerá solo en los próximos pagos."
+      : "Es un «Abono pago a proveedores» sin código de pagador: el banco no indica qué institución pagó.");
     else if (!/\d{7,8}-?[0-9K]/.test(G)) partes.push(G.length >= 34 ? "El detalle del banco viene cortado y no identifica con seguridad quién pagó." : "El detalle del banco no trae el RUT ni un nombre que identifique quién pagó.");
   } else if (destinatarioDe(x.m.descripcion)) partes.push(`El banco solo indica el destinatario («${destinatarioDe(x.m.descripcion)}»).`);
   if (nCand > 1) partes.push(`Hay ${nCand} registros posibles: falta saber cuál corresponde.`);

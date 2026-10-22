@@ -76,7 +76,8 @@ function personasDe(financiadores, vendedores) {
 // Clase de glosa cuyo N° de operación identifica al PAGADOR (convenio de «Pago a proveedores» de cada institución).
 // En otras glosas (TEF, PAGOS VARIOS, bancos) el N° de operación es un código de canal que comparten muchos pagadores.
 export const esPagoProveedores = (desc) => /^ABONO PAGO A PROVEEDORES/.test(norm(desc));
-const claveOperacion = (m) => (esPagoProveedores(m.descripcion) && m.operacion ? `PAP|${String(m.operacion).replace(/^0+/, "")}` : null);
+// Sin N° de operación (vacío o «0») no hay referencia: nunca se agrupan pagos distintos bajo una clave vacía.
+const claveOperacion = (m) => { const op = String(m.operacion || "").replace(/^0+/, ""); return esPagoProveedores(m.descripcion) && op ? `PAP|${op}` : null; };
 // Destinatario de una transferencia («TEF A <nombre>»), normalizado (la glosa viene cortada a ~35 caracteres).
 export const destinatarioDe = (desc) => { const G = norm(desc).replace(/\s+/g, " ").trim(); const m = /^TEF A (.+)$/.exec(G); return m ? m[1].slice(0, 26).trim() : null; };
 
@@ -86,7 +87,9 @@ export function referenciasAprendidas(datos, banco) {
   const porClave = new Map(banco.map((r) => [claveRegistro(r), r]));
   const pagadores = new Map(), destinatarios = new Map();
   const agrega = (mapa, k, v) => { if (k && v) (mapa.get(k) || mapa.set(k, new Set()).get(k)).add(v); };
-  const destinoDe = (r) => (r.tipo === "gasto" ? `cat:${r.cat}` : r.persona ? `persona:${r.persona}` : `tipo:${r.tipo}`);
+  // Solo destinos concretos: una categoría de gasto o una persona. Nunca «cualquier registro de un tipo» (p. ej. cualquier
+  // devolución a financistas) ni compras (que jamás se concilian solas).
+  const destinoDe = (r) => (r.tipo === "gasto" ? `cat:${r.cat}` : r.tipo !== "compra" && r.persona ? `persona:${r.persona}` : null);
   for (const d of (datos.decisiones || []).filter((x) => !x.anulado_en && x.decision === "vinculado")) {
     const r = porClave.get(`${d.tabla}:${d.registro_id}`); if (!r) continue;
     const mov = { descripcion: d.mov_descripcion || "", operacion: d.mov_operacion || "" };
@@ -203,7 +206,9 @@ export function conciliarMovimientos(movs, datos, { cierre = CIERRE_CONCILIACION
       if (rutAprendido) x.pagadorAprendido = rutAprendido;   // también sirve para proponer una factura pendiente de ese cliente
       if (rutAprendido) {
         const u = banco.filter((r) => libre(r) && r.dir === "entra" && r.rut === rutAprendido && r.monto === x.monto && dias(m.fecha, r.fecha) >= -10 && dias(m.fecha, r.fecha) <= 60);
-        if (u.length === 1) { tomar(x, u, "conciliado", ["monto exacto", "referencia bancaria del pagador ya confirmada en un pago anterior"]); x.origen = "aprendido"; continue; }
+        // Si otro cliente tiene un cobro del mismo monto en el período, el código podría estar reutilizado: no se concilia solo.
+        const otroCliente = banco.some((r) => libre(r) && r.dir === "entra" && r.rut !== rutAprendido && r.monto === x.monto && dias(m.fecha, r.fecha) >= -10 && dias(m.fecha, r.fecha) <= 60);
+        if (u.length === 1 && !otroCliente) { tomar(x, u, "conciliado", ["monto exacto", "referencia bancaria del pagador ya confirmada en un pago anterior"]); x.origen = "aprendido"; continue; }
       }
       const abrev = abreviaturaUnica(m.descripcion, datos.ocs);
       const c = banco.filter((r) => libre(r) && r.dir === "entra" && r.monto === x.monto);
@@ -231,8 +236,10 @@ export function conciliarMovimientos(movs, datos, { cierre = CIERRE_CONCILIACION
       const dest = aprendidas.destinatarios.get(destinatarioDe(m.descripcion));
       const delDestino = (r) => (dest.startsWith("cat:") ? r.tipo === "gasto" && `cat:${r.cat}` === dest : dest.startsWith("persona:") ? `persona:${r.persona}` === dest : `tipo:${r.tipo}` === dest);
       const u = banco.filter((r) => libre(r) && r.dir === "sale" && delDestino(r) && r.monto === x.monto && Math.abs(dias(r.fecha, m.fecha)) <= 5);
-      if (u.length === 1) { tomar(x, u, "conciliado", ["monto exacto", "fecha cercana", "destinatario ya confirmado antes con este mismo destino"]); x.origen = "aprendido"; continue; }
-      if (!u.length && dest === `cat:${CATEGORIA_IMPUESTO_SII}`) {
+      // Otro registro del mismo monto y fecha cercana fuera de ese destino → hay alternativa real: no se concilia solo.
+      const otro = banco.some((r) => libre(r) && r.dir === "sale" && !delDestino(r) && r.monto === x.monto && Math.abs(dias(r.fecha, m.fecha)) <= 5);
+      if (u.length === 1 && !otro) { tomar(x, u, "conciliado", ["monto exacto", "fecha cercana", "destinatario ya confirmado antes con este mismo destino"]); x.origen = "aprendido"; continue; }
+      if (!u.length && !otro && dest === `cat:${CATEGORIA_IMPUESTO_SII}`) {
         const sub = subconjuntosExactos(banco.filter((r) => libre(r) && r.tipo === "gasto" && r.cat === CATEGORIA_IMPUESTO_SII && Math.abs(dias(r.fecha, m.fecha)) <= 5 && r.monto < x.monto), x.monto, 4);
         if (sub.length === 1) { tomar(x, sub[0], "conciliado", ["destinatario ya confirmado antes como pago al SII", `${sub[0].length} gastos «Impuesto SII» suman exacto`]); x.origen = "aprendido"; continue; }
       }
