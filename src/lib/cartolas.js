@@ -77,6 +77,8 @@ export function leerCartolaBancoEstado(wb, nombre = "archivo") {
       idx[k] = hdr.findIndex((h) => sinTilde(h) === sinTilde(nombreCol));
       if (idx[k] < 0) return { ...base, formato, errores: [`Falta la columna «${nombreCol}»`] };
     }
+    // Opcional (solo como dato informativo): sucursal donde se hizo el depósito o la operación.
+    const iSucursal = hdr.findIndex((h) => sinTilde(h) === "SUCURSAL");
     const errores = [];
     const desdeR = formato === "historico" ? dmyAIso(resumen["Fecha Inicio"]) : null;
     const hastaR = formato === "historico" ? dmyAIso(resumen["Fecha Final"]) : null;
@@ -98,7 +100,7 @@ export function leerCartolaBancoEstado(wb, nombre = "archivo") {
         fecha = `${anio}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
       }
       try {
-        movs.push({ fecha, operacion: normalizarOperacion(r[idx.operacion]), descripcion: txt(r[idx.descripcion]),
+        movs.push({ fecha, operacion: normalizarOperacion(r[idx.operacion]), descripcion: txt(r[idx.descripcion]), sucursal: iSucursal >= 0 ? txt(r[iSucursal]) : "",
           cargo: montoEntero(r[idx.cargo], ctx), abono: montoEntero(r[idx.abono], ctx), saldo: montoEntero(r[idx.saldo], ctx), archivo: nombre, fila: k + 2 });
       } catch (e) { errores.push(e.message); }
     });

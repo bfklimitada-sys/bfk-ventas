@@ -189,7 +189,10 @@ si("cada movimiento trae fecha, descripción, monto, motivo y acción", [...V.re
   const Cv = conciliarMovimientos(U.movs, dv);
   const g = Cv.movimientos.find((x) => x.monto === 33333), c = Cv.movimientos.find((x) => x.monto === 55555);
   eq("V1 cargo con un único gasto del mismo monto y fecha → Por revisar (no conciliado ni registrable)", [g.estado, g.registrable, g.evidencia], ["posible", false, ["monto exacto", "fecha ±3 días", "sin otro dato"]]);
-  eq("V1 abono con un único cobro del mismo monto y fecha, sin RUT ni nombre → Por revisar", [c.estado, c.registrable], ["posible", false]);
+  eq("V1 abono cuyo detalle trae el RUT de OTRO cliente: el cobro del mismo monto no se ofrece (contradicción) → Sin registrar", [c.estado, c.registrable], ["pendiente", true]);
+  const sinRutV = U.movs.map((m) => (m.abono === 55555 ? { ...m, descripcion: "TRANSFERENCIA DE TERCEROS" } : m));
+  const c2 = conciliarMovimientos(sinRutV, dv).movimientos.find((x) => x.monto === 55555);
+  eq("V1 abono con un único cobro del mismo monto y fecha, sin RUT ni nombre → Por revisar", [c2.estado, c2.registrable], ["posible", false]);
   const dsii = datosBase(); const sinGlosa = U.movs.map((m) => (m.descripcion === "PAGO EN LINEA SII F29" ? { ...m, descripcion: "TRANSFERENCIA ELECTRONICA" } : m));
   eq("V1 IVA + PPM que suman el cargo pero el detalle no dice SII → Por revisar con ambos gastos", (() => { const x = conciliarMovimientos(sinGlosa, dsii).movimientos.find((y) => y.monto === 435000); return [x.estado, (x.candidatos || []).map((r) => r.id).sort()]; })(), ["posible", ["g_iva", "g_ppm"]]);
 }

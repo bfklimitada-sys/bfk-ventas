@@ -104,7 +104,7 @@ for (const movil of [false, true]) {
   // 2. Cada movimiento muestra fecha, descripción, monto, motivo y acción; lenguaje simple.
   const tarjeta = p.locator(`[data-mov="${CL[5]}"]`);
   const tt = await tarjeta.innerText();
-  ok(`${X}03_tarjeta_con_fecha_descripcion_monto_motivo_accion`, /16\/10/.test(tt) && /PROVEEDOR CS/.test(tt) && /80\.000/.test(tt) && /Motivo/.test(tt) && /Acción/.test(tt) && /Compra con fondos propios/.test(tt), tt);
+  ok(`${X}03_tarjeta_con_fecha_descripcion_monto_motivo_accion`, /16\/10/.test(tt) && /PROVEEDOR CS/.test(tt) && /80\.000/.test(tt) && /Evidencia/.test(tt) && /Acción/.test(tt) && /Compra con fondos propios/.test(tt), tt);
   ok(`${X}04_sin_expresiones_confusas`, !PROHIBIDAS.test(await p.locator("[data-cartola-conciliacion]").innerText()));
   ok(`${X}05_dos_cargos_iguales_avisados_no_duplicados`, /operaciones distintas/.test(await p.locator(`[data-mov="${CL[2]}"]`).innerText()) && (await p.locator(`[data-mov="${CL[2]}"] [data-vincular-registro]`).count()) === 2);
   ok(`${X}06_deposito_de_vale_vista_por_revisar`, (await p.locator(`[data-mov="${CL[8]}"]`).getAttribute("data-tipo-revision")) === "vale_vista" && (await p.locator(`[data-mov="${CL[8]}"] [data-preparar]`).count()) === 1);

@@ -358,6 +358,11 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, ga
               {it.x.origen === "decision" && onAnularDecision && (
                 <button data-deshacer-vinculo onClick={() => anular(it.x.decisiones.map((d) => d.id))} style={{ ...btnG, marginTop: 6, fontSize: 11, padding: "4px 10px" }}>Deshacer vínculo</button>
               )}
+              {it.reconocidoAuto && !it.x.anteriorCierre && (it.x.registros || []).length > 0 && (
+                <button data-no-corresponde-auto={it.x.registros.map((r) => r.id).join(",")} disabled={decisiones === null || !!decidiendo} onClick={() => decidir(it, "rechazado", it.x.registros)}
+                  title="Reconocido automáticamente. Si no es este registro, se descarta para este movimiento (no cambia el registro)."
+                  style={{ ...btnG, marginTop: 6, fontSize: 11, padding: "4px 10px", opacity: decisiones === null ? 0.5 : 1 }}>No corresponde</button>
+              )}
             </Movimiento>
           ))}
         </Seccion>
@@ -443,6 +448,8 @@ function SoloRevision({ c }) {
 const mensajeDecision = (e) => {
   const t = String(e?.rpcCuerpo?.message || e?.message || e || "");
   if (/PGRST202|Could not find the function/i.test(t)) return "La base aún no guarda decisiones de conciliación (actualización pendiente): no se guardó nada.";
+  // Otra sesión acaba de vincular ese registro o ese movimiento (índice único de la base): se recarga y no se guarda nada.
+  if (/conc_dec_|duplicate key|23505|llave duplicada/i.test(t)) return "Otra persona acaba de vincular este registro o este movimiento. No se guardó nada; la lista se actualizó.";
   return t.replace(/^CONC:\s*/, "") || "No se pudo guardar la decisión.";
 };
 
@@ -486,7 +493,10 @@ function Movimiento({ it, abierto, children }) {
       <div data-titulo-mov style={{ fontSize: 13, fontWeight: 700, color: t.texto, marginTop: 3 }}>{it.titulo}</div>
       <Linea dato="posible" k="Posible OC o categoría" v={it.posible} />
       <Linea dato="registro" k="Registro BFK" v={it.registros?.join(" · ")} />
-      <Linea dato="motivo" k="Motivo" v={it.motivo} />
+      <Linea dato="motivo" k="Evidencia" v={it.motivo} />
+      <Linea dato="falta" k="Falta" v={it.falta} />
+      <Linea dato="antecedentes" k="Antecedentes" v={it.antecedentes} />
+      {it.sucursal && x.dir === "entra" && /DEPOSITO/i.test(m.descripcion) && <Linea dato="sucursal" k="Sucursal" v={it.sucursal} />}
       {it.nota && it.nota !== it.registros?.join(" · ") && <Linea dato="nota" k="Detalle" v={it.nota} />}
       <Linea dato="accion" k="Acción" v={it.accion} />
       {it.aviso && <div data-aviso-gemelo style={{ fontSize: 12, color: C.warnText, marginTop: 4, fontWeight: 600 }}>{it.aviso}</div>}

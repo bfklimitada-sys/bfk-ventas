@@ -73,6 +73,50 @@ function personasDe(financiadores, vendedores) {
   return [...m].map(([clave, tokens]) => ({ clave, tokens }));
 }
 
+// Clase de glosa cuyo N° de operación identifica al PAGADOR (convenio de «Pago a proveedores» de cada institución).
+// En otras glosas (TEF, PAGOS VARIOS, bancos) el N° de operación es un código de canal que comparten muchos pagadores.
+export const esPagoProveedores = (desc) => /^ABONO PAGO A PROVEEDORES/.test(norm(desc));
+const claveOperacion = (m) => (esPagoProveedores(m.descripcion) && m.operacion ? `PAP|${String(m.operacion).replace(/^0+/, "")}` : null);
+// Destinatario de una transferencia («TEF A <nombre>»), normalizado (la glosa viene cortada a ~35 caracteres).
+export const destinatarioDe = (desc) => { const G = norm(desc).replace(/\s+/g, " ").trim(); const m = /^TEF A (.+)$/.exec(G); return m ? m[1].slice(0, 26).trim() : null; };
+
+// Referencias aprendidas SOLO de lo que un usuario confirmó (vínculos) o registró desde la cartola (marca): son
+// auditables y se deshacen con la decisión. Una referencia que alguna vez apuntó a dos destinos distintos se ignora.
+export function referenciasAprendidas(datos, banco) {
+  const porClave = new Map(banco.map((r) => [claveRegistro(r), r]));
+  const pagadores = new Map(), destinatarios = new Map();
+  const agrega = (mapa, k, v) => { if (k && v) (mapa.get(k) || mapa.set(k, new Set()).get(k)).add(v); };
+  const destinoDe = (r) => (r.tipo === "gasto" ? `cat:${r.cat}` : r.persona ? `persona:${r.persona}` : `tipo:${r.tipo}`);
+  for (const d of (datos.decisiones || []).filter((x) => !x.anulado_en && x.decision === "vinculado")) {
+    const r = porClave.get(`${d.tabla}:${d.registro_id}`); if (!r) continue;
+    const mov = { descripcion: d.mov_descripcion || "", operacion: d.mov_operacion || "" };
+    if (r.tipo === "cobro") agrega(pagadores, claveOperacion(mov), r.rut);
+    else agrega(destinatarios, destinatarioDe(mov.descripcion), destinoDe(r));
+  }
+  for (const r of banco.filter((x) => x.marca)) {   // registrados desde la cartola: «Desde cartola: <glosa> (op. N)»
+    const t = /Desde cartola:\s*(.+?)(?:\s*\(op\. (\d+)\))?$/.exec(String(r.nota || "")); if (!t) continue;
+    if (r.tipo === "cobro") agrega(pagadores, claveOperacion({ descripcion: t[1], operacion: t[2] || "" }), r.rut);
+    else agrega(destinatarios, destinatarioDe(t[1]), destinoDe(r));
+  }
+  const unico = (mapa) => new Map([...mapa].filter(([, v]) => v.size === 1).map(([k, v]) => [k, [...v][0]]));
+  return { pagadores: unico(pagadores), destinatarios: unico(destinatarios) };
+}
+
+// Nombre de la institución ABREVIADO al final de un detalle cortado (p. ej. «…MUNICIPALIDAD DE ARI» → ARICA). Solo
+// cuenta si esa abreviatura corresponde a UN solo cliente (por RUT) entre todas las OC.
+function abreviaturaUnica(desc, ocs) {
+  const G = norm(desc).replace(/\s+/g, " ").trim();
+  if (G.length < 34) return null;
+  const ult = G.split(" ").at(-1);
+  if (!ult || ult.length < 3 || GENERICAS.has(ult) || /\d/.test(ult)) return null;
+  const ruts = new Set();
+  for (const o of ocs || []) {
+    const ws = norm(o.cliente).split(/[^A-Z]+/).filter((w) => w.length >= 4 && !GENERICAS.has(w));
+    if (ws.some((w) => w.startsWith(ult) && w !== ult)) ruts.add(soloRut(o.rut_cliente));
+  }
+  return ruts.size === 1 ? { prefijo: ult, rut: [...ruts][0] } : null;
+}
+
 // Universo de registros BFK que pasaron por la cuenta, con dirección (entra/sale) y persona cuando aplica.
 export function registrosBancarios({ ocs, financiadores, vendedores, gastos, pagosVendedor, pagoFinSueltos, aportes }) {
   const personas = personasDe(financiadores, vendedores);
@@ -147,15 +191,26 @@ export function conciliarMovimientos(movs, datos, { cierre = CIERRE_CONCILIACION
     else x.vinculoRoto = ds;   // registro inexistente/anulado o vínculo inconsistente: se vuelve a revisar
   }
 
+  const aprendidas = referenciasAprendidas(datos, banco);
+
   // Pasada 1: correspondencias con evidencia además del monto.
   for (const x of res.filter((y) => y.estado === "pendiente")) {
     const libre = libreX(x);
     const m = x.m, P = personaGlosa(m.descripcion), ruts = (norm(m.descripcion).match(/\d{7,8}-?[\dK]/g) || []).map(soloRut);
     if (x.dir === "entra") {
+      // Referencia del pagador ya confirmada antes (mismo N° de «Pago a proveedores» → mismo cliente).
+      const rutAprendido = aprendidas.pagadores.get(claveOperacion(m));
+      if (rutAprendido) x.pagadorAprendido = rutAprendido;   // también sirve para proponer una factura pendiente de ese cliente
+      if (rutAprendido) {
+        const u = banco.filter((r) => libre(r) && r.dir === "entra" && r.rut === rutAprendido && r.monto === x.monto && dias(m.fecha, r.fecha) >= -10 && dias(m.fecha, r.fecha) <= 60);
+        if (u.length === 1) { tomar(x, u, "conciliado", ["monto exacto", "referencia bancaria del pagador ya confirmada en un pago anterior"]); x.origen = "aprendido"; continue; }
+      }
+      const abrev = abreviaturaUnica(m.descripcion, datos.ocs);
       const c = banco.filter((r) => libre(r) && r.dir === "entra" && r.monto === x.monto);
       const ev = (r) => [Math.abs(dias(m.fecha, r.fecha)) <= 3 && "fecha ±3 días", r.rut && ruts.includes(r.rut) && "RUT del cliente en la glosa",
         r.cliente && r.cliente.split(/[^A-Z]+/).some((w) => w.length >= 5 && !GENERICAS.has(w) && norm(m.descripcion).includes(w)) && "nombre del cliente en la glosa",
-        fechaEnNota(r, m.fecha) && "la nota del registro cita esta fecha bancaria", P && r.persona === P && "persona en la glosa"].filter(Boolean);
+        fechaEnNota(r, m.fecha) && "la nota del registro cita esta fecha bancaria", P && r.persona === P && "persona en la glosa",
+        abrev && r.rut === abrev.rut && "nombre abreviado del cliente en la glosa"].filter(Boolean);
       // Monto y fecha NO bastan: hace falta RUT, nombre del cliente, persona o la fecha citada en la nota.
       const fuertes = c.map((r) => ({ r, e: ev(r) })).filter((y) => y.e.some((t) => t !== "fecha ±3 días"));
       if (fuertes.length === 1) { tomar(x, [fuertes[0].r], "conciliado", ["monto exacto", ...fuertes[0].e]); continue; }
@@ -170,6 +225,17 @@ export function conciliarMovimientos(movs, datos, { cierre = CIERRE_CONCILIACION
       const g = banco.filter((r) => libre(r) && r.dir === "sale" && r.persona === P && dias(r.fecha, m.fecha) >= -5 && dias(r.fecha, m.fecha) <= 1);
       if (g.length && g.reduce((a, r) => a + r.monto, 0) === x.monto)
         tomar(x, g, "conciliado", ["persona en la glosa", g.length > 1 ? `todos sus registros de la fecha suman exacto (${g.length})` : "registro único de la persona", "fecha −5/+1"]);
+    } else if (aprendidas.destinatarios.get(destinatarioDe(m.descripcion))) {
+      // Destinatario ya confirmado antes con un solo destino (p. ej. siempre «Impuesto SII»): mismo destino, monto exacto
+      // (o IVA + PPM que suman exacto) y fecha cercana → ya registrado. Si no calza, sigue el flujo normal (por revisar).
+      const dest = aprendidas.destinatarios.get(destinatarioDe(m.descripcion));
+      const delDestino = (r) => (dest.startsWith("cat:") ? r.tipo === "gasto" && `cat:${r.cat}` === dest : dest.startsWith("persona:") ? `persona:${r.persona}` === dest : `tipo:${r.tipo}` === dest);
+      const u = banco.filter((r) => libre(r) && r.dir === "sale" && delDestino(r) && r.monto === x.monto && Math.abs(dias(r.fecha, m.fecha)) <= 5);
+      if (u.length === 1) { tomar(x, u, "conciliado", ["monto exacto", "fecha cercana", "destinatario ya confirmado antes con este mismo destino"]); x.origen = "aprendido"; continue; }
+      if (!u.length && dest === `cat:${CATEGORIA_IMPUESTO_SII}`) {
+        const sub = subconjuntosExactos(banco.filter((r) => libre(r) && r.tipo === "gasto" && r.cat === CATEGORIA_IMPUESTO_SII && Math.abs(dias(r.fecha, m.fecha)) <= 5 && r.monto < x.monto), x.monto, 4);
+        if (sub.length === 1) { tomar(x, sub[0], "conciliado", ["destinatario ya confirmado antes como pago al SII", `${sub[0].length} gastos «Impuesto SII» suman exacto`]); x.origen = "aprendido"; continue; }
+      }
     } else {
       // Sin persona en el detalle del banco, un registro del mismo monto y fecha cercana NO se concilia solo: queda
       // «Por revisar» (pasada 2) hasta que el usuario confirme. Excepción con evidencia propia: pago al SII (F29), cuando
@@ -185,10 +251,16 @@ export function conciliarMovimientos(movs, datos, { cierre = CIERRE_CONCILIACION
     }
   }
   // Pasada 2: coincidencias sin respaldo suficiente (posible) o nada (pendiente).
+  // Solo alternativas reales: se descartan registros CONTRADICTORIOS (otro RUT en el detalle, un registro de otra
+  // persona cuando el banco nombra a un destinatario distinto) y, después del cierre, registros de más de 60 días antes.
   for (const x of res.filter((y) => y.estado === "pendiente")) {
     const libre = libreX(x);
     const m = x.m, P = personaGlosa(m.descripcion);
-    const c = banco.filter((r) => libre(r) && r.dir === x.dir && r.monto === x.monto && dias(m.fecha, r.fecha) >= -45 && dias(m.fecha, r.fecha) <= 150 && (!P || !r.persona || r.persona === P));
+    const rutsG = (norm(m.descripcion).match(/\d{7,8}-?[\dK]/g) || []).map(soloRut);
+    const nombraOtro = !P && !!destinatarioDe(m.descripcion);
+    const [desde, hasta] = m.fecha > cierre ? [-10, 60] : [-45, 150];
+    const compatible = (r) => !(x.dir === "entra" && rutsG.length && r.rut && !rutsG.includes(r.rut)) && !(nombraOtro && r.persona);
+    const c = banco.filter((r) => libre(r) && compatible(r) && r.dir === x.dir && r.monto === x.monto && dias(m.fecha, r.fecha) >= desde && dias(m.fecha, r.fecha) <= hasta && (!P || !r.persona || r.persona === P));
     if (c.length) {
       // Sin reservar el registro: si dos movimientos iguales compiten por él, ambos quedan «Por revisar» y el usuario decide.
       const cerca = c.some((r) => Math.abs(dias(m.fecha, r.fecha)) <= 3);
@@ -197,7 +269,7 @@ export function conciliarMovimientos(movs, datos, { cierre = CIERRE_CONCILIACION
     }
     if (x.dir === "entra") {
       const porCliente = {};
-      for (const r of banco.filter((r) => libre(r) && r.dir === "entra" && r.cliente && dias(m.fecha, r.fecha) >= -45 && dias(m.fecha, r.fecha) <= 150)) (porCliente[r.cliente] ||= []).push(r);
+      for (const r of banco.filter((r) => libre(r) && compatible(r) && r.dir === "entra" && r.cliente && dias(m.fecha, r.fecha) >= desde && dias(m.fecha, r.fecha) <= hasta)) (porCliente[r.cliente] ||= []).push(r);
       const sub = (l) => { for (let i = 0; i < l.length; i++) for (let j = i + 1; j < l.length; j++) { if (l[i].monto + l[j].monto === x.monto) return [l[i], l[j]];
         for (let k = j + 1; k < l.length; k++) if (l[i].monto + l[j].monto + l[k].monto === x.monto) return [l[i], l[j], l[k]]; } return null; };
       const g = Object.values(porCliente).map(sub).find(Boolean);
@@ -218,6 +290,20 @@ export function conciliarMovimientos(movs, datos, { cierre = CIERRE_CONCILIACION
       if (g.length) Object.assign(x, { estado: "posible", evidencia: ["persona", "registros cercanos que no suman exacto"], nota: `registrado en forma agregada: ${g.length} registro(s) de la misma persona` });
     }
   }
+  // Un registro candidato de varios movimientos se deja solo en el (o los) más cercano(s) en fecha: así un cobro del
+  // 05/08 no se ofrece para un abono del 16/10 si hubo un abono igual el 20/08. Si un movimiento queda sin
+  // candidatos, vuelve a «sin registrar».
+  const lineasDe = new Map();
+  for (const x of res.filter((y) => y.estado === "posible" && (y.candidatos || []).length)) for (const r of x.candidatos) (lineasDe.get(r.id) || lineasDe.set(r.id, []).get(r.id)).push(x);
+  for (const [id, xs] of lineasDe) {
+    if (xs.length < 2) continue;
+    const dist = (x) => Math.abs(dias(x.m.fecha, x.candidatos.find((r) => r.id === id).fecha));
+    const min = Math.min(...xs.map(dist));
+    for (const x of xs.filter((y) => dist(y) > min)) x.candidatos = x.candidatos.filter((r) => r.id !== id);
+  }
+  for (const x of res.filter((y) => y.estado === "posible" && y.candidatos && !y.candidatos.length)) Object.assign(x, { estado: "pendiente", evidencia: [], candidatos: undefined, nota: "" });
+  for (const x of res.filter((y) => y.estado === "posible" && (y.candidatos || []).length && /registro\(s\) del mismo monto/.test(y.nota))) x.nota = `${x.candidatos.length} registro(s) del mismo monto`;
+
   // Neutro: abono y cargo del mismo monto, mismo día y misma contraparte, ambos sin registro.
   for (const a of res.filter((x) => x.estado === "pendiente" && x.dir === "entra")) {
     const b = res.find((x) => x.estado === "pendiente" && x.dir === "sale" && x.monto === a.monto && x.m.fecha === a.m.fecha
@@ -236,13 +322,24 @@ export function conciliarMovimientos(movs, datos, { cierre = CIERRE_CONCILIACION
       if (vv.length) x.valeVista = vv.map(({ e, o }) => ({ id: e.id, oc: o.numero_oc, ocId: o.id, fecha: f10(e.fecha), monto: Number(e.monto), medio: e.medio_pago }));
     }
   }
+  // Antecedentes (solo informativos, NO son prueba): otros movimientos de esta misma cartola con el mismo destinatario o
+  // el mismo código de «Pago a proveedores» (solo anteriores o del mismo día), y a qué registro único corresponden.
+  const destinoTexto = (r) => (r.tipo === "gasto" ? `gasto ${r.cat}` : r.tipo === "cobro" ? `cobro ${r.oc} (${r.clienteNombre || ""})` : `${r.tipo}${r.persona ? " " + r.persona : ""}`);
+  for (const x of res) {
+    const dk = destinatarioDe(x.m.descripcion), ok = claveOperacion(x.m);
+    if (!dk && !ok) continue;
+    const otros = res.filter((y) => y !== x && y.m.fecha <= x.m.fecha && ((dk && destinatarioDe(y.m.descripcion) === dk) || (ok && claveOperacion(y.m) === ok)));
+    const ant = otros.map((y) => { const r = y.estado === "conciliado" && y.registros?.length === 1 ? y.registros[0] : (y.candidatos || []).length === 1 ? y.candidatos[0] : null;
+      return r ? { fecha: y.m.fecha, monto: y.monto, destino: destinoTexto(r), cat: r.cat, rut: r.rut, cliente: r.clienteNombre || "", tipo: r.tipo } : null; }).filter(Boolean);
+    if (ant.length) x.antecedentes = ant;
+  }
   // Registrado en BFK, pendiente de verificar en banco: registros posteriores al cierre que ninguna línea bancaria
   // explica (no se llaman duplicados: se explica el posible motivo con pistaSinLinea).
   const desde = res.length ? res[0].m.fecha : null, hasta = res.length ? res[res.length - 1].m.fecha : null;
   const sinLinea = banco.filter((r) => r.fecha > cierre && desde && r.fecha >= desde && r.fecha <= hasta && !usados.has(r.id)
     && !res.some((x) => (x.candidatos || []).some((c) => c.id === r.id)));
   for (const r of sinLinea) r.pista = pistaSinLinea(r, res, datos);
-  return { movimientos: res, usados, sinLinea, resumen: resumirEstados(res) };
+  return { movimientos: res, usados, sinLinea, resumen: resumirEstados(res), aprendidas };
 }
 
 // Subconjuntos (2..max registros) que suman exacto; corta en 3 resultados (basta saber si hay uno o varios).

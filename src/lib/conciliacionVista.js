@@ -10,7 +10,7 @@
 //  · registradosSinBanco: «Registrado en BFK, pendiente de verificar en banco» (nunca se llaman duplicados).
 // Cada fila trae: fecha, descripción, monto, posible OC o categoría, registro relacionado, motivo y acción.
 // ═══════════════════════════════════════════════════════════════
-import { CIERRE_CONCILIACION, TABLA_REGISTRO } from "./conciliacion.js";
+import { CIERRE_CONCILIACION, TABLA_REGISTRO, destinatarioDe, esPagoProveedores } from "./conciliacion.js";
 import { calzarAbonos } from "./cobranza.js";
 
 export const TIPO_REGISTRO = { cobro: "Cobro", pago_financiador: "Devolución a financiador", pago_vendedor: "Pago a vendedor", gasto: "Gasto", retiro_capital: "Retiro de capital", aporte_capital: "Aporte de capital", compra: "Compra con fondos propios" };
@@ -41,7 +41,16 @@ const MOTIVO = {
   "sin documento": "sin documento que lo confirme",
   "persona": "aparece la misma persona",
   "registros cercanos que no suman exacto": "tiene registros cercanos que no suman exacto",
+  "sin otro dato": "sin otro dato que lo confirme",
+  "nombre abreviado del cliente en la glosa": "el nombre del cliente aparece abreviado en el detalle del banco",
+  "referencia bancaria del pagador ya confirmada en un pago anterior": "el banco usó la misma referencia del pagador que en un pago ya confirmado",
+  "destinatario ya confirmado antes con este mismo destino": "este destinatario ya se confirmó antes con el mismo tipo de registro",
+  "destinatario ya confirmado antes como pago al SII": "este destinatario ya se confirmó antes como pago al SII",
+  "el detalle del banco indica pago al SII": "el detalle del banco indica pago al SII",
+  "fecha cercana": "fecha cercana",
 };
+const normT = (t) => String(t || "").toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+const soloRutT = (t) => normT(t).replace(/[^0-9K]/g, "").replace(/K$/, "");
 export const motivoSimple = (ev) => [...new Set((ev || []).map((e) => MOTIVO[e] || (/^suma exacta de \d+ cobros$/.test(e) ? "varios cobros suman exacto" : /todos sus registros/.test(e) ? "todos sus registros de esa fecha suman exacto" : e)))].join(" · ");
 
 export function textoRegistro(r, categorias = []) {
@@ -60,18 +69,63 @@ function opcionesRevision(x) {
   return cands.filter((r) => r.monto === x.monto).map((r) => ({ registros: [r], grupo: false }));
 }
 
+// Qué información falta para identificar el movimiento sin dudas (en palabras simples).
+function faltaDe(x) {
+  const G = normT(x.m.descripcion);
+  const nCand = (x.candidatos || []).length;
+  const partes = [];
+  if (x.dir === "entra") {
+    if (esPagoProveedores(x.m.descripcion)) partes.push("Es un «Abono pago a proveedores»: el banco no indica qué institución pagó. Cuando confirmes uno de esa institución, su código de pagador (op. " + (x.m.operacion || "—") + ") se reconocerá solo en los próximos pagos.");
+    else if (!/\d{7,8}-?[0-9K]/.test(G)) partes.push(G.length >= 34 ? "El detalle del banco viene cortado y no identifica con seguridad quién pagó." : "El detalle del banco no trae el RUT ni un nombre que identifique quién pagó.");
+  } else if (destinatarioDe(x.m.descripcion)) partes.push(`El banco solo indica el destinatario («${destinatarioDe(x.m.descripcion)}»).`);
+  if (nCand > 1) partes.push(`Hay ${nCand} registros posibles: falta saber cuál corresponde.`);
+  else if (nCand === 1) partes.push("Solo coincide el monto" + ((x.evidencia || []).includes("fecha ±3 días") ? " y la fecha" : "") + ": falta un dato que lo confirme.");
+  return partes.join(" ");
+}
+function antecedentesDe(x, categorias) {
+  const a = x.antecedentes || [];
+  if (!a.length) return "";
+  const cat = (id) => categorias.find((c) => c.id === id)?.nombre || id;
+  const grupos = new Map();
+  for (const y of a) { const k = y.tipo === "gasto" ? `gastos «${cat(y.cat)}»` : y.tipo === "cobro" ? `${y.cliente || "el mismo cliente"}` : y.destino; (grupos.get(k) || grupos.set(k, []).get(k)).push(y); }
+  const quien = x.dir === "entra" ? "este código de pagador" : "este destinatario";
+  return `Antes, ${quien} coincidió con ${[...grupos].map(([k, ys]) => `${k} (${ys.map((y) => `${dm(y.fecha)} ${pesos(y.monto)}`).join(", ")})`).join("; ")}. Es un antecedente, no una prueba.`;
+}
+// Evidencia de una propuesta de factura pendiente: qué identifica al pagador (y qué falta).
+function evidenciaPropuesta(x, op, ocs) {
+  const asig = op?.asignaciones || [];
+  const oc = asig.length ? ocs.find((o) => o.id === asig[0].ocId) : null;
+  if (!oc) return { identificada: false, texto: "" };
+  const G = normT(x.m.descripcion), rutOC = soloRutT(oc.rut_cliente);
+  const rutsG = (G.match(/\d{7,8}-?[0-9K]/g) || []).map(soloRutT);
+  const palabras = normT(oc.cliente).split(/[^A-Z]+/).filter((w) => w.length >= 5 && !["ILUSTRE", "MUNICIPALIDAD", "SERVICIO", "UNIVERSIDAD", "HOSPITAL", "DIRECCION", "REGIONAL", "NACIONAL", "GOBIERNO", "CORPORACION", "DELEGACION", "PRESIDENCIAL"].includes(w));
+  const ev = [];
+  ev.push(op.tipo === "exacto" ? "el monto es exactamente el saldo pendiente de la factura" : op.tipo === "varias" ? "el monto es exactamente la suma de esas facturas" : "el monto cubre parte del saldo pendiente");
+  const porRut = rutsG.includes(rutOC), porNombre = palabras.some((w) => G.includes(w)), porReferencia = !!x.pagadorAprendido && x.pagadorAprendido === rutOC;
+  if (porRut) ev.push("el RUT del pagador en el detalle del banco es el del cliente");
+  if (porReferencia) ev.push("el banco usó la referencia de pagador ya confirmada para este cliente");
+  if (porNombre) ev.push("el nombre del cliente aparece en el detalle del banco");
+  const suc = normT(x.m.sucursal || "").replace(/[^A-Z ]+/g, " ");
+  const indicio = suc && palabras.some((w) => suc.split(/\s+/).some((t) => t.length >= 4 && w.startsWith(t)));
+  if (indicio) ev.push(`indicio: depositado en sucursal ${x.m.sucursal} (coincide con el nombre del cliente; no es prueba)`);
+  const identificada = porRut || porNombre || porReferencia;
+  return { identificada, texto: ev.join(" · "), falta: identificada ? "" : "El banco no indica quién pagó: una factura pendiente del mismo monto no prueba que este abono sea de ese cliente." };
+}
+
 export function vistaConciliacion(conc, { ocs = [], categorias = [], cierre = CIERRE_CONCILIACION } = {}) {
   const ya = [], revisar = [], sinRegistrar = [], anteriores = [];
   const sugerencias = new Map(calzarAbonos(conc.movimientos.filter((x) => x.estado === "pendiente" && x.dir === "entra" && !x.anteriorCierre).map((x) => x.m), ocs, [])
     .map((it) => [it.mov?.clave || `${it.mov?.fecha}|${it.mov?.cargo}|${it.mov?.abono}|${it.mov?.saldo}`, it]));
   for (const x of conc.movimientos) {
     const base = { x, i: x.i, marca: x.marca, fecha: x.m.fecha, descripcion: x.m.descripcion, operacion: x.m.operacion || "", monto: x.monto, dir: x.dir,
-      registros: (x.registros || []).map((r) => textoRegistro(r, categorias)), motivo: motivoSimple(x.evidencia), posible: "", accion: "", opciones: [] };
+      registros: (x.registros || []).map((r) => textoRegistro(r, categorias)), motivo: motivoSimple(x.evidencia), posible: "", accion: "", opciones: [],
+      sucursal: x.m.sucursal || "", antecedentes: antecedentesDe(x, categorias) };
     if (x.gemelos?.length) base.aviso = `Hay otro movimiento igual el mismo día${x.gemelos.length ? ` (op. ${x.gemelos.join(", ")})` : ""}: el banco los informa como operaciones distintas. Verifica el N° de operación; no se trata como duplicado.`;
     if (x.estado === "conciliado" || x.estado === "neutro") {
       const r0 = x.registros?.[0];
       ya.push({ ...base, titulo: x.estado === "neutro" ? "Se compensa con otro movimiento del mismo día" : r0 ? `${TIPO_REGISTRO[r0.tipo] || "Registro"} de ${pesos(x.monto)} ya ${registradoDe(r0.tipo)} en BFK` : "Ya registrado",
         motivo: x.estado === "neutro" ? "abono y cargo del mismo monto, el mismo día y la misma contraparte" : base.motivo,
+        reconocidoAuto: x.estado === "conciliado" && !x.origen ? "evidencia" : x.origen === "aprendido" ? "aprendido" : "",
         accion: "Nada que hacer: ya está registrado (no se crea otro)." });
       continue;
     }
@@ -94,7 +148,7 @@ export function vistaConciliacion(conc, { ocs = [], categorias = [], cierre = CI
         posible: [...new Set((x.candidatos || []).map((r) => r.oc || (categorias.find((c) => c.id === r.cat)?.nombre) || "").filter(Boolean))].join(", "),
         registros: opciones.length ? [] : (x.candidatos || []).slice(0, 5).map((r) => textoRegistro(r, categorias)),
         accion: opciones.length ? "Confirma si es este registro (no crea nada) o indica que no corresponde." : "Revísalo: los registros cercanos no suman exacto. Si no corresponde, queda como sin registrar.",
-        nota: x.nota || "" });
+        falta: faltaDe(x), nota: x.nota || "" });
       continue;
     }
     // pendiente posterior al cierre
@@ -119,11 +173,15 @@ export function vistaConciliacion(conc, { ocs = [], categorias = [], cierre = CI
     const sug = x.dir === "entra" ? sugerencias.get(x.m.clave) : null;
     const TIPO_OP = { exacto: "Factura", varias: "Varias facturas", parcial: "Abono parcial", vale_vista: "Vale vista" };
     const op0 = sug?.claro ? sug.opciones.find((o) => o.id === sug.sugerida) : null;
-    sinRegistrar.push({ ...base, titulo: x.dir === "entra" ? "Abono sin registro en BFK" : "Cargo sin registro en BFK",
-      posible: op0 ? `${TIPO_OP[op0.tipo] || ""} ${op0.etiqueta} (sugerencia, no se aplica sola)`
-        : sug?.opciones?.length ? `Posibles: ${sug.opciones.slice(0, 2).map((o) => o.etiqueta).join(" o ")}` : "",
-      motivo: "no hay ningún registro BFK que corresponda",
-      accion: x.dir === "entra" ? "Identifica la OC y regístralo como cobro (pide confirmación)." : "Indica si es gasto, pago a vendedor, devolución a financiador o retiro, y regístralo (pide confirmación)." });
+    const evP = op0 ? evidenciaPropuesta(x, op0, ocs) : null;
+    sinRegistrar.push({ ...base, propuesta: op0 ? { id: op0.id, identificada: evP.identificada } : null,
+      titulo: x.dir === "entra" ? (op0 ? (evP.identificada ? "Cobro de una factura pendiente (pagador identificado)" : "Abono nuevo: posible cobro de una factura pendiente") : "Abono sin registro en BFK") : "Cargo sin registro en BFK",
+      posible: op0 ? `${TIPO_OP[op0.tipo] || ""} ${op0.etiqueta}` : sug?.opciones?.length ? `Posibles: ${sug.opciones.slice(0, 2).map((o) => o.etiqueta).join(" o ")}` : "",
+      motivo: op0 ? evP.texto : "no hay ningún registro BFK que corresponda",
+      falta: op0 ? evP.falta : x.dir === "entra" ? faltaDe(x) : (destinatarioDe(x.m.descripcion) ? `No hay ningún registro BFK de ${pesos(x.monto)} para este destinatario.` : ""),
+      accion: x.dir === "entra"
+        ? (op0 ? `Regístralo como cobro de esa factura solo si corresponde (se registra únicamente ${pesos(x.monto)}, lo efectivamente abonado; pide confirmación).` : "Identifica la OC y regístralo como cobro (pide confirmación).")
+        : "Indica si es gasto, pago a vendedor, devolución a financiador o retiro, y regístralo (pide confirmación)." });
   }
   const registradosSinBanco = (conc.sinLinea || []).map((r) => ({ r, texto: textoRegistro(r, categorias), pista: r.pista?.texto || "", tipoPista: r.pista?.tipo || "sin_movimiento",
     accion: r.pista?.tipo === "agrupado" || r.pista?.tipo === "mismo_cliente" ? "Revisa el abono indicado. No elimines el registro sin verificar." : "Verifica en el banco cuando llegue. No lo elimines ni lo dupliques." }));
