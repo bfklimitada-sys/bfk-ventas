@@ -52,6 +52,8 @@ const LINEA = [
   { fecha: "2026-10-20", op: "8819", desc: "DEPOSITO DOCUMENTO", abono: 500000 },
 ];
 const rLinea = escribe("cs_linea.xlsx", cartolaEnLinea(LINEA, { saldoInicial: 4999000 }));
+// Tramo superpuesto (movimientos 3 a 7, otra descarga con glosas recortadas) para probar que las decisiones persisten.
+const rTramo = escribe("cs_tramo.xlsx", cartolaEnLinea(LINEA.slice(2, 7), { saldoInicial: 4999000 - 480000 - 260000, glosaVariante: true }));
 
 // Base simulada de las decisiones (misma regla que conciliacion_decidir: un vínculo por movimiento y por registro).
 function conDecisiones(b) {
@@ -74,10 +76,10 @@ function conDecisiones(b) {
   };
   return b;
 }
-async function abrirCartola(p) {
+async function abrirCartola(p, archivos = [rHist, rLinea]) {
   await p.getByRole("button", { name: /^Cartola$/ }).first().click();
   await p.locator("[role=dialog] [data-cartola-archivos]").waitFor({ state: "attached", timeout: 15000 });
-  await p.locator("[role=dialog] [data-cartola-archivos]").setInputFiles([rHist, rLinea]);
+  await p.locator("[role=dialog] [data-cartola-archivos]").setInputFiles(archivos);
   await p.locator("[data-cartola-conciliacion]").waitFor({ timeout: 15000 }); await espera(p, 600);
 }
 const cuenta = async (p, g) => Number(await p.locator(`[data-cuenta="${g}"]`).innerText());
@@ -126,8 +128,17 @@ for (const movil of [false, true]) {
   await p.locator(`[data-mov="${CL[2]}"] [data-rechazar="g250a"]`).click(); await espera(p, 1500);
   const rech = b.escr.slice(n0).filter((w) => w.tabla === "conciliacion_decidir" && w.cuerpo.p_decision === "rechazado");
   ok(`${X}12_no_corresponde_guarda_rechazo`, rech.length === 1 && JSON.stringify(rech[0].cuerpo.p_ids) === '["g250a"]');
-  ok(`${X}13_tras_rechazo_cada_cargo_queda_con_su_gasto`, (await cuenta(p, "revisar")) === 1 && (await cuenta(p, "ya")) === 6, [await cuenta(p, "revisar"), await cuenta(p, "ya")]);
+  ok(`${X}13_tras_rechazo_sigue_por_revisar_solo_con_el_otro_gasto`, (await cuenta(p, "revisar")) === 3 && (await cuenta(p, "ya")) === 4
+    && (await p.locator(`[data-mov="${CL[2]}"] [data-vincular-registro]`).count()) === 1 && (await p.locator(`[data-mov="${CL[2]}"] [data-vincular-registro="g250b"]`).count()) === 1,
+    [await cuenta(p, "revisar"), await cuenta(p, "ya")]);
   ok(`${X}14_rechazo_no_escribe_registros_financieros`, escriturasFinancieras(b, n0).length === 0 && huella(b) === h0);
+
+  // 6b. Persistencia: cerrar la ventana, volver a abrir y cargar las cartolas en otro orden y con un tramo superpuesto.
+  await p.keyboard.press("Escape"); await p.locator("[role=dialog]").waitFor({ state: "detached", timeout: 10000 }).catch(() => {}); await espera(p, 400);
+  await abrirCartola(p, [rTramo, rLinea, rHist]);
+  ok(`${X}13b_decisiones_persisten_al_volver_a_abrir_con_cartolas_superpuestas`, (await cuenta(p, "revisar")) === 3 && (await cuenta(p, "ya")) === 4
+    && (await p.locator(`[data-grupo-seccion="revisar"] [data-mov="${CL[5]}"]`).count()) === 0 && (await p.locator(`[data-mov="${CL[2]}"] [data-vincular-registro="g250a"]`).count()) === 0,
+    [await cuenta(p, "revisar"), await cuenta(p, "ya")]);
 
   // 7. Deshacer el vínculo: vuelve a «Por revisar»; tampoco toca registros.
   await p.locator("[data-ver-conciliados]").click(); await espera(p, 300);

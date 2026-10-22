@@ -82,8 +82,8 @@ export function vistaConciliacion(conc, { ocs = [], categorias = [], cierre = CI
       continue;
     }
     if (x.vinculoRoto) {
-      revisar.push({ ...base, tipo: "vinculo_roto", titulo: "El registro que estaba vinculado ya no existe o fue anulado",
-        motivo: "se vinculó antes, pero ese registro cambió", accion: "Anula el vínculo y vuelve a revisar el movimiento.", decisiones: x.vinculoRoto });
+      revisar.push({ ...base, tipo: "vinculo_roto", titulo: "El vínculo guardado ya no calza con este movimiento",
+        motivo: "el registro vinculado ya no existe, fue anulado o no suma exactamente el monto del banco", accion: "Anula el vínculo y vuelve a revisar el movimiento.", decisiones: x.vinculoRoto });
       continue;
     }
     if (x.estado === "posible") {
@@ -109,11 +109,11 @@ export function vistaConciliacion(conc, { ocs = [], categorias = [], cierre = CI
     const conjunto = (conc.sinLinea || []).find((r) => r.pista?.tipo === "agrupado" && r.pista.mov === x.i);
     if (conjunto) {
       const otras = conjunto.pista.otras;
-      sinRegistrar.push({ ...base, tipo: undefined, conjunto: { registro: conjunto.id, otras }, titulo: "Abono que incluye un cobro ya registrado",
-        posible: `${conjunto.oc} (ya cobrado, ${pesos(conjunto.monto)}) + ${otras.map((o) => `${o.oc} (${pesos(o.saldo)} pendiente)`).join(" + ")}`,
+      sinRegistrar.push({ ...base, tipo: undefined, conjunto: { registro: conjunto.id, otras }, titulo: "Abono que podría incluir un cobro ya registrado (hipótesis)",
+        posible: `Hipótesis: ${conjunto.oc} (ya cobrado, ${pesos(conjunto.monto)}) + ${otras.map((o) => `${o.oc} (${pesos(o.saldo)} pendiente)`).join(" + ")}`,
         registros: [textoRegistro(conjunto, categorias)],
-        motivo: "el monto es exactamente un cobro ya registrado más facturas pendientes del mismo cliente",
-        accion: `No lo registres completo: el cobro de ${conjunto.oc} ya existe. Registra desde la OC solo ${otras.map((o) => `${pesos(o.saldo)} en ${o.oc}`).join(" y ")} con fecha ${dm(x.m.fecha)}; después este abono queda conciliado solo (suma exacta del mismo cliente).` });
+        motivo: "la suma coincide con un cobro ya registrado más facturas pendientes del mismo cliente; la suma sola no es evidencia",
+        accion: `No registres ni elimines cobros solo por esta suma. Pide el comprobante o el detalle del pago para saber cómo se reparte entre las facturas. El cobro de ${conjunto.oc} ya existe: no lo registres de nuevo.` });
       continue;
     }
     const sug = x.dir === "entra" ? sugerencias.get(x.m.clave) : null;

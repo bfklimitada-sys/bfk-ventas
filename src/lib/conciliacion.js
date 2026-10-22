@@ -139,9 +139,12 @@ export function conciliarMovimientos(movs, datos, { cierre = CIERRE_CONCILIACION
     regs.forEach((r) => usados.add(r.id));
     const x = porMarca.get(marca);
     if (!x || x.estado !== "pendiente") continue;
-    if (regs.length === claves.size) Object.assign(x, { estado: "conciliado", registros: regs, evidencia: ["vínculo confirmado"], origen: "decision", decisiones: ds,
+    // Doble defensa (la base ya lo exige): un solo tipo de registro, mismo sentido y suma EXACTA del movimiento.
+    const consistente = regs.length === claves.size && new Set(regs.map((r) => r.tabla)).size === 1 && regs.every((r) => r.dir === x.dir)
+      && regs.reduce((a, r) => a + r.monto, 0) === x.monto;
+    if (consistente) Object.assign(x, { estado: "conciliado", registros: regs, evidencia: ["vínculo confirmado"], origen: "decision", decisiones: ds,
       nota: `confirmado por ${ds[0].usuario_nombre || "un usuario"}${ds[0].creado_en ? ` el ${String(ds[0].creado_en).slice(8, 10)}/${String(ds[0].creado_en).slice(5, 7)}` : ""}` });
-    else x.vinculoRoto = ds;   // el registro vinculado ya no existe o fue anulado: se vuelve a revisar
+    else x.vinculoRoto = ds;   // registro inexistente/anulado o vínculo inconsistente: se vuelve a revisar
   }
 
   // Pasada 1: correspondencias con evidencia además del monto.
@@ -153,7 +156,8 @@ export function conciliarMovimientos(movs, datos, { cierre = CIERRE_CONCILIACION
       const ev = (r) => [Math.abs(dias(m.fecha, r.fecha)) <= 3 && "fecha ±3 días", r.rut && ruts.includes(r.rut) && "RUT del cliente en la glosa",
         r.cliente && r.cliente.split(/[^A-Z]+/).some((w) => w.length >= 5 && !GENERICAS.has(w) && norm(m.descripcion).includes(w)) && "nombre del cliente en la glosa",
         fechaEnNota(r, m.fecha) && "la nota del registro cita esta fecha bancaria", P && r.persona === P && "persona en la glosa"].filter(Boolean);
-      const fuertes = c.map((r) => ({ r, e: ev(r) })).filter((y) => y.e.length);
+      // Monto y fecha NO bastan: hace falta RUT, nombre del cliente, persona o la fecha citada en la nota.
+      const fuertes = c.map((r) => ({ r, e: ev(r) })).filter((y) => y.e.some((t) => t !== "fecha ±3 días"));
       if (fuertes.length === 1) { tomar(x, [fuertes[0].r], "conciliado", ["monto exacto", ...fuertes[0].e]); continue; }
       for (const rut of ruts) {
         const g = banco.filter((r) => libre(r) && r.dir === "entra" && r.rut === rut && Math.abs(dias(m.fecha, r.fecha)) <= 150);
@@ -167,16 +171,16 @@ export function conciliarMovimientos(movs, datos, { cierre = CIERRE_CONCILIACION
       if (g.length && g.reduce((a, r) => a + r.monto, 0) === x.monto)
         tomar(x, g, "conciliado", ["persona en la glosa", g.length > 1 ? `todos sus registros de la fecha suman exacto (${g.length})` : "registro único de la persona", "fecha −5/+1"]);
     } else {
-      // Una compra con fondos propios nunca concilia sola, pero sí impide dar por único a otro registro del mismo monto.
+      // Sin persona en el detalle del banco, un registro del mismo monto y fecha cercana NO se concilia solo: queda
+      // «Por revisar» (pasada 2) hasta que el usuario confirme. Excepción con evidencia propia: pago al SII (F29), cuando
+      // el detalle del banco lo indica y una sola combinación de gastos «Impuesto SII» (IVA + PPM) suma exacto.
       const g = banco.filter((r) => libre(r) && r.dir === "sale" && r.monto === x.monto && Math.abs(dias(r.fecha, m.fecha)) <= 3);
-      if (g.length === 1 && g[0].tipo !== "compra") { tomar(x, g, "conciliado", ["monto exacto", "fecha ±3 días", "registro único"]); continue; }
-      // Pago al SII (F29): IVA y PPM registrados como gastos «Impuesto SII» que juntos suman el cargo. Una sola
-      // combinación posible → ya registrado; varias → por revisar (pasada 2). Nunca se propone un gasto nuevo.
       if (!g.length) {
         const imp = banco.filter((r) => libre(r) && r.tipo === "gasto" && r.cat === CATEGORIA_IMPUESTO_SII && Math.abs(dias(r.fecha, m.fecha)) <= 5 && r.monto < x.monto);
         const sub = subconjuntosExactos(imp, x.monto, 4);
-        if (sub.length === 1) tomar(x, sub[0], "conciliado", ["pago al SII", `${sub[0].length} gastos «Impuesto SII» suman exacto`, "fecha ±5 días"]);
-        else if (sub.length > 1) x.siiAmbiguo = sub[0];
+        const glosaSII = /(^|[^A-Z])(SII|TGR|F29|F 29)([^A-Z]|$)|TESORERIA|IMPUESTO|FORMULARIO 29/.test(norm(m.descripcion));
+        if (sub.length === 1 && glosaSII) tomar(x, sub[0], "conciliado", ["el detalle del banco indica pago al SII", `${sub[0].length} gastos «Impuesto SII» suman exacto`, "fecha ±5 días"]);
+        else if (sub.length) x.siiAmbiguo = sub[0];
       }
     }
   }
@@ -186,8 +190,9 @@ export function conciliarMovimientos(movs, datos, { cierre = CIERRE_CONCILIACION
     const m = x.m, P = personaGlosa(m.descripcion);
     const c = banco.filter((r) => libre(r) && r.dir === x.dir && r.monto === x.monto && dias(m.fecha, r.fecha) >= -45 && dias(m.fecha, r.fecha) <= 150 && (!P || !r.persona || r.persona === P));
     if (c.length) {
-      Object.assign(x, { estado: "posible", evidencia: ["solo monto"], candidatos: c.slice(0, 5), nota: `${c.length} registro(s) del mismo monto` });
-      if (c.length === 1) usados.add(c[0].id);
+      // Sin reservar el registro: si dos movimientos iguales compiten por él, ambos quedan «Por revisar» y el usuario decide.
+      const cerca = c.some((r) => Math.abs(dias(m.fecha, r.fecha)) <= 3);
+      Object.assign(x, { estado: "posible", evidencia: cerca ? ["monto exacto", "fecha ±3 días", "sin otro dato"] : ["solo monto"], candidatos: c.slice(0, 5), nota: `${c.length} registro(s) del mismo monto` });
       continue;
     }
     if (x.dir === "entra") {
@@ -198,7 +203,7 @@ export function conciliarMovimientos(movs, datos, { cierre = CIERRE_CONCILIACION
       const g = Object.values(porCliente).map(sub).find(Boolean);
       if (g) { Object.assign(x, { estado: "posible", evidencia: ["suma exacta de cobros de un mismo cliente", "sin RUT ni documento"], candidatos: g, nota: g.map((r) => r.oc).join(" + ") }); continue; }
     }
-    if (x.siiAmbiguo) { Object.assign(x, { estado: "posible", evidencia: ["suma exacta de gastos sin persona identificada"], candidatos: x.siiAmbiguo, nota: "más de una combinación de gastos «Impuesto SII» suma este monto" }); continue; }
+    if (x.siiAmbiguo) { Object.assign(x, { estado: "posible", evidencia: ["suma exacta de gastos «Impuesto SII»"], candidatos: x.siiAmbiguo, nota: "gastos «Impuesto SII» (IVA y PPM) que suman este monto; el detalle del banco no lo confirma o hay más de una combinación" }); continue; }
     if (x.dir === "sale" && !P) {
       const antes = m.fecha <= cierre ? -120 : -10;
       const l = banco.filter((r) => libre(r) && r.tipo === "gasto" && dias(r.fecha, m.fecha) >= antes && dias(r.fecha, m.fecha) <= 5 && r.monto < x.monto);
@@ -272,7 +277,7 @@ export function pistaSinLinea(r, res, datos) {
     for (const x of libres) {
       const c = combos.find((k) => r.monto + k.reduce((s, o) => s + o.saldo, 0) === x.monto);
       if (c) return { tipo: "agrupado", mov: x.i, monto: x.monto, fecha: x.m.fecha, otras: c,
-        texto: `El banco muestra un abono de ${pesos(x.monto)} el ${dmy(x.m.fecha)} = este cobro + ${c.map((o) => `${o.oc} (${pesos(o.saldo)} pendiente)`).join(" + ")}: puede ser un pago conjunto. Revisa ese abono.` };
+        texto: `Hipótesis (no confirmada): el abono de ${pesos(x.monto)} del ${dmy(x.m.fecha)} coincide con este cobro + ${c.map((o) => `${o.oc} (${pesos(o.saldo)} pendiente)`).join(" + ")}. La suma no basta: confirma con el comprobante o el detalle del pago cómo se reparte entre las facturas.` };
     }
     const palabras = String(r.cliente || "").split(/[^A-Z]+/).filter((w) => w.length >= 5 && !GENERICAS.has(w));
     const mismo = libres.find((x) => { const G = norm(x.m.descripcion); return (r.rut && (G.match(/\d{7,8}-?[\dK]/g) || []).map(soloRut).includes(r.rut)) || palabras.some((w) => G.includes(w)); });

@@ -126,7 +126,7 @@ si("12 pista: abono de $800.799 = este cobro + factura 1111-276 pendiente ($676.
 si("12 nunca se llama duplicado", V.registradosSinBanco.every((s) => !/duplicado(?! necesariamente)/i.test(s.pista.replace("No es necesariamente un duplicado", ""))), V.registradosSinBanco.map((s) => s.pista));
 
 const itConj = V.sinRegistrar.find((i) => i.x.monto === 800799);
-si("12 el abono de $800.799 indica el pago conjunto y pide registrar solo lo pendiente desde la OC", itConj?.conjunto && /1111-200-AG26 \(ya cobrado/.test(itConj.posible) && /solo \$676\.001 en 1111-276-AG26/.test(itConj.accion), itConj);
+si("12 el abono de $800.799 se presenta como HIPÓTESIS y pide evidencia; no propone crear ni eliminar cobros", itConj?.conjunto && /^Hipótesis/.test(itConj.posible) && /No registres ni elimines cobros solo por esta suma/.test(itConj.accion) && /comprobante/.test(itConj.accion) && !itConj.x.registrable === false, itConj);
 // Si se registra desde la OC el cobro pendiente ($676.001, misma fecha del banco), el abono queda conciliado solo.
 const datosConj = datosBase(); datosConj.ocs.find((o) => o.id === "oc2").eventos_pago_cliente.push({ id: "c_338", fecha: "2026-10-16", monto: 676001, medio_pago: "transferencia" });
 const CJ = conciliarMovimientos(U.movs, datosConj);
@@ -135,7 +135,7 @@ eq("12 tras registrar lo pendiente: el abono queda Ya registrado con los dos cob
 
 // 13. Movimientos anteriores al cierre: solo consulta (no registrables).
 eq("13 anterior al cierre sin registro → Antes del cierre, no registrable", [grupoDe(mov("2026-09-27", 11111)), mov("2026-09-27", 11111).registrable], ["anteriores", false]);
-eq("13 anterior al cierre con registro → Ya registrado", grupoDe(mov("2026-09-26", 77000)), "ya");
+eq("13 anterior al cierre que solo coincide en monto y fecha → Antes del cierre (solo consulta)", [grupoDe(mov("2026-09-26", 77000)), mov("2026-09-26", 77000).estado, mov("2026-09-26", 77000).registrable], ["anteriores", "posible", false]);
 
 // 15. Pendientes que se resuelven después: decisiones y registros posteriores.
 const mDesc = mov("2026-10-17", 33333);
@@ -151,7 +151,7 @@ const D = conciliarMovimientos(U.movs, datosDesp);
 const d = (f, monto, k = 0) => D.movimientos.filter((x) => x.m.fecha === f && x.monto === monto)[k];
 eq("15 registrado desde la cartola → Ya registrado por la marca (certeza)", [d("2026-10-17", 33333).estado, d("2026-10-17", 33333).origen, d("2026-10-17", 33333).registrable], ["conciliado", "cartola", false]);
 eq("15 vínculo confirmado (compra) → Ya registrado, sin crear nada", [d("2026-10-16", 80000).estado, d("2026-10-16", 80000).origen, d("2026-10-16", 80000).registros.map((r) => r.id)], ["conciliado", "decision", ["k1"]]);
-eq("15 el gasto vinculado a un cargo ya no se usa para el otro cargo igual (queda el otro gasto, único)", [d("2026-10-14", 250000, 0).registros.map((r) => r.id), d("2026-10-14", 250000, 1).registros.map((r) => r.id)], [["g250a"], ["g250b"]]);
+eq("15 el gasto vinculado a un cargo ya no se ofrece al otro cargo igual (queda solo el otro gasto, por revisar)", [d("2026-10-14", 250000, 0).registros.map((r) => r.id), d("2026-10-14", 250000, 1).estado, (d("2026-10-14", 250000, 1).candidatos || []).map((r) => r.id)], [["g250a"], "posible", ["g250b"]]);
 eq("15 rechazo: el registro rechazado no se vuelve a proponer para ese movimiento", (d("2026-10-17", 55555).candidatos || []).some((r) => r.id === "c_hosp"), false);
 eq("15 verificación previa: un movimiento vinculado no se registra de nuevo", verificarRegistro(U.movs, d("2026-10-16", 80000).i, datosDesp).ok, false);
 const datosRoto = datosBase(); datosRoto.decisiones = [{ id: 9, marca: mc.marca, decision: "vinculado", tabla: "eventos_compra", registro_id: "k_borrada" }];
@@ -165,10 +165,88 @@ const itMix = VM.revisar.find((i) => i.x.m.fecha === "2026-10-16" && i.x.monto =
 eq("un movimiento no se vincula a registros de tipos distintos a la vez (una opción por registro)", itMix?.opciones.map((o) => o.registros.length), [1, 1]);
 
 // Pantalla: grupos y textos simples.
-eq("grupos: por revisar / sin registrar / ya registrados / antes del cierre", [V.revisar.length, V.sinRegistrar.length, V.ya.length, V.anteriores.length], [4, 3, 5, 1]);
+eq("grupos: por revisar / sin registrar / ya registrados / antes del cierre", [V.revisar.length, V.sinRegistrar.length, V.ya.length, V.anteriores.length], [4, 3, 4, 2]);
 si("textos sin «control inverso», «posible registrado» ni «registro posterior al cierre»", ![...V.ya, ...V.revisar, ...V.sinRegistrar, ...V.anteriores].some((i) => /control inverso|posible registrado|registro posterior al cierre/i.test(JSON.stringify([i.titulo, i.motivo, i.accion]))));
 si("cada movimiento trae fecha, descripción, monto, motivo y acción", [...V.revisar, ...V.sinRegistrar].every((i) => i.fecha && i.descripcion && i.monto > 0 && i.motivo && i.accion));
-eq("ejemplo de Kevin: «Gasto de $250.000 ya registrado en BFK»", V.ya.find((i) => i.x.monto === 77000)?.titulo, "Gasto de $77.000 ya registrado en BFK");
+// Ejemplo de Kevin: gasto de $250.000 ya registrado y su transferencia → se ofrece conciliar con el gasto existente
+// («Es este registro»), sin crear otro gasto; una vez confirmado: «Gasto de $250.000 ya registrado en BFK».
+{
+  const dk = datosBase(); dk.gastos = dk.gastos.filter((g) => g.id !== "g250b");
+  const Ck = conciliarMovimientos(U.movs, dk); const xk = Ck.movimientos.find((x) => x.m.operacion === "8813");
+  const Vk = vistaConciliacion(Ck, { ocs: dk.ocs, categorias }); const ik = Vk.revisar.find((i) => i.x === xk);
+  eq("ejemplo de Kevin: gasto de $250.000 ya registrado → Por revisar con «Es este registro» y sin registro nuevo", [xk.estado, xk.registrable, ik?.opciones.map((o) => o.registros.map((r) => r.id))], ["posible", false, [["g250a"]]]);
+  dk.decisiones = [{ marca: xk.marca, decision: "vinculado", tabla: "gastos_indirectos", registro_id: "g250a" }];
+  const Vk2 = vistaConciliacion(conciliarMovimientos(U.movs, dk), { ocs: dk.ocs, categorias });
+  eq("ejemplo de Kevin: confirmado → «Gasto de $250.000 ya registrado en BFK»", Vk2.ya.find((i) => i.x.m.operacion === "8813")?.titulo, "Gasto de $250.000 ya registrado en BFK");
+}
+
+// ═════ Verificaciones previas a la publicación (Kevin, 21/10/2026 22:52) ═════
+// V1. Monto y fecha solos → «Por revisar», nunca conciliación automática.
+{
+  const dv = datosBase();
+  dv.gastos = [{ id: "gv", categoria_id: "cat_otros", monto: 33333, fecha: "2026-10-17", detalle: "Algo" }];   // mismo monto y fecha que «TEF A DESCONOCIDO»
+  dv.ocs.find((o) => o.id === "oc2").eventos_pago_cliente.push({ id: "cv", fecha: "2026-10-17", monto: 55555, medio_pago: "transferencia" });   // cliente distinto al del detalle
+  const Cv = conciliarMovimientos(U.movs, dv);
+  const g = Cv.movimientos.find((x) => x.monto === 33333), c = Cv.movimientos.find((x) => x.monto === 55555);
+  eq("V1 cargo con un único gasto del mismo monto y fecha → Por revisar (no conciliado ni registrable)", [g.estado, g.registrable, g.evidencia], ["posible", false, ["monto exacto", "fecha ±3 días", "sin otro dato"]]);
+  eq("V1 abono con un único cobro del mismo monto y fecha, sin RUT ni nombre → Por revisar", [c.estado, c.registrable], ["posible", false]);
+  const dsii = datosBase(); const sinGlosa = U.movs.map((m) => (m.descripcion === "PAGO EN LINEA SII F29" ? { ...m, descripcion: "TRANSFERENCIA ELECTRONICA" } : m));
+  eq("V1 IVA + PPM que suman el cargo pero el detalle no dice SII → Por revisar con ambos gastos", (() => { const x = conciliarMovimientos(sinGlosa, dsii).movimientos.find((y) => y.monto === 435000); return [x.estado, (x.candidatos || []).map((r) => r.id).sort()]; })(), ["posible", ["g_iva", "g_ppm"]]);
+}
+// V2. Las decisiones persisten: misma marca al recargar, con cartolas superpuestas y en otro orden de carga.
+{
+  const lin2 = leerCartolaBancoEstado(idaYVuelta(cartolaEnLinea(LINEA, { saldoInicial: saldoHist, glosaVariante: true })), "otra_descarga.xlsx");
+  const supB = leerCartolaBancoEstado(idaYVuelta(cartolaEnLinea(LINEA.slice(2, 7), { saldoInicial: saldoHist - 480000 - 260000 })), "tramo.xlsx");
+  const cargas = [[hist, lin], [lin, hist], [hist, lin2, supB], [supB, lin, hist, lin2]].map((cs) => unirCartolas(cs).movs);
+  const marcas = cargas.map((ms) => ms.map((_, i) => marcaCartola(ms, i)).sort());
+  eq("V2 misma marca de cada movimiento al recargar, en otro orden y con cartolas superpuestas", marcas.every((m) => JSON.stringify(m) === JSON.stringify(marcas[0])), true);
+  const dd = datosBase(); dd.decisiones = [{ marca: mc.marca, decision: "vinculado", tabla: "eventos_compra", registro_id: "k1" }, { marca: mov("2026-10-17", 55555).marca, decision: "rechazado", tabla: "eventos_pago_cliente", registro_id: "c_hosp" }];
+  eq("V2 la decisión se aplica igual en las cuatro formas de cargar", cargas.map((ms) => conciliarMovimientos(ms, dd).movimientos.find((x) => x.monto === 80000).origen), ["decision", "decision", "decision", "decision"]);
+}
+// V3. Identificación estable aun con dos transferencias legítimas del mismo monto y fecha.
+{
+  eq("V3 dos cargos de $250.000 el mismo día → marcas distintas", new Set(dos.map((x) => x.marca)).size, 2);
+  // Caso extremo: cargo, abono y cargo del mismo monto el mismo día → dos líneas con la MISMA fecha, monto y saldo.
+  const EXT = [{ fecha: "2026-10-18", op: "9001", desc: "TEF A PROVEEDOR X", cargo: 1000 }, { fecha: "2026-10-18", op: "9002", desc: "TEF DE PROVEEDOR X", abono: 1000 }, { fecha: "2026-10-18", op: "9003", desc: "TEF A PROVEEDOR X", cargo: 1000 }];
+  const e1 = leerCartolaBancoEstado(idaYVuelta(cartolaEnLinea(EXT, { saldoInicial: 50000 })), "e1.xlsx");
+  const e2 = leerCartolaBancoEstado(idaYVuelta(cartolaEnLinea(EXT, { saldoInicial: 50000, glosaVariante: true })), "e2.xlsx");
+  const mk = (cs) => { const ms = unirCartolas(cs).movs; return ms.map((m, i) => `${m.operacion}=${marcaCartola(ms, i)}`); };
+  const a1 = mk([e1]), a2 = mk([e2, e1]), a3 = mk([e1, e2, e1]);
+  eq("V3 líneas idénticas (misma fecha, monto y saldo) → ocurrencia 1 y 2, y no se pierde ninguna", [a1.length, new Set(a1.map((x) => x.split("=")[1])).size], [3, 3]);
+  eq("V3 la ocurrencia es estable al recargar y con otra descarga de la misma cartola", [JSON.stringify(a2) === JSON.stringify(a1), JSON.stringify(a3) === JSON.stringify(a1)], [true, true]);
+}
+// V4. Una decisión no vincula el movimiento con registros incompatibles.
+{
+  const dm = datosBase(); dm.gastos.push({ id: "g80", categoria_id: "cat_otros", monto: 80000, fecha: "2026-10-16", detalle: "Otro" });
+  const VM2 = vistaConciliacion(conciliarMovimientos(U.movs, dm), { ocs: dm.ocs, categorias });
+  const it = VM2.revisar.find((i) => i.x.monto === 80000);
+  eq("V4 compra y gasto del mismo monto → una opción por registro, nunca juntos", it.opciones.map((o) => o.registros.map((r) => r.tabla)), [["eventos_compra"], ["gastos_indirectos"]]);
+  dm.decisiones = [{ marca: it.marca, decision: "vinculado", tabla: "eventos_compra", registro_id: "k1" }, { marca: it.marca, decision: "vinculado", tabla: "gastos_indirectos", registro_id: "g80" }];
+  const x = conciliarMovimientos(U.movs, dm).movimientos.find((y) => y.monto === 80000);
+  eq("V4 si llegaran vínculos de tipos distintos (la base lo impide), el movimiento NO queda conciliado: vuelve a revisarse", [x.estado === "conciliado", !!x.vinculoRoto, x.registrable], [false, true, false]);
+}
+// V5. Abono conjunto contra varios cobros: sin duplicar los registrados ni superar lo abonado.
+{
+  const dj = datosBase(); dj.ocs.find((o) => o.id === "oc2").eventos_pago_cliente.push({ id: "c_338", fecha: "2026-10-16", monto: 676001, medio_pago: "transferencia" });
+  const sinRut = U.movs.map((m) => (m.abono === 800799 ? { ...m, descripcion: "TRANSFERENCIA DE TERCEROS" } : m));
+  const xj = conciliarMovimientos(sinRut, dj).movimientos.find((y) => y.monto === 800799);
+  const ij = vistaConciliacion(conciliarMovimientos(sinRut, dj), { ocs: dj.ocs, categorias }).revisar.find((i) => i.x.monto === 800799);
+  eq("V5 sin RUT en el detalle: los dos cobros que suman el abono quedan Por revisar como UNA opción conjunta", [xj.estado, ij?.opciones.map((o) => o.registros.map((r) => r.id).sort())], ["posible", [["c_338", "c_uta"]]]);
+  eq("V5 la opción conjunta suma exactamente lo abonado (no lo supera)", ij.opciones[0].registros.reduce((a, r) => a + r.monto, 0), 800799);
+  dj.decisiones = [{ marca: xj.marca, decision: "vinculado", tabla: "eventos_pago_cliente", registro_id: "c_uta" }, { marca: xj.marca, decision: "vinculado", tabla: "eventos_pago_cliente", registro_id: "c_338" }];
+  const Cj = conciliarMovimientos(sinRut, dj);
+  eq("V5 confirmado: conciliado con ambos cobros, ninguno queda «sin banco» y no hay nada por registrar", [Cj.movimientos.find((y) => y.monto === 800799).estado, Cj.sinLinea.some((r) => ["c_uta", "c_338"].includes(r.id)), Cj.movimientos.find((y) => y.monto === 800799).registrable], ["conciliado", false, false]);
+  const dSolo = datosBase(); dSolo.decisiones = [{ marca: xj.marca, decision: "vinculado", tabla: "eventos_pago_cliente", registro_id: "c_uta" }];
+  const xs = conciliarMovimientos(sinRut, dSolo).movimientos.find((y) => y.monto === 800799);
+  eq("V5 un vínculo que no cubre el abono completo no lo deja conciliado (la base además exige suma exacta)", [xs.estado === "conciliado", !!xs.vinculoRoto, xs.registrable], [false, true, false]);
+}
+// V6. Confirmar o descartar no modifica ningún dato financiero.
+{
+  const d6 = datosBase(); const h6 = JSON.stringify({ ...d6, decisiones: undefined });
+  d6.decisiones = [{ marca: mc.marca, decision: "vinculado", tabla: "eventos_compra", registro_id: "k1" }, { marca: dos[0].marca, decision: "rechazado", tabla: "gastos_indirectos", registro_id: "g250a" }];
+  conciliarMovimientos(U.movs, d6); vistaConciliacion(conciliarMovimientos(U.movs, d6), { ocs: d6.ocs, categorias }); verificarRegistro(U.movs, 0, d6);
+  eq("V6 compras, cobros, gastos, pagos al SII, comisiones y devoluciones intactos tras decidir", JSON.stringify({ ...d6, decisiones: undefined }), h6);
+}
 
 // La conciliación no cambia ningún dato (huella de los datos de entrada).
 eq("la conciliación no modifica los datos (huella idéntica)", JSON.stringify(datos), antes);
