@@ -20,9 +20,17 @@ import * as XLSX from "xlsx";
 //    depósitos con documentos aparte). Los cargos se validan con la cadena de saldo (en algunas cartolas el
 //    Resumen excluye los giros de cajero).
 //  · Un archivo con cualquier error se rechaza completo: nunca se usa a medias.
+//
+// Solo revisión (22/10/2026): si el archivo se pudo LEER pero no cuadra (saldo, totales, cantidad o fechas del
+// Resumen), sigue rechazado para conciliar (movs: [], errores con el detalle técnico), pero además entrega:
+//  · soloRevision: true y movsRevision: sus movimientos, solo para consultarlos (fecha, operación, monto, saldo);
+//  · diagnostico: las diferencias en palabras simples, sin suponer qué operaciones las explican.
+// Un archivo que no se puede leer (formato, columnas, fechas o montos no válidos) no trae nada para revisar.
 // ═══════════════════════════════════════════════════════════════
 
 const txt = (v) => String(v ?? "").replace(/\s+/g, " ").trim();
+const pesos = (n) => (n < 0 ? "-$" : "$") + Math.abs(Math.round(Number(n) || 0)).toLocaleString("es-CL");
+const dma = (iso) => { const [y, m, d] = String(iso || "").split("-"); return d ? `${d}/${m}/${y}` : ""; };
 export const normalizarOperacion = (v) => txt(v).replace(/^0+(?=\d)/, "");
 
 export function montoEntero(v, ctx = "") {
@@ -55,7 +63,7 @@ export const claveMovimiento = (m) => `${m.fecha}|${m.cargo}|${m.abono}|${m.sald
 
 // Lee UN libro de BancoEstado. Nunca lanza: devuelve { errores: [...] } si algo no cuadra.
 export function leerCartolaBancoEstado(wb, nombre = "archivo") {
-  const base = { nombre, formato: null, numero: null, desde: null, hasta: null, saldoInicial: null, saldoFinal: null, movs: [], errores: [] };
+  const base = { nombre, formato: null, numero: null, desde: null, hasta: null, saldoInicial: null, saldoFinal: null, movs: [], errores: [], soloRevision: false, movsRevision: [], diagnostico: [] };
   try {
     const formato = wb?.Sheets?.Registros ? "linea" : wb?.Sheets?.Movimientos ? "historico" : null;
     if (!formato) return { ...base, errores: ["No es una cartola de BancoEstado: falta la hoja Registros o Movimientos"] };
@@ -100,28 +108,68 @@ export function leerCartolaBancoEstado(wb, nombre = "archivo") {
       saldoInicial = montoEntero(formato === "linea" ? resumen["Inicial"] : resumen["Saldo Inicial"], "Resumen");
       saldoFinal = montoEntero(formato === "linea" ? resumen["Saldo Contable"] : resumen["Saldo Final"], "Resumen");
     } catch (e) { errores.push(e.message); }
-    if (!errores.length) {
+    // Hasta aquí: errores de LECTURA (el archivo no sirve ni para revisar). Desde aquí: el archivo se leyó, y se
+    // comprueba que cuadre. Lo que no cuadra deja la cartola en «solo revisión» (nunca se usa para conciliar).
+    const lectura = errores.length === 0;
+    const diagnostico = [];
+    if (lectura) {
       let s = saldoInicial;
       for (const m of movs) {
-        if (m.cargo && m.abono) errores.push(`fila ${m.fila}: trae cargo y abono a la vez`);
+        if (m.cargo && m.abono) {
+          errores.push(`fila ${m.fila}: trae cargo y abono a la vez`);
+          diagnostico.push({ tipo: "fila", fila: m.fila, texto: `El movimiento del ${dma(m.fecha)}${m.operacion ? ` (operación ${m.operacion})` : ""} trae un cargo y un abono a la vez.` });
+        }
         s += m.abono - m.cargo;
-        if (s !== m.saldo) { errores.push(`El saldo no cuadra en la fila ${m.fila} (${m.fecha}): se esperaba ${s}, la cartola dice ${m.saldo}`); break; }
+        if (s !== m.saldo) {
+          errores.push(`El saldo no cuadra en la fila ${m.fila} (${m.fecha}): se esperaba ${s}, la cartola dice ${m.saldo}`);
+          diagnostico.push({ tipo: "salto", fila: m.fila, fecha: m.fecha, diferencia: m.saldo - s,
+            texto: `Antes del movimiento del ${dma(m.fecha)}${m.operacion ? ` (operación ${m.operacion})` : ""} el saldo ${m.saldo < s ? "baja" : "sube"} ${pesos(Math.abs(m.saldo - s))} sin un movimiento que lo explique. Puede faltar un movimiento en el archivo.` });
+          s = m.saldo;   // se sigue revisando desde el saldo que informa el banco, para encontrar TODAS las diferencias
+        }
       }
-      if (!errores.length && s !== saldoFinal) errores.push(`El saldo final calculado (${s}) no coincide con el del Resumen (${saldoFinal})`);
+      if (s !== saldoFinal) {
+        errores.push(`El saldo final calculado (${s}) no coincide con el del Resumen (${saldoFinal})`);
+        diagnostico.push({ tipo: "saldo_final", diferencia: saldoFinal - s, saldoMovimientos: s, saldoResumen: saldoFinal,
+          texto: `El saldo que informa el banco en el resumen (${pesos(saldoFinal)}) no coincide con el saldo del último movimiento del archivo (${pesos(s)}). Diferencia: ${pesos(Math.abs(saldoFinal - s))}. Puede que el banco aún no liste algún movimiento: descarga la cartola de nuevo más tarde.` });
+      }
+      const sumaAbonos = movs.reduce((a, m) => a + m.abono, 0), sumaCargos = movs.reduce((a, m) => a + m.cargo, 0);
       if (formato === "historico") {
-        if (movs.at(-1).fecha !== hastaR) errores.push(`La última fecha (${movs.at(-1).fecha}) no coincide con la Fecha Final del Resumen (${hastaR})`);
-        if (movs.some((m) => m.fecha < desdeR || m.fecha > hastaR)) errores.push("Hay fechas fuera del rango del Resumen");
+        if (movs.at(-1).fecha !== hastaR) {
+          errores.push(`La última fecha (${movs.at(-1).fecha}) no coincide con la Fecha Final del Resumen (${hastaR})`);
+          diagnostico.push({ tipo: "fechas", texto: `El último movimiento es del ${dma(movs.at(-1).fecha)}, pero el banco dice que la cartola llega hasta el ${dma(hastaR)}.` });
+        }
+        if (movs.some((m) => m.fecha < desdeR || m.fecha > hastaR)) {
+          errores.push("Hay fechas fuera del rango del Resumen");
+          diagnostico.push({ tipo: "fechas", texto: `Hay movimientos fuera del período que informa el banco (${dma(desdeR)} al ${dma(hastaR)}).` });
+        }
         const declarados = Number(txt(resumen["N° Movimientos"]));
-        if (Number.isFinite(declarados) && declarados > 0 && declarados !== movs.length) errores.push(`El Resumen declara ${declarados} movimientos y el archivo trae ${movs.length}`);
+        if (Number.isFinite(declarados) && declarados > 0 && declarados !== movs.length) {
+          errores.push(`El Resumen declara ${declarados} movimientos y el archivo trae ${movs.length}`);
+          diagnostico.push({ tipo: "cantidad", texto: `El banco informa ${declarados} movimientos y el archivo trae ${movs.length}.` });
+        }
         try {
-          const abonos = movs.reduce((a, m) => a + m.abono, 0);
           const decl = montoEntero(resumen["Total Abonos"], "Resumen") + montoEntero(resumen["Total Depósitos"], "Resumen");
-          if (abonos !== decl) errores.push(`Los abonos (${abonos}) no coinciden con Total Abonos + Total Depósitos del Resumen (${decl})`);
+          if (sumaAbonos !== decl) {
+            errores.push(`Los abonos (${sumaAbonos}) no coinciden con Total Abonos + Total Depósitos del Resumen (${decl})`);
+            diagnostico.push({ tipo: "totales", texto: `Los abonos del archivo suman ${pesos(sumaAbonos)} y el banco informa ${pesos(decl)} (diferencia ${pesos(Math.abs(decl - sumaAbonos))}).` });
+          }
         } catch (e) { errores.push(e.message); }
+      } else {
+        // En línea: los totales del Resumen se informan para el diagnóstico (no cambian la validación de saldos).
+        for (const [k, suma, nombre] of [["Total Abonos", sumaAbonos, "abonos"], ["Total Cargos", sumaCargos, "cargos"]]) {
+          if (resumen[k] === undefined || resumen[k] === "") continue;
+          let decl = null; try { decl = montoEntero(resumen[k], "Resumen"); } catch { decl = null; }
+          if (decl !== null && decl !== suma) {
+            errores.push(`Los ${nombre} del archivo (${suma}) no coinciden con ${k} del Resumen (${decl})`);
+            diagnostico.push({ tipo: "totales", texto: `Los ${nombre} del archivo suman ${pesos(suma)} y el banco informa ${pesos(decl)} (diferencia ${pesos(Math.abs(decl - suma))}).` });
+          }
+        }
       }
     }
+    const soloRevision = lectura && errores.length > 0;
     return { ...base, formato, numero: txt(resumen["N° Cartola"]) || null, desde: desdeR || movs[0]?.fecha || null, hasta: hastaR || movs.at(-1)?.fecha || null,
-      saldoInicial, saldoFinal, movs: errores.length ? [] : movs, errores };
+      saldoInicial, saldoFinal, movs: errores.length ? [] : movs, errores,
+      soloRevision, movsRevision: soloRevision ? movs : [], diagnostico };
   } catch (e) {
     return { ...base, errores: ["No se pudo leer el archivo: " + e.message] };
   }
@@ -134,7 +182,10 @@ export function leerCartolaBancoEstado(wb, nombre = "archivo") {
 //    reales idénticas de un mismo día (p. ej. dos giros) se conservan.
 //  · Continuidad: el saldo final de un tramo debe ser el saldo inicial del siguiente; si no, falta una cartola.
 export function unirCartolas(cartolas) {
-  const rechazadas = (cartolas || []).filter((c) => c.errores.length).map((c) => ({ nombre: c.nombre, errores: c.errores }));
+  // Rechazadas: no se usan para conciliar. Las «solo revisión» se informan además con su diagnóstico y movimientos.
+  const rechazadas = (cartolas || []).filter((c) => c.errores.length).map((c) => ({ nombre: c.nombre, errores: c.errores, soloRevision: !!c.soloRevision }));
+  const soloRevision = (cartolas || []).filter((c) => c.soloRevision).map((c) => ({ nombre: c.nombre, formato: c.formato, desde: c.desde, hasta: c.hasta,
+    saldoInicial: c.saldoInicial, saldoFinal: c.saldoFinal, diagnostico: c.diagnostico || [], movs: c.movsRevision || [] }));
   const validas = (cartolas || []).filter((c) => !c.errores.length);
   const maximo = new Map(), ejemplos = new Map();
   for (const c of validas) {
@@ -162,7 +213,7 @@ export function unirCartolas(cartolas) {
     if (a.saldoFinal !== b.saldoInicial)
       faltantes.push({ despuesDe: a.hasta, antesDe: b.desde, saldoEsperado: a.saldoFinal, saldoEncontrado: b.saldoInicial, neto: b.saldoInicial - a.saldoFinal });
   }
-  return { movs, leidos, duplicadosQuitados: leidos - movs.length, archivosRepetidos, faltantes, rechazadas, tramos: tramos.map((c) => ({ nombre: c.nombre, formato: c.formato, numero: c.numero, desde: c.desde, hasta: c.hasta, saldoInicial: c.saldoInicial, saldoFinal: c.saldoFinal, n: c.movs.length })) };
+  return { movs, leidos, duplicadosQuitados: leidos - movs.length, archivosRepetidos, faltantes, rechazadas, soloRevision, tramos: tramos.map((c) => ({ nombre: c.nombre, formato: c.formato, numero: c.numero, desde: c.desde, hasta: c.hasta, saldoInicial: c.saldoInicial, saldoFinal: c.saldoFinal, n: c.movs.length })) };
 }
 
 // Totales por mes de la cartola (base de banco_mensual): entradas, salidas y saldo del último movimiento del mes.

@@ -133,3 +133,16 @@ duplicados, marca del movimiento, registro atómico en la base, cierre del 07/10
    - `…-deshacer.sql`, que se detiene si ya hay decisiones: exportarlas antes y usar `set bfk.conc_descartar = 'si'`.
 
    Ningún registro financiero cambia en ningún paso.
+
+## Cartolas que no cuadran: «Solo revisión» (rama `cartolas-solo-revision`, 22/10/2026)
+- La validación sigue igual de estricta: una cartola cuyo saldo, totales, cantidad o fechas no cuadran **no se usa**
+  para conciliar ni registrar (sus movimientos no entran a la unión, no generan marcas ni decisiones).
+- Si el archivo se pudo leer, queda en **«Solo revisión»**: aviso claro, diagnóstico en palabras simples (diferencia del
+  saldo final, salto de saldo antes de un movimiento —posible movimiento omitido—, totales, cantidad, fechas) y sus
+  movimientos para consultar (fecha, N° de operación, descripción, monto, saldo). Sin ningún botón de acción.
+- Los archivos que cuadran se concilian aparte, sin mezcla. Mientras haya una cartola en «Solo revisión» cargada no se
+  guardan los totales del banco. Si no hay ninguna que cuadre, no se muestra conciliación.
+- Al cargar la cartola corregida se vuelve a validar todo; las acciones se habilitan solo con la que cuadra.
+- Caso real (archivo de Kevin, revisado solo en local): queda en «Solo revisión» con «Diferencia: $910.000» entre el
+  saldo del resumen ($359.829) y el del último movimiento ($1.269.829); los totales del resumen sí calzan.
+- Pruebas: `revision.test.mjs` 19/19; `e2e_solo_revision.mjs` (PC y celular) 28/28.

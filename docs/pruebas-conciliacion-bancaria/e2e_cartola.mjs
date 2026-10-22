@@ -137,7 +137,8 @@ async function verTodo(p) {
   const n0 = b.escr.length;
   await abrirCartola(p, [rHist, rHueco, rRota]);
   ok("E4_aviso_de_cartola_faltante", /Falta\(n\) cartola\(s\)/.test(await p.locator("[data-cartolas-faltantes]").innerText().catch(() => "")));
-  ok("E4_cartola_con_error_rechazada", (await p.locator('[data-archivo="rechazado"]').count()) === 1);
+  // 22/10/2026: un archivo legible que no cuadra queda en «Solo revisión» (sigue sin usarse para conciliar).
+  ok("E4_cartola_con_error_rechazada", (await p.locator('[data-archivo="solo-revision"]').count()) === 1 && (await p.locator("[data-solo-revision]").count()) === 1);
   await verTodo(p);
   ok("E4_solo_movimientos_validos", (await p.locator("[data-mov]").count()) === 4);
   ok("E4_no_escribe", b.escr.slice(n0).filter((w) => w.metodo !== "GET").length === 0);

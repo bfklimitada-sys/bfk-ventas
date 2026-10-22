@@ -251,8 +251,9 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, ga
       {/* Archivos leídos y validaciones */}
       <div style={{ background: C.paper, borderRadius: 12, padding: "10px 13px", marginBottom: 10 }}>
         {cartolas.map((c, k) => (
-          <div key={k} data-archivo={c.errores.length ? "rechazado" : "ok"} style={{ fontSize: 12, color: c.errores.length ? C.dangerText : C.inkMuted, marginBottom: 3 }}>
-            {c.errores.length ? <><Ic n="⚠" /> {c.nombre}: rechazado — {c.errores.slice(0, 2).join(" · ")}</>
+          <div key={k} data-archivo={c.soloRevision ? "solo-revision" : c.errores.length ? "rechazado" : "ok"} style={{ fontSize: 12, color: c.soloRevision ? C.warnText : c.errores.length ? C.dangerText : C.inkMuted, marginBottom: 3, fontWeight: c.soloRevision ? 700 : 400 }}>
+            {c.soloRevision ? <><Ic n="⚠" /> {c.nombre}: no cuadra · Solo revisión (no se usa para conciliar ni registrar)</>
+              : c.errores.length ? <><Ic n="⚠" /> {c.nombre}: no se pudo leer — {c.errores.slice(0, 2).join(" · ")}</>
               : <>{c.formato === "linea" ? "En línea" : `Histórica N° ${c.numero || "—"}`} · {fmt.date(c.desde)} a {fmt.date(c.hasta)} · {c.movs.length} mov. · saldo {fmt.money(c.saldoInicial)} → {fmt.money(c.saldoFinal)}</>}
           </div>
         ))}
@@ -269,6 +270,20 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, ga
         </div>
       )}
 
+      {union.soloRevision.length > 0 && (
+        <div data-aviso-solo-revision style={{ background: C.warnLight, border: `1px solid ${C.warn}`, borderRadius: 10, padding: "10px 12px", marginBottom: 10, fontSize: 13, color: C.ink, lineHeight: 1.5 }}>
+          <div style={{ fontWeight: 800, color: C.warnText }}>{union.soloRevision.length === 1 ? "Una cartola no cuadra" : `${union.soloRevision.length} cartolas no cuadran`}: quedaron en «Solo revisión»</div>
+          Puedes ver sus movimientos, pero con ellas no se registra, no se concilia ni se guardan saldos.
+          {movs.length > 0 ? " La conciliación de abajo usa solo los archivos que sí cuadran." : " Descarga la cartola de nuevo más tarde y vuelve a cargarla: se revisará completa otra vez."}
+        </div>
+      )}
+      {union.soloRevision.map((c) => <SoloRevision key={c.nombre} c={c} />)}
+
+      {movs.length === 0 ? (
+        <div data-sin-conciliacion style={{ textAlign: "center", padding: "14px 6px", color: C.inkMuted, fontSize: 13, lineHeight: 1.5 }}>
+          No hay cartolas que cuadren, así que todavía no se puede conciliar. Nada se registró ni se guardó.
+        </div>
+      ) : (<>
       {/* Resumen: tres grupos */}
       <div data-resumen-grupos style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 6, marginBottom: 8 }}>
         <Contador dato="revisar" etiqueta="Por revisar" n={vista.revisar.length} tono={vista.revisar.length ? "posible" : "neutro"} />
@@ -354,8 +369,14 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, ga
         </Seccion>
       )}
 
-      {/* Totales del banco: también requieren confirmación (escriben banco_mensual y el registro de la cartola) */}
-      {movs.length > 0 && onRegistrar && (
+      </>)}
+
+      {/* Totales del banco: también requieren confirmación (escriben banco_mensual y el registro de la cartola).
+          Con una cartola en «Solo revisión» cargada no se guardan saldos (podrían quedar incompletos). */}
+      {movs.length > 0 && onRegistrar && union.soloRevision.length > 0 && (
+        <div data-totales-bloqueados style={{ fontSize: 12, color: C.inkMuted, marginTop: 12, lineHeight: 1.45 }}>No se pueden guardar los totales del banco mientras haya una cartola que no cuadra.</div>
+      )}
+      {movs.length > 0 && onRegistrar && union.soloRevision.length === 0 && (
         <div style={{ background: C.paper, borderRadius: 12, padding: "10px 12px", marginTop: 12 }}>
           <label style={{ display: "flex", gap: 8, fontSize: 12, color: C.inkMuted, alignItems: "flex-start", cursor: "pointer" }}>
             <input data-confirmar-totales type="checkbox" checked={confirmaTotales} onChange={(e) => setConfirmaTotales(e.target.checked)} style={{ marginTop: 2 }} />
@@ -379,6 +400,43 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, ga
         Empezar de nuevo
       </button>
     </div>
+  );
+}
+
+// Cartola que no cuadra: diagnóstico en palabras simples y sus movimientos, SOLO para consultar (sin acciones).
+function SoloRevision({ c }) {
+  const [ver, setVer] = useState(false);
+  return (
+    <section data-solo-revision={c.nombre} style={{ background: C.card, border: `1px solid ${C.warn}`, borderRadius: 12, padding: "10px 12px", marginBottom: 10 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap", alignItems: "baseline" }}>
+        <span style={{ fontSize: 13, fontWeight: 800, color: C.ink }}>Solo revisión · {c.formato === "linea" ? "Cartola en línea" : "Cartola histórica"} · {fmt.date(c.desde)} a {fmt.date(c.hasta)}</span>
+        <span style={{ fontSize: 11, fontWeight: 800, color: C.warnText, background: C.warnLight, borderRadius: 999, padding: "2px 8px" }}>SOLO REVISIÓN</span>
+      </div>
+      <div style={{ fontSize: 12, color: C.inkFaint, marginTop: 2 }}>{c.nombre}</div>
+      <ul data-diagnostico style={{ margin: "8px 0 0", paddingLeft: 18, fontSize: 12.5, color: C.ink, lineHeight: 1.5 }}>
+        {c.diagnostico.map((d, i) => <li key={i} data-diferencia={d.tipo}>{d.texto}</li>)}
+      </ul>
+      <button data-ver-movimientos-revision onClick={() => setVer((v) => !v)} style={{ ...btnG, width: "100%", marginTop: 8, fontSize: 12, padding: "7px" }}>
+        {ver ? "Ocultar movimientos" : `Ver sus ${c.movs.length} movimientos (solo consulta)`}
+      </button>
+      {ver && (
+        <div data-movimientos-revision style={{ marginTop: 8 }}>
+          {c.movs.map((m, i) => {
+            const salto = c.diagnostico.find((d) => d.tipo === "salto" && d.fila === m.fila);
+            return (
+              <div key={i} data-mov-revision={`${m.fecha}|${m.cargo}|${m.abono}|${m.saldo}`} style={{ borderTop: `1px solid ${C.border}`, padding: "6px 0", fontSize: 12 }}>
+                {salto && <div data-salto style={{ color: C.warnText, fontWeight: 700, marginBottom: 2 }}>⚠ Aquí el saldo {salto.diferencia < 0 ? "baja" : "sube"} {fmt.money(Math.abs(salto.diferencia))} sin un movimiento que lo explique</div>}
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                  <span style={{ color: C.inkMuted, minWidth: 0, overflowWrap: "anywhere" }}>{fmt.date(m.fecha)}{m.operacion ? ` · op. ${m.operacion}` : ""} · {m.descripcion}</span>
+                  <span style={{ fontFamily: MONO, fontWeight: 800, color: m.abono ? C.okText : C.dangerText, flexShrink: 0 }}>{m.abono ? "+" : "−"}{fmt.money(m.abono || m.cargo)}</span>
+                </div>
+                <div style={{ color: C.inkFaint, fontFamily: MONO, textAlign: "right" }}>saldo {fmt.money(m.saldo)}</div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
   );
 }
 
