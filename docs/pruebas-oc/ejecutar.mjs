@@ -8,3 +8,5 @@ const D = path.dirname(fileURLToPath(import.meta.url));
 const salida = path.join(process.env.TMPDIR || "/tmp", "reglas_oc.bundle.mjs");
 await build({ entryPoints: [path.join(D, "reglas_oc.test.mjs")], bundle: true, platform: "node", format: "esm", outfile: salida, logLevel: "error", jsx: "automatic", loader: { ".js": "jsx" } });
 execFileSync(process.execPath, [salida], { stdio: "inherit" });
+// Eliminación definitiva de OC (23/10/2026)
+execFileSync(process.execPath, [path.join(D, "eliminar_oc.test.mjs")], { stdio: "inherit" });

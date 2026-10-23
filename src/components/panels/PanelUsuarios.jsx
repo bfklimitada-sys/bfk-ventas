@@ -1,4 +1,6 @@
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
+import { selEliminacionesOC } from "../../lib/supabase";
+import { NOMBRE_REGISTRO, mensajeErrorEliminar } from "../../lib/eliminarOC";
 import { PanelDatos } from "./PanelDatos";
 import { C, btnP, fmt, iStyle } from "../../lib/theme";
 import { Ic } from "../ui/Iconos";
@@ -6,13 +8,22 @@ import { Seccion, Tarjeta, Badge, BotonAdmin, Pestanas, PanelPestana } from "../
 import { ImportarEntidades } from "../forms/ImportarEntidades";
 import { ContactosCatalogo } from "../ficha/ContactosInstitucion";
 
-export function PanelUsuarios({ perfiles, ocs, ocsArchivadas, onRestaurarOC, onChangeRol, session, showToast, entidadesCatalogo, onEntidadesImportadas, usoMP, sincronizando, validandoTodo, exportando, onCorregirFechas, onValidarTodo, onExportarTodo, difsHistoricas }) {
+export function PanelUsuarios({ perfiles, ocs, ocsArchivadas, onRestaurarOC, onChangeRol, session, showToast, entidadesCatalogo, onEntidadesImportadas, usoMP, sincronizando, validandoTodo, exportando, onCorregirFechas, onValidarTodo, onExportarTodo, difsHistoricas, onEliminarOC, eliminacionesVersion }) {
   const [verDifs,setVerDifs]=useState(false);
   const [pestana,setPestana]=useState("usuarios");
   const [showImport,setShowImport]=useState(false);
   const [filtroArch,setFiltroArch]=useState("");
   const [archAbierta,setArchAbierta]=useState(null);
   const [restaurando,setRestaurando]=useState(null);
+  // Auditoría de OCs eliminadas definitivamente (solo lectura; la escribe la base).
+  const [eliminadas,setEliminadas]=useState(null); const [errEliminadas,setErrEliminadas]=useState("");
+  useEffect(()=>{
+    if(pestana!=="archivadas"||!session?.access_token) return;
+    let vivo=true;
+    selEliminacionesOC(session.access_token).then(r=>{ if(vivo){ setEliminadas(r); setErrEliminadas(""); } })
+      .catch(e=>{ if(vivo){ setEliminadas([]); setErrEliminadas(mensajeErrorEliminar(e)); } });
+    return ()=>{ vivo=false; };
+  },[pestana,session?.access_token,eliminacionesVersion]);
   const archivadasFiltradas=useMemo(()=>{
     const q=filtroArch.trim().toLowerCase();
     const lista=[...(ocsArchivadas||[])].sort((a,b)=>String(b.archivada_en||"").localeCompare(String(a.archivada_en||"")));
@@ -190,11 +201,28 @@ export function PanelUsuarios({ perfiles, ocs, ocsArchivadas, onRestaurarOC, onC
                       if(!window.confirm(`¿Restaurar la OC ${o.numero_oc}? Volverá a la operación normal con todos sus datos.`)) return;
                       setRestaurando(o.id); try{ await onRestaurarOC(o.id); } finally { setRestaurando(null); setArchAbierta(null); }
                     }} style={{width:"100%",marginTop:8}}>{restaurando===o.id?"Restaurando…":"Restaurar esta OC"}</BotonAdmin>
+                    {onEliminarOC&&<BotonAdmin peligro data-eliminar-oc-abrir={o.numero_oc} onClick={()=>onEliminarOC(o)} style={{width:"100%",marginTop:8}}>Eliminar definitivamente…</BotonAdmin>}
                   </div>
                 )}
               </div>
             );
           })}
+        </Tarjeta>
+      </Seccion>
+      <Seccion id="adm-eliminadas" titulo="OCs eliminadas" nota="Registro permanente de las eliminaciones definitivas: quién, cuándo, motivo y qué registros se borraron (la copia completa queda en la base).">
+        <Tarjeta>
+          {errEliminadas&&<div style={{fontSize:12,color:C.inkMuted}}>{errEliminadas}</div>}
+          {!errEliminadas&&eliminadas===null&&<div style={{fontSize:12,color:C.inkMuted}}>Cargando…</div>}
+          {!errEliminadas&&eliminadas&&eliminadas.length===0&&<div style={{fontSize:12,color:C.inkMuted}}>No hay OCs eliminadas.</div>}
+          {(eliminadas||[]).map(e=>(
+            <div key={e.id} data-oc-eliminada={e.numero_oc} style={{borderTop:`1px solid ${C.border}`,padding:"10px 0",fontSize:12,color:C.inkMuted,lineHeight:1.6}}>
+              <div style={{display:"flex",justifyContent:"space-between",gap:8}}><b style={{color:C.ink,fontSize:14}}>{e.numero_oc}</b><span>{fmt.money(e.resumen?.monto_total||0)}</span></div>
+              <div>{e.cliente||"—"}{e.original_numero?` · duplicada de ${e.original_numero}`:""}{e.estaba_archivada?" · estaba archivada":" · estaba activa"}</div>
+              <div>Eliminada {fmt.datetime(e.eliminado_en)} por <b style={{color:C.ink}}>{e.eliminado_por_nombre||"—"}</b> · {e.motivo}</div>
+              <div>Registros borrados: {Object.entries(e.resumen?.registros||{}).map(([t,n])=>`${n} ${NOMBRE_REGISTRO[t]||t}`).join(" · ")||"solo la OC"}</div>
+              {e.restaurado_en&&<div style={{color:C.okText}}>Restaurada {fmt.datetime(e.restaurado_en)} por {e.restaurado_por_nombre||"—"}</div>}
+            </div>
+          ))}
         </Tarjeta>
       </Seccion>
       </PanelPestana>

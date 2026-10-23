@@ -1,0 +1,15 @@
+-- Firma de TODO excepto la OC indicada (:oc): OC, eventos, financiadores, pagos, gastos, IVA y filas asociadas a otras OC.
+select md5(concat_ws('|',
+  (select md5(coalesce(string_agg(to_jsonb(o)::text, ',' order by o.id), '')) from public.ordenes_compra_v2 o where o.id <> :'oc'),
+  (select md5(coalesce(string_agg(to_jsonb(t)::text, ',' order by t.id), '')) from public.eventos_factura t where t.oc_id <> :'oc'),
+  (select md5(coalesce(string_agg(to_jsonb(t)::text, ',' order by t.id), '')) from public.eventos_compra t where t.oc_id <> :'oc'),
+  (select md5(coalesce(string_agg(to_jsonb(t)::text, ',' order by t.id), '')) from public.eventos_pago_financiamiento t where t.oc_id is distinct from :'oc'),
+  (select md5(coalesce(string_agg(to_jsonb(t)::text, ',' order by t.id), '')) from public.eventos_pago_cliente t where t.oc_id <> :'oc'),
+  (select md5(coalesce(string_agg(to_jsonb(t)::text, ',' order by t.id), '')) from public.eventos_entrega t where t.oc_id <> :'oc'),
+  (select md5(coalesce(string_agg(to_jsonb(t)::text, ',' order by t.id), '')) from public.historial_cambios t where t.oc_id is distinct from :'oc'),
+  (select md5(coalesce(string_agg(to_jsonb(t)::text, ',' order by t.id), '')) from public.oc_productos_link t where t.oc_id <> :'oc'),
+  (select md5(coalesce(string_agg(to_jsonb(t)::text, ',' order by t.id), '')) from public.financiadores t),
+  (select md5(coalesce(string_agg(to_jsonb(t)::text, ',' order by t.id), '')) from public.pagos_vendedor t),
+  (select md5(coalesce(string_agg(to_jsonb(t)::text, ',' order by t.id), '')) from public.gastos_indirectos t),
+  (select md5(coalesce(string_agg(to_jsonb(t)::text, ',' order by t::text), '')) from public.iva_mensual t),
+  (select md5(coalesce(string_agg(to_jsonb(t)::text, ',' order by t.id), '')) from public.conciliacion_decisiones t))) as h \gset

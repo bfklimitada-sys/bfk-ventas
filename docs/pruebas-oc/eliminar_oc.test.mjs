@@ -1,0 +1,21 @@
+// Eliminación definitiva de OC (23/10/2026): sugerencia de la OC original, habilitación del botón y mensajes. Datos ficticios.
+import { mensajeErrorEliminar, puedeEliminar, sugerirOriginales } from "../../src/lib/eliminarOC.js";
+let ok = 0, fallas = 0;
+const eq = (k, a, b) => { const s = JSON.stringify(a) === JSON.stringify(b); s ? ok++ : fallas++; console.log((s ? "OK    " : "FALLA ") + k + (s ? "" : ` :: ${JSON.stringify(a)} ≠ ${JSON.stringify(b)}`)); };
+const fac = (folio, monto) => ({ numero_factura: folio, monto });
+const A = { id: "a", numero_oc: "1057480-1082-AG26", eventos_factura: [fac("150", 130000)] };
+const B = { id: "b", numero_oc: "1057480-1082-AG26-B", eventos_factura: [fac("150", 130000)] };
+const OTRA = { id: "o", numero_oc: "1057480-108-AG26", eventos_factura: [fac("151", 130000)] };
+const LARGA = { id: "l", numero_oc: "1057480-1082-AG26-BIS2", eventos_factura: [] };
+const MISMA_FACT = { id: "m", numero_oc: "9999-1-AG26", eventos_factura: [fac("150", 130000)] };
+eq("01 la original por código (duplicada «-B»)", sugerirOriginales(B, [OTRA, A, B]).map((s) => s.oc.id), ["a"]);
+eq("02 un prefijo parecido pero distinto no se sugiere (1057480-108 ≠ 1057480-1082)", sugerirOriginales(B, [OTRA]).length, 0);
+eq("03 sufijo largo no se toma como duplicado por código", sugerirOriginales(LARGA, [A]).length, 0);
+eq("04 también por factura (mismo folio y monto), después de las de código", sugerirOriginales(B, [MISMA_FACT, A]).map((s) => s.oc.id), ["a", "m"]);
+eq("05 nunca la misma OC; la original no sugiere a la duplicada por código", [sugerirOriginales(A, [A]).length, sugerirOriginales(A, [B]).map((s) => s.motivo)], [0, ["comparte una factura (mismo folio y monto)"]]);
+const rev = { eliminable: true, oc: { numero_oc: "1057480-1082-AG26-B" } };
+eq("06 botón: código exacto (sin distinguir mayúsculas) y motivo de 5+ caracteres", [puedeEliminar(rev, "1057480-1082-ag26-b ", "Duplicada"), puedeEliminar(rev, "1057480-1082-AG26", "Duplicada"), puedeEliminar(rev, "1057480-1082-AG26-B", "dup"), puedeEliminar({ ...rev, eliminable: false }, "1057480-1082-AG26-B", "Duplicada")], [true, false, false, false]);
+eq("07 sin la actualización de la base: mensaje simple", /actualización pendiente/.test(mensajeErrorEliminar({ message: "Could not find the function public.oc_eliminar_definitivamente" })), true);
+eq("08 errores de la base sin el prefijo técnico", mensajeErrorEliminar({ rpcCuerpo: { message: "OCE: la confirmación no coincide con el N° de la OC. No se eliminó nada." } }), "la confirmación no coincide con el N° de la OC. No se eliminó nada.");
+console.log(`\nRESUMEN eliminar OC (unitarias): ${ok} OK, ${fallas} FALLA(S)`);
+process.exit(fallas ? 1 : 0);

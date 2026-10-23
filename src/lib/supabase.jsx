@@ -94,6 +94,16 @@ async function rpcSimple(t, fn, body) {
 // Registro desde la cartola (funciones de la base con la garantía atómica). El error conserva el código
 // (23505 = ya registrado; BFK01 = posible duplicado de un registro manual; PGRST202 = función aún no instalada).
 export const rpcCartola = (t, fn, body) => rpcSimple(t, fn, body);
+// Eliminación definitiva de OC (23/10/2026): la base valida todo (solo admin, bloqueos, equivalencias, auditoría).
+export const rpcRevisarEliminacionOC = (t, ocId, originalId = null) => rpcSimple(t, "oc_eliminacion_revisar", { p_oc_id: ocId, p_original_id: originalId || null });
+export const rpcEliminarOC = (t, { ocId, confirmacion, motivo, originalId = null }) =>
+  rpcSimple(t, "oc_eliminar_definitivamente", { p_oc_id: ocId, p_confirmacion: confirmacion, p_motivo: motivo, p_original_id: originalId || null });
+export async function selEliminacionesOC(t) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/oc_eliminaciones?select=id,oc_id,numero_oc,cliente,estaba_archivada,original_numero,motivo,eliminado_por_nombre,eliminado_en,resumen,restaurado_en,restaurado_por_nombre&order=eliminado_en.desc&limit=100`, { headers: hdrs(t) });
+  const cuerpo = await r.json().catch(() => null);
+  if (!r.ok) throw Object.assign(new Error(cuerpo?.message || `HTTP ${r.status}`), { rpcStatus: r.status, rpcCuerpo: cuerpo });
+  return cuerpo || [];
+}
 // Vendedor responsable: pasa el vendedor de la cotización adjudicada a su OC (solo si es inequívoco y la OC no tiene).
 export const rpcTransferirVendedor = (t, cotizacionId) => rpcSimple(t, "cz_transferir_vendedor_a_oc", { p_cotizacion_id: cotizacionId });
 // Contactos institucionales (21/10/2026): toda escritura pasa por RPC (la base valida RUT, duplicados y prioridad).
