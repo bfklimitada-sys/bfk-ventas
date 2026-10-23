@@ -96,6 +96,19 @@ for (const movil of [false, true]) {
   ok(`${X}01_seguras_son_las_4_con_evidencia`, (await p.locator("[data-segura]").count()) === 4 && (await Promise.all(SEGURAS.map(enSeguras))).every(Boolean));
   ok(`${X}02_ambiguo_y_sin_registro_quedan_aparte`, (await p.locator(`[data-grupo-seccion="revisar"] [data-mov="${CL[2]}"]`).count()) === 1
     && (await p.locator(`[data-grupo-seccion="sin-registrar"] [data-mov="${CL[4]}"]`).count()) === 1 && !(await enSeguras(2)) && !(await enSeguras(4)));
+  // 1b. «Revisar todas las coincidencias seguras (N)»: marca solo las seguras, abre el resumen con la confirmación
+  //     desmarcada y NO escribe nada en la base (ni decisiones ni registros) hasta confirmar.
+  const nR = b.escr.length;
+  ok(`${X}01b_boton_revisar_todas_muestra_n`, /Revisar todas las coincidencias seguras \(4\)/.test(await p.locator("[data-revisar-todas-seguras]").innerText()));
+  await p.locator("[data-revisar-todas-seguras]").click(); await espera(p, 800);
+  ok(`${X}01c_selecciona_solo_las_seguras_y_abre_el_resumen`, (await p.locator("[data-sel-segura]:checked").count()) === 4 && (await p.locator("[data-fila-lote]").count()) === 4
+    && (await p.locator("input[data-sel-nuevo]:checked").count()) === 0 && (await p.locator("[data-resumen-lote]").count()) === 1);
+  ok(`${X}01d_confirmacion_final_desmarcada_y_boton_inactivo`, !(await p.locator("[data-confirmar-lote-check]").isChecked()) && await p.locator("[data-confirmar-lote]").isDisabled());
+  ok(`${X}01e_abrir_el_resumen_no_escribe_en_la_base`, b.escr.slice(nR).filter((w) => w.metodo !== "GET").length === 0 && huella(b) === h0 && b.db.conciliacion_decisiones.length === 0, b.escr.slice(nR).filter((w) => w.metodo !== "GET"));
+  await p.locator("[data-resumen-lote]").scrollIntoViewIfNeeded();
+  await p.screenshot({ path: path.join(SALIDA, `masiva_${X}_revisar_todas.png`), fullPage: !movil });
+  await p.locator("[data-quitar-seleccion]").click(); await espera(p, 200);
+  ok(`${X}01f_quitar_seleccion_cierra_el_resumen_sin_escribir`, (await p.locator("[data-resumen-lote]").count()) === 0 && b.escr.slice(nR).filter((w) => w.metodo !== "GET").length === 0);
   // 2. Seleccionar todas, quitar una, revisar: el resumen muestra movimientos, montos, registros y evidencia.
   await p.locator("[data-seleccionar-seguras]").click(); await espera(p, 200);
   ok(`${X}03_seleccionar_coincidencias_seguras_marca_todas`, (await p.locator("[data-sel-segura]:checked").count()) === 4);

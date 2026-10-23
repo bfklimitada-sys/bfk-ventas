@@ -392,6 +392,10 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, ga
       {seguras.length > 0 && (
         <Seccion dato="seguras" titulo={`Coincidencias seguras para confirmar (${seguras.length})`} ayuda="Ya están registradas en BFK y el banco trae evidencia propia (RUT, nombre, persona o una referencia ya confirmada). Confirmar solo guarda el vínculo: no crea ni cambia registros.">
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+            {/* Atajo: marca SOLO las coincidencias seguras ya identificadas y abre el resumen. No guarda nada: la
+                confirmación final queda desmarcada y se exige marcarla y pulsar «Confirmar». */}
+            <button data-revisar-todas-seguras onClick={() => { setSelSeguras(new Set(seguras.map((x) => x.marca))); setConfirmaLote(false); setRevisandoLote(true); }} disabled={!!progresoLote}
+              style={{ ...btnP(C.ok), flex: "1 1 100%", fontSize: 13, padding: "9px" }}>Revisar todas las coincidencias seguras ({seguras.length})</button>
             <button data-seleccionar-seguras onClick={() => setSelSeguras(new Set(seguras.map((x) => x.marca)))} disabled={!!progresoLote}
               style={{ ...btnG, flex: "1 1 200px", fontSize: 12, padding: "7px", borderColor: C.ok, color: C.okText }}>Seleccionar coincidencias seguras</button>
             {selSeguras.size > 0 && <button data-quitar-seleccion onClick={() => { setSelSeguras(new Set()); setRevisandoLote(false); setConfirmaLote(false); }} style={{ ...btnG, flex: "0 1 140px", fontSize: 12, padding: "7px" }}>Quitar selección</button>}

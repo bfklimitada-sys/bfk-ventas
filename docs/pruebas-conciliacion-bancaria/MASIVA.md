@@ -7,6 +7,9 @@ Regla: **conciliar no es registrar**. El lote solo guarda vínculos con registro
   evidencia propia del banco (RUT, nombre del cliente, persona en el detalle, nota con la fecha, glosa del SII o una
   referencia ya confirmada), posteriores al cierre, sin decisión ni marca, con registros de un solo tipo que suman exacto.
   - Casilla por movimiento y botón «Seleccionar coincidencias seguras».
+  - Atajo «Revisar todas las coincidencias seguras (N)»: marca solo las coincidencias seguras ya identificadas y abre
+    directamente el resumen del lote, con la confirmación final desmarcada. No guarda decisiones ni crea registros:
+    nada se escribe hasta marcar la confirmación y pulsar «Confirmar».
   - «Revisar y confirmar» muestra un resumen: cada movimiento con fecha, detalle, monto, registro de BFK y evidencia,
     más totales de abonos y cargos. Hay que marcar la confirmación antes de guardar.
   - Al confirmar, cada movimiento se vuelve a validar con datos recién leídos de la base; si otra persona lo confirmó,
@@ -27,8 +30,8 @@ cierres, F29 ni saldos del banco.
 ## Pruebas
 | Prueba | Resultado |
 |---|---|
-| `lote.test.mjs` (selección segura, cierre, revalidación, conflictos, deshacer, huella) | 17/17 |
-| `e2e_conciliacion_masiva.mjs` (PC 1280 y celular 390: lote, resumen, dos usuarios, deshacer, serie, sin base de decisiones) | 40/40 |
+| `lote.test.mjs` (selección segura, cierre, revalidación, conflictos, deshacer, huella) | 19/19 |
+| `e2e_conciliacion_masiva.mjs` (PC 1280 y celular 390: lote, resumen, dos usuarios, deshacer, serie, sin base de decisiones) (incluye «Revisar todas»: abrir el resumen no escribe en la base) | 56/56 |
 | `docs/migraciones/pruebas/conciliacion/concurrencia_lote.sh` (dos lotes cruzados a la vez, base desechable) | 4/4 |
 | SQL de decisiones y concurrencia existentes | 30/30 y 4/4 |
 | e2e existentes de la cartola (simple, automática, cartola, concurrencia, solo revisión) | 43, 20, 32, 30, 28 |
