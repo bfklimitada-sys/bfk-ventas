@@ -6,6 +6,7 @@ import { Ic, I } from "../ui/Iconos";
 import { leerCartolaBancoEstado, totalesPorMes, unirCartolas } from "../../lib/cartolas";
 import { CIERRE_CONCILIACION, TABLA_REGISTRO, conciliarMovimientos, opcionesAbono } from "../../lib/conciliacion";
 import { textoRegistro, vistaConciliacion } from "../../lib/conciliacionVista";
+import { coincidenciasSeguras, decisionesDelLote, ejecutarLote, resumenLote } from "../../lib/conciliacionLote";
 import { esConflictoDuplicado, esFuncionNoDisponible, esPosibleDuplicadoManual, idsDelMensaje, marcaCartola, verificarRegistro } from "../../lib/registroCartola";
 
 // ═══════════════════════════════════════════════════════════════
@@ -89,13 +90,26 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, ga
   const [guardando, setGuardando] = useState(false);
   const [confirmaTotales, setConfirmaTotales] = useState(false);
   const enCurso = useRef(false);                     // bloqueo inmediato contra doble envío (no espera al re-render)
+  const avanzarSerie = useRef(null);                 // registro en serie: avanzar tras recargar los datos
   const [duplicado, setDuplicado] = useState(null);  // { clave, registros }: la base encontró un registro manual parecido
+  // Conciliación masiva (23/10/2026): selección de coincidencias seguras y registro en serie de movimientos nuevos.
+  const [selSeguras, setSelSeguras] = useState(() => new Set());
+  const [revisandoLote, setRevisandoLote] = useState(false);
+  const [confirmaLote, setConfirmaLote] = useState(false);
+  const [progresoLote, setProgresoLote] = useState(null);   // { hechos, total }
+  const [resultadoLote, setResultadoLote] = useState(null); // { res, ids (para deshacer), ok, fallas }
+  const [selNuevos, setSelNuevos] = useState(() => new Set());
+  const [serie, setSerie] = useState(null);                 // { claves: [...], hechos: n, saltados: n }
 
   const datos = useMemo(() => ({ ocs, financiadores, vendedores, gastos, pagosVendedor, pagoFinSueltos, aportes, decisiones: decisiones || [] }),
     [ocs, financiadores, vendedores, gastos, pagosVendedor, pagoFinSueltos, aportes, decisiones]);
   const union = useMemo(() => unirCartolas(cartolas), [cartolas]);
   const conc = useMemo(() => conciliarMovimientos(union.movs, datos, { cierre }), [union, datos, cierre]);
   const vista = useMemo(() => vistaConciliacion(conc, { ocs, categorias, cierre }), [conc, ocs, categorias, cierre]);
+  // Solo con la base de decisiones instalada se pueden confirmar vínculos (en lote o uno a uno).
+  const seguras = useMemo(() => (decisiones === null ? [] : coincidenciasSeguras(vista)), [vista, decisiones]);
+  const lote = useMemo(() => seguras.filter((s) => selSeguras.has(s.marca)), [seguras, selSeguras]);
+  const marcaSegura = useMemo(() => new Set(seguras.map((s) => s.marca)), [seguras]);
 
   const procesar = async (files) => {
     if (!files?.length) return;
@@ -132,6 +146,60 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, ga
     try { for (const id of ids) await onAnularDecision(id); await leerDecisiones(); } catch (e) { setErr(mensajeDecision(e)); }
     finally { enCurso.current = false; }
   };
+
+  // ── Lote de coincidencias seguras: revalida cada una con datos frescos y guarda SOLO decisiones (vínculos) ──
+  const confirmarLote = async () => {
+    if (enCurso.current || !onDecidir || !lote.length || !confirmaLote) return;
+    if (!onLeerDatosFrescos) { setErr("No se puede verificar contra la base: no se confirmó nada."); return; }
+    enCurso.current = true; setErr(""); setProgresoLote({ hechos: 0, total: lote.length });
+    const antes = (await lectorDecisiones.current?.().catch(() => null)) || decisiones || [];
+    try {
+      const res = await ejecutarLote(lote, {
+        leerFrescos: onLeerDatosFrescos,
+        conciliar: (f) => conciliarMovimientos(union.movs, { ...f, decisiones: f.decisiones || antes }, { cierre }),
+        decidir: (d) => onDecidir({ ...d, silencioso: true }),
+        alAvanzar: (hechos, total) => setProgresoLote({ hechos, total }),
+      });
+      const despues = (await lectorDecisiones.current?.().catch(() => null)) || [];
+      const ids = decisionesDelLote(antes, despues, res.filter((r) => r.ok).map((r) => r.marca));
+      setResultadoLote({ res, ids, ok: res.filter((r) => r.ok).length, fallas: res.filter((r) => !r.ok) });
+      setSelSeguras(new Set()); setRevisandoLote(false); setConfirmaLote(false);
+      await leerDecisiones();
+    } catch (e) { setErr(mensajeDecision(e)); await leerDecisiones(); }
+    finally { enCurso.current = false; setProgresoLote(null); }
+  };
+  const deshacerLote = async () => {
+    if (enCurso.current || !onAnularDecision || !resultadoLote?.ids?.length) return;
+    if (!window.confirm(`¿Deshacer los ${resultadoLote.ids.length} vínculos de este lote? Los movimientos vuelven a quedar por confirmar. No cambia ningún registro de BFK.`)) return;
+    enCurso.current = true; setErr("");
+    try { for (const id of resultadoLote.ids) await onAnularDecision(id, { silencioso: true }); setResultadoLote(null); await leerDecisiones(); }
+    catch (e) { setErr(mensajeDecision(e)); await leerDecisiones(); }
+    finally { enCurso.current = false; }
+  };
+  const alternarSegura = (marca) => setSelSeguras((s) => { const n = new Set(s); n.has(marca) ? n.delete(marca) : n.add(marca); return n; });
+  const alternarNuevo = (marca) => setSelNuevos((s) => { const n = new Set(s); n.has(marca) ? n.delete(marca) : n.add(marca); return n; });
+
+  // ── Registro en serie: cada movimiento elegido se abre de a uno, con su propia revisión y confirmación ──
+  const abrirSiguienteDeSerie = (sr, desde = 0) => {
+    const pendientes = vista.sinRegistrar.filter((it) => it.x.registrable && sr.claves.includes(it.x.m.clave));
+    const sig = sr.claves.slice(desde).map((c) => pendientes.find((it) => it.x.m.clave === c)).find(Boolean);
+    if (sig) abrir(sig.x); else { setSerie((s) => (s ? { ...s, terminada: true } : s)); cerrar(); }
+  };
+  const iniciarSerie = () => {
+    const claves = vista.sinRegistrar.filter((it) => it.x.registrable && selNuevos.has(it.marca)).map((it) => it.x.m.clave);
+    if (!claves.length) return;
+    const sr = { claves, actual: 0, hechos: 0, saltados: 0 }; setSerie(sr); setSelNuevos(new Set()); abrirSiguienteDeSerie(sr, 0);
+  };
+
+  // Tras registrar uno de la serie (datos ya recargados): abrir el siguiente que siga sin registrar.
+  useEffect(() => {
+    if (!avanzarSerie.current || !serie) return;
+    avanzarSerie.current = null;
+    const sr = { ...serie, actual: serie.actual + 1, hechos: serie.hechos + 1 };
+    setSerie(sr); abrirSiguienteDeSerie(sr, sr.actual);
+  }, [vista]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const saltarEnSerie = () => { if (!serie) return; const sr = { ...serie, actual: serie.actual + 1, saltados: serie.saltados + 1 }; setSerie(sr); abrirSiguienteDeSerie(sr, sr.actual); };
+  const terminarSerie = () => { setSerie(null); cerrar(); };
 
   const resumenCartola = () => {
     if (!movs.length) return null;
@@ -183,15 +251,16 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, ga
         const cobros = (op.asignaciones || []).map((a) => ({ ocId: a.ocId, numeroOc: a.numeroOc, monto: a.monto, parcial: a.parcial, tipo: op.tipo,
           fecha: m.fecha, descripcion: `${m.descripcion}${ref}` }));
         const valeVistas = op.valeVista ? [{ ...op.valeVista, fecha: m.fecha, monto: m.abono, descripcion: m.descripcion }] : [];
-        await onRegistrar(cobros, resumenCartola(), valeVistas, marca);
+        await onRegistrar(cobros, resumenCartola(), valeVistas, marca, { mantenerAbierto: !!serie });
       } else if (borrador.tipo === "retiro") {
         if (!onRegistrarRetiro) throw new Error("El registro de retiros de capital no está disponible");
-        await onRegistrarRetiro({ ...marca, socio: String(borrador.socio).trim(), monto: m.cargo, fecha: m.fecha, notas: `Desde cartola${ref}: ${m.descripcion}` });
+        await onRegistrarRetiro({ ...marca, socio: String(borrador.socio).trim(), monto: m.cargo, fecha: m.fecha, notas: `Desde cartola${ref}: ${m.descripcion}`, mantenerAbierto: !!serie });
       } else {
         await onRegistrarEgresos([{ ...marca, tipo: borrador.tipo, destinoId: borrador.destinoId, categoriaId: borrador.categoriaId, monto: m.cargo, fecha: m.fecha,
-          descripcion: `${m.descripcion}${ref}`, operacion: m.operacion || "", mesCom: Number(borrador.mesCom), anioCom: Number(borrador.anioCom) }], resumenCartola());
+          descripcion: `${m.descripcion}${ref}`, operacion: m.operacion || "", mesCom: Number(borrador.mesCom), anioCom: Number(borrador.anioCom) }], resumenCartola(), { mantenerAbierto: !!serie });
       }
       cerrar();
+      if (serie) avanzarSerie.current = { hechos: 1 };   // se abre el siguiente cuando llegan los datos recargados
     } catch (e) {
       if (esPosibleDuplicadoManual(e)) {
         const ids = idsDelMensaje(e);
@@ -289,6 +358,7 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, ga
         <Contador dato="revisar" etiqueta="Por revisar" n={vista.revisar.length} tono={vista.revisar.length ? "posible" : "neutro"} />
         <Contador dato="sin-registrar" etiqueta="Sin registrar" n={vista.sinRegistrar.length} tono={vista.sinRegistrar.length ? "pendiente" : "neutro"} />
         <Contador dato="ya" etiqueta="Ya registrados" n={vista.ya.length} tono="conciliado" />
+        {seguras.length > 0 && <Contador dato="seguras" etiqueta="Seguras por confirmar" n={seguras.length} tono="conciliado" />}
       </div>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
         <button data-ver-conciliados onClick={() => setVerConciliados((v) => !v)} style={{ ...btnG, flex: "1 1 160px", fontSize: 12, padding: "7px" }}>
@@ -306,6 +376,69 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, ga
       </div>
 
       {err && <div data-error style={{ background: C.dangerLight, color: C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 13, margin: "0 0 10px", fontWeight: 600 }}>{err}</div>}
+
+      {resultadoLote && (
+        <div data-resultado-lote role="status" style={{ background: resultadoLote.fallas.length ? C.warnLight : C.okLight, border: `1px solid ${resultadoLote.fallas.length ? C.warn : C.ok}`, borderRadius: 10, padding: "10px 12px", marginBottom: 10, fontSize: 13, color: C.ink, lineHeight: 1.5 }}>
+          <b>{resultadoLote.ok} vínculo{resultadoLote.ok === 1 ? "" : "s"} confirmado{resultadoLote.ok === 1 ? "" : "s"}</b>{resultadoLote.fallas.length ? ` · ${resultadoLote.fallas.length} no se guardaron` : ""}. No se creó ni cambió ningún cobro, gasto ni pago.
+          {resultadoLote.fallas.map((f) => { const s0 = vista.ya.concat(vista.revisar, vista.sinRegistrar).find((i) => i.marca === f.marca); return (
+            <div key={f.marca} data-falla-lote={f.marca} style={{ fontSize: 12, color: C.inkMuted }}>· {s0 ? `${fmt.date(s0.x.m.fecha)} ${s0.x.m.descripcion} ${fmt.money(s0.x.monto)}` : f.marca}: {f.motivo}</div>); })}
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
+            {resultadoLote.ids.length > 0 && onAnularDecision && <button data-deshacer-lote onClick={deshacerLote} style={{ ...btnG, fontSize: 12, padding: "6px 10px" }}>Deshacer este lote ({resultadoLote.ids.length})</button>}
+            <button data-cerrar-resultado-lote onClick={() => setResultadoLote(null)} style={{ ...btnG, fontSize: 12, padding: "6px 10px" }}>Cerrar</button>
+          </div>
+        </div>
+      )}
+
+      {seguras.length > 0 && (
+        <Seccion dato="seguras" titulo={`Coincidencias seguras para confirmar (${seguras.length})`} ayuda="Ya están registradas en BFK y el banco trae evidencia propia (RUT, nombre, persona o una referencia ya confirmada). Confirmar solo guarda el vínculo: no crea ni cambia registros.">
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+            <button data-seleccionar-seguras onClick={() => setSelSeguras(new Set(seguras.map((x) => x.marca)))} disabled={!!progresoLote}
+              style={{ ...btnG, flex: "1 1 200px", fontSize: 12, padding: "7px", borderColor: C.ok, color: C.okText }}>Seleccionar coincidencias seguras</button>
+            {selSeguras.size > 0 && <button data-quitar-seleccion onClick={() => { setSelSeguras(new Set()); setRevisandoLote(false); setConfirmaLote(false); }} style={{ ...btnG, flex: "0 1 140px", fontSize: 12, padding: "7px" }}>Quitar selección</button>}
+          </div>
+          {seguras.map((sg) => (
+            <div key={sg.marca} data-segura={sg.marca} data-grupo-seccion-item="seguras" style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+              <input type="checkbox" data-sel-segura={sg.marca} checked={selSeguras.has(sg.marca)} disabled={!!progresoLote}
+                onChange={() => { alternarSegura(sg.marca); setConfirmaLote(false); }} aria-label={`Seleccionar ${sg.descripcion} ${fmt.money(sg.monto)}`} style={{ marginTop: 14, width: 18, height: 18, flexShrink: 0, cursor: "pointer" }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <Movimiento it={sg.item}>
+                  <button data-no-corresponde-auto={sg.ids.join(",")} disabled={!!decidiendo || !!progresoLote} onClick={() => { setSelSeguras((x) => { const n = new Set(x); n.delete(sg.marca); return n; }); decidir(sg.item, "rechazado", sg.registros); }}
+                    title="Si no es este registro, se descarta para este movimiento (no cambia el registro)." style={{ ...btnG, marginTop: 6, fontSize: 11, padding: "4px 10px" }}>No corresponde</button>
+                </Movimiento>
+              </div>
+            </div>
+          ))}
+          {lote.length > 0 && !revisandoLote && (
+            <button data-revisar-lote onClick={() => { setRevisandoLote(true); setConfirmaLote(false); }} style={{ ...btnP(C.ok), marginTop: 4 }}>Revisar y confirmar {lote.length} seleccionado{lote.length === 1 ? "" : "s"}</button>
+          )}
+          {lote.length > 0 && revisandoLote && (() => { const r = resumenLote(lote); return (
+            <div data-resumen-lote style={{ background: C.paper, border: `1px solid ${C.border}`, borderRadius: 10, padding: "10px 12px", marginTop: 4 }}>
+              <div style={{ fontSize: 13, fontWeight: 800, color: C.ink, marginBottom: 4 }}>Resumen antes de confirmar</div>
+              <div data-totales-lote style={{ fontSize: 12, color: C.inkMuted, marginBottom: 6 }}>
+                {r.n} movimiento{r.n === 1 ? "" : "s"} · {r.abonos} abono{r.abonos === 1 ? "" : "s"} por <b style={{ fontFamily: MONO, color: C.okText }}>{fmt.money(r.totalAbonos)}</b> · {r.cargos} cargo{r.cargos === 1 ? "" : "s"} por <b style={{ fontFamily: MONO, color: C.dangerText }}>{fmt.money(r.totalCargos)}</b> · {r.registros} registro{r.registros === 1 ? "" : "s"} de BFK
+              </div>
+              {lote.map((sg) => (
+                <div key={sg.marca} data-fila-lote={sg.marca} style={{ borderTop: `1px solid ${C.border}`, padding: "6px 0", fontSize: 12, lineHeight: 1.45 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                    <span style={{ color: C.ink, fontWeight: 700, minWidth: 0, overflowWrap: "anywhere" }}>{fmt.date(sg.fecha)} · {sg.descripcion}</span>
+                    <span style={{ fontFamily: MONO, whiteSpace: "nowrap", color: sg.dir === "entra" ? C.okText : C.dangerText }}>{sg.dir === "entra" ? "+" : "−"}{fmt.money(sg.monto)}</span>
+                  </div>
+                  <div style={{ color: C.inkMuted }}>Registro BFK: {sg.registros.map((x) => textoRegistro(x, categorias)).join(" + ")}</div>
+                  <div style={{ color: C.inkFaint }}>Evidencia: {sg.evidencia || "—"}</div>
+                </div>
+              ))}
+              <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 12, color: C.ink, marginTop: 8, cursor: "pointer" }}>
+                <input type="checkbox" data-confirmar-lote-check checked={confirmaLote} onChange={(e) => setConfirmaLote(e.target.checked)} style={{ marginTop: 2 }} disabled={!!progresoLote} />
+                <span>Confirmo que cada movimiento corresponde al registro indicado. Solo se guarda el vínculo: no se crea ni modifica ningún cobro, gasto, pago ni devolución.</span>
+              </label>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+                <button data-confirmar-lote disabled={!confirmaLote || !!progresoLote} onClick={confirmarLote}
+                  style={{ ...btnP(C.ok), flex: "1 1 200px", opacity: confirmaLote && !progresoLote ? 1 : 0.5 }}>{progresoLote ? `Guardando ${progresoLote.hechos} de ${progresoLote.total}…` : `Confirmar ${lote.length} vínculo${lote.length === 1 ? "" : "s"}`}</button>
+                <button data-cancelar-lote disabled={!!progresoLote} onClick={() => { setRevisandoLote(false); setConfirmaLote(false); }} style={{ ...btnG, flex: "0 1 120px", fontSize: 12 }}>Volver</button>
+              </div>
+            </div>); })()}
+        </Seccion>
+      )}
 
       <Seccion dato="revisar" titulo="Por revisar" ayuda="Hay un registro en BFK que podría ser este movimiento. Confirma o descarta." vacio="Nada por revisar.">
         {vista.revisar.map((it) => (
@@ -332,10 +465,39 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, ga
       </Seccion>
 
       <Seccion dato="sin-registrar" titulo="Sin registrar" ayuda="Movimientos nuevos: identifícalos y regístralos (se pide confirmación)." vacio="No hay movimientos nuevos por registrar.">
+        {serie && !serie.terminada && (
+          <div data-serie style={{ background: C.tealLight, borderRadius: 10, padding: "9px 12px", marginBottom: 8, fontSize: 13, color: C.ink, lineHeight: 1.45 }}>
+            <b>Registro {Math.min(serie.actual + 1, serie.claves.length)} de {serie.claves.length}</b> · {serie.hechos} registrado{serie.hechos === 1 ? "" : "s"}{serie.saltados ? ` · ${serie.saltados} saltado${serie.saltados === 1 ? "" : "s"}` : ""}. Cada uno se revisa y se confirma por separado; nada se crea solo.
+            <div style={{ display: "flex", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
+              <button data-serie-saltar onClick={saltarEnSerie} disabled={guardando} style={{ ...btnG, fontSize: 12, padding: "6px 10px" }}>Saltar este</button>
+              <button data-serie-terminar onClick={terminarSerie} disabled={guardando} style={{ ...btnG, fontSize: 12, padding: "6px 10px" }}>Terminar</button>
+            </div>
+          </div>
+        )}
+        {serie?.terminada && (
+          <div data-serie-terminada role="status" style={{ background: C.okLight, borderRadius: 10, padding: "9px 12px", marginBottom: 8, fontSize: 13, color: C.ink }}>
+            Serie terminada: {serie.hechos} registrado{serie.hechos === 1 ? "" : "s"}{serie.saltados ? `, ${serie.saltados} saltado${serie.saltados === 1 ? "" : "s"}` : ""}.
+            <button data-serie-cerrar onClick={() => setSerie(null)} style={{ ...btnG, fontSize: 12, padding: "4px 10px", marginLeft: 8 }}>Cerrar</button>
+          </div>
+        )}
+        {!serie && vista.sinRegistrar.some((it) => it.x.registrable) && (
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8, alignItems: "center" }}>
+            <span style={{ fontSize: 12, color: C.inkMuted, flex: "1 1 200px" }}>Marca varios para registrarlos en serie: cada uno se revisa y confirma por separado.</span>
+            {selNuevos.size > 0 && <button data-registrar-serie onClick={iniciarSerie} style={{ ...btnG, fontSize: 12, padding: "7px 10px", borderColor: C.teal, color: C.tealDark }}>Registrar {selNuevos.size} seleccionado{selNuevos.size === 1 ? "" : "s"}, uno por uno</button>}
+          </div>
+        )}
         {vista.sinRegistrar.map((it) => (
-          <Movimiento key={it.marca} it={{ ...it, posible: it.posible || sugerenciaCargo(it) }} abierto={abierto === it.x.m.clave}>
-            {it.x.registrable && renderPreparar(it.x)}
-          </Movimiento>
+          <div key={it.marca} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+            {!serie && it.x.registrable && (
+              <input type="checkbox" data-sel-nuevo={it.marca} checked={selNuevos.has(it.marca)} onChange={() => alternarNuevo(it.marca)}
+                aria-label={`Seleccionar ${it.x.m.descripcion} ${fmt.money(it.x.monto)}`} style={{ marginTop: 14, width: 18, height: 18, flexShrink: 0 }} />
+            )}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <Movimiento it={{ ...it, posible: it.posible || sugerenciaCargo(it) }} abierto={abierto === it.x.m.clave}>
+                {it.x.registrable && (!serie || abierto === it.x.m.clave) && renderPreparar(it.x)}
+              </Movimiento>
+            </div>
+          </div>
         ))}
       </Seccion>
 
@@ -352,8 +514,8 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, ga
       )}
 
       {verConciliados && (
-        <Seccion dato="ya" titulo="Ya registrados" ayuda="Solo informativo: estos movimientos ya están en BFK y no crean nada nuevo." vacio="Ninguno.">
-          {vista.ya.map((it) => (
+        <Seccion dato="ya" titulo="Ya registrados" ayuda={`Solo informativo: estos movimientos ya están en BFK y no crean nada nuevo.${seguras.length ? ` Los ${seguras.length} reconocidos aún sin confirmar están arriba, en «Coincidencias seguras».` : ""}`} vacio={seguras.length ? "Todos los reconocidos están arriba, por confirmar." : "Ninguno."}>
+          {vista.ya.filter((it) => !marcaSegura.has(it.marca)).map((it) => (
             <Movimiento key={it.marca} it={it}>
               {it.x.origen === "decision" && onAnularDecision && (
                 <button data-deshacer-vinculo onClick={() => anular(it.x.decisiones.map((d) => d.id))} style={{ ...btnG, marginTop: 6, fontSize: 11, padding: "4px 10px" }}>Deshacer vínculo</button>

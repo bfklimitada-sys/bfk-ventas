@@ -98,12 +98,12 @@ for (const movil of [false, true]) {
 
   // IVA a Gestión Empresarial AM igual a un gasto IVA → Ya registrado (aprendido), con «No corresponde».
   await p.locator("[data-ver-conciliados]").click(); await espera(p, 400);
-  ok(`${X}06_iva_reconocido_automaticamente`, await enGrupo(p, "ya", 2) && (await p.locator(`[data-mov="${CL[2]}"] [data-no-corresponde-auto]`).count()) === 1);
+  ok(`${X}06_iva_reconocido_automaticamente_queda_en_seguras_por_confirmar`, await enGrupo(p, "seguras", 2) && (await p.locator(`[data-mov="${CL[2]}"] [data-no-corresponde-auto]`).count()) === 1);
   await p.locator(`[data-mov="${CL[2]}"]`).first().scrollIntoViewIfNeeded();
   await p.screenshot({ path: process.env.SALIDA ? path.join(process.env.SALIDA, `automatica_${X}_reconocido.png`) : `/tmp/automatica_${X}_reconocido.png` });
   await p.locator(`[data-mov="${CL[2]}"] [data-no-corresponde-auto]`).click(); await espera(p, 1500);
   const rpc = b.escr.slice(n0).filter((w) => w.tabla === "conciliacion_decidir");
-  ok(`${X}07_no_corresponde_guarda_un_rechazo_y_vuelve_a_revision`, rpc.length === 1 && rpc[0].cuerpo.p_decision === "rechazado" && rpc[0].cuerpo.p_ids.join() === "g_iva2" && !(await enGrupo(p, "ya", 2)), rpc.map((w) => w.cuerpo));
+  ok(`${X}07_no_corresponde_guarda_un_rechazo_y_vuelve_a_revision`, rpc.length === 1 && rpc[0].cuerpo.p_decision === "rechazado" && rpc[0].cuerpo.p_ids.join() === "g_iva2" && !(await enGrupo(p, "ya", 2)) && !(await enGrupo(p, "seguras", 2)), rpc.map((w) => w.cuerpo));
   ok(`${X}08_sin_escrituras_financieras_huella_intacta`, escriturasFinancieras(b, n0).length === 0 && huella(b) === h0);
   ok(`${X}09_sin_desborde_horizontal`, await p.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1));
   ok(`${X}10_sin_errores_js`, errs.length === 0, errs);

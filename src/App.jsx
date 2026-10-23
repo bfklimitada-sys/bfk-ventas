@@ -890,7 +890,7 @@ export default function App() {
   // Fase 4C: un abono puede cubrir una factura, varias del mismo RUT o ser parcial; todos los cobros
   // de la cartola se insertan en UNA sola solicitud (todo o nada). Los depósitos de vale vista ya
   // registrados solo se marcan como cobrados en el banco (no se duplica el cobro).
-  const handleCobrosDesdeCartola=async(cobros,infoCartola,valeVistas=[],marca=null)=>{
+  const handleCobrosDesdeCartola=async(cobros,infoCartola,valeVistas=[],marca=null,{mantenerAbierto}={})=>{
     const t=session.access_token;
     if(cobros.length&&marca?.marca){
       // Desde la cartola: la base registra el abono una sola vez (marca del movimiento) o lo vincula a un cobro manual.
@@ -924,7 +924,7 @@ export default function App() {
       ? [cobros.length&&`${cobros.length} cobro${cobros.length!==1?"s":""} registrado${cobros.length!==1?"s":""} · ${fmt.money(total)}`,
          valeVistas.length&&`${valeVistas.length} vale vista${valeVistas.length!==1?"s":""} cobrado${valeVistas.length!==1?"s":""} en el banco`].filter(Boolean).join(" · ")
       : `Totales del banco guardados · ${(infoCartola?.meses||[]).length} mes(es)`);
-    setAccion(null); await cargarTodo();
+    if(!mantenerAbierto) setAccion(null); await cargarTodo();   // registro en serie: la cartola sigue abierta
   };
 
   // Mercado Público es inestable (ellos mismos la marcan "Beta"): si
@@ -1109,7 +1109,7 @@ export default function App() {
   // ─── EGRESOS DE LA CARTOLA ───────────────────────────────────
   // Cada cargo del banco se registra según lo que sea: devolución
   // a un financista (con reparto FIFO), pago a vendedor o gasto.
-  const handleEgresosDesdeCartola=async(egresos,infoCartola)=>{
+  const handleEgresosDesdeCartola=async(egresos,infoCartola,{mantenerAbierto}={})=>{
     const t=session.access_token;
     let nFin=0,nVen=0,nGas=0;
     const repartidoEnLote=new Map();
@@ -1165,17 +1165,17 @@ export default function App() {
     if(nGas) partes.push(`${nGas} gastos`);
     await registrarCartola(infoCartola,{egresos:egresos.length});
     showToast(`Egresos registrados: ${partes.join(" · ")}`);
-    setAccion(null); await cargarTodo();
+    if(!mantenerAbierto) setAccion(null); await cargarTodo();
   };
 
   // Retiro de capital desde la cartola (Etapa 2): es patrimonio, nunca gasto. Medio bancario (pasa por la caja).
   // Retiro de capital desde la cartola: la base lo registra una sola vez (marca del movimiento) o lo vincula a un
   // retiro manual. Nunca actualiza un registro existente.
-  const handleRetiroDesdeCartola=async({marca,vincular,confirmoDistinto,socio,monto,fecha,notas})=>{
+  const handleRetiroDesdeCartola=async({marca,vincular,confirmoDistinto,socio,monto,fecha,notas,mantenerAbierto})=>{
     await rpcCartola(session.access_token,"registrar_movimiento_cartola",{p_marca:marca,p_tipo:"retiro",p_vincular:vincular||null,p_confirmo_distinto:!!confirmoDistinto,
       p_filas:vincular?null:[{id:genId("ap"),socio,tipo:"retiro",monto,fecha,medio:"Transferencia BancoEstado",notas:notas||null,creado_por:session.user.id}]});
     showToast("Retiro registrado");
-    setAccion(null); await cargarTodo();
+    if(!mantenerAbierto) setAccion(null); await cargarTodo();
   };
 
   // Alerta de posible duplicado (la pone la base): el usuario la quita tras revisar.
@@ -1202,13 +1202,13 @@ export default function App() {
     try{ return await sel("conciliacion_decisiones",session.access_token,"&anulado_en=is.null&order=id"); }
     catch{ return null; }
   };
-  const decidirConciliacion=async({marca,decision,tabla,ids,operacion,descripcion})=>{
+  const decidirConciliacion=async({marca,decision,tabla,ids,operacion,descripcion,silencioso})=>{
     await rpcCartola(session.access_token,"conciliacion_decidir",{p_marca:marca,p_decision:decision,p_tabla:tabla,p_ids:ids,p_operacion:operacion||null,p_descripcion:descripcion||null});
-    showToast(decision==="vinculado"?"Conciliado con el registro existente (no se creó nada)":"Coincidencia descartada para este movimiento");
+    if(!silencioso) showToast(decision==="vinculado"?"Conciliado con el registro existente (no se creó nada)":"Coincidencia descartada para este movimiento");   // el lote muestra su propio resumen
   };
-  const anularDecisionConciliacion=async(id)=>{
+  const anularDecisionConciliacion=async(id,{silencioso}={})=>{
     await rpcCartola(session.access_token,"conciliacion_anular",{p_id:id,p_motivo:"Deshecho desde la cartola"});
-    showToast("Decisión deshecha");
+    if(!silencioso) showToast("Decisión deshecha");
   };
 
   // ─── ABONO A FINANCIADOR con reparto FIFO ────────────────────

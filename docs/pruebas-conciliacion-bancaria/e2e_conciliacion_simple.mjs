@@ -112,9 +112,10 @@ for (const movil of [false, true]) {
   const sb = p.locator('[data-registrado-sin-banco="c_uta"]');
   ok(`${X}07_registrado_en_bfk_pendiente_de_verificar_en_banco`, (await sb.count()) === 1 && (await sb.getAttribute("data-pista")) === "agrupado" && /800\.799/.test(await sb.innerText()) && /1111-276-AG26/.test(await sb.innerText()) && !/duplicado(?! necesariamente)/i.test((await sb.innerText()).replace("No es necesariamente un duplicado", "")), await sb.innerText().catch(() => ""));
   // 4. «Ver conciliados»: pago al SII (IVA + PPM), devolución FIFO y comisión, como «ya registrado».
+  //    Desde la conciliación masiva (23/10/2026) los reconocidos aún sin confirmar se muestran en «Coincidencias seguras».
   await p.locator("[data-ver-conciliados]").click(); await espera(p, 300);
-  const ya = await p.locator('[data-grupo-seccion="ya"]').innerText();
-  ok(`${X}08_ver_conciliados`, (await enSeccion(p, "ya").count()) === 3 && /Gasto de \$435\.000 ya registrado en BFK/.test(ya) && /Devolución a financiador de \$260\.000 ya registrada/.test(ya) && /Pago a vendedor de \$480\.000 ya registrado/.test(ya), ya.slice(0, 400));
+  const ya = (await p.locator('[data-grupo-seccion="seguras"]').innerText()) + (await p.locator('[data-grupo-seccion="ya"]').innerText());
+  ok(`${X}08_ver_conciliados`, (await p.locator("[data-segura]").count()) === 3 && /Gasto de \$435\.000 ya registrado en BFK/.test(ya) && /Devolución a financiador de \$260\.000 ya registrada/.test(ya) && /Pago a vendedor de \$480\.000 ya registrado/.test(ya) && /reconocidos aún sin confirmar están arriba/.test(ya), ya.slice(0, 400));
   await p.locator("[data-ver-conciliados]").click(); await espera(p, 200);
 
   // 5. «Es este registro» (compra con fondos propios): guarda la decisión, NO crea ni cambia registros.
