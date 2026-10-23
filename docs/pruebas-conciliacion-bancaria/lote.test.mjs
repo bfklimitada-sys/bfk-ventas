@@ -79,5 +79,12 @@ const antes = [{ id: 7, marca: "m0", decision: "vinculado" }];
 const despues = [...antes, { id: 8, marca: "m1", decision: "vinculado" }, { id: 9, marca: "m2", decision: "vinculado" }, { id: 10, marca: "m3", decision: "rechazado" }, { id: 11, marca: "mx", decision: "vinculado" }];
 eq("L17 «Deshacer este lote» anula solo lo creado por el lote", decisionesDelLote(antes, despues, ["m1", "m2", "m3", "m0"]), [8, 9]);
 
+// Conflicto: un vínculo guardado cuyo registro ya no existe («vínculo roto») nunca entra al lote.
+const d4 = base(); d4.decisiones = [{ id: 5, marca: xRut.marca, decision: "vinculado", tabla: "eventos_pago_cliente", registro_id: "c_no_existe" }];
+const C4 = correr(d4).C;
+eq("L18 movimiento con vínculo roto (conflicto) no entra al lote", [C4.movimientos.find((x) => x.marca === xRut.marca).vinculoRoto ? "roto" : "-", coincidenciasSeguras(correr(d4).V).some((s) => s.marca === xRut.marca)], ["roto", false]);
+// Deshacer: una decisión ANTERIOR de la misma marca (p. ej. un rechazo previo) nunca se anula con el lote.
+eq("L19 decisiones anteriores de las mismas marcas no se tocan", decisionesDelLote([{ id: 3, marca: "m1", decision: "rechazado" }], [{ id: 3, marca: "m1", decision: "rechazado" }, { id: 12, marca: "m1", decision: "vinculado" }], ["m1"]), [12]);
+
 console.log(`\nRESUMEN conciliación masiva: ${n} OK, ${F.length} FALLA(S)`);
 if (F.length) process.exitCode = 1;

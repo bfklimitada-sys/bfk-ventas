@@ -156,6 +156,53 @@ for (const movil of [false, true]) {
   await ctx.close();
 }
 
+// Serie con devolución a financista (FIFO) y aviso de duplicado manual (escritorio). El reparto FIFO enviado a la base en
+// serie debe ser IDÉNTICO al del registro normal de un solo movimiento; el duplicado detiene la serie hasta resolverlo.
+{
+  const LINEA2 = [...LINEA, { fecha: "2026-10-21", op: "8821", desc: "TEF A FICTICIA ROJAS ANA", cargo: 1000000 }];
+  const s2 = []; { let s = 4999000; for (const m of LINEA2) { s += (m.abono || 0) - (m.cargo || 0); s2.push(s); } }
+  const M2 = LINEA2.map((m, i) => `cart:${m.fecha.replace(/-/g, "")}:${m.cargo || 0}:${m.abono || 0}:${s2[i]}:1`);
+  const CL2 = LINEA2.map((m, i) => `${m.fecha}|${m.cargo || 0}|${m.abono || 0}|${s2[i]}`);
+  const rL2 = escribe("cm_linea2.xlsx", cartolaEnLinea(LINEA2, { saldoInicial: 4999000 }));
+  const datos2 = () => { const d = datos(); d.gastos_indirectos.push({ id: "g333", categoria_id: "cat_otros", monto: 33333, mes: 10, anio: 2026, fecha: "2026-10-17", detalle: "Gasto manual", creadoEn: "2026-10-17T10:00:00Z" }); return d; };
+  const abrir2 = async (p) => {
+    await p.getByRole("button", { name: /^Cartola$/ }).first().click();
+    await p.locator("[role=dialog] [data-cartola-archivos]").waitFor({ state: "attached", timeout: 15000 });
+    await p.locator("[role=dialog] [data-cartola-archivos]").setInputFiles([rHist, rL2]);
+    await p.locator("[data-cartola-conciliacion]").waitFor({ timeout: 15000 }); await espera(p, 600);
+  };
+  const pagarFin = async (p) => { await p.locator("[data-tipo-egreso]").selectOption("financiador"); await p.locator("[data-destino]").selectOption("f1"); await p.locator("[data-confirmo]").check(); await p.locator("[data-registrar]").click(); await espera(p, 3000); };
+  // a) Registro normal (uno solo): reparto FIFO de referencia.
+  const bA = conDecisiones(crearBase(datos2(), { mp: RESPUESTAS_MP }));
+  const A = await abrir(browser, bA, { url: URL_APP, ancho: 1280, alto: 900, movil: false, espera: 3000 });
+  await abrir2(A.page); const nA = bA.escr.length;
+  await A.page.locator(`[data-preparar="${CL2[7]}"]`).click(); await espera(A.page, 300); await pagarFin(A.page);
+  const refFifo = rpcs(bA, nA, "registrar_pago_financiador_cartola")[0]?.cuerpo.p_asignaciones;
+  ok("F01_registro_normal_reparte_fifo_mas_antigua_primero", JSON.stringify(refFifo) === JSON.stringify([{ oc_id: "oc2", monto: 810000 }, { oc_id: "oc4", monto: 190000 }]), refFifo);
+  await A.ctx.close();
+  // b) En serie: primero el gasto con un registro manual parecido (aviso de duplicado), luego la devolución.
+  const bS = conDecisiones(crearBase(datos2(), { mp: RESPUESTAS_MP }));
+  const S = await abrir(browser, bS, { url: URL_APP, ancho: 1280, alto: 900, movil: false, espera: 3000 }); const p = S.page;
+  await abrir2(p); const nS = bS.escr.length;
+  await p.locator(`[data-mov="${CL2[4]}"] [data-rechazar="g333"]`).click(); await espera(p, 1200);   // «No corresponde» → pasa a Sin registrar
+  await p.locator(`[data-sel-nuevo="${M2[4]}"]`).check(); await p.locator(`[data-sel-nuevo="${M2[7]}"]`).check();
+  await p.locator("[data-registrar-serie]").click(); await espera(p, 400);
+  await p.locator("[data-tipo-egreso]").selectOption("gasto"); await p.locator("[data-categoria]").selectOption("cat_otros"); await p.locator("[data-confirmo]").check();
+  await p.locator("[data-registrar]").click(); await espera(p, 2500);
+  ok("F02_serie_muestra_el_aviso_de_duplicado_y_no_avanza", (await p.locator("[data-duplicado-manual]").count()) === 1 && /Registro 1 de 2 · 0 registrados/.test(await p.locator("[data-serie]").innerText())
+    && rpcs(bS, nS, "registrar_movimiento_cartola").length === 1 && !bS.db.gastos_indirectos.some((g) => g.marca_cartola === M2[4]),
+    { serie: await p.locator("[data-serie]").innerText().catch(() => "-"), error: await p.locator("[data-error]").innerText().catch(() => "-"), rpcs: rpcs(bS, nS, "registrar_movimiento_cartola").length, dup: await p.locator("[data-duplicado-manual]").count() });
+  await p.locator("[data-duplicado-manual] [data-vincular]").click(); await espera(p, 3000);
+  ok("F03_vincular_el_manual_no_crea_gasto_y_avanza", bS.db.gastos_indirectos.filter((g) => g.monto === 33333).length === 1 && bS.db.gastos_indirectos.find((g) => g.id === "g333")?.marca_cartola === M2[4]
+    && /Registro 2 de 2 · 1 registrado/.test(await p.locator("[data-serie]").innerText().catch(() => "")));
+  await pagarFin(p);
+  const serieFifo = rpcs(bS, nS, "registrar_pago_financiador_cartola")[0]?.cuerpo.p_asignaciones;
+  ok("F04_serie_reparte_fifo_igual_que_el_registro_normal", JSON.stringify(serieFifo) === JSON.stringify(refFifo), serieFifo);
+  ok("F05_cartola_sigue_abierta_y_serie_terminada", (await p.locator("[data-cartola-conciliacion]").count()) === 1 && /2 registrados/.test(await p.locator("[data-serie-terminada]").innerText().catch(() => "")));
+  ok("F06_sin_errores_js", S.errs.length === 0, S.errs);
+  await S.ctx.close();
+}
+
 // Sin la base de decisiones (actualización pendiente): no se ofrece confirmar en lote.
 {
   const b = crearBase(datos(), { mp: RESPUESTAS_MP });
