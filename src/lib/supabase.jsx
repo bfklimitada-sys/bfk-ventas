@@ -155,7 +155,53 @@ export async function selPerfiles(t) { const r=await fetch(`${SUPABASE_URL}/rest
 
 export async function getPerfil(t, uid) { const r=await fetch(`${SUPABASE_URL}/rest/v1/perfiles?id=eq.${uid}&select=*`,{headers:hdrs(t)}); if(!r.ok) return null; const a=await r.json(); return a[0]||null; }
 
-export async function updRol(t, uid, rol) { const r=await fetch(`${SUPABASE_URL}/rest/v1/perfiles?id=eq.${uid}`,{method:"PATCH",headers:hdrs(t),body:JSON.stringify({rol})}); if(!r.ok) throw new Error("Error actualizando rol"); return r.json(); }
+export async function updRol(t, uid, rol) {
+  const r=await fetch(`${SUPABASE_URL}/rest/v1/perfiles?id=eq.${uid}`,{method:"PATCH",headers:hdrs(t),body:JSON.stringify({rol})});
+  const cuerpo=await r.json().catch(()=>null);
+  if(!r.ok) throw new Error(mensajeAcceso(cuerpo?.message)||"Error actualizando rol");
+  if(Array.isArray(cuerpo)&&cuerpo.length===0) throw new Error("La base no aplicó el cambio de rol (sin permiso o la cuenta ya no existe)");
+  return cuerpo;
+}
+
+// ── Seguridad 23/10/2026: perfil BFK obligatorio ─────────────────────────────────────────────
+// Una cuenta sin fila en public.perfiles NO es usuario BFK: no ve datos financieros y queda «por autorizar»
+// hasta que un administrador la autoriza con public.bfk_autorizar_cuenta. La app nunca crea perfiles.
+// Resultado: {estado:"ok",perfil} · {estado:"sin_perfil"} · {estado:"error",mensaje}. Un error de red NO se
+// confunde con «sin perfil», y en ningún caso se muestra la aplicación sin un perfil leído de la base.
+export async function leerPerfil(t, uid) {
+  try{
+    const r=await fetch(`${SUPABASE_URL}/rest/v1/perfiles?id=eq.${encodeURIComponent(uid)}&select=*`,{headers:hdrs(t)});
+    if(!r.ok) return { estado:"error", mensaje:`No se pudo comprobar el acceso (HTTP ${r.status})` };
+    const a=await r.json();
+    const p=Array.isArray(a)?a[0]:null;
+    return p&&p.id===uid ? { estado:"ok", perfil:p } : { estado:"sin_perfil" };
+  }catch{ return { estado:"error", mensaje:"No se pudo comprobar el acceso (sin conexión)" }; }
+}
+// Mensajes legibles para los errores de seguridad de la base (BFK_PERFIL / BFK_SIN_PERFIL).
+export function mensajeAcceso(m) {
+  const s=String(m||"");
+  if(/BFK_PERFIL:|BFK_SIN_PERFIL:/.test(s)) return s.replace(/^.*?BFK_(SIN_)?PERFIL:\s*/,"");
+  return s;
+}
+// La función no existe aún en la base (migración de seguridad no instalada): PostgREST responde PGRST202 / 404.
+export const funcionNoInstalada = (e) => e?.rpcCuerpo?.code==="PGRST202" || e?.rpcStatus===404;
+// Solo administrador (lo exige la base): cuentas sin perfil, con correo y fechas. Nada financiero.
+// Es una función STABLE: se lee con GET (lectura normal, sin cuerpo), igual que en el diseño original.
+export async function rpcCuentasPorAutorizar(t) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/bfk_cuentas_por_autorizar`, { headers:hdrs(t) });
+  const cuerpo = await r.json().catch(()=>null);
+  if (!r.ok) throw Object.assign(new Error(cuerpo?.message || `HTTP ${r.status}`), { rpcStatus: r.status, rpcCuerpo: cuerpo });
+  return Array.isArray(cuerpo) ? cuerpo : [];   // tolera respuestas inesperadas: sin lista no hay cuentas que mostrar
+}
+// Solo administrador (lo exige la base): crea el perfil y deja registro en perfiles_autorizaciones.
+export const rpcAutorizarCuenta = (t, { id, nombre, rol = "usuario" }) => rpcSimple(t, "bfk_autorizar_cuenta", { p_id: id, p_nombre: nombre, p_rol: rol });
+// Registro de autorizaciones (solo administrador por RLS). null = tabla aún no instalada.
+export async function selAutorizaciones(t) {
+  const r=await fetch(`${SUPABASE_URL}/rest/v1/perfiles_autorizaciones?select=*&order=autorizado_en.desc&limit=50`,{headers:hdrs(t)});
+  if(r.status===404) return null;
+  if(!r.ok) throw new Error("No se pudo leer el registro de autorizaciones");
+  return r.json();
+}
 
 export async function selOCs(t) {
   const r=await fetch(`${SUPABASE_URL}/rest/v1/ordenes_compra_v2?select=*,vendedores(nombre),financiadores(nombre),eventos_compra(*),eventos_entrega(*),eventos_factura(*),eventos_pago_cliente(*),eventos_pago_financiamiento(*),oc_productos_link(*),oc_comentarios(*)&order=creadoEn.desc`,{headers:hdrs(t)});

@@ -3,6 +3,7 @@ import { cargarClasificaciones, solicitarClasificacion, resolverClasificacion, a
 import { useState, useEffect, useRef, useMemo } from "react";
 import { LoginScreen } from "./components/auth/LoginScreen";
 import { RestablecerContrasena } from "./components/auth/RestablecerContrasena";
+import { CuentaPorAutorizar } from "./components/auth/CuentaPorAutorizar";
 import { RETORNO_RECUPERACION } from "./lib/retornoAuth";
 import { FormIngresarCompra } from "./components/forms/FormIngresarCompra";
 import { NuevaOCRapida } from "./components/forms/NuevaOCRapida";
@@ -28,7 +29,7 @@ import { PanelUsuarios } from "./components/panels/PanelUsuarios";
 import { PanelVendedores } from "./components/panels/PanelVendedores";
 import { Modal, Toast } from "./components/ui/Basicos";
 import { PanelNotificaciones, calcularAlertas } from "./components/ui/Multiusuario";
-import { SESSION_KEY, SUPABASE_URL, crearNotificacion, del, delConfirmado, genId, getPerfil, hdrs, ins, registrarCambio, sel, selOCs, selPerfiles, storageGet, storageSet, supaRefresh, supaSignOut, upd, updRol } from "./lib/supabase";
+import { SESSION_KEY, SUPABASE_URL, crearNotificacion, del, delConfirmado, genId, hdrs, ins, leerPerfil, registrarCambio, sel, selOCs, selPerfiles, storageGet, storageSet, supaRefresh, supaSignOut, upd, updRol } from "./lib/supabase";
 import { buscarOCPorCodigo, esCodigoMP, esErrorDuplicado, estadoMP, fechaOCEditable, mensajeDuplicado, normalizarCodigoOC, resultadoConsultaMP } from "./lib/ocs";
 import { cambiosProducto } from "./lib/productosOC";
 import { CLAVE_REVISION_AUTO, LIMITE_USO_DIARIO, PREFIJO_FOTO_MP, cambiosOCDesdeMP, claveFotoMP, elegirRevisionAutomatica, fotoMP, lineaVentaDesdeMP, mpCancelada, planProductosVenta, toca } from "./lib/mercadoPublico";
@@ -63,6 +64,12 @@ export default function App() {
   const [todo,setTodo]=useState(false); // vista de impresión de todas las pantallas
   const [pdfEstado,setPdfEstado]=useState(null); // null | {fase:"generando",txt} | {fase:"listo",url,nombre} | {fase:"error",txt}
   const [session,setSession]=useState(null); const [perfil,setPerfil]=useState(null);
+  // Seguridad 23/10/2026: solo una cuenta con perfil BFK (leído de la base) usa la aplicación. Sin perfil no se monta
+  // ninguna pantalla ni se pide ningún dato: se muestra «Cuenta por autorizar». La app nunca crea perfiles.
+  const [accesoEstado,setAccesoEstado]=useState(null); // null | "sin_perfil" | "aislada" | "error"
+  const [accesoMensaje,setAccesoMensaje]=useState("");
+  const perfilRef=useRef(null); perfilRef.current=perfil;
+  const autorizado=!!(session&&perfil);
   const sesionRef=useRef(null); sesionRef.current=session; fijarProveedorToken(()=>sesionRef.current?.access_token||null); // token vigente para el ciclo de bloqueo de OC
   const [loadingApp,setLoadingApp]=useState(true);
   // Recuperación de contraseña: si la app se abrió desde el enlace del correo, se muestra primero esa pantalla.
@@ -168,21 +175,27 @@ export default function App() {
       if(saved){ try {
         let s=JSON.parse(saved);
         try{ s=await supaRefresh(s.refresh_token); storageSet(SESSION_KEY,JSON.stringify(s)); } catch{}
-        setSession(s); const p=await getPerfil(s.access_token,s.user.id); setPerfil(p);
+        setSession(s); await aplicarAcceso(s);
       } catch{} }
       setLoadingApp(false);
     })();
   },[]);
 
+  // Lee el perfil de la cuenta de la sesión. Sin perfil (o si no se pudo comprobar) la cuenta queda fuera de la app.
+  // Antes la app creaba un perfil «usuario» (o «admin» si era la primera cuenta) a quien no lo tuviera: eliminado.
+  async function aplicarAcceso(s){
+    const r=await leerPerfil(s.access_token,s.user.id);
+    if(r.estado==="ok"){ setPerfil(r.perfil); setAccesoEstado(null); setAccesoMensaje(""); return; }
+    setPerfil(null);
+    const aislada=String(s.user?.app_metadata?.bfk_tipo||"").trim();
+    setAccesoEstado(r.estado==="error"?"error":aislada?"aislada":"sin_perfil"); setAccesoMensaje(r.mensaje||"");
+  }
   const handleLogin=async(s)=>{
     setSession(s); storageSet(SESSION_KEY,JSON.stringify(s));
-    let p=await getPerfil(s.access_token,s.user.id);
-    if(!p){ const all=await selPerfiles(s.access_token); const esPrimero=all.length===0;
-      p=await ins("perfiles",s.access_token,{id:s.user.id,nombre:s.user.user_metadata?.nombre||s.user.email,rol:esPrimero?"admin":"usuario"});
-      p=Array.isArray(p)?p[0]:p; }
-    setPerfil(p);
+    await aplicarAcceso(s);
   };
-  const handleLogout=async()=>{ await bloqueoOC.cerrar(); await supaSignOut(session.access_token); setSession(null); setPerfil(null); storageSet(SESSION_KEY,""); };
+  const reintentarAcceso=async()=>{ const s=sesionRef.current; if(s) await aplicarAcceso(s); };
+  const handleLogout=async()=>{ try{ await bloqueoOC.cerrar(); }catch{} try{ await supaSignOut(session.access_token); }catch{} setSession(null); setPerfil(null); setAccesoEstado(null); setAccesoMensaje(""); storageSet(SESSION_KEY,""); };
 
   // Renovar el token automáticamente cada 45 minutos mientras la app
   // sigue abierta — antes solo se renovaba una vez, al iniciar, y por
@@ -219,10 +232,10 @@ export default function App() {
   // se abre Cotizaciones, que restaura el borrador local (marcado como «recuperado», no guardado en BFK).
   const revisoBorradores=useRef(false);
   useEffect(()=>{
-    const uid=session?.user?.id; if(!uid||revisoBorradores.current) return;
+    const uid=autorizado?session?.user?.id:null; if(!uid||revisoBorradores.current) return;
     revisoBorradores.current=true;
     listarBorradores(uid).then(l=>{ if(l.length){ setTab("cotizaciones"); showToast("Se recuperaron cambios de cotización no guardados en este dispositivo (aún no están guardados en BFK)."); } }).catch(()=>{});
-  },[session?.user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  },[autorizado,session?.user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reintenta una función asíncrona hasta 2 veces antes de rendirse.
   // Para datos críticos (OCs, perfiles) que no queremos dejar vacíos
@@ -278,7 +291,7 @@ export default function App() {
     }catch{ /* que falle esto no debe frenar la acción real */ }
   };
 
-  useEffect(()=>{ if(session) cargarUsoMP(); },[session]);
+  useEffect(()=>{ if(autorizado) cargarUsoMP(); },[autorizado,session]);
 
   // ─── Caché del último resultado bueno de Mercado Público ────────
   // Si la consulta de ahora falla, no se borra lo que ya se sabía —
@@ -306,7 +319,7 @@ export default function App() {
     }catch{ /* sin caché disponible, se parte vacío como antes */ }
   };
 
-  useEffect(()=>{ if(session) cargarCacheMP(); },[session]);
+  useEffect(()=>{ if(autorizado) cargarCacheMP(); },[autorizado,session]);
 
   // Antes de una acción pesada (cientos de solicitudes de una vez),
   // avisa si eso acercaría al límite diario de 10.000 de Mercado Público.
@@ -323,7 +336,7 @@ export default function App() {
   };
 
   const cargarTodo=async()=>{
-    if(!session) return;
+    if(!session||!perfilRef.current) return;   // sin perfil BFK no se pide ningún dato
     const t=session.access_token;
     try {
       const [ocsD,finD,vendD,catD,gastD,ivaD,pagVD,ajuD,perfD,contD,entD,pagoFinSueltosD,notifD,histD,reclamosD,respD,pvD,aporD,cartD,sbD,bmD,difD,fotosD,correosD,segD,segHistD,tribD,tribCotD,ciD,ciOcD,cotOcD]=await enLotes([
@@ -370,6 +383,11 @@ export default function App() {
       const ocsConReclamos=ocsD.map(oc=>({...oc,oc_reclamos:reclamosPorOC[oc.id]||[],oc_responsables:respPorOC[oc.id]||[],eventos_postventa:pvPorOC[oc.id]||[],oc_seguimientos:segPorOC[oc.id]||[],mp:fotos[oc.id]||null}));
       setOcs(ocsConReclamos.filter(o=>!o.archivada)); setOcsArchivadas(ocsConReclamos.filter(o=>o.archivada)); setFinanciadores(finD); setVendedores(vendD); setCategoriasGasto(catD);
       setGastos(gastD); setIvaMensual(ivaD); setPagosVendedor(pagVD); setAjustesSaldo(ajuD); setPerfiles(perfD);
+      // Seguridad 23/10/2026: el perfil propio se relee en cada carga. Si cambió el rol se actualiza; si ya no aparece
+      // (cuenta desautorizada) se confirma contra la base y, sin perfil, la cuenta sale de la aplicación.
+      { const propio=(perfD||[]).find(x=>x.id===session.user.id);
+        if(propio){ const ant=perfilRef.current; if(!ant||ant.rol!==propio.rol||ant.nombre!==propio.nombre||ant.vendedor_id!==propio.vendedor_id) setPerfil(propio); }
+        else await aplicarAcceso(session); }
       setContactos(contD); setEntidadesCatalogo(entD); setPagoFinSueltos(pagoFinSueltosD);
       setCotizacionesConOC(Array.isArray(cotOcD)?cotOcD:[]); ciDisponible.current=Array.isArray(ciD); setContactosInst(Array.isArray(ciD)?ciD:null); setVinculosInst(Array.isArray(ciOcD)?ciOcD:[]);
       setClasificaciones(Array.isArray(tribD)?tribD:null); setCotizacionesClasificadas(Array.isArray(tribCotD)?tribCotD:[]); setNotificaciones(notifD); setHistorialCambios(histD); setAportes(aporD); setUltimaCartola((cartD||[])[0]||null); setSaldoBanco((sbD||[])[0]||null); setBancoMensual(bmD||[]); setDifsHistoricas(difD||[]); setCorreosBfk(correosD||[]);
@@ -389,20 +407,20 @@ export default function App() {
       }
     } catch(e){ showToast(e.message,"error"); }
   };
-  useEffect(()=>{ if(session) cargarTodo(); },[session]);
+  useEffect(()=>{ if(autorizado) cargarTodo(); },[autorizado,session]);
   // Correos de BFK: se refrescan cada 5 minutos con la app abierta (la sincronización con Gmail corre aparte, cada hora).
   useEffect(()=>{
-    if(!session) return;
-    const id=setInterval(()=>{ const t=sesionRef.current?.access_token; if(t) cargarCorreosBfk(t,desdeCorreos()).then(setCorreosBfk).catch(()=>{}); },5*60*1000);
+    if(!autorizado) return;
+    const id=setInterval(()=>{ const t=sesionRef.current?.access_token; if(t&&perfilRef.current) cargarCorreosBfk(t,desdeCorreos()).then(setCorreosBfk).catch(()=>{}); },5*60*1000);
     return()=>clearInterval(id);
-  },[session?.user?.id]);
+  },[autorizado,session?.user?.id]);
 
   useEffect(()=>{
-    if(!session) return;
+    if(!autorizado) return;
     const handleVisible=()=>{ if(document.visibilityState==="visible") cargarTodo(); };
     document.addEventListener("visibilitychange",handleVisible);
     return()=>document.removeEventListener("visibilitychange",handleVisible);
-  },[session]);
+  },[autorizado,session]);
 
 
   // ─── HANDLERS ─────────────────────────────────
@@ -1373,7 +1391,7 @@ export default function App() {
     showToast(plan.aviso?`IVA guardado · ${plan.aviso}`:plan.gasto.accion==="ninguna"?"IVA guardado":"IVA guardado · pago al SII registrado en Gastos");
     await cargarTodo();
   };
-  const handleChangeRol=async(uid,rol)=>{ await updRol(session.access_token,uid,rol); showToast("Rol actualizado"); await cargarTodo(); };
+  const handleChangeRol=async(uid,rol)=>{ try{ await updRol(session.access_token,uid,rol); showToast("Rol actualizado"); }catch(e){ showToast(e.message,"error"); } await cargarTodo(); };
   const handleGuardarLink=async(ocId,{descripcion,url,orden,direccion_entrega,cantidad,precio_compra,precio_venta,origen},oc)=>{
     const t=session.access_token;
     await ins("oc_productos_link",t,{id:genId("lnk"),oc_id:ocId,descripcion,url,orden,
@@ -1868,6 +1886,8 @@ export default function App() {
   }} />;
   if(loadingApp) return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",color:C.inkMuted,fontFamily:SANS}}>Cargando…</div>;
   if(!session) return <LoginScreen onLogin={handleLogin} emailInicial={avisoLogin?.email||""} avisoInicial={avisoLogin?.aviso||""} />;
+  // Seguridad 23/10/2026: sin perfil BFK no se monta la aplicación (ninguna pantalla, por ninguna dirección).
+  if(!perfil) return <CuentaPorAutorizar estado={accesoEstado||"error"} correo={session.user?.email||""} mensaje={accesoMensaje} onReintentar={reintentarAcceso} onSalir={handleLogout} />;
   const alertasUrgentes=calcularAlertas(ocs).filter(a=>a.nivel==="alto").length;
 
   // La cartola concilia contra los registros completos (lib/conciliacion.js): ya no usa una lista solo de fecha y monto.
@@ -1936,7 +1956,7 @@ export default function App() {
       {(tab==="impuestos"||todo)&&hoja("impuestos",<PanelImpuestos ivaMensual={ivaMensual} gastos={gastos} onGuardarIva={handleGuardarIva} />)}
       {(tab==="banco"||todo)&&hoja("banco",<PanelBanco ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} aportes={aportes} saldoBanco={saldoBanco} ultimaCartola={ultimaCartola} bancoMensual={bancoMensual} onEditarSaldo={()=>setAccion("saldo_banco")} onImportarCartola={()=>setAccion("cartola")} onQuitarAlertaCartola={handleQuitarAlertaCartola} />)}
       {(tab==="vendedores"||todo)&&hoja("vendedores",<PanelVendedores vendedores={vendedores} ocs={ocs} ivaMensual={ivaMensual} gastos={gastos} pagosVendedor={pagosVendedor} onGuardarIva={handleGuardarIva} onPagoVendedor={handlePagoVendedorSimple} onAnularPago={handleAnularPagoVendedor} esAdmin={perfil?.rol==="admin"} onIrImpuestos={()=>irA("impuestos")} onVerOCs={(filtro)=>{setFiltroCompras(filtro);setOcFoco(null);setVolverA(null);setTab("compras");}} onAbrirOC={(ocId)=>{setFiltroCompras(null);setOcFoco(ocId);setVolverA(null);setTab("compras");}} />)}
-      {(tab==="usuarios"||todo)&&perfil?.rol==="admin"&&hoja("usuarios",<PanelUsuarios onEliminarOC={setEliminandoOC} eliminacionesVersion={eliminacionesVersion} difsHistoricas={difsHistoricas} perfiles={perfiles} ocs={ocs} ocsArchivadas={ocsArchivadas} onRestaurarOC={handleRestaurarOC} onChangeRol={handleChangeRol} session={session} showToast={showToast} entidadesCatalogo={entidadesCatalogo} onEntidadesImportadas={handleEntidadesImportadas} usoMP={usoMP} sincronizando={sincronizando} validandoTodo={validandoTodo} exportando={exportando} onCorregirFechas={corregirFechasTodas} onValidarTodo={validarTodoContraMP} onExportarTodo={handleExportarTodo} />)}
+      {(tab==="usuarios"||todo)&&perfil?.rol==="admin"&&hoja("usuarios",<PanelUsuarios perfilPropio={perfil} onRecargar={cargarTodo} onEliminarOC={setEliminandoOC} eliminacionesVersion={eliminacionesVersion} difsHistoricas={difsHistoricas} perfiles={perfiles} ocs={ocs} ocsArchivadas={ocsArchivadas} onRestaurarOC={handleRestaurarOC} onChangeRol={handleChangeRol} session={session} showToast={showToast} entidadesCatalogo={entidadesCatalogo} onEntidadesImportadas={handleEntidadesImportadas} usoMP={usoMP} sincronizando={sincronizando} validandoTodo={validandoTodo} exportando={exportando} onCorregirFechas={corregirFechasTodas} onValidarTodo={validarTodoContraMP} onExportarTodo={handleExportarTodo} />)}
     </ContactosContext.Provider></ModoTodoContext.Provider>
   );
 

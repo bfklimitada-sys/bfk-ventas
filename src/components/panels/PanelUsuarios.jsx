@@ -7,8 +7,9 @@ import { Ic } from "../ui/Iconos";
 import { Seccion, Tarjeta, Badge, BotonAdmin, Pestanas, PanelPestana } from "../ui/Sistema";
 import { ImportarEntidades } from "../forms/ImportarEntidades";
 import { ContactosCatalogo } from "../ficha/ContactosInstitucion";
+import { AutorizacionCuentas } from "./AutorizacionCuentas";
 
-export function PanelUsuarios({ perfiles, ocs, ocsArchivadas, onRestaurarOC, onChangeRol, session, showToast, entidadesCatalogo, onEntidadesImportadas, usoMP, sincronizando, validandoTodo, exportando, onCorregirFechas, onValidarTodo, onExportarTodo, difsHistoricas, onEliminarOC, eliminacionesVersion }) {
+export function PanelUsuarios({ perfilPropio, onRecargar, perfiles, ocs, ocsArchivadas, onRestaurarOC, onChangeRol, session, showToast, entidadesCatalogo, onEntidadesImportadas, usoMP, sincronizando, validandoTodo, exportando, onCorregirFechas, onValidarTodo, onExportarTodo, difsHistoricas, onEliminarOC, eliminacionesVersion }) {
   const [verDifs,setVerDifs]=useState(false);
   const [pestana,setPestana]=useState("usuarios");
   const [showImport,setShowImport]=useState(false);
@@ -56,8 +57,19 @@ export function PanelUsuarios({ perfiles, ocs, ocsArchivadas, onRestaurarOC, onC
       ]} />
       <PanelPestana visible={pestana==="usuarios"} titulo="Usuarios y permisos">
       {/* ── 1. Usuarios y permisos ── */}
-      <Seccion id="adm-usuarios" titulo="Usuarios y permisos">
+      <AutorizacionCuentas session={session} showToast={showToast} onAutorizada={onRecargar} visible={pestana==="usuarios"} />
+      <Seccion id="adm-usuarios" titulo="Usuarios y permisos" nota="Cuentas autorizadas (con perfil BFK). Debe quedar siempre al menos un administrador.">
       {perfiles.map(p=>{
+        const nAdmins=perfiles.filter(x=>x.rol==="admin").length;
+        const ultimoAdmin=p.rol==="admin"&&nAdmins<=1;
+        const esYo=p.id===perfilPropio?.id;
+        const cambiarRol=()=>{
+          if(ultimoAdmin) return;
+          const nuevo=p.rol==="admin"?"usuario":"admin";
+          const txt=nuevo==="admin"?`¿Dar rol de ADMINISTRADOR a ${p.nombre}?`:esYo?"¿Quitarte el rol de administrador? Perderás el acceso a Administración.":`¿Quitar el rol de administrador a ${p.nombre}?`;
+          if(!window.confirm(txt)) return;
+          onChangeRol(p.id,nuevo);
+        };
         const ultima=ultimaActividad[p.id];
         const diasInactivo = ultima ? Math.floor((new Date()-new Date(ultima))/(1000*60*60*24)) : null;
         const activo = diasInactivo!==null && diasInactivo<=14;
@@ -68,11 +80,11 @@ export function PanelUsuarios({ perfiles, ocs, ocsArchivadas, onRestaurarOC, onC
                 <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
                   <span style={{width:8,height:8,borderRadius:"50%",background:activo?C.ok:C.inkFaint,display:"inline-block",flexShrink:0}} />
                   <span style={{fontWeight:700,fontSize:16,color:C.ink}}>{p.nombre}</span>
-                  <Badge tono={p.rol==="admin"?"info":"neutro"}>{p.rol==="admin"?"Administrador":"Usuario"}</Badge>
+                  <Badge tono={p.rol==="admin"?"info":"neutro"}>{p.rol==="admin"?"Administrador":"Usuario"}</Badge>{esYo&&<Badge tono="ok">Tú</Badge>}
                 </div>
                 <div style={{fontSize:12,color:C.inkMuted,marginTop:4}}>{ultima?`Última actividad: ${fmt.datetime(ultima)}`:"Sin actividad registrada"}</div>
               </div>
-              <BotonAdmin peligro={p.rol==="admin"} onClick={()=>onChangeRol(p.id,p.rol==="admin"?"usuario":"admin")} style={{flexShrink:0,padding:"8px 12px",fontSize:13}}>{p.rol==="admin"?"Quitar admin":"Hacer admin"}</BotonAdmin>
+              <BotonAdmin data-cambiar-rol={p.id} peligro={p.rol==="admin"} disabled={ultimoAdmin} title={ultimoAdmin?"Es el único administrador: debe quedar al menos uno":undefined} onClick={cambiarRol} style={{flexShrink:0,padding:"8px 12px",fontSize:13}}>{p.rol==="admin"?"Quitar admin":"Hacer admin"}</BotonAdmin>
             </div>
           </Tarjeta>
         );

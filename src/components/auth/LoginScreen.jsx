@@ -19,7 +19,7 @@ export function LoginScreen({ onLogin, emailInicial="", avisoInicial="" }) {
         if(pass.length<6){setErr("Contraseña mínimo 6 caracteres");return;}
         const d=await supaSignUp(email.trim(),pass,nombre.trim());
         if(d.access_token) await onLogin(d);
-        else { setInfo("Cuenta creada. Confirma tu correo, luego inicia sesión."); setMode("login"); }
+        else { setInfo("Cuenta creada. Confirma tu correo e inicia sesión; un administrador de BFK debe autorizarla antes de que tengas acceso."); setMode("login"); }
       } else if(mode==="recover") {
         if(!email.trim()){setErr("Indica tu correo");return;}
         if(!correoValido(email)){setErr("Revisa el correo: no tiene un formato válido");return;}
@@ -49,7 +49,7 @@ export function LoginScreen({ onLogin, emailInicial="", avisoInicial="" }) {
         <button onClick={submit} disabled={loading} style={btnP(loading?C.inkFaint:C.night)}>{loading?"Procesando…":mode==="login"?"Ingresar":mode==="signup"?"Crear cuenta":"Enviar correo de recuperación"}</button>
         {mode==="login"&&<div style={{textAlign:"center",marginTop:14}}><button onClick={()=>{setMode("recover");setErr("");setInfo("");}} style={{background:"none",border:"none",color:C.tealDark,fontSize:12,fontWeight:700,cursor:"pointer"}}>¿Olvidaste tu contraseña?</button></div>}
         {mode==="recover"&&<div style={{textAlign:"center",marginTop:14}}><button onClick={()=>{setMode("login");setErr("");setInfo("");}} style={{background:"none",border:"none",color:C.tealDark,fontSize:12,fontWeight:700,cursor:"pointer"}}>← Volver a iniciar sesión</button></div>}
-        <div style={{textAlign:"center",fontSize:12,color:C.inkFaint,marginTop:16}}>{mode==="login"?'¿Sin cuenta? Usa "Crear cuenta"':mode==="signup"?"El primer usuario será administrador.":""}</div>
+        <div style={{textAlign:"center",fontSize:12,color:C.inkFaint,marginTop:16}}>{mode==="login"?'¿Sin cuenta? Usa "Crear cuenta"':mode==="signup"?"La cuenta nueva queda por autorizar: un administrador de BFK debe habilitarla antes de que puedas ver la información.":""}</div>
     </MarcoAuth>
   );
 }
