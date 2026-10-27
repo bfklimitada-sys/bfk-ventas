@@ -14,6 +14,7 @@ export const PANTALLAS = [
   { key: "notif",          ruta: "alertas",        label: "Alertas",        icono: "🔔", grupo: "operacion", desc: "Alertas de OC y correos de BFK" },
   { key: "agenda",         ruta: "agenda",         label: "Agenda",         icono: "📅", grupo: "operacion", desc: "Entregas y vencimientos por fecha" },
   { key: "cotizaciones",   ruta: "cotizaciones",   label: "Cotizaciones",   icono: "📋", grupo: "operacion", desc: "Cotizaciones, EETT y biblioteca de productos" },
+  { key: "proyectos",      ruta: "proyectos",      label: "Proyectos Industriales", icono: "🏭", grupo: "proyectos", desc: "Proyectos de ingeniería y servicios industriales (línea PI)" },
   { key: "finanzas",       ruta: "finanzas",       label: "Resumen",        icono: "🏦", grupo: "finanzas",  hub: "finanzas", desc: "Resultado del mes, caja y margen" },
   { key: "financiamiento", ruta: "financiamiento", label: "Financiamiento", icono: "🏦", grupo: "finanzas",  hub: "finanzas", desc: "Deuda con financiadores, abonos y aportes" },
   { key: "vendedores",     ruta: "vendedores",     label: "Comisiones",     icono: "🧑‍💼", grupo: "finanzas",  hub: "finanzas", desc: "Comisiones y pagos a vendedores" },
@@ -30,6 +31,7 @@ export const HUBS = {
 
 export const GRUPOS = [
   { key: "operacion", label: "Operación" },
+  { key: "proyectos", label: "Proyectos Industriales" },
   { key: "finanzas",  label: "Finanzas" },
   { key: "admin",     label: "Sistema" },
 ];
@@ -74,6 +76,15 @@ export const pantallaDesdeHash = (hash) => {
 };
 
 export const hashDe = (key) => "#/" + (pantallaDe(key)?.ruta || PANTALLA_INICIAL);
+
+// Enlace directo a un proyecto industrial: #/proyectos/PI-AAAA-NNN (la pantalla sigue siendo «proyectos»).
+export const detalleDesdeHash = (hash) => {
+  const m = /^#\/?proyectos\/(PI-\d{4}-\d{3,})\/?$/i.exec(String(hash || "").trim());
+  return m ? m[1].toUpperCase() : null;
+};
+export const hashProyecto = (codigo) => (codigo ? `#/proyectos/${codigo}` : "#/proyectos");
+// La dirección actual ya corresponde a la pantalla (incluye el enlace directo a un proyecto): no se reescribe.
+export const hashEsDe = (hash, key) => hash === hashDe(key) || (key === "proyectos" && !!detalleDesdeHash(hash));
 
 export const tituloDocumento = (key) => {
   const p = pantallaDe(key);

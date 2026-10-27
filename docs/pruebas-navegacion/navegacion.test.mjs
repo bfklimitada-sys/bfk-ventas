@@ -1,9 +1,9 @@
 // Pruebas de lib/navegacion.js (direcciones #/ruta, permisos y títulos). Ejecutar: node docs/pruebas-navegacion/navegacion.test.mjs
-import { PANTALLAS, PRINCIPALES, pantallaDesdeHash, hashDe, puedeVer, visiblesPara, tituloDocumento, pantallaDe, entradasPara, entradaDe, pestanasDe } from "../../src/lib/navegacion.js";
+import { PANTALLAS, PRINCIPALES, GRUPOS, pantallaDesdeHash, hashDe, puedeVer, visiblesPara, tituloDocumento, pantallaDe, entradasPara, entradaDe, pestanasDe } from "../../src/lib/navegacion.js";
 let ok = 0, fallas = 0;
 const eq = (n, a, b) => { const v = JSON.stringify(a) === JSON.stringify(b); v ? ok++ : fallas++; console.log((v ? "OK    " : "FALLA ") + n + (v ? "" : ` :: esperado ${JSON.stringify(b)} obtenido ${JSON.stringify(a)}`)); };
-eq("12 pantallas (incluye Cotizaciones), claves únicas", new Set(PANTALLAS.map((p) => p.key)).size, 12);
-eq("rutas únicas", new Set(PANTALLAS.map((p) => p.ruta)).size, 12);
+eq("13 pantallas (incluye Cotizaciones y Proyectos Industriales), claves únicas", new Set(PANTALLAS.map((p) => p.key)).size, 13);
+eq("rutas únicas", new Set(PANTALLAS.map((p) => p.ruta)).size, 13);
 eq("cada pantalla tiene etiqueta, ícono, grupo y descripción", PANTALLAS.every((p) => p.label && p.icono && p.grupo && p.desc), true);
 eq("barra inferior: Inicio, Compras, Finanzas, Alertas", PRINCIPALES, ["panel", "compras", "finanzas", "notif"]);
 eq("#/compras → compras", pantallaDesdeHash("#/compras"), "compras");
@@ -24,10 +24,10 @@ eq("usuario no ve Administración", puedeVer("usuarios", false), false);
 eq("administrador ve Administración", puedeVer("usuarios", true), true);
 eq("usuario ve Vendedores", puedeVer("vendedores", false), true);
 eq("pantalla inexistente no se ve", puedeVer("nada", true), false);
-eq("visibles usuario (11)", visiblesPara(false).map((p) => p.key), ["panel", "compras", "notif", "agenda", "cotizaciones", "finanzas", "financiamiento", "vendedores", "gastos", "impuestos", "banco"]);
-eq("visibles administrador (12)", visiblesPara(true).length, 12);
-eq("entradas usuario: Finanzas es una sola entrada", entradasPara(false).map((p) => p.key), ["panel", "compras", "notif", "agenda", "cotizaciones", "finanzas"]);
-eq("entradas administrador (+ Administración)", entradasPara(true).map((p) => p.key), ["panel", "compras", "notif", "agenda", "cotizaciones", "finanzas", "usuarios"]);
+eq("visibles usuario (12)", visiblesPara(false).map((p) => p.key), ["panel", "compras", "notif", "agenda", "cotizaciones", "proyectos", "finanzas", "financiamiento", "vendedores", "gastos", "impuestos", "banco"]);
+eq("visibles administrador (13)", visiblesPara(true).length, 13);
+eq("entradas usuario: Finanzas es una sola entrada", entradasPara(false).map((p) => p.key), ["panel", "compras", "notif", "agenda", "cotizaciones", "proyectos", "finanzas"]);
+eq("entradas administrador (+ Administración)", entradasPara(true).map((p) => p.key), ["panel", "compras", "notif", "agenda", "cotizaciones", "proyectos", "finanzas", "usuarios"]);
 eq("pestañas de Finanzas en orden", pestanasDe("finanzas", false).map((p) => p.key), ["finanzas", "financiamiento", "vendedores", "gastos", "impuestos", "banco"]);
 eq("rutas anteriores conservadas", ["#/financiamiento", "#/vendedores", "#/gastos"].map(pantallaDesdeHash), ["financiamiento", "vendedores", "gastos"]);
 eq("rutas nuevas", ["#/finanzas", "#/impuestos", "#/banco"].map(pantallaDesdeHash), ["finanzas", "impuestos", "banco"]);
@@ -39,5 +39,11 @@ eq("título de pestaña en un centro", tituloDocumento("vendedores"), "Finanzas 
 eq("título de pestaña", tituloDocumento("compras"), "Compras · BFK Ltda");
 eq("título sin sesión", tituloDocumento(null), "BFK Ltda — Ventas Mercado Público");
 eq("Administración es solo admin", pantallaDe("usuarios").adminOnly, true);
+// Proyectos Industriales (línea PI): grupo propio en el escritorio, en «Más» en el celular, enlace directo a cada proyecto.
+eq("#/proyectos → proyectos", pantallaDesdeHash("#/proyectos"), "proyectos");
+eq("#/proyectos/PI-2026-001 abre la pantalla de proyectos", pantallaDesdeHash("#/proyectos/PI-2026-001"), "proyectos");
+eq("Proyectos Industriales en su propio grupo, entre Operación y Finanzas", GRUPOS.map((g) => g.key), ["operacion", "proyectos", "finanzas", "admin"]);
+eq("Proyectos Industriales no está en la barra inferior (va en Más)", PRINCIPALES.includes("proyectos"), false);
+eq("título de pestaña Proyectos Industriales", tituloDocumento("proyectos"), "Proyectos Industriales · BFK Ltda");
 console.log(`\nRESUMEN pruebas navegación: ${ok} OK, ${fallas} FALLA(S)`);
 process.exit(fallas ? 1 : 0);

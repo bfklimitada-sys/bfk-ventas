@@ -44,12 +44,13 @@ import { contarCorreosAccion, desdeCorreos, reemplazarCorreo } from "./lib/corre
 import { C, MONO, SANS, fmt } from "./lib/theme";
 import { Ic } from "./components/ui/Iconos";
 import { generarPdfPantallas } from "./lib/pdfPantallas";
-import { PANTALLAS, PANTALLA_INICIAL, HUBS, pantallaDe, pantallaDesdeHash, hashDe, puedeVer, entradasPara, pestanasDe, tituloDocumento } from "./lib/navegacion";
+import { PANTALLAS, PANTALLA_INICIAL, HUBS, pantallaDe, pantallaDesdeHash, hashDe, hashEsDe, puedeVer, entradasPara, pestanasDe, tituloDocumento } from "./lib/navegacion";
 import { ModoTodoContext, Pestanas } from "./components/ui/Sistema";
 import { PanelImpuestos } from "./components/panels/PanelImpuestos";
 import { PanelBanco } from "./components/panels/PanelBanco";
 import { PanelResumenFinanzas } from "./components/panels/PanelResumenFinanzas";
 import { PanelCotizaciones } from "./components/panels/PanelCotizaciones";
+import { PanelProyectos } from "./components/proyectos/PanelProyectos";
 import { listarBorradores } from "./lib/borradoresCotizacion";
 import { buscarCotizacionesDeOC, cargarCotizacionLectura } from "./lib/cotizacionesDatos";
 import { etiquetaCategoria, etiquetaPrioridad, etiquetaEstado, etiquetaSeguimiento } from "./lib/seguimientos";
@@ -129,7 +130,7 @@ export default function App() {
     const actual=window.location.hash;
     // Al abrir, una dirección con datos (p. ej. "#access_token=…" de un correo de Supabase) no se toca.
     const conDatos=modoHistorial.current==="reemplazar"&&/[=&]/.test(actual);
-    if(actual!==h&&!conDatos){
+    if(!hashEsDe(actual,tab)&&!conDatos){
       if(modoHistorial.current==="reemplazar") window.history.replaceState(window.history.state,"",h);
       else window.history.pushState(null,"",h);
     }
@@ -149,7 +150,7 @@ export default function App() {
       }
       const destino=pantallaDesdeHash(window.location.hash)||PANTALLA_INICIAL;
       // Dirección escrita a mano o desconocida: se corrige sin agregar otra entrada al historial.
-      if(window.location.hash!==hashDe(destino)) window.history.replaceState(null,"",hashDe(destino));
+      if(!hashEsDe(window.location.hash,destino)) window.history.replaceState(null,"",hashDe(destino));
       setFiltroCompras(null); setOcFoco(null); setVolverA(null);
       setTab(destino);
     };
@@ -1950,6 +1951,7 @@ export default function App() {
       {(tab==="notif"||todo)&&hoja("notif",<PanelNotificaciones correos={correosBfk} onMarcarCorreo={handleMarcarCorreo} notificaciones={notificaciones} ocs={ocs} onMarcarLeidas={handleMarcarNotificacionesLeidas} filtroAlertas={filtroAlertas} onFiltroAlertas={setFiltroAlertas} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setVolverA(ocId?"notif":null);setTab(t);}} />)}
       {(tab==="agenda"||todo)&&hoja("agenda",<PanelCalendario ocs={ocs} onMarcarFecha={handleMarcarFecha} onVerAlertas={(f)=>{setFiltroCompras(null);setOcFoco(null);setVolverA(null);setFiltroAlertas({nivel:(f&&f.nivel)||"todas",etapa:(f&&f.etapa)||null});setTab("notif");}} />)}
       {tab==="cotizaciones"&&!todo&&hoja("cotizaciones",<PanelCotizaciones token={session?.access_token} perfil={perfil} tributario={tributario} entidadesCatalogo={entidadesCatalogo} showToast={showToast} />)}
+      {tab==="proyectos"&&!todo&&hoja("proyectos",<PanelProyectos token={session?.access_token} perfil={perfil} showToast={showToast} />)}
       {(tab==="financiamiento"||todo)&&hoja("financiamiento",<PanelFinanciamiento difsHistoricas={difsHistoricas} financiadores={financiadores} ocs={ocs} ajustes={ajustesSaldo} perfiles={perfiles} onAjustar={handleAjusteSaldo} aportes={aportes} onGuardarAporte={handleGuardarAporte} onEliminarAporte={perfil?.rol==="admin"?handleEliminarAporte:undefined} onAbonar={(finId)=>{setAbonoFinId(typeof finId==="string"||typeof finId==="number"?finId:null);setAccion("abono_fin");}} pagoFinSueltos={pagoFinSueltos} />)}
       {(tab==="gastos"||todo)&&hoja("gastos",<PanelGastos gastos={gastos} categorias={categoriasGasto} ivaMensual={ivaMensual} pagosVendedor={pagosVendedor} vendedores={vendedores} onNuevoGasto={handleNuevoGasto} onGuardarIva={handleGuardarIva} onIrImpuestos={()=>irA("impuestos")} />)}
       {(tab==="finanzas"||todo)&&hoja("finanzas",<PanelResumenFinanzas ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} aportes={aportes} ajustes={ajustesSaldo} categorias={categoriasGasto} onIrImpuestos={()=>irA("impuestos")} />)}
