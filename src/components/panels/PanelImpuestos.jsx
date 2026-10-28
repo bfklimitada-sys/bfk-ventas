@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Modal } from "../ui/Basicos";
 import { C, MONO, btnG, fmt } from "../../lib/theme";
 import { Seccion, Tarjeta, Pestanas, PanelPestana, Indicador, Indicadores, Badge } from "../ui/Sistema";
@@ -12,11 +12,20 @@ import { periodosIvaIncompletos } from "../../lib/ivaUnificado";
 const conSigno=(n)=>(n<0?"−":"")+fmt.money(Math.abs(n));
 const MES=["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
 
-export function PanelImpuestos({ ivaMensual, gastos=[], onGuardarIva }) {
+export function PanelImpuestos({ ivaMensual, gastos=[], onGuardarIva, periodoInicial=null, onPeriodoInicialUsado }) {
   const [pestana,setPestana]=useState("iva");
   const [editIva,setEditIva]=useState(false);
   const [verHistorialIva,setVerHistorialIva]=useState(false);
   const [editandoIvaExistente,setEditandoIvaExistente]=useState(null);
+  // Enlace desde otra pantalla (p. ej. Vendedores · «Registrar IVA de Oct/2026»): abre el mismo formulario único de IVA
+  // en ese período. Solo lo abre; no guarda nada hasta que el usuario confirme en el formulario.
+  useEffect(()=>{
+    if(!periodoInicial) return;
+    setPestana("iva");
+    setEditandoIvaExistente({anio:periodoInicial.anio,mes:periodoInicial.mes});
+    setEditIva(true);
+    onPeriodoInicialUsado&&onPeriodoInicialUsado();
+  },[periodoInicial]);
   const ivaOrdenado=useMemo(()=>ivaMensual.slice().sort((a,b)=>`${b.anio}-${String(b.mes).padStart(2,"0")}`.localeCompare(`${a.anio}-${String(a.mes).padStart(2,"0")}`)),[ivaMensual]);
   const ivaIncompletos=useMemo(()=>periodosIvaIncompletos({gastos,ivaMensual}),[gastos,ivaMensual]);
   const hoy=new Date(); const mesActual=hoy.getMonth()+1; const anioActual=hoy.getFullYear();
