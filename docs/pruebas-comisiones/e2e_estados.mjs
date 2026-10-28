@@ -3,6 +3,7 @@
 // Uso: node docs/pruebas-comisiones/e2e_estados.mjs http://127.0.0.1:4178/
 import { chromium, CHROME, crearBase, abrir } from "../pruebas-oc/mock_estado.mjs";
 import { crearDatos } from "../pruebas-oc/datos_oc.mjs";
+import { aplicaComisionPeriodo, repartirComision } from "../../src/lib/calculos.js";
 const URL_APP = process.argv[2] || "http://127.0.0.1:4178/";
 const F = []; let nOk = 0;
 const ok = (k, v, d) => { if (!v) { F.push(k); console.log("FALLA " + k + (d !== undefined ? " :: " + JSON.stringify(d).slice(0, 400) : "")); } else { nOk++; console.log("OK    " + k); } };
@@ -37,7 +38,9 @@ d.iva_mensual.push({ id: "ivm2", anio: m2.anio, mes: m2.mes, iva_ventas: 100000,
 d.iva_mensual = d.iva_mensual.filter((i) => !(i.anio === m1.anio && i.mes === m1.mes) && !(i.anio === m0.anio && i.mes === m0.mes));
 // Comisiones del mes m2 (si el mes es desde agosto 2026 se descuenta también el PPM).
 const desc2 = (m2.anio * 12 + m2.mes >= 2026 * 12 + 8) ? 120000 : 100000;
-const comA2 = Math.round((400000 - desc2) / 2), comB2 = Math.round((500000 - desc2) / 2), comA1 = 300000, comA0 = 150000, comB0 = 50000;
+// Etapa 4: desde COMISION_PERIODO_DESDE el descuento del mes se aplica una sola vez y se reparte (Ana 400.000 : Bruno 500.000).
+const parteM2 = aplicaComisionPeriodo(m2.anio, m2.mes) ? repartirComision(Math.max(0, Math.round((900000 - desc2) / 2)), [{ id: "va", peso: 400000 }, { id: "vb", peso: 500000 }]) : null;
+const comA2 = parteM2 ? parteM2.get("va") : Math.round((400000 - desc2) / 2), comB2 = parteM2 ? parteM2.get("vb") : Math.round((500000 - desc2) / 2), comA1 = 300000, comA0 = 150000, comB0 = 50000;
 d.pagos_vendedor.push({ id: "pva2", vendedor_id: "va", anio: m2.anio, mes: m2.mes, monto_calculado: comA2, monto_pagado: comA2, monto_extra_gestion: 0, monto_transferido: comA2, fecha: m1.fecha, estado: "pagado" });
 const b = crearBase(d);
 const n0 = () => b.escr.length;
