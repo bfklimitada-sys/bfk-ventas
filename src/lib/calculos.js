@@ -145,11 +145,86 @@ export const pagoVigente = (p) => !p?.anulado_en;
 export const totalTransferido = (p) => (p?.monto_transferido != null ? Number(p.monto_transferido) || 0 : Number(p?.monto_pagado) || 0);
 export const extraGestion = (p) => Number(p?.monto_extra_gestion) || 0;
 
+// ── Descuento tributario ÚNICO del período (IVA neto con signo + retenciones del F29 desde agosto 2026) ──
+// Abril 2025 no descontaba IVA. Sin IVA registrado el descuento es 0 (comisión provisoria).
+export const descuentoTributarioPeriodo = (ivaMensual, anio, mes) => {
+  const sinIva = Number(anio) === 2025 && Number(mes) === 4;
+  const ivaMes = sinIva ? null : registroIvaDe(ivaMensual, anio, mes);
+  const impIva = ivaNetoPeriodo(ivaMes);          // con signo (0 si el período no tiene IVA registrado)
+  const retenciones = retencionesPeriodo(ivaMes); // desde agosto 2026: PPM y demás retenciones del F29
+  return { sinIva, ivaMes, impIva, retenciones, descuentoF29: impIva + retenciones };
+};
+
+// ── Comisión ordinaria del PERÍODO con uno o más vendedores (Etapa 4, 28/10/2026) ──
+// Regla común para Vendedores, Panel, informes, caja y registro de pagos (todos usan calcularPagoVendedor):
+//   comisión ordinaria total = max(0, redondeo((Σ utilidad ordinaria del período − descuento tributario único) / 2))
+//   El descuento tributario se aplica UNA vez por período. Antes cada vendedor lo descontaba completo de su propia
+//   utilidad, de modo que con dos o más vendedores el IVA y el PPM se descontaban dos o más veces.
+//   Reparto entre los vendedores con ventas ordinarias del período, en proporción a su utilidad ordinaria POSITIVA, en
+//   pesos enteros por el método del mayor resto (las partes suman exactamente el total; empates por id del vendedor).
+// Casos definidos y probados (docs/pruebas-comisiones-multiples):
+//   · Un solo vendedor con ventas ordinarias: idéntico al cálculo anterior (incluido el IVA neto negativo, que suma).
+//   · Utilidad ordinaria de un vendedor negativa o cero: su resultado entra en la utilidad total del período (es de BFK)
+//     y su parte es $0. Nunca hay pagos negativos ni porcentajes indefinidos.
+//   · Utilidad total menor o igual al descuento: comisión total $0.
+//   · Ningún vendedor con utilidad positiva y aun así total > 0 (solo por IVA neto negativo): partes iguales.
+//   · Un vendedor con SOLO ventas propias en el período no participa del total ordinario ni recibe parte del descuento
+//     (antes recibía la mitad del IVA neto negativo como si tuviera ventas ordinarias).
+//   · Ventas propias (100% de su utilidad − IVA de su factura), montos verificados, pagos, extras por gestión y
+//     anulaciones: sin cambios.
+// Vigencia: desde COMISION_PERIODO_DESDE. Los períodos anteriores conservan el cálculo anterior por vendedor: no se
+// recalculan comisiones pagadas, verificadas ni cierres. La comparación por período está en el informe de la Etapa 4.
+export const COMISION_PERIODO_DESDE = { anio: 2026, mes: 10 };
+export const aplicaComisionPeriodo = (anio, mes, desde = COMISION_PERIODO_DESDE) =>
+  Number(anio) * 12 + Number(mes) >= desde.anio * 12 + desde.mes;
+
+// Reparte un total en pesos enteros según pesos enteros ≥ 0 (mayor resto). pesos: [{ id, peso }]. Devuelve Map id → monto.
+// Aritmética exacta con BigInt: las partes suman exactamente el total. Sin pesos positivos, partes iguales.
+export const repartirComision = (total, pesos) => {
+  const T = BigInt(Math.max(0, Math.round(Number(total) || 0)));
+  const lista = [...pesos].map((p) => ({ id: String(p.id), peso: BigInt(Math.max(0, Math.round(Number(p.peso) || 0))) })).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  const res = new Map(lista.map((p) => [p.id, 0]));
+  if (!lista.length || T === 0n) return res;
+  let W = lista.reduce((s, p) => s + p.peso, 0n);
+  if (W === 0n) { lista.forEach((p) => { p.peso = 1n; }); W = BigInt(lista.length); }
+  const filas = lista.map((p, i) => ({ id: p.id, i, base: (T * p.peso) / W, resto: (T * p.peso) % W }));
+  let sobrante = T - filas.reduce((s, f) => s + f.base, 0n);
+  [...filas].sort((a, b) => (b.resto > a.resto ? 1 : b.resto < a.resto ? -1 : a.i - b.i)).forEach((f) => { if (sobrante > 0n) { f.base += 1n; sobrante -= 1n; } });
+  filas.forEach((f) => res.set(f.id, Number(f.base)));
+  return res;
+};
+
+// Utilidad ordinaria por vendedor de un período (OC que generan comisión, no venta propia, con vendedor asignado).
+const utilidadOrdinariaPorVendedor = (ocs, anio, mes) => {
+  const u = new Map();
+  (ocs || []).forEach((o) => {
+    if (!o?.vendedor_id || o.es_venta_propia || !generaComision(o)) return;
+    const p = periodoComision(o);
+    if (!p || p.anio !== Number(anio) || p.mes !== Number(mes)) return;
+    u.set(o.vendedor_id, (u.get(o.vendedor_id) || 0) + ((Number(o.monto_total) || 0) - (Number(o.costo_total) || 0)));
+  });
+  return u;
+};
+
+// Comisión ordinaria total del período y su reparto (solo cálculo; no lee pagos).
+export const comisionOrdinariaPeriodo = ({ ocs, anio, mes, ivaMensual = [] }) => {
+  const util = utilidadOrdinariaPorVendedor(ocs, anio, mes);
+  const t = descuentoTributarioPeriodo(ivaMensual, anio, mes);
+  const utilidadTotal = [...util.values()].reduce((s, x) => s + x, 0);
+  const total = util.size ? Math.max(0, Math.round(utilidadTotal / 2 - t.descuentoF29 / 2)) : 0;
+  const pesos = [...util.entries()].map(([id, x]) => ({ id, peso: Math.max(0, Math.round(x)) }));
+  const pesoTotal = pesos.reduce((s, p) => s + p.peso, 0);
+  const partes = repartirComision(total, pesos);
+  const metodo = !util.size ? "sin_ventas_ordinarias" : util.size === 1 ? "un_vendedor" : total === 0 ? "sin_comision" : pesoTotal > 0 ? "proporcional" : "partes_iguales";
+  return { anio: Number(anio), mes: Number(mes), vendedores: util.size, utilidades: util, utilidadTotal, ...t, total, pesos, pesoTotal, partes, metodo };
+};
+
 // Pago de un vendedor en un mes. Regla única:
 //  · La comisión es sobre la UTILIDAD (venta − costo), no sobre lo facturado.
-//  · Mitad de (utilidad − IVA neto del período − retenciones del F29 desde ago-2026).
-//    El IVA neto se usa con su signo:
-//    si es negativo (más crédito que débito) suma; la comisión nunca baja de $0.
+//  · Comisión ordinaria: su parte de la comisión ordinaria del período (comisionOrdinariaPeriodo, desde
+//    COMISION_PERIODO_DESDE). Con un solo vendedor es la mitad de (utilidad − IVA neto del período − retenciones del
+//    F29 desde ago-2026); el IVA neto se usa con su signo: si es negativo (más crédito que débito) suma; nunca baja de $0.
+//    Antes de COMISION_PERIODO_DESDE: la fórmula anterior por vendedor (sin cambios en esos períodos).
 //  · Abril 2025 no descontaba IVA.
 //  · Las OC "venta propia" se pagan aparte: 100% de su utilidad menos el IVA de su factura.
 //  · Si el mes está verificado (planilla o cartola), se usa ese monto.
@@ -182,12 +257,14 @@ export const calcularPagoVendedor = ({ vendedorId, ocs, anio, mes, ivaMensual = 
     detalle.push(linea);
   });
   if (!hayFacturas) return null;
-  const sinIva = anio === 2025 && mes === 4;
-  const ivaMes = sinIva ? null : registroIvaDe(ivaMensual, anio, mes);
-  const impIva = ivaNetoPeriodo(ivaMes); // con signo (0 si el período no tiene IVA registrado)
-  const retenciones = retencionesPeriodo(ivaMes); // desde agosto 2026: PPM y demás retenciones del F29
-  const descuentoF29 = impIva + retenciones;
-  const pagoCalculadoFormula = Math.max(0, Math.round(sumaUtilidad / 2 - descuentoF29 / 2)) + pagoVentasPropias;
+  const { sinIva, ivaMes, impIva, retenciones, descuentoF29 } = descuentoTributarioPeriodo(ivaMensual, anio, mes);
+  // Comisión ordinaria: su parte del período (regla común) o, antes de COMISION_PERIODO_DESDE, la fórmula anterior.
+  const reglaPeriodo = aplicaComisionPeriodo(anio, mes);
+  const per = reglaPeriodo ? comisionOrdinariaPeriodo({ ocs, anio, mes, ivaMensual }) : null;
+  const comisionOrdinaria = per ? per.partes.get(String(vendedorId)) || 0 : Math.max(0, Math.round(sumaUtilidad / 2 - descuentoF29 / 2));
+  const periodo = per ? { vendedores: per.vendedores, utilidadTotal: per.utilidadTotal, descuentoF29: per.descuentoF29, total: per.total, metodo: per.metodo,
+    pesoTotal: per.pesoTotal, peso: per.pesos.find((p) => String(p.id) === String(vendedorId))?.peso || 0 } : null;
+  const pagoCalculadoFormula = comisionOrdinaria + pagoVentasPropias;
   const pagosDelMes = pagosVendedor.filter((p) => pagoVigente(p) && p.vendedor_id === vendedorId && Number(p.mes) === mes && Number(p.anio) === anio);
   const pagado = pagosDelMes.reduce((s, p) => s + (Number(p.monto_pagado) || 0), 0);
   const extra = pagosDelMes.reduce((s, p) => s + extraGestion(p), 0);
@@ -197,6 +274,7 @@ export const calcularPagoVendedor = ({ vendedorId, ocs, anio, mes, ivaMensual = 
   const pagoCalculado = esVerificado ? verificado : pagoCalculadoFormula;
   return {
     mes, anio, label: fmt.monthYear(mes, anio), sumaFacts, sumaUtilidad, pagoVentasPropias, pagoCalculado, pagado,
+    comisionOrdinaria, reglaPeriodo, periodo,   // desglose de la comisión ordinaria (regla común del período)
     estado: pagado >= pagoCalculado ? "pagado" : "pendiente", esVerificado, impIva, retenciones, descuentoF29, sinIva, ivaRegistrado: !!ivaMes,
     // Desde agosto 2026 la comisión descuenta el PPM del F29: sin el total del F29 registrado aún no es definitiva.
     f29Incompleto: !sinIva && !!ivaMes && aplicaRetenciones(anio, mes) && !f29TotalRegistrado(ivaMes),
