@@ -14,6 +14,8 @@ const hoyCL = new Date(new Date().toLocaleString("en-US", { timeZone: "America/S
 const m0 = { anio: hoyCL.getFullYear(), mes: hoyCL.getMonth() + 1, fecha: `${hoyCL.getFullYear()}-${String(hoyCL.getMonth() + 1).padStart(2, "0")}-05` };
 
 const d = crearDatos();
+// Las OC de la base de prueba común no participan: este escenario controla todos los vendedores del período.
+d.ordenes_compra_v2.forEach((o) => { o.vendedor_id = null; });
 d.vendedores.push({ id: "va", nombre: "Ana Prueba", comision_pct: 0 }, { id: "vb", nombre: "Bruno Prueba", comision_pct: 0 }, { id: "vc", nombre: "Carla Prueba", comision_pct: 0 });
 const venta = (id, vend, util, extra = {}) => {
   d.ordenes_compra_v2.push({ id, numero_oc: `${id}-1-AG26`, cliente: "Municipalidad Ficticia", tipo_registro: "venta", vendedor_id: vend, financiador_id: "f1",
@@ -23,10 +25,10 @@ const venta = (id, vend, util, extra = {}) => {
   d.eventos_compra.push({ id: "ev" + id, oc_id: id, fecha: m0.fecha, costo_compra: 1000000, financiador_id: "f1" });
   d.eventos_factura.push({ id: "fa" + id, oc_id: id, fecha: m0.fecha, numero_factura: "8" + id.length + id.charCodeAt(id.length - 1), tipo_documento: "factura", monto: 1000000 + util });
 };
-venta("ocPA", "va", 600000); venta("ocPB", "vb", 400000); venta("ocPC", "vc", 119000, { es_venta_propia: true });
+venta("ocPA", "va", 600000); venta("ocPB", "vb", 400000); venta("ocPC", "vc", 419000, { es_venta_propia: true });
 d.iva_mensual = d.iva_mensual.filter((i) => !(i.anio === m0.anio && i.mes === m0.mes));
 d.iva_mensual.push({ id: "ivm0", anio: m0.anio, mes: m0.mes, iva_ventas: 150000, iva_compras: 50000, iva_pagado: 160000 });
-const vpC = Math.max(0, Math.round(119000 - (1119000 - 1119000 / 1.19)));
+const vpC = Math.max(0, Math.round(419000 - (1419000 - 1419000 / 1.19)));   // 100% de la utilidad − IVA de su factura (> 0)
 const b = crearBase(d);
 const n0 = () => b.escr.length;
 
@@ -39,7 +41,7 @@ for (const [ancho, alto, movil] of [[1366, 900, false], [390, 844, true]]) {
   await irA("vendedores");
   ok(`${sufijo}_ana_en_curso_252000`, pesos(await p.locator('[data-vendedor-en-curso="va"]').innerText().catch(() => "")) === 252000, await p.locator('[data-vendedor-en-curso="va"]').innerText().catch(() => ""));
   ok(`${sufijo}_bruno_en_curso_168000`, pesos(await p.locator('[data-vendedor-en-curso="vb"]').innerText().catch(() => "")) === 168000, await p.locator('[data-vendedor-en-curso="vb"]').innerText().catch(() => ""));
-  ok(`${sufijo}_carla_solo_venta_propia`, pesos(await p.locator('[data-vendedor-en-curso="vc"]').innerText().catch(() => "")) === vpC, await p.locator('[data-vendedor-en-curso="vc"]').innerText().catch(() => ""));
+  ok(`${sufijo}_carla_solo_venta_propia`, vpC > 0 && pesos(await p.locator('[data-vendedor-en-curso="vc"]').innerText().catch(() => "")) === vpC, await p.locator('[data-vendedor-en-curso="vc"]').innerText().catch(() => ""));
   // Desglose de Ana: período con dos vendedores, descuento una sola vez, su parte.
   await p.getByRole("button", { name: /Ana Prueba/ }).first().click(); await espera(p, 400);
   const des = p.locator('[data-comision-periodo="proporcional"]').first();
