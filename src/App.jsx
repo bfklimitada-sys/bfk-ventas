@@ -52,7 +52,7 @@ import { PanelResumenFinanzas } from "./components/panels/PanelResumenFinanzas";
 import { PanelCotizaciones } from "./components/panels/PanelCotizaciones";
 import { PanelProyectos } from "./components/proyectos/PanelProyectos";
 import { listarBorradores } from "./lib/borradoresCotizacion";
-import { buscarCotizacionesDeOC, cargarCotizacionLectura } from "./lib/cotizacionesDatos";
+import { buscarCotizacionesDeOC, cargarCotizacionLectura, cotizacionesCandidatasOC, buscarCotizacionesTexto, vincularCotizacionOC } from "./lib/cotizacionesDatos";
 import { etiquetaCategoria, etiquetaPrioridad, etiquetaEstado, etiquetaSeguimiento } from "./lib/seguimientos";
 import { idFilaCompra, idFilaDespacho, marcaPedido, filaProtegida, esEventoDePedido } from "./lib/compraCotizacion";
 import { BarraInferior, BarraLateral, MenuMas, contarAlertas, useEsEscritorio } from "./components/ui/Navegacion";
@@ -539,8 +539,10 @@ export default function App() {
   // Lo comprado se guarda como productos «compra» con id fijo (un reintento no duplica filas).
   const buscarCotizacionOC=(numero)=>buscarCotizacionesDeOC(session.access_token,numero);
   const cargarCotizacionOC=(id)=>cargarCotizacionLectura(session.access_token,id);
-  const handleCompraDesdeCotizacion=async({ocId,pedido,grupos,fecha,fechaEst,financiadorId,codigoCotizacion})=>{
-    const t=session.access_token; const oc=ocs.find(o=>o.id===ocId);
+  // ocDatos (Nueva OC, 03/11/2026): la OC recién creada aún no está en «ocs»; se informan su número, monto y productos.
+  // silencioso: no cierra ni recarga (lo hace quien llama).
+  const handleCompraDesdeCotizacion=async({ocId,pedido,grupos,fecha,fechaEst,financiadorId,codigoCotizacion,ocDatos=null,silencioso=false})=>{
+    const t=session.access_token; const oc=ocDatos||ocs.find(o=>o.id===ocId);
     let registrados=0, omitidos=0;
     for(const g of grupos){
       const marca=marcaPedido(pedido,g.n);
@@ -553,7 +555,7 @@ export default function App() {
           notas:`${marca} · desde cotización ${codigoCotizacion}`});
         registrados++;
       } else omitidos++;
-      const existentes=(oc?.oc_productos_link||[]).length;
+      const existentes=ocDatos?(Number(ocDatos.n_productos)||0):(oc?.oc_productos_link||[]).length;
       const filas=[
         ...g.filas.map((f,k)=>({id:idFilaCompra(pedido,g.n,f.itemKey,k),descripcion:[f.producto,f.marca,f.modelo].filter(Boolean).join(" · "),
           cantidad:Number(f.cantidad),precio_compra:Math.round(Number(f.unitario)*Number(f.cantidad)),url:String(f.enlace||"").trim()||"sin-link",
@@ -568,7 +570,38 @@ export default function App() {
     }
     await registrarCambio(t,{ocId,ocNumero:oc?.numero_oc,usuarioId:perfil?.id,usuarioNombre:perfil?.nombre,
       accion:`Compra registrada desde cotización ${codigoCotizacion} (pedido ${pedido}: ${grupos.length} proveedor${grupos.length===1?"":"es"})`,campo:"compra",valorNuevo:grupos.map(g=>g.proveedor).join(", ")}).catch(()=>{});
+    if(silencioso) return {registrados,omitidos};
     showToast(omitidos&&!registrados?"Esta compra ya estaba registrada: no se duplicó":"Compra registrada desde la cotización"); setAccion(null); await cargarTodo();
+  };
+
+  // ─── NUEVA OC CON LA COTIZACIÓN BFK (03/11/2026) ───────────
+  // Un solo flujo y las funciones de siempre: crea la OC (handleNuevaOCRapida), vincula la cotización elegida por el usuario
+  // (cz_guardar_cotizacion_v2, sin recalcular precios) y, solo si el usuario confirmó que compró, registra la compra
+  // (handleCompraDesdeCotizacion → registrar_compra_oc). Cada paso es seguro de reintentar: la OC no se vuelve a crear
+  // (ocIdCreada), el vínculo ya hecho no se repite y la compra lleva su marca «Pedido» (no se duplica compra ni despacho).
+  const handleNuevaOCConCotizacion=async({datos,cotizacion,compra,ocIdCreada,onOCCreada})=>{
+    const t=session.access_token; const numero=datos.oc.numero_oc;
+    let ocId=ocIdCreada||null;
+    if(!ocId){
+      try{ ocId=await handleNuevaOCRapida({...datos,continuar:true}); }
+      catch(e){ throw Object.assign(new Error(e.message),{validacion:true}); }   // no se creó nada
+      onOCCreada?.(ocId);
+    }
+    let vinculo;
+    try{ vinculo=await vincularCotizacionOC(t,cotizacion.id,numero); }
+    catch(e){ throw Object.assign(new Error(`La OC ${numero} quedó creada, pero la cotización ${cotizacion.codigo} no se vinculó: ${e.message}`),{validacion:true}); }
+    if(!vinculo.yaVinculada) await registrarCambio(t,{ocId,ocNumero:numero,usuarioId:perfil?.id,usuarioNombre:perfil?.nombre,
+      accion:`Cotización ${cotizacion.codigo} vinculada desde Nueva OC${vinculo.adjudicada?" (marcada adjudicada)":""}`,campo:"cotizacion",valorNuevo:cotizacion.codigo}).catch(()=>{});
+    let resCompra=null;
+    if(compra){
+      const nProductos=(datos.oc.productos||[]).length||(datos.links||[]).length;
+      try{ resCompra=await handleCompraDesdeCotizacion({...compra,ocId,ocDatos:{numero_oc:numero,monto_total:Number(datos.oc.monto_total)||0,n_productos:nProductos},silencioso:true}); }
+      catch(e){ throw new Error(`La OC ${numero} quedó creada y vinculada a la cotización, pero la compra no se completó: ${e.message}`); }
+    }
+    showToast(compra
+      ? (resCompra&&resCompra.omitidos&&!resCompra.registrados?`OC ${numero} vinculada · la compra ya estaba registrada: no se duplicó`:`OC ${numero} creada, vinculada a la cotización ${cotizacion.codigo} y compra registrada`)
+      : `OC ${numero} creada y vinculada a la cotización ${cotizacion.codigo} (sin compra registrada)`);
+    setAccion(null); setCodigoOcRapida(""); await cargarTodo();
   };
 
   // «Corregir compra» (15/10/2026): corrige la MISMA compra (editar_compra_oc valida y recalcula costo y deuda; no deja el
@@ -599,7 +632,7 @@ export default function App() {
   };
 
   // ─── NUEVA OC RÁPIDA (datos desde Mercado Público) ───────────
-  const handleNuevaOCRapida=async({pendienteSync, oc, links, direccion_entrega, correo_cliente, vendedorId: vendedorIdElegido, ventaPropia, silencioso=false})=>{
+  const handleNuevaOCRapida=async({pendienteSync, oc, links, direccion_entrega, correo_cliente, vendedorId: vendedorIdElegido, ventaPropia, silencioso=false, continuar=false})=>{
     const t=session.access_token;
     const numero=oc.numero_oc;
 
@@ -674,7 +707,7 @@ export default function App() {
       if(avisoCI&&!silencioso) setTimeout(()=>showToast(avisoCI,"error"),3200);
     }
 
-    if(silencioso) return ocId;   // carga masiva: avisa y recarga una sola vez al final
+    if(silencioso||continuar) return ocId;   // carga masiva (avisa y recarga una sola vez al final) · Nueva OC con cotización (sigue el flujo)
     showToast(pendienteSync
       ? `OC ${numero} guardada — se completará sola cuando esté disponible en Mercado Público`
       : `OC ${numero} creada con datos de Mercado Público`);
@@ -1971,7 +2004,11 @@ export default function App() {
         <Modal title="Nueva OC" onClose={()=>{setAccion(null);setCodigoOcRapida("");}}>
           <NuevaOCRapida perfil={perfil} vendedores={vendedores} entidadesCatalogo={entidadesCatalogo}
             codigoInicial={codigoOcRapida} buscarDuplicado={buscarDuplicadoOC}
-            onGuardar={handleNuevaOCRapida} onCerrar={()=>{setAccion(null);setCodigoOcRapida("");}} />
+            onGuardar={handleNuevaOCRapida} onCerrar={()=>{setAccion(null);setCodigoOcRapida("");}}
+            financiadores={financiadores}
+            onCandidatasCotizacion={(ocMP)=>cotizacionesCandidatasOC(session.access_token,ocMP)}
+            onBuscarCotizacionTexto={(q)=>buscarCotizacionesTexto(session.access_token,q)}
+            onCargarCotizacion={cargarCotizacionOC} onGuardarConCotizacion={handleNuevaOCConCotizacion} />
           <button onClick={()=>setAccion("compra_manual")}
             style={{width:"100%",background:"none",border:"none",color:C.inkFaint,fontSize:12,cursor:"pointer",marginTop:14,textDecoration:"underline"}}>
             Ingresar manualmente (formulario completo)

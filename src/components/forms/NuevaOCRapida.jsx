@@ -1,9 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Field } from "../ui/Basicos";
 import { C, MONO, SANS, btnP, btnG, fmt, iStyle, iMono, selStyle } from "../../lib/theme";
 import { Ic } from "../ui/Iconos";
 import { entidadPorRut } from "../../lib/rut";
 import { estadoMP, mensajeDuplicado, resultadoConsultaMP } from "../../lib/ocs";
+import { SelectorCotizacionOC, ResumenCotizacionOC } from "./CotizacionNuevaOC";
+import { CompraDesdeCotizacion } from "./CompraDesdeCotizacion";
+import { enlacesParaProductos } from "../../lib/nuevaOCCotizacion";
+import { nuevoPedido } from "../../lib/compraCotizacion";
 
 // ── Heurística para sacar la dirección de entrega del texto del producto ──
 // Cuando TipoDespacho = 12 ("ver instrucciones"), Mercado Público mete la
@@ -27,7 +31,11 @@ function extraerDireccion(texto) {
   return "";
 }
 
-export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoInicial, onGuardar, onCerrar, buscarDuplicado }) {
+// 03/11/2026: «Nueva OC» centraliza la importación desde Mercado Público, la asociación con la cotización BFK (sugerida,
+// nunca automática) y, si el usuario confirma que compró, el registro de la compra real con la lógica existente.
+// Sin las funciones de cotización (props) se comporta como antes.
+export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoInicial, onGuardar, onCerrar, buscarDuplicado,
+  financiadores = [], onCandidatasCotizacion, onBuscarCotizacionTexto, onCargarCotizacion, onGuardarConCotizacion }) {
   const [paso, setPaso] = useState(1);
   const [codigo, setCodigo] = useState(codigoInicial || "");
   const [cargando, setCargando] = useState(false);
@@ -43,6 +51,14 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
   const [vendedorId, setVendedorId] = useState(perfil?.vendedor_id || "");
   const [ventaPropia, setVentaPropia] = useState(false);
   const [guardando, setGuardando] = useState(false);
+  // Cotización BFK y compra (solo si la OC trae datos de Mercado Público)
+  const conCotizaciones = !!(onCandidatasCotizacion && onCargarCotizacion && onGuardarConCotizacion);
+  const [cotSel, setCotSel] = useState(null);          // { fila, cot, base, eleg }
+  const [sinCot, setSinCot] = useState(false);
+  const [modo, setModo] = useState("solo_oc");         // solo_oc | con_compra
+  const ocCreada = useRef(null);                       // id de la OC ya creada en este formulario (reintentos sin duplicar)
+  const pedidoNuevaOC = useRef(nuevoPedido());         // marca de la compra: la misma en cada reintento (no se duplica)
+  const [avisoParcial, setAvisoParcial] = useState("");
 
   const buscar = async (codigoForzado) => {
     // Fase 4A: el botón entregaba el evento del clic como "código" y la búsqueda fallaba en silencio
@@ -50,6 +66,7 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
     const cod = String(typeof codigoForzado === "string" ? codigoForzado : codigo).trim().toUpperCase();
     if (!cod) { setErr("Ingresa el código de la OC"); return; }
     setErr(""); setCargando(true); setDatos(null); setPendiente(false); setConfirmaCancelada(false);
+    setCotSel(null); setSinCot(false); setModo("solo_oc"); setAvisoParcial(""); ocCreada.current = null; pedidoNuevaOC.current = nuevoPedido(); linksAuto.current = [];
     // Antes de consultar: ¿ya existe (activa o archivada)? Misma clave que el índice único de la base.
     const dup = buscarDuplicado ? buscarDuplicado(cod) : null;
     if (dup) { setErr(mensajeDuplicado(dup)); setCargando(false); return; }
@@ -89,26 +106,64 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
     if (codigoInicial) { setCodigo(codigoInicial); buscar(codigoInicial); }
   }, [codigoInicial]);
 
+  // Validaciones de la OC (comunes a «solo OC» y «OC + compra»). Devuelve el mensaje o "".
+  const validarOC = () => {
+    if (!links.some(l => l.trim())) return "Agrega al menos un link de producto";
+    if (!pendiente && estadoMP(datos?.codigo_estado).tipo === "cancelada" && !confirmaCancelada)
+      return "Esta OC figura cancelada en Mercado Público. Marca la casilla si de todas formas quieres cargarla.";
+    return "";
+  };
+  const datosOC = () => ({
+    pendienteSync: pendiente,
+    oc: datos,
+    // Un enlace por producto vendido (alineados por posición; vacíos quedan «sin-link» en ese producto).
+    links: cotSel ? links.map(l => l.trim()) : links.map(l => l.trim()).filter(Boolean),
+    direccion_entrega: direccion.trim(),
+    correo_cliente: correo.trim(),
+    vendedorId: vendedorId || null,
+    ventaPropia: !!(vendedorId && ventaPropia),
+  });
+  // Con cotización: crea la OC (una sola vez), vincula la cotización y, si corresponde, registra la compra.
+  const guardarConCotizacion = (compra) => onGuardarConCotizacion({
+    datos: datosOC(), cotizacion: { id: cotSel.cot.id, codigo: cotSel.base.codigo }, compra,
+    ocIdCreada: ocCreada.current, onOCCreada: (id) => { ocCreada.current = id; setAvisoParcial(`La OC ${datos.numero_oc} ya quedó creada: un reintento no la vuelve a crear.`); },
+  });
+
   const guardar = async () => {
-    if (!links.some(l => l.trim())) { setErr("Agrega al menos un link de producto"); return; }
-    if (!pendiente && estadoMP(datos?.codigo_estado).tipo === "cancelada" && !confirmaCancelada) {
-      setErr("Esta OC figura cancelada en Mercado Público. Marca la casilla si de todas formas quieres cargarla."); return;
-    }
+    const v = validarOC(); if (v) { setErr(v); return; }
     setErr(""); setGuardando(true);
     try {
-      await onGuardar({
-        pendienteSync: pendiente,
-        oc: datos,
-        links: links.map(l => l.trim()).filter(Boolean),
-        direccion_entrega: direccion.trim(),
-        correo_cliente: correo.trim(),
-        vendedorId: vendedorId || null,
-        ventaPropia: !!(vendedorId && ventaPropia),
-      });
+      if (cotSel) await guardarConCotizacion(null);
+      else await onGuardar(datosOC());
     } catch (e) {
       setErr(e.message); setGuardando(false);
     }
   };
+  // «Guardar OC y registrar compra»: CompraDesdeCotizacion valida la compra y llama aquí.
+  const guardarConCompra = async (compra) => {
+    const v = validarOC(); if (v) throw Object.assign(new Error(v), { validacion: true });
+    setErr("");
+    await guardarConCotizacion(compra);
+  };
+  // Enlaces de la cotización: no se vuelven a escribir. Se completan los vacíos y los que vinieron de otra cotización
+  // (al cambiarla o quitarla); lo que el usuario escribió se conserva.
+  const linksAuto = useRef([]);
+  const elegirCotizacion = (sel) => {
+    setCotSel(sel); setErr("");
+    if (!sel) setModo("solo_oc");
+    const prev = linksAuto.current;
+    const propio = (v, i) => !!String(v || "").trim() && v !== prev[i];
+    const enl = sel ? enlacesParaProductos(datos?.productos, sel.base.lineas) : [];
+    linksAuto.current = enl;
+    setLinks(ls => {
+      const r = Array.from({ length: Math.max(ls.length, enl.length) }, (_, i) => (propio(ls[i], i) ? ls[i] : (enl[i] || "")));
+      const f = sel && enl.length ? r : r.filter(x => x.trim());
+      return f.length ? f : [""];
+    });
+  };
+  const ocVirtual = useMemo(() => datos ? ({ id: ocCreada.current, numero_oc: datos.numero_oc, monto_total: Number(datos.monto_total) || 0,
+    eventos_compra: [], oc_productos_link: [], financiador_id: null, es_venta_propia: !!(vendedorId && ventaPropia) }) : null,
+    [datos, vendedorId, ventaPropia]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const Dato = ({ label, valor, alerta }) => (
     <div style={{ marginBottom: 7 }}>
@@ -250,20 +305,33 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
         </div>
       )}
 
-      {/* Links de compra — lo único obligatorio para Mati */}
-      <div style={{ marginBottom: 14 }}>
+      {/* Cotización BFK relacionada (sugerida; nunca se vincula sin confirmación) */}
+      {conCotizaciones && !pendiente && (
+        <SelectorCotizacionOC ocMP={oc} onCandidatas={onCandidatasCotizacion} onBuscarTexto={onBuscarCotizacionTexto || (async () => [])}
+          onCargar={onCargarCotizacion} seleccion={cotSel} onSeleccion={elegirCotizacion}
+          sinCotizacion={sinCot} onSinCotizacion={(v) => { setSinCot(v); if (v) elegirCotizacion(null); }} bloqueado={!!ocCreada.current} />
+      )}
+
+      {/* Links de compra — lo único obligatorio para Mati (con cotización, vienen de ella) */}
+      <div style={{ marginBottom: 14 }} data-links-oc>
         <div style={{ fontSize: 12, fontWeight: 800, color: C.inkMuted, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>
           Link de compra <span style={{ color:C.dangerText }}>*</span>
         </div>
+        {cotSel && links.some(l => l.trim()) && (
+          <div data-links-desde-cotizacion style={{ fontSize: 12, color: C.inkMuted, marginTop: -4, marginBottom: 8 }}>Tomados de la cotización {cotSel.base.codigo}. Corrígelos solo si cambió el enlace.</div>
+        )}
         {links.map((l, i) => (
-          <div key={i} style={{ display: "flex", gap: 6, marginBottom: 6 }}>
-            <input style={{ ...iStyle, flex: 1 }} value={l}
+          <div key={i} style={{ marginBottom: 6 }}>
+          {cotSel && (oc.productos || [])[i] && <div style={{ fontSize: 11, color: C.inkFaint, marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Para: {(oc.productos[i].descripcion || "").slice(0, 90)}</div>}
+          <div style={{ display: "flex", gap: 6 }}>
+            <input data-link-oc={i} style={{ ...iStyle, flex: 1, minWidth: 0 }} value={l}
               onChange={e => setLinks(ls => ls.map((x, ix) => ix === i ? e.target.value : x))}
               placeholder="https://…" />
             {links.length > 1 && (
               <button onClick={() => setLinks(ls => ls.filter((_, ix) => ix !== i))}
                 style={{ background: C.dangerLight, border: "none", borderRadius: 8, padding: "0 12px", color:C.dangerText, fontSize: 14, cursor: "pointer" }}>✕</button>
             )}
+          </div>
           </div>
         ))}
         <button onClick={() => setLinks(ls => [...ls, ""])}
@@ -295,15 +363,49 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
       <Field label="Vendedor" hint="Elegido en el paso anterior — vuelve atrás si lo quieres cambiar">
         <input style={{...iStyle,background:C.paper,color:C.inkMuted}} disabled
           value={(vendedores||[]).find(v=>v.id===vendedorId)?.nombre || "Sin vendedor asignado"} />
+        {cotSel && (() => {
+          // Vendedor responsable de la cotización: solo se informa; se asigna únicamente si el usuario lo pide.
+          const vc = String(cotSel.cot.vendedor_id || ""); const enBFK = (vendedores || []).find(v => String(v.id) === vc);
+          if (!vc || String(vendedorId) === vc) return null;
+          if (!vendedorId && enBFK) return (
+            <div data-vendedor-cotizacion style={{ fontSize: 12, color: C.inkMuted, marginTop: 6, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <span>La cotización tiene como vendedor responsable a <b>{enBFK.nombre}</b>.</span>
+              <button data-usar-vendedor-cotizacion onClick={() => setVendedorId(enBFK.id)} style={{ background: "none", border: `1px solid ${C.teal}`, borderRadius: 8, color: C.tealDark, cursor: "pointer", fontSize: 12, padding: "4px 10px", minHeight: 32 }}>Asignarlo a esta OC</button>
+            </div>);
+          return <div data-aviso-vendedor style={{ fontSize: 12, color: C.warnText, fontWeight: 600, marginTop: 6 }}><Ic n="⚠"/> El vendedor responsable de la cotización es {cotSel.cot.vendedor_nombre || vc}{vendedorId ? ", distinto del elegido para la OC" : ""}. Revisa antes de guardar.</div>;
+        })()}
       </Field>
 
-      {err && <div style={{ background: C.dangerLight, color:C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 10, fontWeight: 600 }}>{err}</div>}
+      {/* ¿Qué se guarda? Solo con cotización elegida. La compra real se registra únicamente si el usuario confirma que compró. */}
+      {cotSel && (
+        <div data-modo-guardado style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 12, fontWeight: 800, color: C.inkMuted, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>¿Qué quieres guardar?</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <button data-modo="solo_oc" aria-pressed={modo === "solo_oc"} onClick={() => setModo("solo_oc")} style={{ ...btnP(modo === "solo_oc" ? C.teal : C.inkFaint), minHeight: 56, fontSize: 13 }}>Solo la OC<br /><span style={{ fontWeight: 500, fontSize: 11 }}>aún no compro</span></button>
+            <button data-modo="con_compra" aria-pressed={modo === "con_compra"} onClick={() => setModo("con_compra")} style={{ ...btnP(modo === "con_compra" ? C.teal : C.inkFaint), minHeight: 56, fontSize: 13 }}>OC y compra<br /><span style={{ fontWeight: 500, fontSize: 11 }}>ya compré</span></button>
+          </div>
+        </div>
+      )}
+      {cotSel && modo === "solo_oc" && <ResumenCotizacionOC base={cotSel.base} ventaOC={oc.monto_total} />}
+      {cotSel && modo === "con_compra" && ocVirtual && (
+        <CompraDesdeCotizacion key={cotSel.cot.id} modoNuevaOC pedidoFijo={pedidoNuevaOC.current} oc={ocVirtual} cot={cotSel.cot} financiadores={financiadores} perfil={perfil}
+          onCompraDesdeCotizacion={guardarConCompra}
+          avisoBloqueo={estadoMP(oc.codigo_estado).tipo === "cancelada" ? "La OC figura cancelada en Mercado Público: no se registra una compra. Guarda solo la OC si de todas formas quieres cargarla." : ""} />
+      )}
+      {cotSel && modo === "con_compra" && estadoMP(oc.codigo_estado).tipo === "sin_aceptar" && (
+        <div data-aviso-sin-aceptar style={{ fontSize: 12, color: C.warnText, fontWeight: 600, marginBottom: 10 }}><Ic n="⚠"/> La OC aún no está aceptada en Mercado Público: confirma la compra solo si ya la realizaste.</div>
+      )}
+
+      {avisoParcial && <div data-aviso-oc-creada style={{ background: C.warnLight, color: C.warnText, borderRadius: 8, padding: "8px 12px", fontSize: 12, marginBottom: 10, fontWeight: 600 }}>{avisoParcial}</div>}
+      {err && <div data-error-nueva-oc style={{ background: C.dangerLight, color:C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 10, fontWeight: 600 }}>{err}</div>}
 
       <div style={{ display: "flex", gap: 8 }}>
-        <button onClick={() => { setPaso(1); setErr(""); }} style={{ ...btnP(C.inkFaint), flex: 1 }}>← Atrás</button>
-        <button onClick={guardar} disabled={guardando} style={{ ...btnP(guardando ? C.inkFaint : C.ok), flex: 2 }}>
-          {guardando ? "Guardando…" : "✓ Crear OC"}
-        </button>
+        <button onClick={() => { setPaso(1); setErr(""); }} disabled={!!ocCreada.current} style={{ ...btnP(C.inkFaint), flex: 1, opacity: ocCreada.current ? 0.45 : 1 }}>← Atrás</button>
+        {!(cotSel && modo === "con_compra") && (
+          <button data-crear-oc onClick={guardar} disabled={guardando} style={{ ...btnP(guardando ? C.inkFaint : C.ok), flex: 2 }}>
+            {guardando ? "Guardando…" : cotSel ? (ocCreada.current ? "↻ Reintentar vínculo" : "✓ Crear OC y vincular cotización") : "✓ Crear OC"}
+          </button>
+        )}
       </div>
 
       <div style={{ fontSize: 12, color: C.inkFaint, textAlign: "center", marginTop: 10 }}>

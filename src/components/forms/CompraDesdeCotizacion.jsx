@@ -60,19 +60,22 @@ export function RegistrarCompraOC(props) {
   return <CompraDesdeCotizacion {...props} cot={estado.cot} onSinCotizacion={() => setEstado({ fase: "manual" })} />;
 }
 
-function CompraDesdeCotizacion({ oc, cot, financiadores, perfil, onCompraDesdeCotizacion, onSinCotizacion }) {
+// modoNuevaOC (03/11/2026): la misma compra dentro de «Nueva OC», antes de que la OC exista. Los datos de la compra se
+// editan directamente (cargados desde la cotización), se pide el financiador expresamente (salvo venta propia) y una
+// confirmación explícita de que la compra se realizó. onCompraDesdeCotizacion recibe lo mismo que en una OC existente.
+export function CompraDesdeCotizacion({ oc, cot, financiadores, perfil, onCompraDesdeCotizacion, onSinCotizacion, modoNuevaOC = false, avisoBloqueo = "", pedidoFijo = null }) {
   const base = useMemo(() => baseCotizacion(cot), [cot]);
   const comprado = useMemo(() => compradoEnOC(oc), [oc]);
   const lineas = useMemo(() => estadoLineas(base, comprado), [base, comprado]);
-  const [opcion, setOpcion] = useState(null);
+  const [opcion, setOpcion] = useState(modoNuevaOC ? "B" : null);
   const [filas, setFilas] = useState(() => filasIniciales(base, lineas));
   const [despReal, setDespReal] = useState({}); const [extras, setExtras] = useState({});
-  const [conf, setConf] = useState({ vigencia: false, especificaciones: false, direccion: false });
+  const [conf, setConf] = useState({ vigencia: false, especificaciones: false, direccion: false, compraEfectiva: false });
   const tieneCompras = (oc.eventos_compra || []).length > 0;
-  const [financiadorId, setFinanciadorId] = useState(oc.financiador_id || perfil?.financiador_default || financiadores[0]?.id || "");
+  const [financiadorId, setFinanciadorId] = useState(modoNuevaOC ? "" : (oc.financiador_id || perfil?.financiador_default || financiadores[0]?.id || ""));
   const [fecha, setFecha] = useState(hoy()); const [fechaEst, setFechaEst] = useState("");
   const [errores, setErrores] = useState([]); const [guardando, setGuardando] = useState(false);
-  const pedido = useRef(nuevoPedido()); const enCurso = useRef(false);
+  const pedido = useRef(pedidoFijo || nuevoPedido()); const enCurso = useRef(false);   // pedidoFijo: el mismo en reintentos (Nueva OC)
 
   const grupos = useMemo(() => armarPedidos({ filas, base, comprado, despachosReales: opcion === "B" ? despReal : {}, extras: opcion === "B" ? extras : {} }), [filas, base, comprado, despReal, extras, opcion]);
   const costoPrevio = (oc.eventos_compra || []).reduce((s, e) => s + (Number(e.costo_compra) || 0), 0);
@@ -86,12 +89,15 @@ function CompraDesdeCotizacion({ oc, cot, financiadores, perfil, onCompraDesdeCo
 
   const registrar = async () => {
     if (enCurso.current) return;
-    if (val.errores.length) { setErrores(val.errores); return; }
-    if (!tieneCompras && !financiadorId && !oc.es_venta_propia) { setErrores(["Selecciona el financiador."]); return; }
+    if (avisoBloqueo) { setErrores([avisoBloqueo]); return; }
+    const faltan = [...val.errores];
+    if (!tieneCompras && !financiadorId && !oc.es_venta_propia) faltan.push("Selecciona el financiador.");
+    if (modoNuevaOC && !conf.compraEfectiva) faltan.push("Confirma que la compra se realizó efectivamente: solo así se registra el costo real.");
+    if (faltan.length) { setErrores(faltan); return; }
     enCurso.current = true; setGuardando(true); setErrores([]);
     try {
-      await onCompraDesdeCotizacion({ ocId: oc.id, pedido: pedido.current, grupos, fecha, fechaEst, financiadorId, codigoCotizacion: base.codigo });
-    } catch (e) { setErrores([`No se completó el registro: ${e.message}. Puedes reintentar: lo ya registrado no se duplica.`]); enCurso.current = false; setGuardando(false); }
+      await onCompraDesdeCotizacion({ ocId: oc.id, pedido: pedido.current, grupos, fecha, fechaEst, financiadorId: modoNuevaOC && oc.es_venta_propia ? null : financiadorId, codigoCotizacion: base.codigo });
+    } catch (e) { setErrores([e.validacion ? e.message : `No se completó el registro: ${e.message}. Puedes reintentar: lo ya registrado no se duplica.`]); enCurso.current = false; setGuardando(false); }
   };
 
   const caja = { background: C.paper, borderRadius: 12, padding: "10px 12px", marginBottom: 12, border: `1px solid ${C.border}` };
@@ -101,10 +107,10 @@ function CompraDesdeCotizacion({ oc, cot, financiadores, perfil, onCompraDesdeCo
 
   return (
     <div data-compra-cotizacion>
-      <div style={{ background: C.tealLight, borderRadius: 10, padding: "10px 12px", marginBottom: 12, fontSize: 13 }}>
+      {!modoNuevaOC && <div style={{ background: C.tealLight, borderRadius: 10, padding: "10px 12px", marginBottom: 12, fontSize: 13 }}>
         <b>Cotización adjudicada vinculada: {base.codigo}</b>{cot.institucion ? ` · ${cot.institucion}` : ""}
         <div style={{ fontSize: 12, color: C.inkMuted, marginTop: 2 }}>La cotización, el monto adjudicado y los productos vendidos no se modifican. La compra se guarda aparte.</div>
-      </div>
+      </div>}
 
       <div style={caja} data-estado-lineas>
         {tit("Cantidades")}
@@ -116,7 +122,9 @@ function CompraDesdeCotizacion({ oc, cot, financiadores, perfil, onCompraDesdeCo
         ))}
       </div>
 
-      {todoComprado ? (
+      {modoNuevaOC ? (
+        <div data-compra-nueva-oc style={{ fontSize: 12, color: C.inkMuted, marginBottom: 12, lineHeight: 1.5 }}>Los datos vienen de la cotización. Ajusta solo lo que cambió en la compra real (precio, proveedor, enlace, cantidad o despacho): lo modificado se destaca y se compara con lo cotizado. Para comprar solo una parte, baja la cantidad; el resto queda pendiente para «Registrar otra compra».</div>
+      ) : todoComprado ? (
         <div data-todo-comprado style={{ background: C.okLight, color: C.okText, borderRadius: 8, padding: "10px 12px", fontSize: 13, marginBottom: 10, fontWeight: 600 }}>Todo lo cotizado ya está comprado. Si hubo una compra adicional, usa el formulario normal.</div>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
@@ -124,7 +132,7 @@ function CompraDesdeCotizacion({ oc, cot, financiadores, perfil, onCompraDesdeCo
           <button data-opcion="B" onClick={() => elegir("B")} style={{ ...btnP(opcion === "B" ? C.teal : C.inkFaint), minHeight: 56 }}>B · Modificar datos de la compra</button>
         </div>
       )}
-      <button data-sin-cotizacion onClick={onSinCotizacion} style={{ background: "none", border: "none", color: C.tealDark, textDecoration: "underline", cursor: "pointer", fontSize: 12, padding: 0, marginBottom: 12, minHeight: 32 }}>Registrar sin usar la cotización (formulario normal)</button>
+      {!modoNuevaOC && <button data-sin-cotizacion onClick={onSinCotizacion} style={{ background: "none", border: "none", color: C.tealDark, textDecoration: "underline", cursor: "pointer", fontSize: 12, padding: 0, marginBottom: 12, minHeight: 32 }}>Registrar sin usar la cotización (formulario normal)</button>}
 
       {opcion && !todoComprado && <>
         <div style={caja} data-filas-compra>
@@ -189,14 +197,19 @@ function CompraDesdeCotizacion({ oc, cot, financiadores, perfil, onCompraDesdeCo
 
         <div style={caja}>
           {tit("Datos de la compra")}
-          <Field label="Financiador" hint={tieneCompras ? "La OC ya tiene compras: se usa el mismo financiador." : ""}>
-            <select style={selStyle} value={financiadorId} disabled={tieneCompras} onChange={(e) => setFinanciadorId(e.target.value)}>
+          {modoNuevaOC && oc.es_venta_propia ? (
+            <div data-financiador-venta-propia style={{ fontSize: 12, color: C.inkMuted, marginBottom: 10 }}>Venta propia del vendedor: la compra no genera deuda con un financiador.</div>
+          ) : (
+          <Field label="Financiador" required={modoNuevaOC} hint={tieneCompras ? "La OC ya tiene compras: se usa el mismo financiador." : modoNuevaOC ? "Quién financió esta compra (genera la deuda con el financiador, salvo fondos propios)." : ""}>
+            <select data-campo-compra="financiador" style={selStyle} value={financiadorId} disabled={tieneCompras} onChange={(e) => setFinanciadorId(e.target.value)}>
+              {modoNuevaOC && <option value="">— Selecciona el financiador —</option>}
               {financiadores.map((f) => <option key={f.id} value={f.id}>{f.nombre}{f.tipo === "propio" ? " — fondos propios (no genera deuda)" : ""}</option>)}
             </select>
           </Field>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            <Field label="Fecha de compra"><input style={iStyle} type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} /></Field>
-            <Field label="Fecha de entrega estimada"><input data-campo-compra="fecha-entrega" style={iStyle} type="date" value={fechaEst} onChange={(e) => setFechaEst(e.target.value)} /></Field>
+          )}
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 10 }}>
+            <Field label="Fecha de compra"><input style={{ ...iStyle, minWidth: 0 }} type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} /></Field>
+            <Field label="Fecha de entrega estimada"><input data-campo-compra="fecha-entrega" style={{ ...iStyle, minWidth: 0 }} type="date" value={fechaEst} onChange={(e) => setFechaEst(e.target.value)} /></Field>
           </div>
         </div>
 
@@ -227,10 +240,12 @@ function CompraDesdeCotizacion({ oc, cot, financiadores, perfil, onCompraDesdeCo
         <div style={{ marginBottom: 10 }}>
           {val.requiere.vigencia && <label data-confirmar="vigencia" style={{ display: "flex", gap: 8, fontSize: 13, marginBottom: 6, fontWeight: 600 }}><input type="checkbox" checked={conf.vigencia} onChange={(e) => setConf((c) => ({ ...c, vigencia: e.target.checked }))} /> Confirmo que los precios, la disponibilidad, las condiciones y el despacho siguen vigentes.</label>}
           {val.requiere.especificaciones && <label data-confirmar="especificaciones" style={{ display: "flex", gap: 8, fontSize: 13, marginBottom: 6, fontWeight: 600 }}><input type="checkbox" checked={conf.especificaciones} onChange={(e) => setConf((c) => ({ ...c, especificaciones: e.target.checked }))} /> Comprobé que el producto cumple las especificaciones ofertadas.</label>}
+          {modoNuevaOC && <label data-confirmar="compra-efectiva" style={{ display: "flex", gap: 8, fontSize: 13, marginBottom: 6, fontWeight: 700, background: C.warnLight, borderRadius: 8, padding: "8px 10px" }}><input type="checkbox" checked={conf.compraEfectiva} onChange={(e) => setConf((c) => ({ ...c, compraEfectiva: e.target.checked }))} /> Confirmo que la compra se realizó efectivamente con estos precios, proveedores y despacho. Se registrará el costo real{oc.es_venta_propia || financiadores.find((f) => f.id === financiadorId)?.tipo === "propio" ? " (sin deuda con un financiador)" : " y la deuda con el financiador"}.</label>}
           {val.requiere.direccion && <label data-confirmar="direccion" style={{ display: "flex", gap: 8, fontSize: 13, marginBottom: 6, fontWeight: 600 }}><input type="checkbox" checked={conf.direccion} onChange={(e) => setConf((c) => ({ ...c, direccion: e.target.checked }))} /> Verifiqué nuevamente el despacho para la nueva dirección.</label>}
         </div>
+        {avisoBloqueo && <div data-bloqueo-compra style={{ background: C.dangerLight, color: C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 10, fontWeight: 600 }}>{avisoBloqueo}</div>}
         {errores.length > 0 && <div data-errores-compra style={{ background: C.dangerLight, color: C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 10, fontWeight: 600 }}>{errores.map((e, i) => <div key={i}>• {e}</div>)}</div>}
-        <button data-registrar-compra-cotizacion onClick={registrar} disabled={guardando} style={btnP(guardando ? C.inkFaint : C.ok)}>{guardando ? "Registrando…" : `✓ Registrar compra (${grupos.length} pedido${grupos.length === 1 ? "" : "s"} · ${m(comp.totalReal)})`}</button>
+        <button data-registrar-compra-cotizacion {...(modoNuevaOC ? { "data-crear-oc-y-compra": true } : {})} onClick={registrar} disabled={guardando} style={btnP(guardando ? C.inkFaint : C.ok)}>{guardando ? (modoNuevaOC ? "Guardando OC y compra…" : "Registrando…") : `✓ ${modoNuevaOC ? "Crear OC y registrar compra" : "Registrar compra"} (${grupos.length} pedido${grupos.length === 1 ? "" : "s"} · ${m(comp.totalReal)})`}</button>
       </>}
     </div>
   );

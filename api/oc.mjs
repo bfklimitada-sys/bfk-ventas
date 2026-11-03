@@ -306,6 +306,8 @@ export default async function handler(req, res) {
     const normalizada = {
       numero_oc: txt(oc.Codigo) || codigo,
       nombre_oc: txt(oc.Nombre),
+      // Código de la licitación o compra ágil de origen (si Mercado Público lo informa): solo para SUGERIR la cotización BFK.
+      codigo_licitacion: txt(oc.CodigoLicitacion),
       descripcion: txt(oc.Descripcion),
       estado_mp: txt(oc.Estado) || txt(oc.CodigoEstado),
       codigo_estado: Number(oc.CodigoEstado) || null,

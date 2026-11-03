@@ -12,6 +12,7 @@
 // ═══════════════════════════════════════════════════════════════
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./supabase.jsx";
 import { fichaPublica, calcularCotizacion, FORMULA, formulaParaGuardar } from "./cotizaciones.js";
+import { preliminares, elegibilidad, payloadVinculo } from "./nuevaOCCotizacion.js";
 
 const CLAVE_LOCAL = "bfk_cotizaciones_prueba_v1";
 export const DEP_IMG = "cz-productos"; // depósito propio del módulo (imágenes de fichas)
@@ -325,4 +326,62 @@ export async function buscarCotizacionesDeOC(token, numeroOC) {
 }
 export async function cargarCotizacionLectura(token, id) {
   return crearAlmacen(token, "base", 2).cargarCotizacion(id);
+}
+
+// ── «Nueva OC» con la cotización BFK (03/11/2026) ──
+// Lectura: cotizaciones presentadas o adjudicadas recientes (más las ya vinculadas a esta OC) y los productos de las
+// mejores candidatas, para SUGERIR (lib/nuevaOCCotizacion.js). Ninguna lectura vincula nada.
+const CAMPOS_CANDIDATA = "id,id_externo,nombre,institucion,rut,estado,oc_codigo,fecha,total,subtotal_neto,actualizado_en,vendedor_id,vendedor_nombre";
+export async function cotizacionesCandidatasOC(token, ocMP) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/cotizaciones?select=${CAMPOS_CANDIDATA}&estado=in.(presentada,adjudicada)&order=actualizado_en.desc&limit=400`, { headers: cab(token) });
+  if (!r.ok) {
+    const c = await json(r);
+    if (r.status === 404 && TABLA_INEXISTENTE.includes(c?.code)) return { disponible: false, motivo: "El módulo de Cotizaciones no está instalado.", lista: [], itemsPor: {} };
+    if (c?.code === "42703") return { disponible: false, motivo: "Vincular cotizaciones desde Nueva OC requiere la versión 2 del módulo de Cotizaciones.", lista: [], itemsPor: {} };
+    throw errorDe(r, c, "No se pudo consultar las cotizaciones");
+  }
+  const recientes = (await r.json()) || [];
+  // Las vinculadas explícitamente a esta OC (aunque sean antiguas), con la misma consulta que usa «Registrar compra».
+  const vinculadas = await buscarCotizacionesDeOC(token, ocMP?.numero_oc).catch(() => []);
+  const ids = new Set(recientes.map((c) => c.id));
+  const faltan = vinculadas.filter((c) => !ids.has(c.id)).map((c) => c.id);
+  let extra = [];
+  if (faltan.length) {
+    const r2 = await fetch(`${SUPABASE_URL}/rest/v1/cotizaciones?select=${CAMPOS_CANDIDATA}&id=in.(${faltan.map(encodeURIComponent).join(",")})`, { headers: cab(token) });
+    extra = r2.ok ? ((await r2.json()) || []) : [];
+  }
+  const lista = [...extra, ...recientes];
+  const leerDe = [...new Set([...extra.map((c) => c.id), ...preliminares(ocMP, lista)])];
+  const itemsPor = {};
+  if (leerDe.length) {
+    const r3 = await fetch(`${SUPABASE_URL}/rest/v1/cotizacion_items?select=cotizacion_id,orden,cantidad,nombre:especificaciones_aprobadas->>nombre,marca:especificaciones_aprobadas->>marca,modelo:especificaciones_aprobadas->>modelo&cotizacion_id=in.(${leerDe.map(encodeURIComponent).join(",")})`, { headers: cab(token) });
+    if (r3.ok) for (const it of (await r3.json()) || []) (itemsPor[it.cotizacion_id] ||= []).push(it);
+  }
+  return { disponible: true, lista, itemsPor };
+}
+// Búsqueda manual (código, nombre o institución), con el mismo listado del módulo Cotizaciones.
+export async function buscarCotizacionesTexto(token, q) {
+  const t = String(q || "").trim(); if (t.length < 2) return [];
+  return (await crearAlmacen(token, "base", 2).listarCotizaciones({ q: t, porPagina: 15 })).filas;
+}
+
+// Vincula la cotización a la OC con la función existente del módulo (cz_guardar_cotizacion_v2): reenvía lo GUARDADO
+// sin recalcular (lib/nuevaOCCotizacion.js → payloadVinculo) y solo cambia el estado a «adjudicada» y el código de la OC.
+// La base aplica sus reglas de siempre (versión, protección de lo ofertado en adjudicadas, vínculo solo administrador si ya
+// tenía otra OC, vendedor responsable para adjudicar, guardas de exentas). Reintentar es seguro: si ya quedó vinculada a
+// esta OC, no se vuelve a guardar.
+export async function vincularCotizacionOC(token, cotId, numeroOC) {
+  const leer = async (q) => { const r = await fetch(`${SUPABASE_URL}/rest/v1/${q}`, { headers: cab(token) }); const c = await json(r); if (!r.ok) throw errorDe(r, c, "No se pudo leer la cotización"); return c || []; };
+  const id = encodeURIComponent(cotId);
+  const [c] = await leer(`cotizaciones?select=*&id=eq.${id}`);
+  if (!c) throw new Error("La cotización ya no existe o no tienes acceso a ella.");
+  const e = elegibilidad(c, numeroOC);
+  if (!e.ok) throw new Error(e.motivo);
+  if (e.yaVinculada && c.estado === "adjudicada") return { yaVinculada: true, id: c.id, version: c.version, adjudicada: false };
+  const [items, envios] = await Promise.all([leer(`cotizacion_items?select=*&cotizacion_id=eq.${id}&order=orden.asc`), leer(`cotizacion_envios?select=*&cotizacion_id=eq.${id}`)]);
+  if (!items.length) throw new Error("La cotización no tiene productos guardados: no se vincula.");
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/cz_guardar_cotizacion_v2`, { method: "POST", headers: cab(token, { "Content-Type": "application/json" }), body: JSON.stringify({ p: payloadVinculo(c, items, envios, numeroOC) }) });
+  const cuerpo = await json(r);
+  if (!r.ok) { const err = errorDe(r, cuerpo, "No se pudo vincular la cotización"); err.message = String(err.message).replace(/^CZ_VENDEDOR:\s*/, ""); throw err; }
+  return { yaVinculada: false, adjudicada: e.adjudicar, ...(cuerpo || {}) };
 }
