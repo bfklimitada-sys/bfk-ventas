@@ -319,7 +319,8 @@ export default async function handler(req, res) {
       comuna: txt(comprador.ComunaUnidad),
       region: txt(comprador.RegionUnidad),
       direccion: txt(comprador.DireccionUnidad),
-      contacto: [txt(comprador.NombreContacto), txt(comprador.FonoContacto)]
+      // El teléfono suele venir vacío en la API (sí aparece en el portal); se aceptan otros nombres por si cambia.
+      contacto: [txt(comprador.NombreContacto), txt(comprador.FonoContacto) || txt(comprador.TelefonoContacto) || txt(comprador.Fono) || txt(comprador.Telefono)]
         .filter(Boolean).join(" · "),
       cargo_contacto: txt(comprador.CargoContacto),
       correo_cliente: txt(comprador.MailContacto),

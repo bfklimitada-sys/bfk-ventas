@@ -34,6 +34,15 @@ function extraerDireccion(texto) {
 // 03/11/2026: «Nueva OC» centraliza la importación desde Mercado Público, la asociación con la cotización BFK (sugerida,
 // nunca automática) y, si el usuario confirma que compró, el registro de la compra real con la lógica existente.
 // Sin las funciones de cotización (props) se comporta como antes.
+// Teléfono dentro de «Nombre · teléfono» (formato de la importación) y armado del contacto con el teléfono ingresado.
+const FONO_VALIDO = /^[+()0-9][0-9 ()+-]{5,18}[0-9]$/;
+const fonoDeContacto = (c) => String(c || "").split("·").slice(1).map(x => x.trim()).find(x => /\d{6,}|\d{2,}[- ]\d{3,}/.test(x)) || "";
+function contactoConFono(contacto, fono) {
+  const f = String(fono || "").trim(); const nombre = String(contacto || "").split("·")[0].trim();
+  if (!f) return contacto || "";
+  return nombre ? `${nombre} · ${f}` : f;
+}
+
 export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoInicial, onGuardar, onCerrar, buscarDuplicado,
   financiadores = [], onCandidatasCotizacion, onBuscarCotizacionTexto, onCargarCotizacion, onGuardarConCotizacion }) {
   const [paso, setPaso] = useState(1);
@@ -48,6 +57,10 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
   const [links, setLinks] = useState([""]);
   const [direccion, setDireccion] = useState("");
   const [correo, setCorreo] = useState("");
+  // Teléfono del contacto (03/11/2026): la API de Mercado Público no lo entrega (vacío en todas las OCs importadas), aunque
+  // el portal lo muestra. Se puede copiar desde la OC; se guarda como «Nombre · teléfono», el formato que ya separa la base
+  // (conciliar_contactos_oc) para los contactos de la institución.
+  const [fono, setFono] = useState("");
   const [vendedorId, setVendedorId] = useState(perfil?.vendedor_id || "");
   const [ventaPropia, setVentaPropia] = useState(false);
   const [guardando, setGuardando] = useState(false);
@@ -81,6 +94,7 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
         // Correo: primero el del catálogo por RUT, si existe
         const enCatalogo = entidadPorRut(entidadesCatalogo, oc.rut_cliente).entidad;
         setCorreo(oc.correo_cliente || enCatalogo?.correo || "");
+        setFono(fonoDeContacto(oc.contacto));
         // Dirección: la del comprador, o la que venga en el texto del producto
         const textoItems = (oc.productos || []).map(p => p.descripcion).join(" ");
         setDireccion(oc.direccion || extraerDireccion(textoItems) || "");
@@ -109,13 +123,14 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
   // Validaciones de la OC (comunes a «solo OC» y «OC + compra»). Devuelve el mensaje o "".
   const validarOC = () => {
     if (!links.some(l => l.trim())) return "Agrega al menos un link de producto";
+    if (fono.trim() && !FONO_VALIDO.test(fono.trim())) return "El teléfono del contacto solo admite números, espacios, +, - y paréntesis (7 a 20 caracteres).";
     if (!pendiente && estadoMP(datos?.codigo_estado).tipo === "cancelada" && !confirmaCancelada)
       return "Esta OC figura cancelada en Mercado Público. Marca la casilla si de todas formas quieres cargarla.";
     return "";
   };
   const datosOC = () => ({
     pendienteSync: pendiente,
-    oc: datos,
+    oc: pendiente ? datos : { ...datos, contacto: contactoConFono(datos?.contacto, fono) },
     // Un enlace por producto vendido (alineados por posición; vacíos quedan «sin-link» en ese producto).
     links: cotSel ? links.map(l => l.trim()) : links.map(l => l.trim()).filter(Boolean),
     direccion_entrega: direccion.trim(),
@@ -347,6 +362,13 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
           <textarea style={{ ...iStyle, minHeight: 56, resize: "vertical" }} value={direccion}
             onChange={e => setDireccion(e.target.value)}
             placeholder="Dirección donde hay que entregar" />
+        </Field>
+      )}
+
+      {!pendiente && (
+        <Field label="Teléfono del contacto" hint={fonoDeContacto(oc.contacto) ? "Recibido desde Mercado Público" : "Opcional. Mercado Público no lo entrega automáticamente: cópialo desde la OC en el portal («Datos del Contacto para esta Compra»)."}>
+          <input data-telefono-contacto style={iStyle} type="tel" inputMode="tel" value={fono}
+            onChange={e => { setFono(e.target.value); setErr(""); }} placeholder="56-65-2240404" />
         </Field>
       )}
 

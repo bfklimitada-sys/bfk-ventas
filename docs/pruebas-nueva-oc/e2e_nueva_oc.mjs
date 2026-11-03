@@ -309,7 +309,13 @@ const sinDesborde = (p) => p.evaluate(() => { const d = document.querySelector('
   await m.locator("[data-crear-oc]").click(); await espera(p, 500);
   ok("N02_sigue_exigiendo_link", /al menos un link/.test(await m.innerText()) && escrituras(b, n).length === 0);
   await m.locator('input[placeholder="https://…"]').first().fill("https://tienda.cl/x");
+  // Teléfono del contacto: Mercado Público no lo entrega; se copia desde el portal y se valida.
+  ok("T01_campo_telefono_visible_vacio", (await m.locator("[data-telefono-contacto]").inputValue()) === "" && /no lo entrega automáticamente/.test(await m.innerText()));
+  await m.locator("[data-telefono-contacto]").fill("abc"); n = b.escr.length; await m.locator("[data-crear-oc]").click(); await espera(p, 500);
+  ok("T02_telefono_invalido_no_guarda", /solo admite números/.test(await m.innerText()) && escrituras(b, n).length === 0);
+  await m.locator("[data-telefono-contacto]").fill("56-65-2240404");
   n = b.escr.length; await m.locator("[data-crear-oc]").click(); await espera(p, 2500);
+  ok("T03_contacto_guardado_con_telefono", ocDe(b, "2600-80-SE26")?.contacto === "Ana · 56-65-2240404", ocDe(b, "2600-80-SE26")?.contacto);
   ok("N03_crea_oc_sin_tocar_cotizaciones_ni_compras", !!ocDe(b, "2600-80-SE26") && escrDesde(b, n, (w) => /^cz_|registrar_compra_oc/.test(w.tabla)).length === 0 && b.db.cotizaciones.every((c) => c.id === "c" ? c.oc_codigo === "OTRA-9-SE26" : !c.oc_codigo));
   m = await abrirNuevaOC(p, "2600-83-SE26");
   await m.locator('[data-usar-cotizacion="a"]').waitFor({ timeout: 8000 }).catch(() => {});
