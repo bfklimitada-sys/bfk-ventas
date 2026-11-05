@@ -90,3 +90,57 @@ Ensayo en copia restaurada del último respaldo: rama temporal `ensayo-inteligen
 4. Kevin (administrador): abrir Inteligencia Comercial y pulsar «Actualizar resultados» (primera sincronización).
 Reversión: `git revert` del commit en main; `BORRADOR-2026-11-04-inteligencia-comercial-deshacer.sql` (solo objetos ic_).
 Sin migración instalada la interfaz funciona en modo local (solo estados de las cotizaciones).
+
+---
+
+# Corrección de la sincronización y criterio de fecha (05/11/2026)
+
+**Estado: desarrollada y probada en local y en una copia restaurada (rama `correccion-inteligencia-sync`). NO publicada.
+Migración preparada, NO aplicada en producción.** Diagnóstico de origen: `bfk-respaldos`, rama
+`diagnostico-inteligencia-temporal`, `docs/registro-operaciones/diagnostico-inteligencia-temporal/EVIDENCIA.md`.
+
+## Qué cambia
+| | Antes | Ahora |
+|---|---|---|
+| HTTP 429 de ChileCompra | Detenía toda la sincronización («límite alcanzado») | Restricción temporal: espera y reintenta la misma consulta (2, 5, 10 s o `Retry-After`), baja el ritmo (×2, máx. 8 s) y, si insiste, pausa sugerida de 30 s y **continúa** |
+| Ritmo | 3 simultáneas, una cada 350 ms (hasta ~1,7/s) | 2 simultáneas, una cada 1,2 s (≈ 50/min), adaptativo (no es un límite oficial) |
+| Detalle «sin tiempo» / 429 / demora | Guardado «sin información», espera 30 min × 2ⁿ (máx. 24 h) | «Sin tiempo»: de inmediato; 429/demora/error: 1, 2, 4 … min (máx. 1 h); los por verificar van primero |
+| Navegador | Se detenía al primer 429 o error; máx. 30 rondas | Continúa tras pausas, espera reintentos próximos, cancelar/reanudar, topes (rondas, tiempo, pausas, sin avance) |
+| Mensajes | «N revisados, N con resultado nuevo» | Revisadas · ganadas · perdidas · en proceso · desiertas/canceladas · por verificar · sin respuesta; lo que queda |
+| Indicadores | Pendientes sin desglose; un aviso mezclado | Pendientes: sin consultar · en proceso · por verificar; «indicadores parciales»; ganadas sin regularizar aparte |
+| Fecha | Solo presentación | Presentación o adjudicación (fecha informada por ChileCompra), sin mezclar |
+| Estados (F) | id 5 = desierta, 6 = cancelada (no usado: el texto manda) | 6 = desierta (observado); cancelada según lo observado; un id no observado no se adivina |
+
+## Archivos
+| Archivo | Cambio |
+|---|---|
+| `api/inteligencia.mjs` | 429 con reintentos y ritmo adaptativo; pausa sugerida; `reintento_detalle`; conteo y ganadas nuevas; estado de la cola; `crearManejador` (dependencias reemplazables en pruebas) |
+| `src/lib/inteligenciaDatos.js` | Funciones v2 con respaldo a v1 y a modo local; ciclo de sincronización con pausas, cancelación y topes; control único por pestaña |
+| `src/lib/inteligenciaComercial.js` | Fecha de adjudicación, criterio, indicadores de cobertura y de avisos, exportación con criterio, estados (F) |
+| `src/lib/inteligenciaMensajes.js` (nuevo) | Textos del avance y del resultado |
+| `src/components/inteligencia/InteligenciaComercial.jsx`, `Graficos.jsx` | Selector «Fecha según», avance con pausa y «Cancelar», avisos separados, indicadores por criterio |
+| `docs/migraciones/BORRADOR-2026-11-05-inteligencia-sincronizacion.sql` (+ `-deshacer.sql`) | Solo funciones (ver encabezado). Sin cambios de tablas ni de filas |
+
+## Pruebas
+```
+node docs/pruebas-inteligencia/reglas.test.mjs                 # reglas, 429, ritmo, manejador HTTP, criterio, mensajes
+node docs/pruebas-inteligencia/sincronizacion.test.mjs         # ciclo del navegador con el servidor real (simulado)
+bash docs/pruebas-inteligencia/validar_sql.sh                  # migración del 04/11 (sin cambios)
+bash docs/pruebas-inteligencia/validar_sql_sincronizacion.sh   # migración del 05/11 + SQL = JS con ambos criterios
+node docs/pruebas-inteligencia/e2e_inteligencia.mjs http://127.0.0.1:4302/   # interfaz escritorio y celular
+```
+Ensayo real (copia restaurada del respaldo nuevo + ChileCompra real, solo lectura): `bfk-respaldos`, rama
+`correccion-inteligencia-temporal`.
+
+## Publicación (requiere autorización expresa de Kevin) y reversión
+1. Respaldo cifrado nuevo, verificado (SHA-256, descifrado, restauración).
+2. Migración `BORRADOR-2026-11-05-inteligencia-sincronizacion.sql` en una transacción (no cambia filas).
+3. Push normal del commit a `main` → Vercel; verificar READY.
+4. Kevin pulsa «Actualizar resultados» con el panel abierto (≈ 15 min la primera vez; se puede cancelar y reanudar).
+
+El orden 2 ↔ 3 es indiferente: la app nueva funciona con la base sin la corrección (usa las funciones del 04/11) y la
+app publicada hoy funciona con la base corregida (sus funciones no cambian).
+**Reversión**: app → `git revert` del commit (o «Instant Rollback» al despliegue anterior en Vercel); base →
+`BORRADOR-2026-11-05-inteligencia-sincronizacion-deshacer.sql` en una transacción (restaura exactamente las dos funciones
+del 04/11, elimina las cuatro nuevas, conserva todos los resultados). Debe ir antes de un eventual deshacer del 04/11
+(este falla mientras exista la corrección: protección intencional). Ningún dato se pierde en la reversión.

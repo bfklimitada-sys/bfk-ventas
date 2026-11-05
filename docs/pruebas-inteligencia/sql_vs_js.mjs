@@ -1,9 +1,10 @@
-// Comprueba que la vista ic_oportunidades y la función ic_resumen (PostgreSQL) dan EXACTAMENTE lo mismo que
+// Comprueba que la vista ic_oportunidades y las funciones ic_resumen/ic_detalle (o, si la corrección del 05/11/2026 está
+// instalada, ic_resumen_v2/ic_detalle_v2 con ambos criterios de fecha) dan EXACTAMENTE lo mismo que
 // construirOportunidades / filtrarOportunidades / resumirOportunidades (src/lib/inteligenciaComercial.js) sobre los
 // mismos datos. Una sola regla de negocio: si alguna difiere, la prueba falla.
 // Uso (lo llama validar_sql.sh): PGHOST=<dir> PGPORT=<puerto> node sql_vs_js.mjs <uid-admin>
 import { execFileSync } from "node:child_process";
-import { construirOportunidades, filtrarOportunidades, resumirOportunidades, periodoDe } from "../../src/lib/inteligenciaComercial.js";
+import { construirOportunidades, filtrarOportunidades, resumirOportunidades, resumenConCriterio, periodoDe } from "../../src/lib/inteligenciaComercial.js";
 
 const UID = process.argv[2];
 const q = (sql, comoUsuario = true) => {
@@ -28,9 +29,12 @@ const cot = q("select coalesce(json_agg(c), '[]') from public.cotizaciones c");
 const ver = q("select coalesce(json_agg(json_build_object('cotizacion_id', v.cotizacion_id, 'estado', v.contenido->>'estado', 'guardado_en', v.guardado_en)), '[]') from public.cotizacion_versiones v");
 const res = q("select coalesce(json_agg(r), '[]') from public.ic_resultados r");
 const js = construirOportunidades(cot, ver, res);
+const V2 = q("select to_json(to_regprocedure('public.ic_resumen_v2(date,date,text,text,text,text)') is not null)");
+console.log(`(modo ${V2 ? "v2: ic_resumen_v2 / ic_detalle_v2 con criterio de fecha" : "original: ic_resumen / ic_detalle"})`);
+const sinFA = (o) => { const { fecha_adjudicacion, ...x } = o; return x; };   // la vista no tiene la columna (se calcula en v2)
 const sql = q("select coalesce(json_agg(o order by o.clave), '[]') from public.ic_oportunidades o");
 ok("V01_misma_cantidad_de_oportunidades", sql.length === js.length, { sql: sql.length, js: js.length });
-const porClave = new Map(js.map((o) => [o.clave, o]));
+const porClave = new Map(js.map((o) => [o.clave, sinFA(o)]));
 let iguales = 0;
 for (const s of sql) { const j = porClave.get(s.clave); const d = j ? difs(s, j) : [{ k: "falta_en_js" }]; if (!d.length) iguales++; else ok(`V02_oportunidad_${s.clave}`, false, d); }
 ok(`V02_oportunidades_identicas_${iguales}_de_${sql.length}`, iguales === sql.length && sql.length === js.length);
@@ -51,15 +55,29 @@ const casos = [
   { n: "solo_perdidas", f: { resultado: "perdida" } },
   { n: "solo_pendientes", f: { resultado: "pendiente" } },
   { n: "solo_ganadas_noviembre", f: { resultado: "ganada", ...periodoDe({ tipo: "mes", anio: 2026, mes: 11 }) } },
+  ...(V2 ? [
+    { n: "ADJ_todo", f: { criterio: "adjudicacion" } },
+    { n: "ADJ_octubre_2026", f: { criterio: "adjudicacion", ...periodoDe({ tipo: "mes", anio: 2026, mes: 10 }) } },
+    { n: "ADJ_noviembre_2026", f: { criterio: "adjudicacion", ...periodoDe({ tipo: "mes", anio: 2026, mes: 11 }) } },
+    { n: "ADJ_31_octubre_limite", f: { criterio: "adjudicacion", desde: "2026-10-31", hasta: "2026-10-31" } },
+    { n: "ADJ_1_noviembre_utc", f: { criterio: "adjudicacion", desde: "2026-11-01", hasta: "2026-11-01" } },
+    { n: "ADJ_vendedora_dos", f: { criterio: "adjudicacion", vendedor: "Vendedora Dos" } },
+    { n: "ADJ_solo_ganadas", f: { criterio: "adjudicacion", resultado: "ganada" } },
+    { n: "ADJ_solo_pendientes_vacio", f: { criterio: "adjudicacion", resultado: "pendiente" } },
+    { n: "ADJ_institucion_hospital", f: { criterio: "adjudicacion", institucion: "hospital", ...periodoDe({ tipo: "anio", anio: 2026 }) } },
+    { n: "PRES_explicito_octubre", f: { criterio: "presentacion", ...periodoDe({ tipo: "mes", anio: 2026, mes: 10 }) } },
+  ] : []),
 ];
 const lit = (v) => (v === null || v === undefined ? "null" : `'${String(v).replace(/'/g, "''")}'`);
 for (const c of casos) {
   const f = c.f;
-  const s = q(`select public.ic_resumen(${lit(f.desde)}::date, ${lit(f.hasta)}::date, ${lit(f.institucion || "")}, ${lit(f.vendedor || "")}, ${lit(f.resultado || "")})`);
-  const j = resumirOportunidades(filtrarOportunidades(js, f), { desde: f.desde || null, hasta: f.hasta || null });
+  const s = V2 ? q(`select public.ic_resumen_v2(${lit(f.desde)}::date, ${lit(f.hasta)}::date, ${lit(f.institucion || "")}, ${lit(f.vendedor || "")}, ${lit(f.resultado || "")}, ${lit(f.criterio || "presentacion")})`)
+    : q(`select public.ic_resumen(${lit(f.desde)}::date, ${lit(f.hasta)}::date, ${lit(f.institucion || "")}, ${lit(f.vendedor || "")}, ${lit(f.resultado || "")})`);
+  const j = V2 ? resumenConCriterio(js, f) : resumirOportunidades(filtrarOportunidades(js, f), { desde: f.desde || null, hasta: f.hasta || null });
   const sComp = { ...s }; delete sComp.ultima_sincronizacion; delete sComp.ultima_consulta;
   const jComp = { ...j }; delete jComp.ultima_consulta;
-  const d = ["periodo", "indicadores", "por_mes", "competidores", "distribucion", "fuente"].filter((k) => !igual(sComp[k], jComp[k]));
+  if (!V2) { delete jComp.criterio; jComp.indicadores = Object.fromEntries(Object.keys(sComp.indicadores).map((k) => [k, jComp.indicadores[k]])); }
+  const d = ["periodo", ...(V2 ? ["criterio"] : []), "indicadores", "por_mes", "competidores", "distribucion", "fuente"].filter((k) => !igual(sComp[k], jComp[k]));
   ok(`R_${c.n}`, !d.length, d.map((k) => ({ k, sql: sComp[k], js: jComp[k] })));
 }
 
@@ -75,12 +93,18 @@ const detalles = [
   { n: "busqueda_rut_y_resultado", f: { resultado: "perdida" }, o: { q: "77.888", orden: "fecha_presentacion", desc: false, pagina: 0, porPagina: 50 } },
   { n: "busqueda_institucion_tilde", f: {}, o: { q: "angeles", orden: "fecha_presentacion", desc: true, pagina: 0, porPagina: 50 } },
   { n: "columna_no_permitida", f: {}, o: { orden: "cotizacion_id; drop table x", desc: true, pagina: 0, porPagina: 50 } },
+  ...(V2 ? [
+    { n: "ADJ_fecha_adjudicacion_desc", f: { criterio: "adjudicacion" }, o: { orden: "fecha_adjudicacion", desc: true, pagina: 0, porPagina: 50 } },
+    { n: "ADJ_noviembre_oferta_asc", f: { criterio: "adjudicacion", ...periodoDe({ tipo: "mes", anio: 2026, mes: 11 }) }, o: { orden: "oferta_total", desc: false, pagina: 0, porPagina: 50 } },
+    { n: "PRES_fecha_adjudicacion_asc_nulos_al_final", f: {}, o: { orden: "fecha_adjudicacion", desc: false, pagina: 0, porPagina: 50 } },
+  ] : []),
 ];
 const { ordenarPaginar } = await import("../../src/lib/inteligenciaComercial.js");
 for (const c of detalles) {
   const f = c.f, o = c.o;
-  const s = q(`select public.ic_detalle(${lit(f.desde)}::date, ${lit(f.hasta)}::date, ${lit(f.institucion || "")}, ${lit(f.vendedor || "")}, ${lit(f.resultado || "")}, ${lit(o.q || "")}, ${lit(o.orden)}, ${o.desc}, ${o.porPagina}, ${o.pagina * o.porPagina})`);
-  const j = ordenarPaginar(filtrarOportunidades(js, f), o);
+  const s = V2 ? q(`select public.ic_detalle_v2(${lit(f.desde)}::date, ${lit(f.hasta)}::date, ${lit(f.institucion || "")}, ${lit(f.vendedor || "")}, ${lit(f.resultado || "")}, ${lit(f.criterio || "presentacion")}, ${lit(o.q || "")}, ${lit(o.orden)}, ${o.desc}, ${o.porPagina}, ${o.pagina * o.porPagina})`)
+    : q(`select public.ic_detalle(${lit(f.desde)}::date, ${lit(f.hasta)}::date, ${lit(f.institucion || "")}, ${lit(f.vendedor || "")}, ${lit(f.resultado || "")}, ${lit(o.q || "")}, ${lit(o.orden)}, ${o.desc}, ${o.porPagina}, ${o.pagina * o.porPagina})`);
+  const j0 = ordenarPaginar(filtrarOportunidades(js, f), o); const j = V2 ? j0 : { ...j0, filas: j0.filas.map(sinFA) };
   const okFilas = s.filas.length === j.filas.length && s.filas.every((x, i) => igual(x, j.filas[i]));
   ok(`D_${c.n}`, s.total === j.total && okFilas, { total: [s.total, j.total], sql: s.filas.map((x) => x.clave), js: j.filas.map((x) => x.clave) });
 }

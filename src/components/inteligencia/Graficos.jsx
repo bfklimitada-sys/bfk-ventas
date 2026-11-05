@@ -104,7 +104,7 @@ export function Dona({ datos, onSeleccionar, activo }) {
 }
 
 // 3. Línea: evolución mensual (cotizaciones presentadas, ganadas y perdidas), con cursor y rótulo por mes.
-export function LineaMensual({ meses, series }) {
+export function LineaMensual({ meses, series, nota = "Cotizaciones presentadas y adjudicaciones por mes de presentación" }) {
   const rot = useRotulo(); const [sel, setSel] = useState(null);
   const W = 340, H = 160, L = 26, Bo = 20, max = Math.max(1, ...meses.flatMap((m) => series.map((s) => m[s.k] || 0))); const { tope, paso } = escala(max);
   const x = (i) => L + (meses.length === 1 ? (W - L) / 2 : 8 + (i * (W - L - 16)) / (meses.length - 1)); const y = (v) => H - (v / tope) * (H - 14);
@@ -115,7 +115,7 @@ export function LineaMensual({ meses, series }) {
     rot.mostrar(e, <><b>{mesCorto(m.mes)}</b>{series.map((s) => <div key={s.k}><span style={{ display: "inline-block", width: 8, height: 3, background: s.color, marginRight: 5, verticalAlign: "middle" }} />{s.label}: {m[s.k] || 0}</div>)}</>);
   };
   return (
-    <Marco titulo="Evolución mensual" nota="Cotizaciones presentadas y adjudicaciones por mes de presentación" dato="linea-mensual" rot={rot}>
+    <Marco titulo="Evolución mensual" nota={nota} dato="linea-mensual" rot={rot}>
       {!meses.length ? <Vacio /> : (<>
         <svg viewBox={`0 0 ${W} ${H + Bo}`} width="100%" style={{ maxHeight: 240, display: "block", margin: "0 auto" }} role="img" aria-label={meses.map((m) => `${mesCorto(m.mes)}: ${series.map((s) => `${s.label} ${m[s.k] || 0}`).join(", ")}`).join("; ")}
           onMouseMove={elegir} onTouchStart={elegir} onMouseLeave={() => { setSel(null); rot.ocultar(); }}>

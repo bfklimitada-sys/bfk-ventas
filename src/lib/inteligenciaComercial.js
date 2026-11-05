@@ -16,9 +16,14 @@
 // tributaria (afecta/afecta o exenta/exenta). Se compara el TOTAL a pagar por el comprador: BFK (neto + IVA, despacho
 // incluido en los unitarios, modalidad A) vs adjudicado (neto + impuesto + despacho informado por ChileCompra).
 // Nunca se usa el presupuesto del comprador.
+// Criterio de fecha (05/11/2026, E1): «presentacion» (fecha de la primera versión presentada, hora de Chile) o
+// «adjudicacion» (fecha del resultado informada por ChileCompra: último cambio al quedar seleccionado, desierto o
+// cancelado). Con el criterio de adjudicación solo cuentan las oportunidades con resultado y fecha informados; las
+// pendientes no tienen fecha de adjudicación y se informan aparte. Los dos criterios nunca se mezclan.
 //
-// Esta lógica es la MISMA que la vista ic_oportunidades y la función ic_resumen de
-// docs/migraciones/BORRADOR-2026-11-04-inteligencia-comercial.sql (la prueba sql_vs_js lo comprueba). La versión en
+// Esta lógica es la MISMA que la vista ic_oportunidades y las funciones ic_resumen_v2 / ic_detalle_v2 de
+// docs/migraciones/BORRADOR-2026-11-04-inteligencia-comercial.sql y BORRADOR-2026-11-05-inteligencia-sincronizacion.sql
+// (la prueba sql_vs_js lo comprueba). La versión en
 // JavaScript se usa (a) en el servidor para normalizar la respuesta de ChileCompra y (b) en el navegador cuando la
 // migración todavía no está instalada (solo con los estados de las cotizaciones: sin resultados externos).
 // ═══════════════════════════════════════════════════════════════
@@ -41,6 +46,9 @@ export const FINALES = ["ganada", "perdida", "desierta", "cancelada", "sin_ofert
 export const NO_DISPONIBLE = "Información no disponible";
 export const POR_VERIFICAR = "Resultado pendiente de verificar";
 export const FUENTE_OFICIAL = "API Compra Ágil v2 (ChileCompra)";
+export const CRITERIOS = { presentacion: "Fecha de presentación", adjudicacion: "Fecha de adjudicación" };
+export const criterioDe = (c) => (c === "adjudicacion" ? "adjudicacion" : "presentacion");
+const campoFecha = (c) => (criterioDe(c) === "adjudicacion" ? "fecha_adjudicacion" : "fecha_presentacion");
 
 // RUT sin puntos ni guion, en mayúsculas ("77.322.317-3" → "773223173"). Igual que ic_rut_norm() en SQL.
 export const rutNorm = (r) => String(r ?? "").replace(/[^0-9kK]/g, "").toUpperCase();
@@ -52,7 +60,11 @@ const num = (v) => { if (v === null || v === undefined || v === "") return null;
 const txt = (v) => (v === null || v === undefined ? "" : String(v).trim());
 
 // ── Normalización de la respuesta oficial (servidor) ─────────────────────────
-const POR_ID = { 2: "publicada", 3: "cerrada", 4: "proveedor_seleccionado", 5: "desierta", 6: "cancelada", 7: "oc_emitida" };
+// id_estado observados en la API real (diagnóstico y ensayo del 04-05/11/2026, 2020-221-COT26 cancelada): 2 publicada ·
+// 3 cerrada · 4 proveedor seleccionado · 5 cancelada · 6 desierta. El texto «codigo» siempre tiene prioridad; el número
+// solo se usa si falta el texto. Un id no observado (p. ej. 7) NO se adivina: queda «sin_informacion».
+export const CANCELADA_ID = 5;
+const POR_ID = { 2: "publicada", 3: "cerrada", 4: "proveedor_seleccionado", 6: "desierta", [CANCELADA_ID]: "cancelada" };
 export function estadoProcesoDe(estado) {
   if (estado === null || estado === undefined) return "sin_informacion";
   if (typeof estado === "number") return POR_ID[estado] || "sin_informacion";
@@ -119,6 +131,15 @@ export function normalizarResultadoMP(codigo, item, detalle = null, { detalleErr
   return p;
 }
 
+// Fecha (AAAA-MM-DD) tal como la informa ChileCompra: se toma la fecha calendario del valor guardado (UTC en la base),
+// igual que (fecha_resultado at time zone 'UTC')::date en SQL. Solo para resultados finales.
+export function fechaInformada(v) {
+  if (!v) return null; const s = String(v).trim();
+  if (!/([zZ]|[+-]\d{2}:?\d{2})$/.test(s)) return /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : null;
+  const d = new Date(s); return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
+}
+export const fechaAdjudicacionDe = (resultado, fecha_resultado) => (FINALES.includes(resultado) ? fechaInformada(fecha_resultado) : null);
+
 // ── Oportunidades (misma lógica que la vista ic_oportunidades) ───────────────
 const PRIORIDAD = { adjudicada: 1, no_adjudicada: 2, presentada: 3 };
 export function fechaChile(iso) {
@@ -171,7 +192,7 @@ export function construirOportunidades(cotizaciones = [], versiones = [], result
       adjudicatario_rut: r?.adjudicatario_rut ?? null, adjudicatario_nombre: r?.adjudicatario_nombre ?? null,
       adjudicado_neto: r?.monto_neto == null ? null : Number(r.monto_neto), adjudicado_impuesto: r?.monto_impuesto == null ? null : Number(r.monto_impuesto),
       adjudicado_despacho: r?.monto_despacho == null ? null : Number(r.monto_despacho), adjudicado_total: adjTot, moneda: r?.moneda ?? null, adjudicado_base: r?.base_tributaria ?? null,
-      fecha_resultado: r?.fecha_resultado ?? null, fuente: r?.fuente ?? null, detalle_consultado: r?.detalle_consultado ?? null, consultado_en: r?.consultado_en ?? null,
+      fecha_resultado: r?.fecha_resultado ?? null, fecha_adjudicacion: fechaAdjudicacionDe(resultado, r?.fecha_resultado), fuente: r?.fuente ?? null, detalle_consultado: r?.detalle_consultado ?? null, consultado_en: r?.consultado_en ?? null,
       verificado_en: r?.verificado_en ?? null, consulta_estado: r?.consulta_estado ?? null, consulta_error: r?.consulta_error ?? null, motivo: r?.motivo ?? null,
       resultado, fuente_resultado, verificacion, aviso, comparable,
       motivo_no_comparable: comparable ? null : motivo_no_comparable,
@@ -197,10 +218,12 @@ export function periodoDe(p) {
 }
 // Igual que cz_clave_nombre() en SQL: sin tildes, sin distinguir mayúsculas, espacios simples.
 const normalTexto = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
-// filtros: { desde, hasta, institucion, vendedor ("" | nombre | "__sin__"), resultado }
+// filtros: { desde, hasta, institucion, vendedor ("" | nombre | "__sin__"), resultado, criterio ("presentacion" | "adjudicacion") }
+// Con el criterio de adjudicación quedan fuera las oportunidades sin fecha de adjudicación (aunque no haya período).
 export function filtrarOportunidades(filas, f = {}) {
   const inst = normalTexto(f.institucion), vend = f.vendedor || "", res = f.resultado || "";
-  return filas.filter((o) => (!f.desde || (o.fecha_presentacion && o.fecha_presentacion >= f.desde)) && (!f.hasta || (o.fecha_presentacion && o.fecha_presentacion <= f.hasta))
+  const k = campoFecha(f.criterio), adj = k === "fecha_adjudicacion";
+  return filas.filter((o) => (!adj || o.fecha_adjudicacion) && (!f.desde || (o[k] && o[k] >= f.desde)) && (!f.hasta || (o[k] && o[k] <= f.hasta))
     && (!inst || normalTexto(o.institucion).includes(inst))
     && (!vend || (vend === "__sin__" ? !o.vendedor_nombre : normalTexto(o.vendedor_nombre) === normalTexto(vend)))
     && (!res || o.resultado === res));
@@ -213,8 +236,10 @@ export function mediana(xs) {
 export const r1 = (x) => (x === null || x === undefined || !Number.isFinite(x) ? null : Math.sign(x) * Math.round(Math.abs(x) * 10 + 1e-9) / 10);
 const mesDe = (f) => (f ? String(f).slice(0, 7) : null);
 
-// Resumen del período (misma forma que ic_resumen). filas: oportunidades YA filtradas.
-export function resumirOportunidades(filas, { desde = null, hasta = null } = {}) {
+// Resumen del período (misma forma que ic_resumen_v2). filas: oportunidades YA filtradas (con el mismo criterio).
+// sinFechaAdjudicacion: oportunidades con resultado final que no tienen fecha informada (solo con criterio de adjudicación).
+export function resumirOportunidades(filas, { desde = null, hasta = null, criterio = "presentacion", sinFechaAdjudicacion = 0 } = {}) {
+  const crit = criterioDe(criterio); const kf = campoFecha(crit);
   const cuenta = (r) => filas.filter((o) => o.resultado === r).length;
   const pres = filas.filter((o) => o.resultado !== "sin_oferta_bfk");
   const gan = filas.filter((o) => o.resultado === "ganada"), per = filas.filter((o) => o.resultado === "perdida");
@@ -234,10 +259,16 @@ export function resumirOportunidades(filas, { desde = null, hasta = null } = {})
     diferencia_pct_mediana: r1(mediana(comp.map((o) => o.diferencia_pct))),
     perdidas_sin_adjudicatario: per.filter((o) => !o.adjudicatario_rut).length,
     avisos: filas.filter((o) => o.aviso).length,
+    // Cobertura (D): cuántas pendientes aún no tienen resultado de ChileCompra, y avisos separados por tipo.
+    sin_consultar: filas.filter((o) => o.resultado === "pendiente" && o.verificacion === "sin_consultar").length,
+    en_proceso: filas.filter((o) => o.resultado === "pendiente" && o.verificacion === "en_proceso").length,
+    ganadas_sin_regularizar: filas.filter((o) => o.estado_cotizacion === "presentada" && o.resultado === "ganada" && o.resultado_externo === "ganada").length,
+    otros_avisos: filas.filter((o) => o.aviso && !(o.estado_cotizacion === "presentada" && o.resultado_externo === "ganada")).length,
+    criterio: crit, sin_fecha_adjudicacion: crit === "adjudicacion" ? sinFechaAdjudicacion : 0,
   };
-  const meses = [...new Set(filas.map((o) => mesDe(o.fecha_presentacion)).filter(Boolean))].sort();
+  const meses = [...new Set(filas.map((o) => mesDe(o[kf])).filter(Boolean))].sort();
   const por_mes = meses.map((m) => {
-    const xs = filas.filter((o) => mesDe(o.fecha_presentacion) === m); const cs = xs.filter((o) => o.comparable);
+    const xs = filas.filter((o) => mesDe(o[kf]) === m); const cs = xs.filter((o) => o.comparable);
     const n = (r) => xs.filter((o) => o.resultado === r).length;
     return { mes: m, presentadas: xs.filter((o) => o.resultado !== "sin_oferta_bfk").length, ganadas: n("ganada"), perdidas: n("perdida"), pendientes: n("pendiente"),
       otras: n("desierta") + n("cancelada"), ofertado_neto: suma(xs.filter((o) => o.resultado !== "sin_oferta_bfk"), "oferta_neto"), ganado_neto: suma(xs.filter((o) => o.resultado === "ganada"), "oferta_neto"),
@@ -255,11 +286,18 @@ export function resumirOportunidades(filas, { desde = null, hasta = null } = {})
     .map(({ k, ...c }) => ({ ...c, nombre: c.nombre || NO_DISPONIBLE }));
   const distribucion = Object.keys(RESULTADOS).map((r) => ({ resultado: r, n: cuenta(r) })).filter((x) => x.n > 0);
   const ult = filas.map((o) => o.consultado_en).filter(Boolean).sort().slice(-1)[0] || null;
-  return { periodo: { desde, hasta }, indicadores, por_mes, competidores, distribucion, ultima_consulta: ult, fuente: FUENTE_OFICIAL };
+  return { periodo: { desde, hasta }, criterio: crit, indicadores, por_mes, competidores, distribucion, ultima_consulta: ult, fuente: FUENTE_OFICIAL };
+}
+// Filtro + resumen con el criterio pedido (modo sin base y pruebas). todas: oportunidades sin filtrar.
+export function resumenConCriterio(todas, f = {}) {
+  const crit = criterioDe(f.criterio);
+  const sinFechaAdjudicacion = crit === "adjudicacion"
+    ? filtrarOportunidades(todas, { ...f, desde: null, hasta: null, criterio: "presentacion" }).filter((o) => FINALES.includes(o.resultado) && !o.fecha_adjudicacion).length : 0;
+  return resumirOportunidades(filtrarOportunidades(todas, { ...f, criterio: crit }), { desde: f.desde || null, hasta: f.hasta || null, criterio: crit, sinFechaAdjudicacion });
 }
 
 // ── Orden y paginación del detalle (modo sin migración) ───────────────────────
-export const COLUMNAS_ORDEN = ["fecha_presentacion", "codigo", "institucion", "vendedor_nombre", "oferta_total", "resultado", "adjudicatario_nombre", "adjudicado_total", "diferencia", "diferencia_pct"];
+export const COLUMNAS_ORDEN = ["fecha_presentacion", "fecha_adjudicacion", "codigo", "institucion", "vendedor_nombre", "oferta_total", "resultado", "adjudicatario_nombre", "adjudicado_total", "diferencia", "diferencia_pct"];
 export function ordenarPaginar(filas, { q = "", orden = "fecha_presentacion", desc = true, pagina = 0, porPagina = 15 } = {}) {
   const t = normalTexto(q);
   const xs = t ? filas.filter((o) => [o.codigo, o.institucion, o.descripcion, o.adjudicatario_nombre, o.adjudicatario_rut, o.vendedor_nombre].some((v) => normalTexto(v).includes(t))) : filas.slice();
@@ -278,7 +316,8 @@ export function ordenarPaginar(filas, { q = "", orden = "fecha_presentacion", de
 const pesos = (n) => (n === null || n === undefined ? "" : Math.round(Number(n)));
 export function filasDetalleExport(filas) {
   return filas.map((o) => ({
-    "Código Compra Ágil": o.codigo || "(sin código)", "Fecha de presentación": o.fecha_presentacion || "", "Institución compradora": o.institucion || "", "Descripción": o.descripcion || "",
+    "Código Compra Ágil": o.codigo || "(sin código)", "Fecha de presentación": o.fecha_presentacion || "", "Fecha de adjudicación (ChileCompra)": o.fecha_adjudicacion || "",
+    "Institución compradora": o.institucion || "", "Descripción": o.descripcion || "",
     "Vendedor BFK": o.vendedor_nombre || "(sin vendedor)", "Ofertado BFK neto": pesos(o.oferta_neto), "Ofertado BFK IVA": pesos(o.oferta_impuesto), "Ofertado BFK total": pesos(o.oferta_total),
     "Base tributaria BFK": o.oferta_base, "Estado cotización": o.estado_cotizacion, "Estado del proceso (ChileCompra)": o.estado_proceso || NO_DISPONIBLE,
     "Resultado": RESULTADOS[o.resultado]?.label || o.resultado, "Fuente del resultado": o.fuente_resultado,
@@ -293,11 +332,15 @@ export function hojasInforme(resumen, filas, { generado = new Date().toISOString
   const i = resumen.indicadores; const p = resumen.periodo;
   const res = [
     ["Informe", "Inteligencia Comercial de Compra Ágil — BFK"], ["Período desde", p.desde || "(inicio)"], ["Período hasta", p.hasta || "(hoy)"],
+    ["Criterio de fecha", CRITERIOS[criterioDe(resumen.criterio || i.criterio)]],
     ["Generado", generado], ["Última sincronización con ChileCompra", ultimaSincronizacion || NO_DISPONIBLE], ["Fuente oficial", FUENTE_OFICIAL],
     ["Modo", modo === "base" ? "Base de datos (resultados verificados)" : "Solo estados de las cotizaciones (migración no instalada)"], [],
     ["Cotizaciones presentadas", i.presentadas], ["Monto ofertado neto", pesos(i.monto_ofertado_neto)], ["Monto ofertado IVA", pesos(i.monto_ofertado_impuesto)], ["Monto ofertado total", pesos(i.monto_ofertado_total)],
     ["Ganadas", i.ganadas], ["Monto ganado neto (precio ofertado)", pesos(i.monto_ganado_neto)], ["Monto ganado total", pesos(i.monto_ganado_total)],
-    ["Perdidas", i.perdidas], ["Pendientes", i.pendientes], ["  de ellas por verificar", i.pendientes_por_verificar], ["Desiertas", i.desiertas], ["Canceladas", i.canceladas], ["BFK no figura entre las ofertas", i.sin_oferta_bfk],
+    ["Perdidas", i.perdidas], ["Pendientes", i.pendientes], ["  de ellas sin consultar en ChileCompra", i.sin_consultar ?? ""], ["  de ellas en proceso (abiertas o en evaluación)", i.en_proceso ?? ""],
+    ["  de ellas por verificar (ganador aún no confirmado)", i.pendientes_por_verificar], ["Desiertas", i.desiertas], ["Canceladas", i.canceladas], ["BFK no figura entre las ofertas", i.sin_oferta_bfk],
+    ["Ganadas según ChileCompra que siguen «presentadas» en Cotizaciones", i.ganadas_sin_regularizar ?? ""],
+    ...(criterioDe(resumen.criterio || i.criterio) === "adjudicacion" ? [["Resultados sin fecha de adjudicación informada (no incluidos)", i.sin_fecha_adjudicacion ?? 0]] : []),
     ["Tasa de éxito % = ganadas / (ganadas + perdidas)", i.tasa_exito ?? "Sin ganadas ni perdidas"],
     ["Perdidas comparables (misma base tributaria)", i.comparables], ["Diferencia total (BFK − adjudicado)", i.diferencia_total == null ? NO_DISPONIBLE : pesos(i.diferencia_total)],
     ["Diferencia % ponderada", i.diferencia_pct_ponderada ?? NO_DISPONIBLE], ["Diferencia % mediana", i.diferencia_pct_mediana ?? NO_DISPONIBLE],
@@ -312,8 +355,8 @@ const csvCampo = (v) => { const s = v === null || v === undefined ? "" : String(
 // CSV con separador «;» (Excel en español) y BOM UTF-8. Encabezado con el período y las fechas.
 export function csvInforme(resumen, filas, meta = {}) {
   const h = hojasInforme(resumen, filas, meta); const det = h.Oportunidades;
-  const cab = h.Resumen.filter((r) => r.length).slice(0, 7).map((r) => r.map(csvCampo).join(";"));
+  const cab = h.Resumen.filter((r) => r.length).slice(0, 8).map((r) => r.map(csvCampo).join(";"));
   const cols = det.length ? Object.keys(det[0]) : Object.keys(filasDetalleExport([{ resultado: "pendiente" }])[0]);
   return "﻿" + [...cab, "", cols.map(csvCampo).join(";"), ...det.map((f) => cols.map((c) => csvCampo(f[c])).join(";"))].join("\r\n");
 }
-export const nombreArchivo = (p, ext) => `inteligencia-comercial_${p?.desde || "inicio"}_${p?.hasta || "hoy"}.${ext}`;
+export const nombreArchivo = (p, ext, criterio = "presentacion") => `inteligencia-comercial${criterioDe(criterio) === "adjudicacion" ? "_adjudicacion" : ""}_${p?.desde || "inicio"}_${p?.hasta || "hoy"}.${ext}`;
