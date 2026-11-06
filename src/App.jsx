@@ -55,7 +55,17 @@ import { listarBorradores } from "./lib/borradoresCotizacion";
 import { buscarCotizacionesDeOC, cargarCotizacionLectura, cotizacionesCandidatasOC, buscarCotizacionesTexto, vincularCotizacionOC } from "./lib/cotizacionesDatos";
 import { etiquetaCategoria, etiquetaPrioridad, etiquetaEstado, etiquetaSeguimiento } from "./lib/seguimientos";
 import { idFilaCompra, idFilaDespacho, marcaPedido, filaProtegida, esEventoDePedido } from "./lib/compraCotizacion";
-import { BarraInferior, BarraLateral, MenuMas, contarAlertas, useEsEscritorio } from "./components/ui/Navegacion";
+import { BarraInferior, BarraLateral, MenuMas, MenuNuevo, contarAlertas, useEsEscritorio } from "./components/ui/Navegacion";
+// Ventas privadas (06/11/2026): línea VP fuera de Mercado Público (clientes, cotizaciones, órdenes de venta, EETT).
+import { cargarVentasPrivadas } from "./lib/ventasPrivadasDatos";
+import { alertasVP, eventosAgendaVP } from "./lib/ventasPrivadas";
+import { PanelClientes } from "./components/ventas/PanelClientes";
+import { PanelCotizacionesPrivadas } from "./components/ventas/PanelCotizacionesPrivadas";
+import { PanelOrdenesVenta } from "./components/ventas/PanelOrdenesVenta";
+import { NuevaVentaPrivada } from "./components/ventas/NuevaVenta";
+import { CanalFiltro } from "./components/ventas/Comunes";
+import { ResumenVentasPrivadas, FinanzasPorCanal } from "./components/ventas/ResumenCanales";
+import { ConfigVentasPrivadas } from "./components/ventas/ConfigVentasPrivadas";
 
 // Pantallas, grupos, direcciones (#/ruta) y permisos: una sola definición en lib/navegacion.js.
 export const TABS=PANTALLAS.map(p=>({key:p.key,label:p.label,icon:<Ic n={p.icono}/>,adminOnly:!!p.adminOnly}));
@@ -109,6 +119,11 @@ export default function App() {
   const [ultimaCartola,setUltimaCartola]=useState(null);
   const [saldoBanco,setSaldoBanco]=useState(null);
   const [bancoMensual,setBancoMensual]=useState([]);
+  // Ventas privadas: listas livianas (clientes, cotizaciones, ventas y márgenes visibles para el usuario). instalado=false si falta la migración.
+  const [vp,setVp]=useState({instalado:false,clientes:[],cotizaciones:[],ventas:[],margenes:[],empresa:{},documentosHabilitados:false});
+  const [vpFoco,setVpFoco]=useState(null);     // {tab,id}: abrir una cotización, venta o cliente desde Alertas, Agenda o Inicio
+  const [vpNueva,setVpNueva]=useState(0);      // «+ Nuevo › Cotización privada»
+  const [canal,setCanal]=useState("todos");    // filtro de canal compartido por Inicio, Alertas, Agenda y Finanzas
 
   const showToast=(msg,type="success")=>{ setToast({msg,type}); setTimeout(()=>setToast(null),3000); };
   // Contactos institucionales: tras guardar o sincronizar una OC, la base compara sus correos con los de la institución
@@ -410,6 +425,13 @@ export default function App() {
     } catch(e){ showToast(e.message,"error"); }
   };
   useEffect(()=>{ if(autorizado) cargarTodo(); },[autorizado,session]);
+  // Ventas privadas: carga independiente (si falla, Mercado Público sigue igual).
+  const cargarVP=async()=>{
+    const t=sesionRef.current?.access_token; if(!t||!perfilRef.current) return;
+    try{ const r=await cargarVentasPrivadas(t); setVp(r); }catch(e){ showToast(`Ventas privadas: ${e.message}`,"error"); }
+  };
+  useEffect(()=>{ if(autorizado) cargarVP(); },[autorizado,session]); // eslint-disable-line react-hooks/exhaustive-deps
+  const abrirVP=(t,id)=>{ setMenuMas(false); setVpFoco({tab:t,id}); setTab(t); };
   // Correos de BFK: se refrescan cada 5 minutos con la app abierta (la sincronización con Gmail corre aparte, cada hora).
   useEffect(()=>{
     if(!autorizado) return;
@@ -419,7 +441,7 @@ export default function App() {
 
   useEffect(()=>{
     if(!autorizado) return;
-    const handleVisible=()=>{ if(document.visibilityState==="visible") cargarTodo(); };
+    const handleVisible=()=>{ if(document.visibilityState==="visible"){ cargarTodo(); cargarVP(); } };
     document.addEventListener("visibilitychange",handleVisible);
     return()=>document.removeEventListener("visibilitychange",handleVisible);
   },[autorizado,session]);
@@ -1973,26 +1995,37 @@ export default function App() {
   const esAdminNav=perfil?.rol==="admin";
   const visibles=entradasPara(esAdminNav);
   const pestanasHub=pantalla.hub?pestanasDe(pantalla.hub,esAdminNav):null;
-  const nAlertas=contarAlertas(notificaciones,alertasUrgentes)+contarCorreosAccion(correosBfk);
+  const alertasPrivadas=alertasVP(vp);
+  const nAlertas=contarAlertas(notificaciones,alertasUrgentes+alertasPrivadas.filter(a=>a.nivel==="alto").length)+contarCorreosAccion(correosBfk);
   const salir=()=>{ setMenuMas(false); handleLogout(); };
-  const nuevaOC=()=>{ setMenuMas(false); setAccion("compra_oc"); };
+  // «+ Nuevo»: cotización privada · venta privada / OC de cliente · OC de Mercado Público (el flujo de siempre).
+  const nuevo=(k)=>{ setMenuMas(false);
+    if(k==="mp_oc") setAccion("compra_oc");
+    else if(k==="vp_cotizacion"){ setTab("vp_cotizaciones"); setVpNueva(n=>n+1); }
+    else if(k==="vp_venta") setAccion("vp_venta");
+  };
+  const vpProps={token:session?.access_token,perfil,vp,onRecargar:cargarVP,showToast,onAbrir:abrirVP};
 
   const contenidoPantallas=(
     <ModoTodoContext.Provider value={todo}><ContactosContext.Provider value={ctxContactos}>
       {pestanasHub&&!todo&&<Pestanas etiqueta={HUBS[pantalla.hub].label} variante="subrayado" activa={tab} onCambiar={irA} items={pestanasHub.map(p=>({key:p.key,label:p.label,attrs:{"data-nav":p.key,"aria-current":tab===p.key?"page":undefined}}))} />}
-      {(tab==="panel"||todo)&&hoja("panel",<PanelDashboard tokenSesion={()=>sesionRef.current?.access_token||null} onQuitarAlertaCartola={handleQuitarAlertaCartola} onBuscarCompras={(q)=>{setBusquedaCompras(q);setFiltroCompras(null);setOcFoco(null);setVolverA(null);setTab("compras");}} ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} aportes={aportes} ajustes={ajustesSaldo} categorias={categoriasGasto} perfil={perfil} onExportarTodo={handleExportarTodo} exportando={exportando} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setVolverA(null);setTab(t);}} onAccion={(k)=>setAccion(k)} onSincronizar={completarTodasDesdeMP} onCorregirFechas={corregirFechasTodas} sincronizando={sincronizando} porAceptar={porAceptar.filter(a=>!buscarDuplicadoOC(a.numero_oc))} onActualizarPorAceptar={revisarPorAceptar} verificandoPorAceptar={verificandoPorAceptar} aceptadasSinCargar={aceptadasSinCargar.filter(a=>!buscarDuplicadoOC(a.numero_oc))} onCargarOC={(numero)=>{setCodigoOcRapida(numero);setAccion("compra_oc");}} onCargarTodasAceptadas={handleCargarTodasAceptadas} cargandoAceptadas={cargandoAceptadas} onActualizarAceptadas={revisarAceptadasSinCargar} verificandoAceptadas={verificandoAceptadas} canceladasEnMP={canceladasEnMP.filter(c=>ocs.some(o=>o.id===c.id))} onArchivarCancelada={(id)=>handleArchivarOC(id,"Cancelada en Mercado Público")} onActualizarCanceladas={revisarCanceladasEnMP} verificandoCanceladas={verificandoCanceladas} onValidarTodo={validarTodoContraMP} validandoTodo={validandoTodo} usoMP={usoMP} actMP={actMP} esCodigoMP={esCodigoMP} ultimaCartola={ultimaCartola} saldoBanco={saldoBanco} bancoMensual={bancoMensual} onEditarSaldo={()=>setAccion("saldo_banco")} />)}
+      {(tab==="panel"||todo)&&hoja("panel",<>{!todo&&<CanalFiltro valor={canal} onCambiar={setCanal} dato="inicio" />}{canal!=="mp"&&!todo&&<ResumenVentasPrivadas vp={vp} periodo="todo" compacto={canal==="todos"} onIr={(t)=>{ if(t==="notif") setFiltroAlertas({nivel:"todas",etapa:null}); irA(t); }} />}{(canal!=="vp"||todo)&&<PanelDashboard tokenSesion={()=>sesionRef.current?.access_token||null} onQuitarAlertaCartola={handleQuitarAlertaCartola} onBuscarCompras={(q)=>{setBusquedaCompras(q);setFiltroCompras(null);setOcFoco(null);setVolverA(null);setTab("compras");}} ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} aportes={aportes} ajustes={ajustesSaldo} categorias={categoriasGasto} perfil={perfil} onExportarTodo={handleExportarTodo} exportando={exportando} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setVolverA(null);setTab(t);}} onAccion={(k)=>setAccion(k)} onSincronizar={completarTodasDesdeMP} onCorregirFechas={corregirFechasTodas} sincronizando={sincronizando} porAceptar={porAceptar.filter(a=>!buscarDuplicadoOC(a.numero_oc))} onActualizarPorAceptar={revisarPorAceptar} verificandoPorAceptar={verificandoPorAceptar} aceptadasSinCargar={aceptadasSinCargar.filter(a=>!buscarDuplicadoOC(a.numero_oc))} onCargarOC={(numero)=>{setCodigoOcRapida(numero);setAccion("compra_oc");}} onCargarTodasAceptadas={handleCargarTodasAceptadas} cargandoAceptadas={cargandoAceptadas} onActualizarAceptadas={revisarAceptadasSinCargar} verificandoAceptadas={verificandoAceptadas} canceladasEnMP={canceladasEnMP.filter(c=>ocs.some(o=>o.id===c.id))} onArchivarCancelada={(id)=>handleArchivarOC(id,"Cancelada en Mercado Público")} onActualizarCanceladas={revisarCanceladasEnMP} verificandoCanceladas={verificandoCanceladas} onValidarTodo={validarTodoContraMP} validandoTodo={validandoTodo} usoMP={usoMP} actMP={actMP} esCodigoMP={esCodigoMP} ultimaCartola={ultimaCartola} saldoBanco={saldoBanco} bancoMensual={bancoMensual} onEditarSaldo={()=>setAccion("saldo_banco")} />}</>)}
       {(tab==="compras"||todo)&&hoja("compras",<>{!todo&&volverA==="notif"&&<button onClick={()=>{setVolverA(null);setTab("notif");}} style={{width:"100%",textAlign:"left",background:C.tealLight,color:C.tealDark,border:"none",borderRadius:12,padding:"10px 12px",marginBottom:10,fontWeight:800,fontSize:13,minHeight:44,cursor:"pointer"}}>← Volver a Alertas</button>}<PanelCompras key={"compras-"+reinicio} pagosVendedor={pagosVendedor} onAsignarVendedor={handleAsignarVendedor} onAsignarFinanciador={handleAsignarFinanciador} correosBfk={correosBfk} onMarcarCorreo={handleMarcarCorreo} difsHistoricas={difsHistoricas} onCambiarFinanciamiento={handleCambiarFinanciamiento} busquedaInicial={busquedaCompras} ocs={ocs} perfiles={perfiles} filtroInicial={filtroCompras} ocFoco={ocFoco} onFocoUsado={()=>setOcFoco(null)} contactos={contactos} onEnviarReclamo={handleEnviarReclamo} onCorreoOC={handleCorreoOC} onRegistrarRespuestaReclamo={handleRegistrarRespuestaReclamo} onGuardarContacto={handleGuardarContacto} onGuardarDatosOC={handleGuardarDatosOC} onEditarEvento={handleEditarEvento} financiadores={financiadores} onConfirmarEntrega={handleEntrega} onEmitirFactura={handleFactura} onPagoCliente={handlePagoCliente} onPagoFinanciamiento={handlePagoFin} entidadesCatalogo={entidadesCatalogo} onGuardarLink={handleGuardarLink} onEliminarLink={handleEliminarLink} onEditarLink={handleEditarLink} onRepartirInversion={handleRepartirInversion} buscarDuplicadoOC={buscarDuplicadoOC} onSincronizarFecha={handleSincronizarFecha} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={handleAgregarComentario} onEliminarComentario={handleEliminarComentario} onArchivarOC={handleArchivarOC} onEliminarOC={perfil?.rol==="admin"?setEliminandoOC:undefined} onEliminarFactura={handleEliminarFactura} onRegistrarNC={handleNotaCredito} onEliminarEvento={handleEliminarEvento} vendedores={vendedores} onIngresarCompra={handleIngresarCompra} onCompraDesdeCotizacion={handleCompraDesdeCotizacion} onCorregirCompra={handleCorregirCompra} onCrearSeguimiento={handleCrearSeguimiento} onActualizarSeguimiento={handleActualizarSeguimiento} onEliminarSeguimiento={handleEliminarSeguimiento} onAnularCompra={handleAnularCompra} onBuscarCotizacionOC={buscarCotizacionOC} onCargarCotizacionOC={cargarCotizacionOC} onAsignarResponsable={handleAsignarResponsable} onGuardarPostventa={handleGuardarPostventa} tributario={tributario} /></>)}
-      {(tab==="notif"||todo)&&hoja("notif",<PanelNotificaciones correos={correosBfk} onMarcarCorreo={handleMarcarCorreo} notificaciones={notificaciones} ocs={ocs} onMarcarLeidas={handleMarcarNotificacionesLeidas} filtroAlertas={filtroAlertas} onFiltroAlertas={setFiltroAlertas} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setVolverA(ocId?"notif":null);setTab(t);}} />)}
-      {(tab==="agenda"||todo)&&hoja("agenda",<PanelCalendario ocs={ocs} onMarcarFecha={handleMarcarFecha} onVerAlertas={(f)=>{setFiltroCompras(null);setOcFoco(null);setVolverA(null);setFiltroAlertas({nivel:(f&&f.nivel)||"todas",etapa:(f&&f.etapa)||null});setTab("notif");}} />)}
+      {(tab==="notif"||todo)&&hoja("notif",<>{!todo&&<CanalFiltro valor={canal} onCambiar={setCanal} dato="alertas" />}<PanelNotificaciones alertasExtra={canal==="mp"?[]:alertasPrivadas} onAbrirExtra={(d)=>abrirVP(d.tab,d.id)} correos={correosBfk} onMarcarCorreo={handleMarcarCorreo} notificaciones={notificaciones} ocs={canal==="vp"?[]:ocs} onMarcarLeidas={handleMarcarNotificacionesLeidas} filtroAlertas={filtroAlertas} onFiltroAlertas={setFiltroAlertas} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setVolverA(ocId?"notif":null);setTab(t);}} /></>)}
+      {(tab==="agenda"||todo)&&hoja("agenda",<>{!todo&&<CanalFiltro valor={canal} onCambiar={setCanal} dato="agenda" />}<PanelCalendario ocs={canal==="vp"?[]:ocs} eventosExtra={canal==="mp"?[]:eventosAgendaVP(vp)} onAbrirExtra={(d)=>abrirVP(d.tab,d.id)} onMarcarFecha={handleMarcarFecha} onVerAlertas={(f)=>{setFiltroCompras(null);setOcFoco(null);setVolverA(null);setFiltroAlertas({nivel:(f&&f.nivel)||"todas",etapa:(f&&f.etapa)||null});setTab("notif");}} /></>)}
       {tab==="cotizaciones"&&!todo&&hoja("cotizaciones",<PanelCotizaciones token={session?.access_token} perfil={perfil} tributario={tributario} entidadesCatalogo={entidadesCatalogo} showToast={showToast} />)}
       {tab==="proyectos"&&!todo&&hoja("proyectos",<PanelProyectos token={session?.access_token} perfil={perfil} showToast={showToast} />)}
+      {tab==="vp_clientes"&&!todo&&hoja("vp_clientes",<PanelClientes {...vpProps} focoId={vpFoco?.tab==="vp_clientes"?vpFoco.id:null} onFocoUsado={()=>setVpFoco(null)} />)}
+      {tab==="vp_cotizaciones"&&!todo&&hoja("vp_cotizaciones",<PanelCotizacionesPrivadas key={"vpc-"+reinicio} {...vpProps} focoId={vpFoco?.tab==="vp_cotizaciones"?vpFoco.id:null} onFocoUsado={()=>setVpFoco(null)} nuevaSolicitada={vpNueva} onNuevaUsada={()=>setVpNueva(0)} />)}
+      {tab==="vp_ordenes"&&!todo&&hoja("vp_ordenes",<PanelOrdenesVenta key={"vpo-"+reinicio} {...vpProps} focoId={vpFoco?.tab==="vp_ordenes"?vpFoco.id:null} onFocoUsado={()=>setVpFoco(null)} />)}
       {(tab==="financiamiento"||todo)&&hoja("financiamiento",<PanelFinanciamiento difsHistoricas={difsHistoricas} financiadores={financiadores} ocs={ocs} ajustes={ajustesSaldo} perfiles={perfiles} onAjustar={handleAjusteSaldo} aportes={aportes} onGuardarAporte={handleGuardarAporte} onEliminarAporte={perfil?.rol==="admin"?handleEliminarAporte:undefined} onAbonar={(finId)=>{setAbonoFinId(typeof finId==="string"||typeof finId==="number"?finId:null);setAccion("abono_fin");}} pagoFinSueltos={pagoFinSueltos} />)}
       {(tab==="gastos"||todo)&&hoja("gastos",<PanelGastos gastos={gastos} categorias={categoriasGasto} ivaMensual={ivaMensual} pagosVendedor={pagosVendedor} vendedores={vendedores} onNuevoGasto={handleNuevoGasto} onGuardarIva={handleGuardarIva} onIrImpuestos={()=>irA("impuestos")} />)}
-      {(tab==="finanzas"||todo)&&hoja("finanzas",<PanelResumenFinanzas ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} aportes={aportes} ajustes={ajustesSaldo} categorias={categoriasGasto} onIrImpuestos={()=>irA("impuestos")} />)}
+      {(tab==="finanzas"||todo)&&hoja("finanzas",<>{!todo&&<CanalFiltro valor={canal} onCambiar={setCanal} dato="finanzas" />}<FinanzasPorCanal canal={todo?"mp":canal} ocs={ocs} vp={vp} onIr={irA}><PanelResumenFinanzas ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} aportes={aportes} ajustes={ajustesSaldo} categorias={categoriasGasto} onIrImpuestos={()=>irA("impuestos")} /></FinanzasPorCanal></>)}
       {(tab==="impuestos"||todo)&&hoja("impuestos",<PanelImpuestos ivaMensual={ivaMensual} gastos={gastos} onGuardarIva={handleGuardarIva} periodoInicial={ivaPeriodoInicial} onPeriodoInicialUsado={()=>setIvaPeriodoInicial(null)} />)}
       {(tab==="banco"||todo)&&hoja("banco",<PanelBanco ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} aportes={aportes} saldoBanco={saldoBanco} ultimaCartola={ultimaCartola} bancoMensual={bancoMensual} onEditarSaldo={()=>setAccion("saldo_banco")} onImportarCartola={()=>setAccion("cartola")} onQuitarAlertaCartola={handleQuitarAlertaCartola} />)}
       {(tab==="vendedores"||todo)&&hoja("vendedores",<PanelVendedores vendedores={vendedores} ocs={ocs} ivaMensual={ivaMensual} gastos={gastos} pagosVendedor={pagosVendedor} onGuardarIva={handleGuardarIva} onPagoVendedor={handlePagoVendedorSimple} onAnularPago={handleAnularPagoVendedor} esAdmin={perfil?.rol==="admin"} onIrImpuestos={(p)=>{ setIvaPeriodoInicial(p&&Number.isInteger(p.anio)&&Number.isInteger(p.mes)?{anio:p.anio,mes:p.mes}:null); irA("impuestos"); }} onVerOCs={(filtro)=>{setFiltroCompras(filtro);setOcFoco(null);setVolverA(null);setTab("compras");}} onAbrirOC={(ocId)=>{setFiltroCompras(null);setOcFoco(ocId);setVolverA(null);setTab("compras");}} />)}
       {(tab==="usuarios"||todo)&&perfil?.rol==="admin"&&hoja("usuarios",<PanelUsuarios perfilPropio={perfil} onRecargar={cargarTodo} onEliminarOC={setEliminandoOC} eliminacionesVersion={eliminacionesVersion} difsHistoricas={difsHistoricas} perfiles={perfiles} ocs={ocs} ocsArchivadas={ocsArchivadas} onRestaurarOC={handleRestaurarOC} onChangeRol={handleChangeRol} session={session} showToast={showToast} entidadesCatalogo={entidadesCatalogo} onEntidadesImportadas={handleEntidadesImportadas} usoMP={usoMP} sincronizando={sincronizando} validandoTodo={validandoTodo} exportando={exportando} onCorregirFechas={corregirFechasTodas} onValidarTodo={validarTodoContraMP} onExportarTodo={handleExportarTodo} />)}
+      {tab==="usuarios"&&!todo&&perfil?.rol==="admin"&&<ConfigVentasPrivadas key={vp.instalado?"vp-cfg":"vp-cfg-0"} token={session?.access_token} vp={vp} onRecargar={cargarVP} showToast={showToast} />}
     </ContactosContext.Provider></ModoTodoContext.Provider>
   );
 
@@ -2027,6 +2060,7 @@ export default function App() {
       {accion==="cartola"&&<Modal title="Cartola del banco: conciliar" onClose={()=>setAccion(null)}><ImportarCartola ocs={ocs} financiadores={financiadores} vendedores={vendedores} categorias={categoriasGasto} gastos={gastos} pagosVendedor={pagosVendedor} pagoFinSueltos={pagoFinSueltos} aportes={aportes} onRegistrar={handleCobrosDesdeCartola} onRegistrarEgresos={handleEgresosDesdeCartola} onRegistrarRetiro={handleRetiroDesdeCartola} onLeerDatosFrescos={leerDatosConciliacion} onRecargar={cargarTodo} onLeerDecisiones={leerDecisionesConciliacion} onDecidir={decidirConciliacion} onAnularDecision={anularDecisionConciliacion} /></Modal>}
       {accion==="abono_fin"&&<Modal title="Abonar a financiador" onClose={()=>setAccion(null)}><FormAbonoFinanciador ocs={ocs} financiadores={financiadores} financiadorInicial={abonoFinId} onSave={handleAbonoFinanciador} difsHistoricas={difsHistoricas} /></Modal>}
       {accion==="pago_cliente"&&<Modal title="Ingresar pago" onClose={()=>setAccion(null)}><FormPagoCliente ocs={ocs} onSave={handlePagoCliente} /></Modal>}
+      {accion==="vp_venta"&&<NuevaVentaPrivada token={session?.access_token} perfil={perfil} vp={vp} showToast={showToast} onRecargar={cargarVP} onCerrar={()=>setAccion(null)} onCreada={async(v)=>{ setAccion(null); await cargarVP(); abrirVP("vp_ordenes",v.id); }} />}
       {accion==="compra_manual"&&<Modal title="Nueva OC — manual" onClose={()=>setAccion(null)}><FormIngresarCompra perfil={perfil} ocs={ocs} financiadores={financiadores} vendedores={vendedores} entidadesCatalogo={entidadesCatalogo} buscarDuplicado={buscarDuplicadoOC} onSave={handleIngresarCompra} /></Modal>}
 
       <Toast toast={toast} />
@@ -2037,7 +2071,7 @@ export default function App() {
   if(esEscritorio){
     return (
       <div style={{minHeight:"100vh",background:C.paper,fontFamily:SANS,display:"flex",alignItems:"flex-start"}}>
-        <BarraLateral visibles={visibles} tab={tab} onIr={irA} nAlertas={nAlertas} perfil={perfil} onNuevaOC={nuevaOC} onImprimir={imprimirTodo} onSalir={salir} />
+        <BarraLateral visibles={visibles} tab={tab} onIr={irA} nAlertas={nAlertas} perfil={perfil} onNuevo={nuevo} onImprimir={imprimirTodo} onSalir={salir} />
         <div style={{flex:1,minWidth:0}}>
           <header data-noprint style={{position:"sticky",top:0,zIndex:20,background:"rgba(247,248,250,0.94)",backdropFilter:"blur(10px)",borderBottom:`1px solid ${C.border}`}}>
             <div style={{maxWidth:ANCHO_CONTENIDO,margin:"0 auto",padding:"18px 28px 14px",boxSizing:"border-box"}}>
@@ -2068,7 +2102,7 @@ export default function App() {
 
   return (
     <div style={{minHeight:"100vh",background:C.paper,fontFamily:SANS,paddingBottom:"calc(104px + env(safe-area-inset-bottom))"}}>
-      {/* ENCABEZADO (celular): título de la pantalla y + Nueva OC. Imprimir y Cerrar sesión están en "Más". */}
+      {/* ENCABEZADO (celular): título de la pantalla y + Nuevo. Imprimir y Cerrar sesión están en "Más". */}
       <header data-noprint style={{background:"rgba(255,255,255,0.96)",backdropFilter:"blur(12px)",padding:"calc(10px + env(safe-area-inset-top)) 16px 10px",color:C.ink,borderBottom:`1px solid ${C.border}`,position:"sticky",top:0,zIndex:30}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,maxWidth:760,margin:"0 auto"}}>
           <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0,flex:1}}>
@@ -2078,7 +2112,7 @@ export default function App() {
               <div style={{fontSize:12,color:C.inkMuted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{subtituloPantalla}</div>
             </div>
           </div>
-          <button onClick={nuevaOC} style={{background:C.teal,border:"none",color:"#fff",borderRadius:8,padding:"9px 14px",fontSize:13,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>+ Nueva OC</button>
+          <MenuNuevo onElegir={nuevo} compacto alinear="derecha" />
         </div>
       </header>
 

@@ -6,6 +6,8 @@
 // Uso: node docs/pruebas-nueva-oc/e2e_nueva_oc.mjs http://127.0.0.1:4279/
 import { chromium, CHROME, crearBase, abrir } from "../pruebas-oc/mock_estado.mjs";
 import { crearDatos, dias } from "../pruebas-oc/datos_oc.mjs";
+// 06/11/2026: «+ Nueva OC» pasó a ser «+ Nuevo › OC de Mercado Público» (mismo formulario de siempre).
+const nuevaOC = async (p) => { await p.locator("[data-boton-nuevo]:visible").first().click(); await p.waitForTimeout(250); await p.locator('[data-nuevo="mp_oc"]').first().click(); };
 
 const URL_APP = process.argv[2] || "http://127.0.0.1:4279/";
 const F = []; let nOk = 0;
@@ -113,7 +115,7 @@ async function preparar({ movil = false, usuario = "u2", ...opts } = {}) {
   return { ...r, p: r.page, b, d0 };
 }
 async function abrirNuevaOC(p, codigo, { vendedor = null, ventaPropia = false } = {}) {
-  await p.locator("button:visible", { hasText: /^\+ Nueva OC$/ }).first().click(); await espera(p, 500);
+  await nuevaOC(p); await espera(p, 500);
   const m = modal(p);
   if (vendedor !== null) await m.locator("select").first().selectOption(vendedor);
   if (ventaPropia) { await m.getByText("Es venta propia del vendedor").click(); }

@@ -160,7 +160,7 @@ eq("mensaje de la base sin prefijo técnico", L.mensajeError(new Error("PI_FECHA
 eq("RLS legible", L.mensajeError(new Error("new row violates row-level security policy for table pi_hitos")), "No tienes permiso para hacer este cambio.");
 
 // ── 11. Navegación: pantalla y enlace directo ──
-eq("pantalla proyectos con su grupo", [pantallaDesdeHash("#/proyectos"), PANTALLAS.find((p) => p.key === "proyectos").grupo, GRUPOS.map((g) => g.key)], ["proyectos", "proyectos", ["operacion", "proyectos", "finanzas", "admin"]]);
+eq("pantalla proyectos con su grupo", [pantallaDesdeHash("#/proyectos"), PANTALLAS.find((p) => p.key === "proyectos").grupo, GRUPOS.map((g) => g.key)], ["proyectos", "proyectos", ["general", "mp", "vp", "proyectos", "finanzas", "admin"]]);
 eq("enlace directo #/proyectos/PI-2026-005", [detalleDesdeHash("#/proyectos/PI-2026-005"), pantallaDesdeHash("#/proyectos/PI-2026-005")], ["PI-2026-005", "proyectos"]);
 eq("enlace directo acepta minúsculas y barra final", detalleDesdeHash("#/proyectos/pi-2026-012/"), "PI-2026-012");
 eq("enlace directo inválido", [detalleDesdeHash("#/proyectos/OC-1"), detalleDesdeHash("#/compras/PI-2026-001")], [null, null]);

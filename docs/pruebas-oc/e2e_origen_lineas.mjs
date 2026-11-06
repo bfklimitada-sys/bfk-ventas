@@ -8,6 +8,8 @@ import { chromium, CHROME, crearBase, abrir } from "./mock_estado.mjs";
 import { crearDatos, RESPUESTAS_MP } from "./datos_oc.mjs";
 import { planProductosVenta } from "../../src/lib/mercadoPublico.js";
 import { productosVendidos } from "../../src/lib/productosOC.js";
+// 06/11/2026: «+ Nueva OC» pasó a ser «+ Nuevo › OC de Mercado Público» (mismo formulario de siempre).
+const nuevaOC = async (p) => { await p.locator("[data-boton-nuevo]:visible").first().click(); await p.waitForTimeout(250); await p.locator('[data-nuevo="mp_oc"]').first().click(); };
 
 const URL_APP = process.argv[2] || "http://127.0.0.1:4190/";
 const F = []; let nOk = 0;
@@ -31,7 +33,7 @@ for (const [pref, movil] of [["E", false], ["M", true]]) {
     const b = crearBase(crearDatos(), { mp });
     const { page: p, ctx, errs } = await abrir(browser, b, { url: URL_APP, ancho: movil ? 390 : 1440, alto: movil ? 844 : 900, movil, espera: 2500 });
     const v = p.locator('[data-nav="compras"]:visible'); await v.first().click(); await espera(p, 800);
-    await p.getByRole("button", { name: /^\+ Nueva OC$/ }).first().click(); await espera(p, 500);
+    await nuevaOC(p); await espera(p, 500);
     const m = modal(p);
     await m.locator("select").first().selectOption("v1");
     await m.locator("input").last().fill("4001-1-SE26"); await m.getByRole("button", { name: /Buscar OC/ }).click(); await espera(p, 900);
@@ -58,7 +60,7 @@ for (const [pref, movil] of [["E", false], ["M", true]]) {
     const b = crearBase(crearDatos(), { mp: RESPUESTAS_MP });
     const { page: p, ctx, errs } = await abrir(browser, b, { url: URL_APP, ancho: movil ? 390 : 1440, alto: movil ? 844 : 900, movil, espera: 2500 });
     const v = p.locator('[data-nav="compras"]:visible'); await v.first().click(); await espera(p, 800);
-    await p.getByRole("button", { name: /Nueva OC|manual/i }).first().click(); await espera(p, 500);
+    await nuevaOC(p); await espera(p, 500);
     const manual = p.getByRole("button", { name: /manual/i }).first();
     if (await manual.count()) { await manual.click(); await espera(p, 500); }
     const m = modal(p);

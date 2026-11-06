@@ -4,6 +4,8 @@
 import { chromium, CHROME, crearBase, abrir } from "./mock_estado.mjs";
 import { crearDatos, RESPUESTAS_MP } from "./datos_oc.mjs";
 import { ventaDeOC } from "../../src/lib/productosOC.js";
+// 06/11/2026: «+ Nueva OC» pasó a ser «+ Nuevo › OC de Mercado Público» (mismo formulario de siempre).
+const nuevaOC = async (p) => { await p.locator("[data-boton-nuevo]:visible").first().click(); await p.waitForTimeout(250); await p.locator('[data-nuevo="mp_oc"]').first().click(); };
 
 const URL_APP = process.argv[2] || "http://127.0.0.1:4190/";
 const F = []; let nOk = 0;
@@ -122,8 +124,7 @@ const escr = (b, n, tabla) => b.escr.slice(n).filter((w) => w.tabla === tabla);
   const b = crearBase(datos(), { mp: RESPUESTAS_MP });
   const { page: p, ctx, errs } = await abrir(browser, b, { url: URL_APP, ancho: 1440, alto: 900, movil: false, espera: 2500 });
   await p.locator('aside [data-nav="compras"]').click(); await espera(p, 900);
-  const btn = p.getByRole("button", { name: /Nueva OC|manual/i }).first();
-  await btn.click(); await espera(p, 500);
+  await nuevaOC(p); await espera(p, 500);
   const manual = p.getByRole("button", { name: /manual/i }).first();
   if (await manual.count()) { await manual.click(); await espera(p, 500); }
   const m = modal(p);

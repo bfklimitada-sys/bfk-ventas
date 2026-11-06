@@ -8,20 +8,25 @@
 // ruta: lo que se ve en la dirección del navegador (#/compras).
 // hub: la pantalla vive dentro de un centro con pestañas (Finanzas). Sus direcciones anteriores
 // (#/financiamiento, #/vendedores, #/gastos) se conservan y abren la pestaña correspondiente.
+// Orden y grupos del menú (06/11/2026, «Gestión comercial»): General · Mercado Público · Ventas privadas ·
+// Proyectos industriales · Finanzas · Sistema. Las claves internas y las direcciones anteriores no cambian.
 export const PANTALLAS = [
-  { key: "panel",          ruta: "panel",          label: "Inicio",         icono: "📊", grupo: "operacion", desc: "Resumen del día, caja y compromisos" },
-  { key: "compras",        ruta: "compras",        label: "Compras",        icono: "📦", grupo: "operacion", desc: "Órdenes de compra y su avance" },
-  { key: "notif",          ruta: "alertas",        label: "Alertas",        icono: "🔔", grupo: "operacion", desc: "Alertas de OC y correos de BFK" },
-  { key: "agenda",         ruta: "agenda",         label: "Agenda",         icono: "📅", grupo: "operacion", desc: "Entregas y vencimientos por fecha" },
-  { key: "cotizaciones",   ruta: "cotizaciones",   label: "Cotizaciones",   icono: "📋", grupo: "operacion", desc: "Cotizaciones, EETT y biblioteca de productos" },
-  { key: "proyectos",      ruta: "proyectos",      label: "Proyectos Industriales", icono: "🏭", grupo: "proyectos", desc: "Proyectos de ingeniería y servicios industriales (línea PI)" },
+  { key: "panel",          ruta: "panel",          label: "Inicio",         icono: "📊", grupo: "general",   desc: "Resumen del día, caja y compromisos" },
+  { key: "notif",          ruta: "alertas",        label: "Alertas",        icono: "🔔", grupo: "general",   desc: "Alertas de OC, ventas privadas y correos de BFK" },
+  { key: "agenda",         ruta: "agenda",         label: "Agenda",         icono: "📅", grupo: "general",   desc: "Entregas y vencimientos por fecha" },
+  { key: "compras",        ruta: "compras",        label: "Compras",        icono: "📦", grupo: "mp",        desc: "Órdenes de compra de Mercado Público y su avance" },
+  { key: "cotizaciones",   ruta: "cotizaciones",   label: "Cotizaciones MP", icono: "📋", grupo: "mp",       desc: "Cotizaciones de Mercado Público, EETT y biblioteca de productos" },
+  { key: "vp_clientes",     ruta: "clientes",              label: "Clientes",              icono: "🏢", grupo: "vp", desc: "Clientes de ventas privadas, historial y saldos" },
+  { key: "vp_cotizaciones", ruta: "cotizaciones-privadas", label: "Cotizaciones privadas", icono: "📄", grupo: "vp", desc: "Cotizaciones a clientes privados, revisiones, PDF y EETT" },
+  { key: "vp_ordenes",      ruta: "ordenes-venta",         label: "Órdenes de venta",      icono: "🛒", grupo: "vp", desc: "Ventas privadas: OC del cliente, entregas, facturas y pagos" },
+  { key: "proyectos",      ruta: "proyectos",      label: "Proyectos industriales", icono: "🏭", grupo: "proyectos", desc: "Proyectos de ingeniería y servicios industriales (línea PI)" },
   { key: "finanzas",       ruta: "finanzas",       label: "Resumen",        icono: "🏦", grupo: "finanzas",  hub: "finanzas", desc: "Resultado del mes, caja y margen" },
   { key: "financiamiento", ruta: "financiamiento", label: "Financiamiento", icono: "🏦", grupo: "finanzas",  hub: "finanzas", desc: "Deuda con financiadores, abonos y aportes" },
   { key: "vendedores",     ruta: "vendedores",     label: "Comisiones",     icono: "🧑‍💼", grupo: "finanzas",  hub: "finanzas", desc: "Comisiones y pagos a vendedores" },
   { key: "gastos",         ruta: "gastos",         label: "Gastos",         icono: "🧾", grupo: "finanzas",  hub: "finanzas", desc: "Gastos del negocio" },
   { key: "impuestos",      ruta: "impuestos",      label: "Impuestos",      icono: "🧾", grupo: "finanzas",  hub: "finanzas", desc: "IVA mensual y F29" },
   { key: "banco",          ruta: "banco",          label: "Banco",          icono: "🏦", grupo: "finanzas",  hub: "finanzas", desc: "Saldo, conciliación y cartola" },
-  { key: "usuarios",       ruta: "administracion", label: "Administración", icono: "👥", grupo: "admin",     desc: "Usuarios, respaldo, entidades y OCs archivadas", adminOnly: true },
+  { key: "usuarios",       ruta: "administracion", label: "Administración", icono: "👥", grupo: "admin",     desc: "Usuarios, respaldo, entidades, OCs archivadas y datos de BFK", adminOnly: true },
 ];
 
 // Centros con pestañas: aparecen como una sola entrada en la navegación.
@@ -30,8 +35,10 @@ export const HUBS = {
 };
 
 export const GRUPOS = [
-  { key: "operacion", label: "Operación" },
-  { key: "proyectos", label: "Proyectos Industriales" },
+  { key: "general",   label: "General" },
+  { key: "mp",        label: "Mercado Público" },
+  { key: "vp",        label: "Ventas privadas" },
+  { key: "proyectos", label: "Proyectos industriales" },
   { key: "finanzas",  label: "Finanzas" },
   { key: "admin",     label: "Sistema" },
 ];
@@ -83,11 +90,19 @@ export const detalleDesdeHash = (hash) => {
   return m ? m[1].toUpperCase() : null;
 };
 export const hashProyecto = (codigo) => (codigo ? `#/proyectos/${codigo}` : "#/proyectos");
-// La dirección actual ya corresponde a la pantalla (incluye el enlace directo a un proyecto): no se reescribe.
-export const hashEsDe = (hash, key) => hash === hashDe(key) || (key === "proyectos" && !!detalleDesdeHash(hash));
+// Enlace directo a una cotización privada o a una orden de venta: #/cotizaciones-privadas/CP-AAAA-NNNN · #/ordenes-venta/OV-AAAA-NNNN.
+const RUTAS_VP = { vp_cotizaciones: ["cotizaciones-privadas", "CP"], vp_ordenes: ["ordenes-venta", "OV"] };
+export const folioVPDesdeHash = (hash, key) => {
+  const r = RUTAS_VP[key]; if (!r) return null;
+  const m = new RegExp(`^#/?${r[0]}/(${r[1]}-\\d{4}-\\d{4,})/?$`, "i").exec(String(hash || "").trim());
+  return m ? m[1].toUpperCase() : null;
+};
+export const hashVP = (key, folio) => `#/${RUTAS_VP[key]?.[0] || pantallaDe(key)?.ruta || ""}${folio ? `/${folio}` : ""}`;
+// La dirección actual ya corresponde a la pantalla (incluye los enlaces directos): no se reescribe.
+export const hashEsDe = (hash, key) => hash === hashDe(key) || (key === "proyectos" && !!detalleDesdeHash(hash)) || !!folioVPDesdeHash(hash, key);
 
 export const tituloDocumento = (key) => {
   const p = pantallaDe(key);
-  if (!p) return "BFK Ltda — Ventas Mercado Público";
+  if (!p) return "BFK Ltda — Gestión comercial";
   return p.hub ? `${HUBS[p.hub].label} · ${p.label} · BFK Ltda` : `${p.label} · BFK Ltda`;
 };
