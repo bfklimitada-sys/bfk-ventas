@@ -83,9 +83,14 @@ for (const [n, fn] of [["false", () => false], ["undefined", () => undefined], [
 }
 ok("I06_mensaje_desactivada_claro", /desactivada/i.test(RESPUESTA_DESACTIVADA.error) && /administrador/i.test(RESPUESTA_DESACTIVADA.error));
 
-// 4) Código fuente: el servidor de IC no llama a un proveedor de IA y Vercel no tiene tareas programadas.
-const texto = ["api/inteligencia.mjs", "src/lib/inteligenciaDatos.js", "src/lib/inteligenciaComercial.js", "src/components/inteligencia/InteligenciaComercial.jsx"].map((p) => readFileSync(join(RAIZ, p), "utf8")).join("\n");
+// 4) Código fuente: ni el servidor ni la interfaz de IC llaman a un proveedor de IA; la vista de IC no sincroniza sola.
+const fuentes = ["api/inteligencia.mjs", "src/lib/inteligenciaDatos.js", "src/lib/inteligenciaComercial.js", "src/components/inteligencia/InteligenciaComercial.jsx", "src/components/inteligencia/Graficos.jsx", "src/lib/interruptorIC.js", "src/components/inteligencia/AdminInteligencia.jsx"];
+const texto = fuentes.map((p) => readFileSync(join(RAIZ, p), "utf8")).join("\n");
 ok("I07_IC_sin_proveedor_de_IA_en_el_codigo", !/anthropic|openai|ANTHROPIC_API_KEY|claude-|gpt-|gemini/i.test(texto));
+const ic = readFileSync(join(RAIZ, "src/components/inteligencia/InteligenciaComercial.jsx"), "utf8");
+ok("I08_vista_IC_sin_sincronizacion_automatica", !/origen:\s*["']automatica["']/.test(ic) && !/AUTO_HORAS/.test(ic));
+const dash = readFileSync(join(RAIZ, "src/components/panels/PanelDashboard.jsx"), "utf8");
+ok("I09_inicio_no_carga_IC", !/InteligenciaComercial|inteligencia/i.test(dash.replace(/\/\/.*$/gm, "")));
 const vj = JSON.parse(readFileSync(join(RAIZ, "vercel.json"), "utf8"));
 ok("I10_vercel_sin_crons", !vj.crons || vj.crons.length === 0);
 

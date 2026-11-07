@@ -37,6 +37,9 @@ async function rutasIC(page, est) {
     }
     if (!u.hostname.endsWith("supabase.co")) return route.fallback();
     const fn = u.pathname.includes("/rpc/") ? u.pathname.split("/").pop() : null;
+    // 06/11/2026: interruptor central. En esta suite se simula HABILITADO (prueba el módulo); el estado desactivado se
+    // prueba en e2e_ic_desactivada.mjs.
+    if (fn === "ic_interruptor_estado") { est.interruptor = (est.interruptor || 0) + 1; return route.fulfill({ json: { habilitada: true } }); }
     if (["ic_resumen", "ic_detalle", "ic_resumen_v2", "ic_detalle_v2"].includes(fn)) {
       est.rpc.push({ fn, b });
       if (est.modo === "caida") return route.fulfill({ status: 503, json: { message: "Servicio no disponible (simulado)" } });
@@ -52,7 +55,9 @@ async function rutasIC(page, est) {
     return route.fallback();
   });
 }
-async function abrirIC(page) { await page.click('[data-desplegable="inteligencia"] > button'); await page.waitForSelector("[data-inteligencia]", { timeout: 15000 }); await page.waitForSelector('[data-indicador="ic-presentadas"]', { timeout: 15000 }); await espera(page, 700); }
+// 06/11/2026: Inteligencia Comercial salió de Inicio; se abre desde Administración › Inteligencia Comercial › Abrir.
+async function irAdminIC(page) { await page.evaluate(() => { location.hash = "#/administracion"; }); await page.waitForSelector('[data-tab="ic"]', { timeout: 10000 }); await page.click('[data-tab="ic"]'); await page.waitForSelector("[data-ic-abrir]", { timeout: 10000 }); await page.click("[data-ic-abrir]"); }
+async function abrirIC(page) { await irAdminIC(page); await page.waitForSelector("[data-inteligencia]", { timeout: 15000 }); await page.waitForSelector('[data-indicador="ic-presentadas"]', { timeout: 15000 }); await espera(page, 700); }
 const kpi = (page, d) => page.$eval(`[data-indicador="${d}"] [data-indicador-monto]`, (e) => e.textContent.trim()).catch(() => null);
 const nuevoEstado = (o = {}) => ({ modo: "base", rpc: [], sinc: [], respSinc: [], lecturas: [], ultimaSinc: haceUnaHora(), lento: 0, ...o });
 const esResumen = (r) => r.fn.startsWith("ic_resumen");
@@ -68,8 +73,8 @@ for (const vista of [{ n: "escritorio", ancho: 1280, alto: 900, movil: false }, 
   const chunks = []; page.on("request", (r) => { if (/InteligenciaComercial-/.test(r.url())) chunks.push(r.url()); });
   await rutasIC(page, est);
   // T13: el Panel abre normalmente y sin cargar el módulo
-  ok(`${V}_T13_panel_abre_con_sus_indicadores`, !!(await page.$('[data-indicador="banco"]')) && !!(await page.$('[data-desplegable="inteligencia"]')));
-  ok(`${V}_T13_modulo_no_se_descarga_al_abrir_el_panel`, chunks.length === 0 && est.rpc.length === 0);
+  ok(`${V}_T13_panel_abre_con_sus_indicadores_y_sin_IC`, !!(await page.$('[data-indicador="banco"]')) && !(await page.$('[data-desplegable="inteligencia"]')));
+  ok(`${V}_T13_modulo_no_se_descarga_al_abrir_el_panel`, chunks.length === 0 && est.rpc.length === 0 && est.sinc.length === 0 && !est.interruptor);
   const escrAntes = base.escr.length;
   const t0 = Date.now(); await abrirIC(page); const msAbrir = Date.now() - t0;
   ok(`${V}_T13_indicadores_en_menos_de_2_s (${msAbrir} ms)`, msAbrir < 2000 + 700);
@@ -202,9 +207,14 @@ for (const vista of [{ n: "escritorio", ancho: 1280, alto: 900, movil: false }, 
   ok(`${V}_S06_cancelar_y_reanudar`, est.sinc.length === 5 && /Sincronización cancelada: 3 revisadas/.test(canc) && /Quedan 300 por consultar/.test(canc) && /reanudar/.test(canc) && !(await page.$("[data-cancelar-sinc]")) && !(await page.$("[data-sincronizar][disabled]")), canc);
   est.respSinc.push({ status: 502, json: { ok: false, codigo: "TICKET_INVALIDO", error: "ChileCompra rechazó el ticket configurado (HTTP 401/403). No se modificó ningún resultado." } });
   await page.click("[data-sincronizar]"); await page.waitForSelector('[data-aviso-linea="ic-sinc"]', { timeout: 5000 }); await espera(page, 1000);
-  ok(`${V}_S04_error_api_informado_panel_sigue`, /rechazó el ticket/.test(await page.textContent('[data-aviso-linea="ic-sinc"]')) && !!(await page.$('[data-indicador="ic-presentadas"]')) && !!(await page.$('[data-indicador="banco"]')));
+  ok(`${V}_S04_error_api_informado_panel_sigue`, /rechazó el ticket/.test(await page.textContent('[data-aviso-linea="ic-sinc"]')) && !!(await page.$('[data-indicador="ic-presentadas"]')) && !!(await page.$('[data-ic-admin]')));
+  // 06/11/2026: si el servidor responde que IC está desactivada (423), se informa y NO se reintenta.
+  { const n0 = est.sinc.length; est.respSinc.push({ status: 423, json: { ok: false, codigo: "IC_DESACTIVADA", error: "Inteligencia Comercial está desactivada. No se consultó ChileCompra ni se creó ninguna tarea. Solo un administrador puede reactivarla desde Administración." } });
+    await page.click("[data-sincronizar]"); await page.waitForFunction(() => /desactivada/i.test(document.querySelector('[data-aviso-linea="ic-sinc"]')?.textContent || ""), null, { timeout: 5000 }).catch(() => {}); await espera(page, 2500);
+    ok(`${V}_S07_servidor_desactivado_informado_sin_reintentos`, est.sinc.length === n0 + 1 && /desactivada/i.test(await page.textContent('[data-aviso-linea="ic-sinc"]')), { n: est.sinc.length - n0 }); }
   // T19: ninguna escritura de datos (ni financiera ni de otro tipo) desde el navegador por este módulo
-  const nuevas = base.escr.slice(escrAntes).filter((w) => !["mp_uso_diario", "mp_cache_avisos"].includes(w.tabla));
+  // bfk_cuentas_por_autorizar: lectura (POST) de la pestaña Usuarios de Administración, no de este módulo.
+  const nuevas = base.escr.slice(escrAntes).filter((w) => !["mp_uso_diario", "mp_cache_avisos", "bfk_cuentas_por_autorizar"].includes(w.tabla));
   ok(`${V}_T19_sin_escrituras_desde_el_navegador`, nuevas.length === 0, nuevas.map((w) => w.metodo + " " + w.tabla));
   // T15/T14: sin desbordes horizontales
   ok(`${V}_T14_T15_sin_desborde_horizontal`, await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), await page.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]));
@@ -212,22 +222,21 @@ for (const vista of [{ n: "escritorio", ancho: 1280, alto: 900, movil: false }, 
   ok(`${V}_E01_sin_errores_de_pagina`, errs.length === 0, errs);
   await ctx.close();
 
-  // ── Usuario sin permiso de administrador: lee, no sincroniza ──
+  // ── Usuario sin permiso de administrador (06/11/2026): no ve Inteligencia Comercial ni la consulta ──
   {
     const b2 = crearBase(datos()); const e2 = nuevoEstado({ ultimaSinc: null });
     const { page: p2, ctx: c2 } = await abrir(browser, b2, { url: URL_APP, usuario: "u2", ancho: vista.ancho, alto: vista.alto, movil: vista.movil });
-    await rutasIC(p2, e2); await abrirIC(p2); await espera(p2, 800);
-    ok(`${V}_T12_usuario_sin_boton_de_sincronizar`, !(await p2.$("[data-sincronizar]")) && /administrador/.test(await p2.textContent("[data-inteligencia]")));
-    ok(`${V}_T12_usuario_sin_sincronizacion_automatica`, e2.sinc.length === 0);
-    ok(`${V}_T12_usuario_lee_indicadores`, (await kpi(p2, "ic-presentadas")) === String(anio.presentadas));
+    await rutasIC(p2, e2); await p2.evaluate(() => { location.hash = "#/administracion"; }); await espera(p2, 1200);
+    ok(`${V}_T12_usuario_sin_acceso_a_IC`, !(await p2.$('[data-tab="ic"]')) && !(await p2.$("[data-inteligencia]")) && !(await p2.$('[data-desplegable="inteligencia"]')));
+    ok(`${V}_T12_usuario_sin_consultas`, e2.sinc.length === 0 && e2.rpc.length === 0);
     await c2.close();
   }
-  // ── Administrador con la última sincronización antigua: sincronización automática en segundo plano (una vez) ──
+  // ── Administrador con la última sincronización antigua (06/11/2026): YA NO hay sincronización automática ──
   {
     const b3 = crearBase(datos()); const e3 = nuevoEstado({ ultimaSinc: "2026-10-01T00:00:00Z" }); e3.respSinc.push({ status: 200, json: { ok: true, procesados: 1, actualizados: 0, errores: 0, hay_mas: false } });
     const { page: p3, ctx: c3 } = await abrir(browser, b3, { url: URL_APP, usuario: "u1", ancho: vista.ancho, alto: vista.alto, movil: vista.movil });
-    await rutasIC(p3, e3); await abrirIC(p3); await espera(p3, 1500);
-    ok(`${V}_S05_automatica_si_mas_de_12_h`, e3.sinc.length === 1 && e3.sinc[0].origen === "automatica");
+    await rutasIC(p3, e3); await abrirIC(p3); await espera(p3, 2500);
+    ok(`${V}_S05_sin_sincronizacion_automatica_aunque_tenga_mas_de_12_h`, e3.sinc.length === 0, e3.sinc);
     await c3.close();
   }
   // ── Base con el módulo del 04/11 pero SIN la corrección del 05/11: funciona con ic_resumen/ic_detalle (presentación) ──
@@ -255,8 +264,8 @@ for (const vista of [{ n: "escritorio", ancho: 1280, alto: 900, movil: false }, 
   {
     const b5 = crearBase(datos()); const e5 = nuevoEstado({ modo: "caida" });
     const { page: p5, ctx: c5 } = await abrir(browser, b5, { url: URL_APP, usuario: "u1", ancho: vista.ancho, alto: vista.alto, movil: vista.movil });
-    await rutasIC(p5, e5); await p5.click('[data-desplegable="inteligencia"] > button'); await p5.waitForSelector('[data-aviso-linea="ic-error"]', { timeout: 10000 });
-    ok(`${V}_T09_base_caida_error_contenido`, /no disponible/i.test(await p5.textContent('[data-aviso-linea="ic-error"]')) && !!(await p5.$('[data-indicador="banco"]')) && !!(await p5.$('[data-prioridad], [data-desplegable="caja"]')));
+    await rutasIC(p5, e5); await irAdminIC(p5); await p5.waitForSelector('[data-aviso-linea="ic-error"]', { timeout: 10000 });
+    ok(`${V}_T09_base_caida_error_contenido`, /no disponible/i.test(await p5.textContent('[data-aviso-linea="ic-error"]')) && !!(await p5.$('[data-ic-admin]')) && !!(await p5.$('[data-tab="usuarios"]')));
     await c5.close();
   }
 }

@@ -1,4 +1,4 @@
-import { useState, useMemo, lazy, Suspense, Component } from "react";
+import { useState, useMemo } from "react";
 import { del } from "../../lib/supabase";
 import { C, MONO, SANS, fmt } from "../../lib/theme";
 import { Ic } from "../ui/Iconos";
@@ -7,19 +7,8 @@ import { resumenCaja } from "../../lib/caja";
 import { Seccion, Tarjeta, Badge, Monto, Desplegable, Indicador, Indicadores, AvisoLinea, Ayuda, Enlace } from "../ui/Sistema";
 import { useEsEscritorio } from "../ui/Navegacion";
 import { registrosConAlerta } from "../../lib/registroCartola";
-import { importarModulo } from "../../lib/cargaModulos";
 
-// Inteligencia Comercial (04/11/2026): se descarga y consulta SOLO al abrir su desplegable. Si falla, el error queda
-// dentro del desplegable: el Panel Principal y sus indicadores siguen funcionando.
-const InteligenciaComercial = lazy(() => importarModulo(() => import("../inteligencia/InteligenciaComercial")));
-class LimiteIC extends Component {
-  constructor(p) { super(p); this.state = { error: null }; }
-  static getDerivedStateFromError(error) { return { error }; }
-  render() {
-    if (!this.state.error) return this.props.children;
-    return <AvisoLinea dato="ic-falla" tono="danger" accion="Reintentar" onClick={() => this.setState({ error: null })}>{this.state.error?.message || "No se pudo cargar Inteligencia Comercial."}</AvisoLinea>;
-  }
-}
+// Inteligencia Comercial (06/11/2026): retirada de Inicio. Su estado y su acceso están en Administración.
 
 const MAX_PRIOR=5; // prioridades visibles de entrada; el resto con «Ver más»
 import { FILTROS_PANEL, estaCerrada, filtrarPanel, valeVistasPendientes } from "../../lib/ocs";
@@ -77,7 +66,6 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
   const esAdmin=perfil?.rol==="admin";
   const [verTodasPrior,setVerTodasPrior]=useState(false);
   const escritorio=useEsEscritorio();
-  const [verIC,setVerIC]=useState(false);
   const nAvisosMP=(porAceptar||[]).length+(aceptadasSinCargar||[]).length+(canceladasEnMP||[]).length;
   const nAlertasCartola=registrosConAlerta({ocs,gastos,pagosVendedor,pagoFinSueltos,aportes:aportesLista}).length;
   // Carga masiva de OCs aceptadas (Fase 4A): el vendedor es obligatorio y se puede indicar venta propia.
@@ -515,14 +503,6 @@ export function PanelDashboard({ ocs, financiadores, gastos, pagosVendedor, ivaM
 
         </div>
       </div>
-      {tokenSesion&&(
-        <Desplegable dato="inteligencia" icono={<Ic n="📊"/>} titulo="Inteligencia Comercial" onAbrir={()=>setVerIC(true)}
-          resumen="Compra Ágil: cotizado, ganado, perdido, competidores y evolución">
-          {verIC&&<LimiteIC><Suspense fallback={<div style={{fontSize:13,color:C.inkMuted,padding:"10px 2px"}}>Cargando Inteligencia Comercial…</div>}>
-            <InteligenciaComercial token={tokenSesion} perfil={perfil} escritorio={escritorio} />
-          </Suspense></LimiteIC>}
-        </Desplegable>
-      )}
     </div>
   );
 }
