@@ -60,7 +60,7 @@ function entorno({ codigos, cola429 = {}, ticketMalo = false } = {}) {
     if (det) return { status: 200, json: async () => ({ payload: { ...r.detalle, codigo: cod } }) };
     return { status: 200, json: async () => ({ payload: { items: [{ ...r.listado, codigo: cod }] } }) };
   };
-  const manejador = crearManejador({ validar: async () => ({ uid: "adm", token: "tk", admin: true }), rpcDe, ticketDe: () => "T", f: fMP, lim: { ...LIMITES, llamadasPorMinuto: 1000 } });
+  const manejador = crearManejador({ interruptor: () => true, validar: async () => ({ uid: "adm", token: "tk", admin: true }), rpcDe, ticketDe: () => "T", f: fMP, lim: { ...LIMITES, llamadasPorMinuto: 1000 } });
   // fetch del navegador → manejador en proceso (misma forma que Vercel)
   const f = async (url, o) => {
     if (o?.signal?.aborted) throw Object.assign(new Error("abort"), { name: "AbortError" });

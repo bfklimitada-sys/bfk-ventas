@@ -308,14 +308,14 @@ function baseSimulada({ pendientes = [], cola = { total: 3, sin_consultar: 1, po
 const admin = async () => ({ uid: "u-admin", token: "tk", admin: true });
 {
   const b = baseSimulada();
-  const h = crearManejador({ validar: async () => ({ uid: "u", token: "t", admin: false }), rpcDe: b.rpcDe, ticketDe: () => "T" });
+  const h = crearManejador({ interruptor: () => true, validar: async () => ({ uid: "u", token: "t", admin: false }), rpcDe: b.rpcDe, ticketDe: () => "T" });
   const { r, res } = resp(); await h({ method: "POST", headers: {}, body: {} }, res);
   ok("T30_solo_administradores", r.code === 403 && r.body.codigo === "SOLO_ADMIN" && b.llamadas.length === 0);
 }
 {
   const b = baseSimulada({ pendientes: [{ codigo: "1001-3-COT26" }], cola: { total: 3, sin_consultar: 0, por_verificar: 0, en_proceso: 1, finales: 2, con_error: 0, elegibles_ahora: 0, proximo_reintento: null } });
   const s = simulado({ listado: { "1001-3-COT26": L("1001-3-COT26") }, reloj });
-  const h = crearManejador({ validar: admin, rpcDe: b.rpcDe, ticketDe: () => "T", f: s.f });
+  const h = crearManejador({ interruptor: () => true, validar: admin, rpcDe: b.rpcDe, ticketDe: () => "T", f: s.f });
   const { r, res } = resp(); await h({ method: "POST", headers: {}, body: { origen: "manual" } }, res);
   ok("T31_completo_sin_mas_y_con_cola", r.code === 200 && r.body.ok && r.body.hay_mas === false && r.body.cola.total === 3 && r.body.procesados === 1 && r.body.ritmo_ms >= LIMITES.pausaMinMs, r.body);
   const reg = b.llamadas.find((x) => x.fn === "ic_registrar_sincronizacion").body.p;
@@ -324,7 +324,7 @@ const admin = async () => ({ uid: "u-admin", token: "tk", admin: true });
 {
   const b = baseSimulada({ pendientes: [{ codigo: "1001-3-COT26" }], cola: { total: 50, sin_consultar: 40, por_verificar: 0, en_proceso: 1, finales: 9, con_error: 0, elegibles_ahora: 40, proximo_reintento: null } });
   const s = simulado({ listado: { "1001-3-COT26": L("1001-3-COT26") }, reloj });
-  const h = crearManejador({ validar: admin, rpcDe: b.rpcDe, ticketDe: () => "T", f: s.f });
+  const h = crearManejador({ interruptor: () => true, validar: admin, rpcDe: b.rpcDe, ticketDe: () => "T", f: s.f });
   const { r, res } = resp(); await h({ method: "POST", headers: {}, body: { ritmo_ms: 3000 } }, res);
   ok("T32_hay_mas_si_la_base_tiene_elegibles", r.body.hay_mas === true, r.body);
   ok("T32_ritmo_del_navegador_respetado", r.body.ritmo_ms <= 3000 && r.body.ritmo_ms >= LIMITES.pausaMinMs);
@@ -332,7 +332,7 @@ const admin = async () => ({ uid: "u-admin", token: "tk", admin: true });
 {
   const b = baseSimulada({ pendientes: [{ codigo: "1001-3-COT26" }, { codigo: "1001-4-COT26" }] });
   const s = simulado({ listado: { "1001-3-COT26": L("1001-3-COT26"), "1001-4-COT26": L("1001-4-COT26") }, seq: { "L:1001-3-COT26": [429, 429, 429, 429] }, reloj });
-  const h = crearManejador({ validar: admin, rpcDe: b.rpcDe, ticketDe: () => "T", f: s.f, lim: { ...LIMITES, concurrencia: 1 } });
+  const h = crearManejador({ interruptor: () => true, validar: admin, rpcDe: b.rpcDe, ticketDe: () => "T", f: s.f, lim: { ...LIMITES, concurrencia: 1 } });
   const { r, res } = resp(); await h({ method: "POST", headers: {}, body: {} }, res);
   const reg = b.llamadas.find((x) => x.fn === "ic_registrar_sincronizacion").body.p;
   ok("T33_pausa_de_chilecompra_hay_mas_y_ok", r.code === 200 && r.body.ok && r.body.hay_mas === true && r.body.pausa_ms === LIMITES.pausaSugeridaMs && !r.body.ticket_rechazado, r.body);
@@ -341,35 +341,35 @@ const admin = async () => ({ uid: "u-admin", token: "tk", admin: true });
 {
   const b = baseSimulada({ pendientes: [{ codigo: "1001-3-COT26" }], sinEstado: true });
   const s = simulado({ listado: { "1001-3-COT26": L("1001-3-COT26") }, reloj });
-  const h = crearManejador({ validar: admin, rpcDe: b.rpcDe, ticketDe: () => "T", f: s.f });
+  const h = crearManejador({ interruptor: () => true, validar: admin, rpcDe: b.rpcDe, ticketDe: () => "T", f: s.f });
   const { r, res } = resp(); await h({ method: "POST", headers: {}, body: {} }, res);
   ok("T34_base_sin_la_correccion_sigue_funcionando", r.code === 200 && r.body.ok && r.body.cola === null && r.body.hay_mas === false, r.body);
 }
 {
   const b = baseSimulada({ sinMigracion: true });
-  const h = crearManejador({ validar: admin, rpcDe: b.rpcDe, ticketDe: () => "T" });
+  const h = crearManejador({ interruptor: () => true, validar: admin, rpcDe: b.rpcDe, ticketDe: () => "T" });
   const { r, res } = resp(); await h({ method: "POST", headers: {}, body: {} }, res);
   ok("T35_sin_migracion_informado", r.code === 503 && r.body.codigo === "SIN_MIGRACION");
 }
 {
   const b = baseSimulada({ pendientes: [{ codigo: "1001-3-COT26" }] });
   const s = simulado({ listado: { "1001-3-COT26": 401 }, reloj });
-  const h = crearManejador({ validar: admin, rpcDe: b.rpcDe, ticketDe: () => "T", f: s.f });
+  const h = crearManejador({ interruptor: () => true, validar: admin, rpcDe: b.rpcDe, ticketDe: () => "T", f: s.f });
   const { r, res } = resp(); await h({ method: "POST", headers: {}, body: {} }, res);
   ok("T36_ticket_rechazado_502_sin_registrar_resultados", r.code === 502 && r.body.codigo === "TICKET_INVALIDO" && !b.llamadas.some((x) => x.fn === "ic_registrar_resultado"));
 }
 {
   const b = baseSimulada({ pendientes: [] });
-  const h = crearManejador({ validar: admin, rpcDe: b.rpcDe, ticketDe: () => "T" });
+  const h = crearManejador({ interruptor: () => true, validar: admin, rpcDe: b.rpcDe, ticketDe: () => "T" });
   let ultimo; for (let i = 0; i < LIMITES.llamadasPorMinuto + 1; i++) { const { r, res } = resp(); await h({ method: "POST", headers: {}, body: {} }, res); ultimo = r; }
   ok("T37_limite_propio_informa_cuanto_esperar", ultimo.code === 429 && ultimo.body.codigo === "LIMITE_BFK" && ultimo.body.reintentar_ms > 0 && ultimo.body.reintentar_ms <= 60_000, ultimo.body);
-  const h2 = crearManejador({ validar: admin, rpcDe: b.rpcDe, ticketDe: () => "" });
+  const h2 = crearManejador({ interruptor: () => true, validar: admin, rpcDe: b.rpcDe, ticketDe: () => "" });
   const { r, res } = resp(); await h2({ method: "POST", headers: {}, body: {} }, res);
   ok("T37_sin_ticket", r.code === 503 && r.body.codigo === "SIN_TICKET");
 }
 {
   const b = baseSimulada({ pendientes: [] });
-  const h = crearManejador({ validar: admin, rpcDe: b.rpcDe, ticketDe: () => "T" });
+  const h = crearManejador({ interruptor: () => true, validar: admin, rpcDe: b.rpcDe, ticketDe: () => "T" });
   const { r, res } = resp(); await h({ method: "POST", headers: {}, body: {} }, res);
   ok("T38_todo_al_dia", r.code === 200 && r.body.hay_mas === false && r.body.procesados === 0 && r.body.cola.total === 3);
 }

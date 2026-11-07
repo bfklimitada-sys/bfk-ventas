@@ -142,11 +142,30 @@ export async function sincronizar({ pendientes, ticket, rpc, f = fetch, ahora = 
   return out;
 }
 
-// Manejador HTTP. Las dependencias se pueden reemplazar en las pruebas (sesión, base, ticket, ChileCompra, límites).
-export function crearManejador({ validar = validarSesion, rpcDe = rpcCon, ticketDe = () => (process.env.MP_TICKET_COMPRA_AGIL || process.env.MP_TICKET || "").trim(), f = fetch, lim = LIMITES } = {}) {
+// ── Interruptor central (06/11/2026) ───────────────────────────────────────────────────────────────────────────
+// Inteligencia Comercial queda DESACTIVADA salvo que la base diga explícitamente lo contrario: la función
+// ic_interruptor_estado() debe responder exactamente { habilitada: true }. Cualquier otra cosa —función no instalada,
+// error, respuesta vacía o inválida, tiempo agotado— se trata como DESACTIVADA. El valor solo lo cambia un administrador
+// con ic_cambiar_interruptor(); ningún despliegue, variable de entorno ni valor por defecto lo activa.
+// Esta comprobación va ANTES de validar la sesión, de leer la cola y de tocar ChileCompra: con el módulo desactivado
+// la función no hace ninguna otra llamada.
+export async function leerInterruptor(f = fetch) {
+  try {
+    const r = await f(`${SUPABASE_URL}/rest/v1/rpc/ic_interruptor_estado`, { method: "POST", headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`, "Content-Type": "application/json" }, body: "{}", signal: AbortSignal.timeout(5_000) });
+    if (!r.ok) return false;
+    const j = await r.json().catch(() => null);
+    return j !== null && typeof j === "object" && !Array.isArray(j) && j.habilitada === true;
+  } catch { return false; }
+}
+export const RESPUESTA_DESACTIVADA = { ok: false, codigo: "IC_DESACTIVADA", error: "Inteligencia Comercial está desactivada. No se consultó ChileCompra ni se creó ninguna tarea. Solo un administrador puede reactivarla desde Administración." };
+
+// Manejador HTTP. Las dependencias se pueden reemplazar en las pruebas (interruptor, sesión, base, ticket, ChileCompra, límites).
+export function crearManejador({ interruptor = () => leerInterruptor(), validar = validarSesion, rpcDe = rpcCon, ticketDe = () => (process.env.MP_TICKET_COMPRA_AGIL || process.env.MP_TICKET || "").trim(), f = fetch, lim = LIMITES } = {}) {
   let enCurso = false; const usos = new Map();
   return async function handler(req, res) {
     res.setHeader("Cache-Control", "no-store");
+    let habilitada = false; try { habilitada = (await interruptor()) === true; } catch { habilitada = false; }
+    if (!habilitada) return res.status(423).json(RESPUESTA_DESACTIVADA);
     if (req.method !== "POST") return res.status(405).json({ ok: false, error: "Use POST." });
     const ses = await validar(req);
     if (ses.error) return res.status(ses.status).json({ ok: false, error: ses.error });
