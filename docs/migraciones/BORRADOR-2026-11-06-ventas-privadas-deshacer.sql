@@ -31,6 +31,7 @@ do $$ begin
   if to_regclass('storage.objects') is not null then
     execute 'drop policy if exists vp_storage_leer on storage.objects';
     execute 'drop policy if exists vp_storage_subir on storage.objects';
+    execute 'drop policy if exists vp_storage_respaldo_leer on storage.objects';
     perform set_config('storage.allow_delete_query', 'true', true);   -- solo en esta transacción (el depósito está vacío)
     execute 'delete from storage.buckets where id = ''vp-documentos''';
   end if;

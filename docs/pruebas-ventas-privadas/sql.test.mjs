@@ -220,6 +220,14 @@ check(valor(U.beto, `select count(*) from public.vp_documentos where venta_id = 
 check(valor(U.beto, `select count(*) from storage.objects where bucket_id = 'vp-documentos';`) === "1", "depósito: otro usuario no lee el archivo de compra");
 check(valor(U.ana, `select count(*) from storage.objects where bucket_id = 'vp-documentos';`) === "2", "depósito: responsable lee ambos");
 check(valor(U.ana, `select count(*) from storage.objects where bucket_id = 'cz-productos';`) === "1", "depósito de Cotizaciones MP intacto");
+// Respaldo diario (bfk-respaldos, MODULO=vp): la cuenta aislada de respaldo (sin perfil, en pi_cuentas_respaldo) LEE todo
+// vp-documentos y no puede subir; una cuenta sin perfil que no es de respaldo no lee nada.
+psql(`insert into public.pi_cuentas_respaldo (usuario_id, descripcion) values ('${U.sinPerfil}', 'Cuenta de respaldo de prueba') on conflict do nothing;`);
+check(valor(U.sinPerfil, `select count(*) from storage.objects where bucket_id = 'vp-documentos';`) === "2", "respaldo: la cuenta aislada lee todos los archivos de vp-documentos");
+falla(como(U.sinPerfil, `insert into storage.objects (bucket_id, name) values ('vp-documentos', 'venta/${randomUUID()}/otro/${randomUUID()}-x.pdf');`), "row-level security", "respaldo: la cuenta aislada no sube archivos");
+check(/permission denied|^0$/.test((() => { const r = como(U.sinPerfil, "select count(*) from public.vp_ventas;"); return r.err || r.out; })()), "respaldo: la cuenta aislada no lee datos de ventas");
+psql(`delete from public.pi_cuentas_respaldo where usuario_id = '${U.sinPerfil}';`);
+check(valor(U.sinPerfil, `select count(*) from storage.objects where bucket_id = 'vp-documentos';`) === "0", "sin perfil ni registro de respaldo: no lee vp-documentos");
 
 // ── 11. Producto técnico y EETT ───────────────────────────────────────────────────────────────────────────
 falla(rpc(U.ana, "vp_guardar_producto", j({ nombre: "Bomba", normas: [{ norma: "IEC 60034" }] })), "respaldo", "norma sin respaldo rechazada");

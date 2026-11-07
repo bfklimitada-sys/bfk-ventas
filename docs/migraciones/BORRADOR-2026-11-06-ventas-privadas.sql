@@ -1731,7 +1731,8 @@ end $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════════════════
 -- Depósito privado "vp-documentos" (Supabase Storage). Ruta: <ambito>/<id>/<categoria>/<uuid>-<nombre>.
--- Leer: usuarios BFK (los respaldos de compras, solo administrador y responsable). Subir: usuarios BFK, solo si la carga
+-- Leer: usuarios BFK (los respaldos de compras, solo administrador y responsable) y la cuenta aislada del respaldo
+-- diario (solo lectura). Subir: usuarios BFK, solo si la carga
 -- está habilitada y la ubicación existe. Sin reemplazo ni eliminación por usuarios (no hay políticas UPDATE/DELETE).
 -- Las políticas son PERMISIVAS y limitadas a bucket_id = 'vp-documentos': no cambian el acceso a ningún otro depósito.
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════════════════
@@ -1746,6 +1747,13 @@ do $$ begin
     using (bucket_id = 'vp-documentos' and public.vp_puede_leer_ruta(name))$p$;
   execute $p$create policy vp_storage_subir on storage.objects for insert to authenticated
     with check (bucket_id = 'vp-documentos' and public.vp_puede_subir_ruta(name))$p$;
+  -- Respaldo diario de archivos (bfk-respaldos, MODULO=vp): la MISMA cuenta aislada de solo lectura que respalda
+  -- pi-documentos (registrada en pi_cuentas_respaldo, sin perfil BFK) puede leer este depósito. No puede subir.
+  if to_regprocedure('public.pi_es_lector_respaldo()') is not null then
+    execute $p$create policy vp_storage_respaldo_leer on storage.objects for select to authenticated
+      using (bucket_id = 'vp-documentos' and public.pi_es_lector_respaldo())$p$;
+  else raise notice 'VP|SIN_CUENTA_RESPALDO|la política de lectura para el respaldo se crea cuando exista pi_es_lector_respaldo()';
+  end if;
 end $$;
 
 notify pgrst, 'reload schema';
