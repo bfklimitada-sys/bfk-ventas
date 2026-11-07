@@ -20,7 +20,9 @@ function ResumenAtraso({ titulo, monto, color, fondo, onVerAlertas }) {
   );
 }
 
-export function PanelCalendario({ ocs, onMarcarFecha, onVerAlertas }) {
+// eventosExtra (06/11/2026): eventos de Ventas privadas con fecha (entregas comprometidas, vencimiento de cotizaciones y de
+// pagos), punto turquesa; onAbrirExtra(destino) abre la cotización o la venta. El filtro de canal lo aplica quien llama.
+export function PanelCalendario({ ocs, onMarcarFecha, onVerAlertas, eventosExtra = [], onAbrirExtra }) {
   const hoy=new Date();
   const [anio,setAnio]=useState(hoy.getFullYear());
   const [mes,setMes]=useState(hoy.getMonth());
@@ -89,6 +91,7 @@ export function PanelCalendario({ ocs, onMarcarFecha, onVerAlertas }) {
     return {n,monto};
   },[ocs]);
 
+  const extraPorDia=useMemo(()=>{ const m={}; for(const e of eventosExtra||[]) (m[e.fecha]=m[e.fecha]||[]).push(e); return m; },[eventosExtra]);
   const primerDia=new Date(anio,mes,1);
   const diasEnMes=new Date(anio,mes+1,0).getDate();
   let offset=primerDia.getDay()-1; if(offset<0)offset=6;
@@ -139,6 +142,7 @@ export function PanelCalendario({ ocs, onMarcarFecha, onVerAlertas }) {
         <span><span style={{color:C.ok}}>●</span> Realizada</span>
         <span><span style={{color:C.warn}}>●</span> Vence factura</span>
         <span><span style={{color:C.purple}}>●</span> Promesa de pago</span>
+        {(eventosExtra||[]).length>0&&<span><span style={{color:C.teal}}>●</span> Venta privada</span>}
       </div>
 
       <div style={{background:C.card,borderRadius:12,padding:"10px 8px",border:`1px solid ${C.border}`}}>
@@ -153,6 +157,7 @@ export function PanelCalendario({ ocs, onMarcarFecha, onVerAlertas }) {
             const tieneReal=(realesPorDia[k]||[]).length>0;
             const tieneVence=(vencenPorDia[k]||[]).length>0;
             const tienePromesa=(promesasPorDia[k]||[]).length>0;
+            const tieneExtra=(extraPorDia[k]||[]).length>0;
             const esHoy=d===hoyD;
             const sel=d===diaSel;
             return (
@@ -167,6 +172,7 @@ export function PanelCalendario({ ocs, onMarcarFecha, onVerAlertas }) {
                   {tieneReal&&<span style={{width:5,height:5,borderRadius:"50%",background:C.ok}} />}
                   {tieneVence&&<span style={{width:5,height:5,borderRadius:"50%",background:C.warn}} />}
                   {tienePromesa&&<span style={{width:5,height:5,borderRadius:"50%",background:C.purple}} />}
+                  {tieneExtra&&<span data-punto-vp style={{width:5,height:5,borderRadius:"50%",background:C.teal}} />}
                 </div>
               </button>
             );
@@ -242,7 +248,18 @@ export function PanelCalendario({ ocs, onMarcarFecha, onVerAlertas }) {
               ))}
             </div>
           )}
-          {!(estimadasPorDia[kSel]||[]).length&&!(realesPorDia[kSel]||[]).length&&!(vencenPorDia[kSel]||[]).length&&!(promesasPorDia[kSel]||[]).length&&(
+          {(extraPorDia[kSel]||[]).length>0&&(
+            <div style={{marginTop:8}} data-agenda-vp>
+              <div style={{fontSize:12,fontWeight:700,color:C.tealDark,textTransform:"uppercase",marginBottom:4}}>● Ventas privadas</div>
+              {(extraPorDia[kSel]||[]).map((e,i)=>(
+                <button key={i} type="button" data-evento-vp={e.tipo} onClick={()=>onAbrirExtra&&onAbrirExtra(e.destino)} style={{width:"100%",background:"none",border:"none",padding:"2px 0",cursor:"pointer",fontSize:12,display:"flex",justifyContent:"space-between",gap:8,textAlign:"left"}}>
+                  <span style={{fontWeight:700,color:C.ink}}>{e.titulo}</span>
+                  <span style={{color:C.inkMuted}}>{e.detalle||""}{e.monto>0?` · ${fmt.money(e.monto)}`:""}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {!(estimadasPorDia[kSel]||[]).length&&!(realesPorDia[kSel]||[]).length&&!(vencenPorDia[kSel]||[]).length&&!(promesasPorDia[kSel]||[]).length&&!(extraPorDia[kSel]||[]).length&&(
             <div style={{fontSize:12,color:C.inkFaint}}>Sin eventos este día</div>
           )}
         </div>
@@ -252,6 +269,7 @@ export function PanelCalendario({ ocs, onMarcarFecha, onVerAlertas }) {
         {muestra:"●", color:C.okText, bg:C.okLight, texto:"Verde: entrega realizada, la fecha real en que se confirmó."},
         {muestra:"●", color:C.warnText, bg:C.warnLight, texto:"Amarillo: vence una factura (fecha de factura + plazo de pago de la OC)."},
         {muestra:"●", color:C.purple, bg:C.purpleLight, texto:"Morado: fecha en que el cliente prometió pagar."},
+        {muestra:"●", color:C.tealDark, bg:C.tealLight, texto:"Turquesa: ventas privadas (entrega comprometida, vence una cotización o un pago)."},
         {muestra:"▢", texto:"Recuadro negro: hoy. Recuadro verde: el día que tienes seleccionado."},
       ]} />
     </div>

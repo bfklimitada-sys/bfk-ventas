@@ -125,8 +125,53 @@ export function MenuMas({ abierto, onCerrar, visibles, tab, onIr, perfil, onImpr
   );
 }
 
+// ── Botón «+ Nuevo» con sus opciones (reemplaza «+ Nueva OC»). onElegir(clave): vp_cotizacion | vp_venta | mp_oc ──
+export const OPCIONES_NUEVO = [
+  { k: "vp_cotizacion", label: "Cotización privada", desc: "Cotización a un cliente privado (fuera de Mercado Público)", icono: "📄" },
+  { k: "vp_venta", label: "Venta privada / Registrar OC de cliente", desc: "Desde una cotización aceptada o venta directa", icono: "🛒" },
+  { k: "mp_oc", label: "OC de Mercado Público", desc: "Cargar una orden de compra de Mercado Público", icono: "📦" },
+];
+export function MenuNuevo({ onElegir, oscuro, compacto, alinear = "izquierda" }) {
+  const [abierto, setAbierto] = useState(false);
+  const caja = useRef(null);
+  useEffect(() => {
+    if (!abierto) return undefined;
+    const fuera = (e) => { if (caja.current && !caja.current.contains(e.target)) setAbierto(false); };
+    const tecla = (e) => { if (e.key === "Escape") setAbierto(false); };
+    document.addEventListener("mousedown", fuera); document.addEventListener("touchstart", fuera); window.addEventListener("keydown", tecla);
+    return () => { document.removeEventListener("mousedown", fuera); document.removeEventListener("touchstart", fuera); window.removeEventListener("keydown", tecla); };
+  }, [abierto]);
+  const elegir = (k) => { setAbierto(false); onElegir && onElegir(k); };
+  return (
+    <div ref={caja} style={{ position: "relative", width: compacto ? "auto" : "100%", marginBottom: compacto ? 0 : 14, flexShrink: 0 }}>
+      <button type="button" data-boton-nuevo aria-haspopup="menu" aria-expanded={abierto} onClick={() => setAbierto((v) => !v)}
+        style={compacto
+          ? { background: C.teal, border: "none", color: "#fff", borderRadius: 8, padding: "9px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }
+          : { width: "100%", background: C.teal, border: "none", color: "#fff", borderRadius: 12, padding: "11px 14px", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 3px 10px rgba(20,184,166,0.35)", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+        + Nuevo <span aria-hidden="true" style={{ display: "inline-flex", transform: abierto ? "rotate(180deg)" : "none", transition: "transform .15s" }}><Ic n="chevD" size="1em" /></span>
+      </button>
+      {abierto && (
+        <div role="menu" aria-label="Crear nuevo" data-menu-nuevo
+          style={{ position: "absolute", top: "calc(100% + 6px)", [alinear === "derecha" ? "right" : "left"]: 0, width: compacto ? "min(320px, calc(100vw - 24px))" : "100%", minWidth: 240,
+            background: oscuro ? "#16213E" : C.card, border: `1px solid ${oscuro ? "rgba(255,255,255,0.14)" : C.border}`, borderRadius: 12, boxShadow: "0 14px 34px rgba(0,0,0,0.28)", padding: 6, zIndex: 70 }}>
+          {OPCIONES_NUEVO.map((o) => (
+            <button key={o.k} type="button" role="menuitem" data-nuevo={o.k} onClick={() => elegir(o.k)}
+              style={{ width: "100%", display: "flex", gap: 10, alignItems: "flex-start", textAlign: "left", background: "transparent", border: "none", borderRadius: 8, padding: "9px 10px", cursor: "pointer", color: oscuro ? "#E2E8F0" : C.ink, minHeight: 44 }}>
+              <span style={{ color: oscuro ? "#5EEAD4" : C.tealDark, marginTop: 1 }}><Ic n={o.icono} /></span>
+              <span style={{ minWidth: 0 }}>
+                <span style={{ display: "block", fontSize: 13, fontWeight: 800 }}>{o.label}</span>
+                <span style={{ display: "block", fontSize: 12, color: oscuro ? "#8B9AB5" : C.inkMuted, lineHeight: 1.35 }}>{o.desc}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Escritorio: barra lateral con todas las pantallas agrupadas ────────────
-export function BarraLateral({ visibles, tab, onIr, nAlertas, perfil, onNuevaOC, onImprimir, onSalir }) {
+export function BarraLateral({ visibles, tab, onIr, nAlertas, perfil, onNuevo, onImprimir, onSalir }) {
   const grupos = GRUPOS.map((g) => ({ ...g, items: visibles.filter((p) => p.grupo === g.key) })).filter((g) => g.items.length);
   const esAdmin = perfil?.rol === "admin";
   const sec = { width: "100%", display: "flex", alignItems: "center", gap: 10, background: "transparent", border: "1px solid rgba(255,255,255,0.10)", borderRadius: 12, padding: "8px 10px", color: "#B8C4D9", fontSize: 13, fontWeight: 600, cursor: "pointer", textAlign: "left", minHeight: 40 };
@@ -136,10 +181,10 @@ export function BarraLateral({ visibles, tab, onIr, nAlertas, perfil, onNuevaOC,
         <div style={{ width: 38, height: 38, background: "rgba(20,184,166,0.15)", border: `1.5px solid ${C.teal}`, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: MONO, color: C.teal, fontWeight: 800, fontSize: 13, flexShrink: 0 }}>BFK</div>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontWeight: 800, fontSize: 16, letterSpacing: -0.3 }}>BFK Ltda</div>
-          <div style={{ fontSize: 12, color: "#8B9AB5" }}>Ventas Mercado Público</div>
+          <div style={{ fontSize: 12, color: "#8B9AB5" }}>Gestión comercial</div>
         </div>
       </div>
-      <button onClick={onNuevaOC} style={{ width: "100%", background: C.teal, border: "none", color: "#fff", borderRadius: 12, padding: "11px 14px", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 3px 10px rgba(20,184,166,0.35)", marginBottom: 14 }}>+ Nueva OC</button>
+      <MenuNuevo onElegir={onNuevo} oscuro />
       <nav aria-label="Pantallas" style={{ flex: 1 }}>
         {grupos.map((g) => (
           <div key={g.key} style={{ marginBottom: 14 }}>

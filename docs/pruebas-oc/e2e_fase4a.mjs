@@ -4,6 +4,8 @@
 import { chromium, CHROME, crearBase, abrir } from "./mock_estado.mjs";
 import { crearDatos, RESPUESTAS_MP, dias } from "./datos_oc.mjs";
 import { FILTROS_PANEL } from "../../src/lib/ocs.js";
+// 06/11/2026: «+ Nueva OC» pasó a ser «+ Nuevo › OC de Mercado Público» (mismo formulario de siempre).
+const nuevaOC = async (p) => { await p.locator("[data-boton-nuevo]:visible").first().click(); await p.waitForTimeout(250); await p.locator('[data-nuevo="mp_oc"]').first().click(); };
 
 const URL_APP = process.argv[2] || "http://127.0.0.1:4178/";
 const SOLO = process.env.SOLO ? new Set(process.env.SOLO.split(",")) : null;
@@ -139,7 +141,7 @@ await escenario("S3", async () => {
 await escenario("S4", async () => {
   const b = base0();
   const { page: p, errs, ctx } = await abrir(browser, b, { url: URL_APP, ...escritorio, espera: 3000 });
-  const abrirNueva = async () => { await boton(p, /^\+ Nueva OC$/); await espera(p, 500); return enModal(p); };
+  const abrirNueva = async () => { await nuevaOC(p); await espera(p, 500); return enModal(p); };
   const buscar = async (m, cod) => { await m.locator("input").last().fill(cod); await boton(p, /Buscar OC/, m); await espera(p, 900); };
   let m = await abrirNueva();
   ok("S4_sin_vendedor_por_defecto_avisa", (await m.locator('[data-aviso="sin-vendedor"]').count()) === 1);
@@ -364,7 +366,7 @@ await escenario("S10", async () => {
 await escenario("S11", async () => {
   const b = base0();
   const { page: p, errs, ctx } = await abrir(browser, b, { url: URL_APP, ...escritorio, espera: 3000 });
-  const abrirManual = async () => { await boton(p, /^\+ Nueva OC$/); await espera(p, 400); await boton(p, /Ingresar manualmente/); await espera(p, 400); return enModal(p); };
+  const abrirManual = async () => { await nuevaOC(p); await espera(p, 400); await boton(p, /Ingresar manualmente/); await espera(p, 400); return enModal(p); };
   let m = await abrirManual();
   const selVend = m.locator("select").first();
   ok("S11_vendedor_no_preseleccionado", (await selVend.inputValue()) === "");
@@ -417,7 +419,7 @@ await escenario("S12", async () => {
   const b = base0();
   const { page: p, errs, ctx } = await abrir(browser, b, { url: URL_APP, ...escritorio, espera: 3000 });
   const n0 = b.escr.length;
-  await boton(p, /^\+ Nueva OC$/); await espera(p, 400);
+  await nuevaOC(p); await espera(p, 400);
   let m = enModal(p);
   await m.locator("select").first().selectOption("v1");
   await m.locator("input").last().fill("4005-5-SE26"); await boton(p, /Buscar OC/, m); await espera(p, 900);

@@ -280,14 +280,17 @@ const LEYENDA_ALERTAS = [
         {muestra:"›", texto:"Al tocar una alerta te lleva al listado filtrado por esa etapa."},
       ];
 
-export function PanelNotificaciones({ notificaciones, ocs, onMarcarLeidas, onNavigate, filtroAlertas, onFiltroAlertas, correos, onMarcarCorreo }) {
+// alertasExtra (06/11/2026): alertas de Ventas privadas (canal «vp», con destino {tab,id}); se muestran junto a las de OC
+// según el filtro de canal (lo aplica quien llama). Las alertas de OC se calculan igual que siempre.
+export function PanelNotificaciones({ notificaciones, ocs, onMarcarLeidas, onNavigate, filtroAlertas, onFiltroAlertas, correos, onMarcarCorreo, alertasExtra = [], onAbrirExtra }) {
   const [filtroLocal, setFiltroLocal] = useState({ nivel: "todas", etapa: null });
   const fa = filtroAlertas || filtroLocal;
   const setFa = onFiltroAlertas || setFiltroLocal;
   const filtro = fa.nivel || "todas";
   const etapa = fa.etapa || null;
   const setFiltro = (nivel) => setFa({ nivel, etapa: null });
-  const alertas = calcularAlertas(ocs);
+  const ORDEN_NIVEL = { alto: 0, medio: 1, bajo: 2 };
+  const alertas = [...calcularAlertas(ocs), ...(alertasExtra || [])].map((a, i) => ({ ...a, _i: i })).sort((a, b) => (ORDEN_NIVEL[a.nivel] - ORDEN_NIVEL[b.nivel]) || (a._i - b._i));
   const noLeidas = (notificaciones || []).filter(n => !n.leida);
   const visibles = alertas
     .filter(a => filtro === "todas" || a.nivel === filtro)
@@ -347,16 +350,16 @@ export function PanelNotificaciones({ notificaciones, ocs, onMarcarLeidas, onNav
       )}
 
       {visibles.map((a, i) => (
-        <button key={i} data-alerta-seguimiento={a.seguimientoId} onClick={() => onNavigate && onNavigate(a.tab, a.filtro, a.ocId)}
+        <button key={i} data-alerta-seguimiento={a.seguimientoId} data-alerta-canal={a.canal || "mp"} onClick={() => (a.destino ? onAbrirExtra && onAbrirExtra(a.destino) : onNavigate && onNavigate(a.tab, a.filtro, a.ocId))}
           style={{width:"100%",textAlign:"left",background:C.card,border:`1px solid ${C.border}`,
             borderLeft:`4px solid ${colorNivel(a.nivel)}`,borderRadius:12,padding:"11px 13px",
             marginBottom:7,cursor:"pointer",display:"flex",gap:10,alignItems:"flex-start"}}>
-          <span style={{fontSize:16,flexShrink:0,lineHeight:1.2}}>{a.icono}</span>
+          <span style={{fontSize:16,flexShrink:0,lineHeight:1.2}}>{typeof a.icono === "string" ? <Ic n={a.icono}/> : a.icono}</span>
           <span style={{flex:1,minWidth:0}}>
             <span style={{display:"block",fontSize:13,fontWeight:700,color:C.ink}}>{a.titulo}</span>
             <span style={{display:"block",fontSize:12,color:C.inkMuted,marginTop:2}}>{a.detalle}</span>
             <span style={{display:"block",fontSize:12,color:C.inkFaint,marginTop:3,fontFamily:MONO}}>
-              {a.oc}{a.cliente ? ` · ${a.cliente}` : ""}
+              {a.canal === "vp" ? "Venta privada · " : ""}{a.oc}{a.cliente ? ` · ${a.cliente}` : ""}
             </span>
           </span>
           {a.monto > 0 && (

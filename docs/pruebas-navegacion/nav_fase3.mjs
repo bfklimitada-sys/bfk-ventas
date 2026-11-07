@@ -3,6 +3,8 @@
 // enlaces directos, permisos admin/usuario, celular/escritorio, ventanas, Escape y accesos a funciones.
 import { chromium } from "playwright-core";
 import { abrir, CHROME } from "./mock.mjs";
+// 06/11/2026: «+ Nueva OC» pasó a ser «+ Nuevo › OC de Mercado Público» (mismo formulario de siempre).
+const nuevaOC = async (p) => { await p.locator("[data-boton-nuevo]:visible").first().click(); await p.waitForTimeout(250); await p.locator('[data-nuevo="mp_oc"]').first().click(); };
 const URL_APP=process.argv[2]||"http://127.0.0.1:4177/";
 const browser=await chromium.launch({executablePath:CHROME,args:["--no-sandbox"]});
 const R={}; const F=[]; const ok=(k,v)=>{R[k]=!!v; if(!v) F.push(k);};
@@ -82,12 +84,12 @@ for(const [modo,ancho,alto,movil] of [["movil",390,844,true],["escritorio",1440,
     ok(`${tag}_pantalla_nueva_arriba`, (await p.evaluate(()=>window.scrollY))===0);
     // Ventana + atrás: se cierra la ventana y se queda en la pantalla
     await ir(p,"agenda",esc);
-    await p.getByText("+ Nueva OC").first().click(); await espera(p,400);
+    await nuevaOC(p); await espera(p,400);
     const conVentana=(await p.locator('[role=dialog][aria-modal="true"]').count())>0;
     await p.goBack(); await espera(p,500);
     ok(`${tag}_atras_cierra_ventana`, conVentana && (await p.locator('[role=dialog]').count())===0 && (await hash(p))==="#/agenda");
     // Escape cierra ventana
-    await p.getByText("+ Nueva OC").first().click(); await espera(p,400);
+    await nuevaOC(p); await espera(p,400);
     await p.keyboard.press("Escape"); await espera(p,300);
     ok(`${tag}_escape_cierra_ventana`, (await p.locator('[role=dialog]').count())===0);
     // Ventana: posición según dispositivo

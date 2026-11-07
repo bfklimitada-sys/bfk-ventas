@@ -42,6 +42,8 @@ const P = {
   heart: <><path d="M12 20s-8-5-8-11a4.5 4.5 0 018-2.5A4.5 4.5 0 0120 9c0 6-8 11-8 11z"/></>,
   flag: <><path d="M5 21V4"/><path d="M5 4h12l-2.5 4 2.5 4H5"/></>,
   factory: <><path d="M3 21V10l5 3V10l5 3V6h3l1 15"/><path d="M17 21V3h3v18M2 21h20M7 17h2M12 17h2"/></>,
+  cart: <><circle cx="9" cy="20" r="1.5"/><circle cx="17" cy="20" r="1.5"/><path d="M3 4h2l2.4 11h10.2l2-8H6.2"/></>,
+  plus: <><path d="M12 5v14M5 12h14"/></>,
   sparkle: <><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M18 6l-2.5 2.5M8.5 15.5L6 18"/></>,
 };
 const COLOR = { dotRed:"#EF4444", dotAmber:"#F59E0B", dotOrange:"#F97316" };
@@ -49,7 +51,7 @@ const ALIAS = {
   "📊":"chart","📦":"box","📅":"calendar","🏦":"bank","🧾":"receipt","🧑‍💼":"briefcase","💼":"briefcase","🔔":"bell","👥":"users","👋":"hand",
   "⚠":"alert","⚠️":"alert","📧":"mail","📩":"mailIn","🚚":"truck","💰":"coins","💸":"coins","⏳":"hourglass","🛠":"wrench","🗑":"trash","🗄":"archive",
   "⏸":"pause","📄":"file","🔗":"link","✏️":"pencil","✅":"check","📋":"clipboard","💬":"message","🔒":"lock","🏢":"building","📥":"download",
-  "☰":"menu","◀":"chevL","▶":"chevR","🔴":"dotRed","🟡":"dotAmber","🟠":"dotOrange","💚":"heart","🚩":"flag","🏭":"factory",
+  "☰":"menu","◀":"chevL","▶":"chevR","🔴":"dotRed","🟡":"dotAmber","🟠":"dotOrange","💚":"heart","🚩":"flag","🏭":"factory","🛒":"cart","➕":"plus",
 };
 export function Ic({ n, size = "1.15em", color, style }) {
   const clave = String(n || "").replace(/️/g, "");
