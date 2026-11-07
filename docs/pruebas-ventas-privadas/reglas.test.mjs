@@ -4,7 +4,8 @@
 import { execFileSync } from "node:child_process";
 import { calcularTotales, calcularLinea, indicadoresVP, alertasVP, eventosAgendaVP, propuestasDesdeTexto, tieneDatosComerciales, revisarEETT, documentoPublicoCotizacion,
   documentoDesdeEditor, itemEETTDesde, accionesCotizacion, filtrarVentas, resumenCliente, NO_INFORMADO } from "../../src/lib/ventasPrivadas.js";
-import { crearPdfCotizacion, crearPdfEETT } from "../../src/lib/vpPdf.js";
+import { crearPdfCotizacion } from "../../src/lib/vpPdf.js";
+import { crearPdfEETTVP as crearPdfEETT } from "../../src/lib/vpEETT.js";
 import { jsPDF } from "jspdf";
 
 let ok = 0, fallas = 0;
@@ -112,9 +113,19 @@ const eettPdf = crearPdfEETT({ folio: "ET-2026-0001", revision: 1, estado: "emit
   contenido: { objeto: "Suministro de bomba", alcance: "Instalación", cliente: { razon_social: "Maderas del Sur SpA", rut: "76.086.428-5" }, cotizacion: { folio: "CP-2026-0001", revision: 1 },
     items: [{ ...it, caracteristicas: it.caracteristicas.filter((c) => c.valor !== NO_INFORMADO), requisitos: [{ requisito: "Caudal 100 L/min", ofrecido: "Según curva", cumplimiento: "sin_declarar" }] }] } }, { jsPDF, empresa });
 const te = await textoPDF(eettPdf.output("arraybuffer"));
-si("PDF EETT con folio, revisión, cliente, referencia, ítem numerado y cantidad", /ET-2026-0001/.test(te) && /Rev\. 1/.test(te) && /Maderas del Sur/.test(te) && /CP-2026-0001/.test(te) && /ÍTEM 1/.test(te) && /2 UN/.test(te));
-si("PDF EETT distingue requisito del cliente y ofrecido", /Requisito: Caudal 100/.test(te) && /Ofrecido: Según curva/.test(te));
+si("PDF EETT con el formato de Mercado Público (título y pie de BFK)", /INFORMACI.N\s+T.CNICA DE/.test(te) && /PRODUCTOS/.test(te) && /bfklimitada@gmail\.com/.test(te));
+si("PDF EETT con cotización, EETT, cliente y RUT en la tabla", /COTIZACI.N/.test(te) && /CP-2026-0001 Rev\. 1/.test(te) && /ET-2026-0001 Rev\. 1/.test(te) && /Maderas del Sur/.test(te) && /76\.086\.428-5/.test(te));
+si("PDF EETT sin campos solo de Mercado Público", !/LICITACI.N/.test(te) && !/INSTITUCI.N SOLICITANTE/.test(te) && !/OC DEL CLIENTE/i.test(te));
+si("PDF EETT con ítem numerado y cantidad", /1\. /.test(te) && /CANTIDAD/.test(te) && /2 UN/.test(te));
+si("PDF EETT distingue requisito del cliente y ofrecido", /Requisitos del cliente/.test(te) && /Caudal 100/.test(te) && /Ofrecido: Según curva/.test(te) && !/Cumplimiento/.test(te));
 si("PDF EETT sin precios ni «No informado» en características", !/\$\s?\d/.test(te) && !/Peso\s+No informado/.test(te));
+{ const conOC = crearPdfEETT({ folio: "ET-2026-0001", revision: 2, estado: "emitida", emitida_en: "2026-11-07T12:00:00Z", hash: "b".repeat(64),
+    contenido: { objeto: "x", cliente: { razon_social: "Maderas del Sur SpA", rut: "76.086.428-5" }, cotizacion: { folio: "CP-2026-0001", revision: 1 }, oc_cliente: { numero: "4500012345", fecha: "2026-11-07" },
+      items: [{ ...it, caracteristicas: it.caracteristicas.filter((c) => c.valor !== NO_INFORMADO) }] } }, { jsPDF, empresa });
+  const t2 = await textoPDF(conOC.output("arraybuffer"));
+  si("PDF EETT muestra la OC del cliente cuando existe", /OC DEL CLIENTE/.test(t2) && /4500012345/.test(t2) && /07\/11\/2026/.test(t2)); }
+{ const b = crearPdfEETT({ folio: "ET-2026-0002", revision: 0, estado: "borrador", contenido: { objeto: "x", cliente: { razon_social: "C" }, items: [{ ...it }] } }, { jsPDF, empresa });
+  si("PDF EETT borrador marcado como no emitido", /BORRADOR - NO EMITIDO/.test(await textoPDF(b.output("arraybuffer")))); }
 
 // ── Comparación con la base (fórmula única) ──
 if (process.env.VP_DB_URL) {

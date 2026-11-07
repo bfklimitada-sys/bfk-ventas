@@ -3,6 +3,8 @@
 #   1. sql.test.mjs     — migración: permisos, duplicados, totales, revisiones, idempotencia, concurrencia, anulaciones, EETT, MP intacto
 #   2. deshacer         — la reversión se niega con datos y, sin datos, deja el catálogo idéntico a la plantilla
 #   3. reglas.test.mjs  — reglas puras, PDF sin costos y fórmula idéntica a la base
+#      eett_mp_sin_cambios.test.mjs — las EETT de Mercado Público quedan byte a byte iguales a las de main
+#      ejemplos_eett.mjs — un ejemplo de EETT por canal con el mismo generador (varios productos, textos largos)
 #   4. e2e              — navegador real (escritorio y celular), PostgREST real, recorrido completo
 # Requisitos: PostgreSQL local (PGHOST/PGPORT, superusuario postgres), postgrest 12 (POSTGREST=ruta), Chromium (CHROME=ruta),
 #             npm install y playwright-core resoluble desde node_modules.
@@ -22,6 +24,8 @@ grep -q "no se deshizo nada" <<< "$SAL" && [ -n "$(psql "${P[@]}" -At -U postgre
 psql "${P[@]}" -U bfk_owner -d bfk_vp_rev -f docs/migraciones/BORRADOR-2026-11-06-ventas-privadas-deshacer.sql > /dev/null 2>&1 || { echo "FALLA deshacer sin datos"; RC=1; }
 [ "$(psql "${P[@]}" -At -U postgres -d bfk_vp_rev -c "$H")" = "$(psql "${P[@]}" -At -U postgres -d "${VP_BASE:-bfk_vp_plantilla}" -c "$H")" ] && echo "OK catálogo idéntico tras deshacer" || { echo "FALLA catálogo distinto tras deshacer"; RC=1; }
 echo "== reglas"; node "$D/reglas.test.mjs" 2>/dev/null | tail -1; RC=$((RC | ${PIPESTATUS[0]}))
+echo "== EETT de Mercado Público sin cambios"; node "$D/eett_mp_sin_cambios.test.mjs" | tail -1; RC=$((RC | ${PIPESTATUS[0]}))
+echo "== ejemplos de EETT (ambos canales)"; node "$D/ejemplos_eett.mjs" | tail -1; RC=$((RC | ${PIPESTATUS[0]}))
 # e2e sobre una base limpia (la de sql.test quedó con datos de prueba)
 eval "$(bash "$D/entorno.sh" instalar)"; export PGRST_URL JWT_SECRET VP_DB_URL
 DIST="${TMPDIR:-/tmp}/dist-vp"; npx vite build --outDir "$DIST" --emptyOutDir > /dev/null 2>&1 || { echo "FALLA: build"; exit 1; }

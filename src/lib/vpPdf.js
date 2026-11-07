@@ -1,17 +1,17 @@
 // ═══════════════════════════════════════════════════════════════════════════════════════════════
-// PDF de Ventas privadas (jsPDF, texto vectorial). Dos documentos:
+// PDF de la cotización privada (jsPDF, texto vectorial):
 //   · Cotización privada: estructura del «Formato Cotización» de BFK (encabezado con logo y datos de la empresa,
 //     recuadro COTIZACIÓN con folio, solicitante, contacto, tabla ÍTEM/CÓDIGO/CANTIDAD/UN./DETALLE/P. UNITARIO,
 //     NETO / IVA (19%) / TOTAL, notas y condiciones) y el sello de página «Página X de Y».
-//   · EETT (especificaciones técnicas): mismo lenguaje visual de la ficha técnica de BFK (banda azul con logo),
-//     organizada por ítem con la numeración de la cotización.
+//   · Las EETT privadas NO se generan aquí: usan el formato y el generador de las EETT de Mercado Público
+//     (lib/eettPdf.js) mediante el adaptador lib/vpEETT.js.
 // Privacidad por construcción: la cotización solo recibe documentoPublicoCotizacion() (lista blanca, sin costos ni
-// márgenes) y la EETT solo el contenido validado (sin claves comerciales). El PDF se genera en el dispositivo; lo que
-// se conserva en la base es el contenido congelado (revisión enviada / EETT emitida), desde el que el PDF se regenera igual.
+// márgenes). El PDF se genera en el dispositivo; lo que
+// se conserva en la base es el contenido congelado (revisión enviada), desde el que el PDF se regenera igual.
 // ═══════════════════════════════════════════════════════════════════════════════════════════════
 import { importarModulo } from "./cargaModulos.js";
 import { textoPDF, fechaCL } from "./eettPdf.js";
-import { documentoPublicoCotizacion, caracteristicasVisibles, tieneDatosComerciales, cantidadTxt, CUMPLIMIENTOS, NO_INFORMADO } from "./ventasPrivadas.js";
+import { documentoPublicoCotizacion, cantidadTxt } from "./ventasPrivadas.js";
 
 const AZUL = [54, 96, 146], TINTA = [15, 23, 42], GRIS = [90, 98, 112], LINEA = [190, 196, 206], FONDO = [242, 245, 249];
 const W = 210, H = 297, MX = 14, ANCHO = W - 2 * MX;
@@ -187,102 +187,4 @@ export async function generarPdfCotizacion(documento, opciones = {}) {
   return { blob: doc.output("blob"), nombre, paginas: doc.getNumberOfPages(), doc };
 }
 
-// ── EETT ───────────────────────────────────────────────────────────────────────────────────────────
-// eett: {folio, revision, estado, emitida_en, contenido}; cab: datos públicos de la cotización {folio, revision, cliente};
-// imagenes: {item_id: [dataURL]}.
-export function crearPdfEETT(eett, { jsPDF, logo, empresa = {}, imagenes = {} } = {}) {
-  if (!jsPDF) throw new Error("Falta jsPDF");
-  const c = eett?.contenido || {};
-  if (tieneDatosComerciales(c)) throw new Error("El contenido de la EETT incluye datos comerciales; no se genera.");
-  if (!c.items?.length) throw new Error("La EETT no tiene ítems.");
-  const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait", compress: true });
-  const folio = `${eett.folio} Rev. ${eett.revision}`;
-  doc.setProperties({ title: `EETT ${folio}`, subject: "Especificaciones técnicas", author: empresa.razon_social || "", creator: "BFK Datos" });
-  const borrador = eett.estado === "borrador";
-  const marcaBorrador = () => {
-    if (!borrador) return;
-    doc.setTextColor(220, 38, 38); doc.setFont("helvetica", "bold"); doc.setFontSize(9);
-    doc.text("BORRADOR — NO EMITIDO (vista previa)", W / 2, 8, { align: "center" });
-  };
-  let y = encabezado(doc, { logo, empresa, titulo: "ESPECIFICACIONES TÉCNICAS", folio,
-    lineasDerecha: [`Fecha: ${fechaCL(String(eett.emitida_en || c.fecha || "").slice(0, 10))}`, c.cotizacion ? `Cotización ${c.cotizacion.folio}${Number(c.cotizacion.revision) > 0 ? ` Rev. ${c.cotizacion.revision}` : ""}` : ""].filter(Boolean) });
-  marcaBorrador();
-  const cl = c.cliente || {};
-  y = bloqueDatos(doc, y, "CLIENTE Y REFERENCIA", [["Cliente", cl.razon_social], ["RUT", cl.rut], ["Referencia", c.cotizacion ? `Cotización ${c.cotizacion.folio}${Number(c.cotizacion.revision) > 0 ? ` Rev. ${c.cotizacion.revision}` : ""}` : ""], ["Revisión EETT", String(eett.revision)]]);
-  const parrafo = (titulo, texto) => {
-    if (!String(texto || "").trim()) return;
-    doc.setFont("helvetica", "normal"); doc.setFontSize(9);
-    const lineas = doc.splitTextToSize(t(texto), ANCHO);
-    y = nuevaPaginaSiFalta(doc, y, 9 + Math.min(lineas.length, 6) * 4, () => { marcaBorrador(); return 18; });
-    doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.setTextColor(...AZUL); doc.text(t(titulo), MX, y); y += 4.5;
-    doc.setFont("helvetica", "normal"); doc.setTextColor(...TINTA);
-    for (const l of lineas) { y = nuevaPaginaSiFalta(doc, y, 4, () => { marcaBorrador(); return 18; }); doc.text(l, MX, y); y += 4; }
-    y += 2;
-  };
-  parrafo("OBJETO DEL SUMINISTRO", c.objeto);
-  parrafo("ALCANCE", c.alcance);
-
-  for (const it of c.items) {
-    doc.addPage(); marcaBorrador(); y = 16;
-    doc.setFillColor(64, 64, 64); doc.rect(MX, y, ANCHO, 9, "F");
-    doc.setTextColor(255); doc.setFont("helvetica", "bold"); doc.setFontSize(10.5);
-    doc.text(t(`ÍTEM ${it.orden} — ${it.nombre || ""}`).slice(0, 110), MX + 3, y + 6);
-    doc.text(t(`${cantidadTxt(it.cantidad)} ${it.unidad}`), W - MX - 3, y + 6, { align: "right" });
-    y += 12;
-    const ident = it.tipo === "servicio"
-      ? [["Tipo", "Servicio"], ["Código", it.codigo]]
-      : [["Marca", it.marca || NO_INFORMADO], ["Modelo", it.modelo || NO_INFORMADO], ["Código", it.codigo]];
-    y = bloqueDatos(doc, y, "IDENTIFICACIÓN", ident, { columnas: 3 });
-    const imgs = (imagenes[it.item_id] || []).slice(0, 2);
-    if (imgs.length) {
-      const hImg = 46; y = nuevaPaginaSiFalta(doc, y, hImg + 4, () => { marcaBorrador(); return 18; });
-      const caja = imgs.length === 1 ? [[MX + ANCHO / 4, ANCHO / 2]] : [[MX, ANCHO / 2 - 2], [MX + ANCHO / 2 + 2, ANCHO / 2 - 2]];
-      imgs.forEach((src, i) => {
-        const [x, w] = caja[i]; doc.setDrawColor(...LINEA); doc.rect(x, y, w, hImg);
-        try { const p = doc.getImageProperties(src); const k = Math.min((w - 4) / p.width, (hImg - 4) / p.height); doc.addImage(src, formatoImagen(src), x + (w - p.width * k) / 2, y + (hImg - p.height * k) / 2, p.width * k, p.height * k); } catch { /* imagen no legible */ }
-      });
-      y += hImg + 4;
-    }
-    parrafo("DESCRIPCIÓN TÉCNICA", it.descripcion);
-    const car = caracteristicasVisibles(it);
-    if (car.length) {
-      y = nuevaPaginaSiFalta(doc, y, 14, () => { marcaBorrador(); return 18; });
-      doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.setTextColor(...AZUL); doc.text("CARACTERÍSTICAS DEL PRODUCTO OFRECIDO", MX, y); y += 2;
-      const cab = (yy) => { doc.setFillColor(...FONDO); doc.rect(MX, yy, ANCHO, 6, "F"); doc.setTextColor(...GRIS); doc.setFontSize(8); doc.text("Característica", MX + 2, yy + 4.2); doc.text("Valor", MX + 82, yy + 4.2); doc.text("Unidad", MX + 150, yy + 4.2); return yy + 6; };
-      y = cab(y);
-      for (const k of car) {
-        doc.setFont("helvetica", "normal"); doc.setFontSize(8.6);
-        const lk = doc.splitTextToSize(t(k.caracteristica), 76), lv = doc.splitTextToSize(t(k.valor), 64);
-        const alto = Math.max(lk.length, lv.length) * 3.8 + 2;
-        if (y + alto > H - 18) { doc.addPage(); marcaBorrador(); y = cab(18); }
-        doc.setTextColor(...TINTA); doc.setFont("helvetica", "bold"); doc.text(lk, MX + 2, y + 4); doc.setFont("helvetica", "normal"); doc.text(lv, MX + 82, y + 4); doc.text(t(k.unidad || ""), MX + 150, y + 4);
-        doc.setDrawColor(...LINEA); doc.setLineWidth(0.15); doc.line(MX, y + alto, W - MX, y + alto); y += alto;
-      }
-      y += 3;
-    }
-    parrafo("CONDICIONES DE OPERACIÓN", it.condiciones_operacion);
-    parrafo("CONDICIONES DE INSTALACIÓN", it.condiciones_instalacion);
-    if ((it.accesorios || []).length) parrafo("ACCESORIOS INCLUIDOS", it.accesorios.map((a) => `· ${a}`).join("\n"));
-    if ((it.exclusiones || []).length) parrafo("EXCLUSIONES", it.exclusiones.map((a) => `· ${a}`).join("\n"));
-    parrafo("GARANTÍA", it.garantia);
-    if ((it.normas || []).length) parrafo("NORMAS Y CERTIFICACIONES (CON RESPALDO)", it.normas.map((n) => `· ${n.norma}${n.respaldo_texto ? ` — respaldo: ${n.respaldo_texto}` : n.respaldo_nombre ? ` — respaldo: ${n.respaldo_nombre}${n.respaldo_pagina ? `, pág. ${n.respaldo_pagina}` : ""}` : ""}`).join("\n"));
-    if ((it.requisitos || []).length) {
-      const et = Object.fromEntries(CUMPLIMIENTOS.map((x) => [x.v, x.l.replace(/ \(.*\)$/, "")]));
-      parrafo("REQUISITOS DEL CLIENTE / PRODUCTO OFRECIDO", it.requisitos.map((r) => `· Requisito: ${r.requisito}\n  Ofrecido: ${r.ofrecido || NO_INFORMADO}${r.cumplimiento && r.cumplimiento !== "sin_declarar" ? `\n  Cumplimiento: ${et[r.cumplimiento]}${r.respaldo ? ` (respaldo: ${r.respaldo})` : ""}` : ""}`).join("\n"));
-    }
-    if ((it.anexos || []).length) parrafo("ANEXOS DEL ÍTEM", it.anexos.map((a) => `· ${a.titulo || a.nombre_archivo}${a.pagina ? `, pág. ${a.pagina}` : ""}`).join("\n"));
-  }
-  if ((c.anexos || []).length || String(c.observaciones || "").trim()) {
-    doc.addPage(); marcaBorrador(); y = 18;
-    parrafo("OBSERVACIONES", c.observaciones);
-    if ((c.anexos || []).length) parrafo("ANEXOS", c.anexos.map((a, i) => `${i + 1}. ${a.titulo || a.nombre_archivo}`).join("\n"));
-  }
-  pies(doc, `${eett.folio} Rev. ${eett.revision}${eett.hash ? ` · huella ${eett.hash.slice(0, 12)}` : ""}  |  ${contactoEmpresa(empresa)}`);
-  return doc;
-}
-export async function generarPdfEETTPrivada(eett, opciones = {}) {
-  const { jsPDF } = await importarModulo(() => import("jspdf"));
-  const doc = crearPdfEETT(eett, { ...opciones, jsPDF });
-  const nombre = `EETT ${eett.folio} Rev${eett.revision}${eett.estado === "borrador" ? " (borrador)" : ""}.pdf`.replace(/[\\/:*?"<>|]+/g, "-");
-  return { blob: doc.output("blob"), nombre, paginas: doc.getNumberOfPages(), doc };
-}
+// EETT: lib/vpEETT.js (mismo formato y generador que las EETT de Mercado Público, lib/eettPdf.js).

@@ -126,9 +126,10 @@ try {
   const pdfE = await descarga(p, () => ed.locator("[data-emitir-eett]").click()); await espera(p, 1500);
   const tE = await textoPDF(pdfE);
   const eettFolio = q1(`select folio||' R'||revision from public.vp_eett where estado = 'emitida';`);
-  ok("E4 EETT emitida y descargada (folio, revisión, cliente, referencia, ítems)", /^ET-\d{4}-0001 R0$/.test(eettFolio) && /ET-\d{4}-0001/.test(tE) && /Rev\. 0/.test(tE) && /Maderas del Sur/.test(tE) && tE.includes(folio) && /ÍTEM 1/.test(tE) && /ÍTEM 3/.test(tE), eettFolio);
+  ok("E4 EETT emitida y descargada (folio, revisión, cliente, referencia, ítems)", /^ET-\d{4}-0001 R0$/.test(eettFolio) && /ET-\d{4}-0001/.test(tE) && /Rev\. 0/.test(tE) && /Maderas del Sur/.test(tE) && tE.includes(folio) && /(^|\s)1\. /.test(tE) && /(^|\s)3\. /.test(tE) && /CANTIDAD/.test(tE), eettFolio);
+  ok("E4b EETT con el formato de Mercado Público y sin campos de licitación", /INFORMACI.N\s+T.CNICA DE/.test(tE) && /CARACTER.STICAS/.test(tE) && /COTIZACI.N/.test(tE) && !/LICITACI.N|INSTITUCI.N SOLICITANTE/.test(tE));
   ok("E5 EETT con cantidades/modelo de la cotización y sin precios ni costos", /2 UN/.test(tE) && /CPm 680/.test(tE) && !/\$\s?\d/.test(tE) && !/350\.000|240\.000/.test(tE));
-  ok("E6 requisito del cliente separado de lo ofrecido", /Requisito: Caudal/.test(tE));
+  ok("E6 requisito del cliente separado de lo ofrecido", /Requisitos del cliente/.test(tE) && /Caudal m.nimo 100/.test(tE) && /Ofrecido:/.test(tE) && !/Cumplimiento:/.test(tE));
 
   // ── 5. Conversión a venta: doble clic no duplica; OC del cliente con archivo ───────────────────
   const h5 = p.locator('[data-hoja-lateral="ficha-cotizacion"]');

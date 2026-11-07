@@ -113,7 +113,7 @@ check(valor(U.beto, `select count(*) from public.vp_cotizacion_item_costos;`) ==
 const clave = randomUUID();
 falla(rpc(U.beto, "vp_crear_venta_desde_cotizacion", `'${cot.id}'`, `'${clave}'`, j({})), "VP_PERMISO", "otro usuario no convierte");
 // Dos sesiones a la vez con claves distintas (doble clic en dos dispositivos): una sola venta.
-const sql = (k) => prefijo(U.ana) + `select public.vp_crear_venta_desde_cotizacion('${cot.id}', '${k}', '{}'::jsonb);`;
+const sql = (k) => prefijo(U.ana) + `select public.vp_crear_venta_desde_cotizacion('${cot.id}', '${k}', '{"fecha":"2026-11-05"}'::jsonb);`;
 const corre = (k) => new Promise((res) => { const p = spawn("psql", [DB, "-X", "-At", "-q"]); let o = ""; p.stdout.on("data", (d) => (o += d)); p.stderr.on("data", (d) => (o += d)); p.on("close", () => res(o.trim())); p.stdin.end(sql(k)); });
 const [s1, s2, s3] = await Promise.all([corre(clave), corre(randomUUID()), corre(randomUUID())]);
 const res3 = [s1, s2, s3].map((s) => JSON.parse(s.split("\n").pop()));

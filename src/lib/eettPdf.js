@@ -46,10 +46,17 @@ const ELAB_ALTO = 15;                                   // bloque «Elaboración
 
 // cot: cotización (se usa SOLO cabeceraPublica); items: [{ ficha }];
 // opciones: { jsPDF, logo (dataURL), elaboracion: { vendedor, elaborado_por, fecha, cotizacion, version } }
-export function crearPdfEETT(cot, items, { jsPDF, logo, elaboracion } = {}) {
+// Opciones adicionales (06/11/2026, Ventas privadas; Mercado Público no las usa y su PDF no cambia):
+//   proceso: filas de la tabla de la primera página en lugar de la de Mercado Público: [[{ titulo, valor }], …]
+//            (1 a 3 celdas por fila; las vacías se omiten, nunca se muestran valores ficticios);
+//   introduccion: secciones a todo el ancho tras esa tabla: [{ titulo, filas: [{ etiqueta, valor }] }];
+//   extras: secciones adicionales por producto (mismo índice que items), a todo el ancho tras sus características;
+//   contacto: texto del pie (por defecto el de BFK); empresa: nombre en «Elaboración»; marcaAgua: aviso en cada página.
+export function crearPdfEETT(cot, items, { jsPDF, logo, elaboracion, proceso, introduccion, extras, contacto = CONTACTO_BFK, empresa, marcaAgua } = {}) {
   if (!jsPDF) throw new Error("Falta jsPDF");
   const cab = cabeceraPublica(cot);
   const elab = elaboracion ? elaboracionPublica(elaboracion) : null;
+  if (elab && String(empresa || "").trim()) elab.empresa = String(empresa).trim();
   const fichas = (items || []).map((it) => fichaPublica(it.ficha || it));
   if (!fichas.length) throw new Error("La cotización no tiene productos para la EETT.");
   const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait", compress: true });
@@ -74,12 +81,14 @@ export function crearPdfEETT(cot, items, { jsPDF, logo, elaboracion } = {}) {
         doc.addImage(logo, /^data:image\/png/i.test(logo) ? "PNG" : "JPEG", MX0 + anchoAzul + (LOGO_ANCHO - p.width * k) / 2, MY0 + (CAB_ALTO - p.height * k) / 2, p.width * k, p.height * k); } catch { /* sin logo */ }
     }
     doc.line(MX0, MY0 + CAB_ALTO, MX1, MY0 + CAB_ALTO);
+    if (marcaAgua) { doc.setFont("helvetica", "bold"); doc.setFontSize(7.5); doc.setTextColor(200, 30, 30); doc.text(textoPDF(marcaAgua), W / 2, MY0 - 1.4, { align: "center" }); }
     return MY0 + CAB_ALTO;
   };
 
   // Tabla del proceso (solo primera página, como la plantilla). Sin ID de Mercado Público se omite esa
   // columna (nunca se muestran valores ficticios).
   const tablaProceso = (y0) => {
+    if (proceso) return tablaPropia(y0);
     const conId = !!cab.id_externo;
     const lineaH = (y) => { doc.setDrawColor(0); doc.setLineWidth(0.2); doc.line(CX0, y, CX1, y); };
     const fila = (y, titulos, valores, xs, anchos) => {
@@ -104,11 +113,29 @@ export function crearPdfEETT(cot, items, { jsPDF, logo, elaboracion } = {}) {
     return y + 5;
   };
 
+  // Tabla de la primera página con filas propias (misma tipografía, líneas y medidas que la de Mercado Público).
+  function tablaPropia(y0) {
+    const lineaH = (y) => { doc.setDrawColor(0); doc.setLineWidth(0.2); doc.line(CX0, y, CX1, y); };
+    const ANCHOS = { 3: [33.6, 112.6, CANCHO - 146.2], 2: [33.6 + 112.6, CANCHO - 146.2], 1: [CANCHO] };
+    let y = y0 + 3.8;
+    proceso.map((fila) => (fila || []).filter((c) => c && String(c.valor ?? "").trim())).filter((f) => f.length).forEach((celdas) => {
+      const A = ANCHOS[Math.min(3, celdas.length)] || ANCHOS[3]; const xs = A.map((_, i) => CX0 + A.slice(0, i).reduce((a, b) => a + b, 0));
+      lineaH(y);
+      doc.setFont("helvetica", "bold"); doc.setFontSize(8.8); doc.setTextColor(0);
+      celdas.slice(0, 3).forEach((c, i) => doc.text(textoPDF(c.titulo).toUpperCase(), xs[i], y + 4.2));
+      lineaH(y + 6);
+      doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(0);
+      celdas.slice(0, 3).forEach((c, i) => { const t = doc.splitTextToSize(textoPDF(c.valor), A[i] - 2)[0] || ""; if (t) doc.text(t, xs[i] + A[i] / 2, y + 10.8, { align: "center" }); });
+      y += 13;
+    });
+    return y + 5;
+  }
+
   const pie = () => {
     doc.setFillColor(...AZUL); doc.rect(MX0, PIE_Y, MX1 - MX0, PIE_ALTO, "F");
     doc.setDrawColor(0); doc.setLineWidth(0.3); doc.rect(MX0, PIE_Y, MX1 - MX0, PIE_ALTO);
     doc.setTextColor(255); doc.setFont("helvetica", "normal"); doc.setFontSize(11.5);
-    doc.text(CONTACTO_BFK, W / 2, PIE_Y + 7, { align: "center" });
+    doc.text(contacto === CONTACTO_BFK ? CONTACTO_BFK : textoPDF(contacto), W / 2, PIE_Y + 7, { align: "center" });
   };
 
   // Franja gris oscura con texto blanco centrado (nombre del producto / CARACTERÍSTICAS).
@@ -269,29 +296,31 @@ export function crearPdfEETT(cot, items, { jsPDF, logo, elaboracion } = {}) {
   // Ancho completo: «Características Generales» y luego «Especificaciones», cada una a todo el ancho,
   // continuando en páginas siguientes solo cuando es necesario (orden y contenido originales).
   const flujo = (y, izq, der, limite, nuevaPagina) => {
-    const g = GEO_ANCHO;
-    [izq, der].forEach((lista, c) => {
-      if (!lista.length) return;
-      const cola = lista.map((p) => ({ ...medirFila(p, g), anchoTotal: g.w }));
-      let primeraFila = true;
-      // Título + primera fila (o sus 3 primeras líneas) deben quedar juntos.
-      const minimo = (pt) => pt.tipo === "apilada" ? Math.min(pt.h, altoApilada(pt.le, pt.va.slice(0, 3), pt.fsV)) : pt.h;
-      if (y + 4 + 7.5 + 2 + minimo(cola[0]) > limite) y = nuevaPagina();
-      y = tituloSeccion(g.x, g.w, y + 4, TIT[c]) + 2;
-      while (cola.length) {
-        const pt = cola[0];
-        if (y + pt.h <= limite) { dibujarFila(g, y, pt, false); y += pt.h; cola.shift(); primeraFila = false; continue; }
-        const partes = partirFila(pt, limite - y);
-        if (partes) { dibujarFila(g, y, partes[0], false); cola[0] = { ...partes[1], anchoTotal: g.w }; }
-        else if (primeraFila) { dibujarFila(g, y, pt, false); y += pt.h; cola.shift(); continue; } // seguridad: nunca ciclar
-        y = nuevaPagina();
-        y = tituloSeccion(g.x, g.w, y + 4, `${TIT[c]} (continuación)`) + 2;
-        primeraFila = true;
-      }
-      y += 3;
-    });
+    [izq, der].forEach((lista, c) => { y = seccionAncho(y, TIT[c], lista, limite, nuevaPagina); });
     return y;
   };
+  // Una sección a todo el ancho (título + filas), continuando en páginas siguientes solo cuando es necesario.
+  function seccionAncho(y, titulo, lista, limite, nuevaPagina) {
+    const g = GEO_ANCHO;
+    if (!lista.length) return y;
+    const cola = lista.map((p) => ({ ...medirFila(p, g), anchoTotal: g.w }));
+    let primeraFila = true;
+    // Título + primera fila (o sus 3 primeras líneas) deben quedar juntos.
+    const minimo = (pt) => pt.tipo === "apilada" ? Math.min(pt.h, altoApilada(pt.le, pt.va.slice(0, 3), pt.fsV)) : pt.h;
+    if (y + 4 + 7.5 + 2 + minimo(cola[0]) > limite) y = nuevaPagina();
+    y = tituloSeccion(g.x, g.w, y + 4, titulo) + 2;
+    while (cola.length) {
+      const pt = cola[0];
+      if (y + pt.h <= limite) { dibujarFila(g, y, pt, false); y += pt.h; cola.shift(); primeraFila = false; continue; }
+      const partes = partirFila(pt, limite - y);
+      if (partes) { dibujarFila(g, y, partes[0], false); cola[0] = { ...partes[1], anchoTotal: g.w }; }
+      else if (primeraFila) { dibujarFila(g, y, pt, false); y += pt.h; cola.shift(); continue; } // seguridad: nunca ciclar
+      y = nuevaPagina();
+      y = tituloSeccion(g.x, g.w, y + 4, `${titulo} (continuación)`) + 2;
+      primeraFila = true;
+    }
+    return y + 3;
+  }
 
   const lineasDescripcion = (texto) => { doc.setFont("helvetica", "normal"); doc.setFontSize(9); return doc.splitTextToSize(textoPDF(texto), CANCHO - 6); };
   const descripcion = (y, lineas, limite) => {
@@ -324,6 +353,10 @@ export function crearPdfEETT(cot, items, { jsPDF, logo, elaboracion } = {}) {
     const reservaElab = ultima && elab ? ELAB_ALTO : 0;
     let y = paginaNueva(idx === 0);
     y = idx === 0 ? tablaProceso(y) : y + 3.5;
+    if (idx === 0 && introduccion?.length) {
+      const sigue = () => paginaNueva(false) + 3.5;
+      introduccion.forEach((sec) => { y = seccionAncho(y, sec.titulo, (sec.filas || []).filter((p) => String(p?.valor ?? "").trim()), LIM, sigue); });
+    }
     y = franja(y, f.nombre || "Producto sin nombre") + 3.8;
     const generales = [
       ...(f.marca ? [{ etiqueta: "MARCA", valor: f.marca }] : []),
@@ -346,7 +379,9 @@ export function crearPdfEETT(cot, items, { jsPDF, logo, elaboracion } = {}) {
     if (f.imagenes.length) y = imagenes(y, f.imagenes, altoImg) + 3.8;
     y = franja(y, "CARACTERÍSTICAS");
     let yAct;
-    if (caben2Columnas(y, generales, f.especificaciones, limite)) yAct = columnas(y, generales, f.especificaciones, limite - reservaDesc);
+    // Con secciones adicionales (Ventas privadas) no se rellenan renglones vacíos: las secciones siguen a continuación.
+    const relleno = extras?.[idx]?.length ? 0 : limite - reservaDesc;
+    if (caben2Columnas(y, generales, f.especificaciones, limite)) yAct = columnas(y, generales, f.especificaciones, relleno);
     else yAct = flujo(y, generales, f.especificaciones, limite, continuar);
     let pendientes = desc; let fresca = false;
     while (pendientes.length) {
@@ -355,6 +390,7 @@ export function crearPdfEETT(cot, items, { jsPDF, logo, elaboracion } = {}) {
       else { pendientes = d.resto; yAct = d.y; }
       if (pendientes.length) { const y3 = paginaNueva(false) + 3.5; yAct = franja(y3, `${f.nombre || "Producto"} (continuación)`) + 2; fresca = true; }
     }
+    (extras?.[idx] || []).forEach((sec) => { yAct = seccionAncho(yAct, sec.titulo, (sec.filas || []).filter((p) => String(p?.valor ?? "").trim()), limite, continuar); });
   });
   bloqueElaboracion();
 

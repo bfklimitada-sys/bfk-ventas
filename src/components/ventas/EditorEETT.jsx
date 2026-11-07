@@ -9,9 +9,9 @@ import { C, MONO, R, T, cardStyle, iStyle } from "../../lib/theme";
 import { AvisoLinea, Badge, Desplegable } from "../ui/Sistema";
 import { Ventana, Campo, Rejilla, Subtitulo, Entrada, Area, Selector, ErrorForm } from "../proyectos/Comunes";
 import { estiloBoton, Vacio } from "./Comunes";
-import { leerEETT, guardarEETT, emitirEETT, descartarEETT, leerProductos, guardarProducto, imagenComoDataURL } from "../../lib/ventasPrivadasDatos";
+import { leerEETT, guardarEETT, emitirEETT, descartarEETT, leerProductos, guardarProducto, imagenComoDataURL, ocClienteDeVenta } from "../../lib/ventasPrivadasDatos";
 import { itemEETTDesde, revisarEETT, CUMPLIMIENTOS, NO_INFORMADO, mensajeVP, cantidadTxt, hoyISO, folioRevision, CATEGORIAS_DOCUMENTO } from "../../lib/ventasPrivadas";
-import { generarPdfEETTPrivada } from "../../lib/vpPdf";
+import { generarPdfEETTVP } from "../../lib/vpEETT";
 import { descargarBlob } from "../../lib/eettPdf";
 import { logoBFK } from "../../lib/cotizacionesDatos";
 import logoUrl from "../../assets/bfk-logo.jpg";
@@ -34,10 +34,11 @@ async function imagenesDe(token, contenido) {
   }
   return out;
 }
+// El PDF usa el formato de las EETT de Mercado Público (lib/eettPdf.js) con los datos de la EETT privada (lib/vpEETT.js).
 export async function descargarEETT(token, id, empresa, showToast) {
   try {
     const e = await leerEETT(token, id); if (!e) throw new Error("EETT no encontrada");
-    const r = await generarPdfEETTPrivada(e, { logo: await logoBFK(logoUrl), empresa, imagenes: await imagenesDe(token, e.contenido) });
+    const r = await generarPdfEETTVP(e, { logo: await logoBFK(logoUrl), empresa, imagenes: await imagenesDe(token, e.contenido) });
     descargarBlob(r.blob, r.nombre);
   } catch (x) { showToast?.(`No se pudo generar el PDF de la EETT: ${mensajeVP(x)}`, "error"); }
 }
@@ -68,9 +69,14 @@ export function EditorEETT({ token, cot, datos, vp, eettId, showToast, onCerrar 
       // Si ya hay una EETT emitida, la nueva revisión parte de su contenido (lo ya revisado no se pierde).
       let previo = null;
       if (ultimaEmitida) { try { previo = (await leerEETT(token, ultimaEmitida.id))?.contenido || null; } catch { previo = null; } }
+      let oc = null; try { oc = await ocClienteDeVenta(token, cot.venta_id); } catch { oc = null; }
       const contenido = {
         fecha: hoyISO(), cliente: { razon_social: cl.razon_social || cot.cliente_nombre, rut: cl.rut || cot.cliente_rut },
-        cotizacion: { folio: cot.folio, revision: revisionNum },
+        cotizacion: { folio: cot.folio, revision: revisionNum }, plazo_entrega: datos.revisiones.find((r) => r.id === cot.revision_id)?.plazo_entrega || "",
+        ...(oc ? { oc_cliente: oc } : {}), ...(cot.responsable_nombre ? { responsable: cot.responsable_nombre } : {}),
+        // Datos de la empresa para el pie y «Elaboración», congelados con la EETT (un cambio posterior en Administración
+        // no altera una EETT emitida).
+        empresa: Object.fromEntries(["razon_social", "correo", "telefonos", "comuna"].map((k) => [k, vp.empresa?.[k] || ""]).filter(([, v]) => v)),
         objeto: previo?.objeto || "", alcance: previo?.alcance || "", observaciones: previo?.observaciones || "", anexos: previo?.anexos || [],
         items: elegidas.map((l) => {
           const antes = previo?.items?.find((x) => x.item_id === l.id || (x.orden === l.orden && x.producto_id === l.producto_id));
@@ -94,7 +100,7 @@ export function EditorEETT({ token, cot, datos, vp, eettId, showToast, onCerrar 
   };
   const previa = async () => {
     setOcupado("previa");
-    try { const r = await generarPdfEETTPrivada({ ...borrador, estado: "borrador" }, { logo: await logoBFK(logoUrl), empresa: vp.empresa, imagenes: await imagenesDe(token, borrador.contenido) }); window.open(URL.createObjectURL(r.blob), "_blank"); }
+    try { const r = await generarPdfEETTVP({ ...borrador, estado: "borrador" }, { logo: await logoBFK(logoUrl), empresa: vp.empresa, imagenes: await imagenesDe(token, borrador.contenido) }); window.open(URL.createObjectURL(r.blob), "_blank"); }
     catch (x) { showToast?.(mensajeVP(x), "error"); } finally { setOcupado(""); }
   };
   const emitir = async () => {

@@ -138,6 +138,13 @@ export const registrarExtraccion = (t, p) => rpc(t, "vp_registrar_extraccion", {
 export const resolverExtraccion = (t, id, aceptadas) => rpc(t, "vp_resolver_extraccion", { p_id: id, p_aceptadas: aceptadas });
 
 // ── EETT ───────────────────────────────────────────────────────────────────────────────────────────
+// OC del cliente vigente (no anulada) de una venta, si existe: {numero, fecha} o null. Se copia al contenido de la EETT
+// al prepararla; una EETT emitida conserva lo que tenía al emitirse.
+export async function ocClienteDeVenta(t, ventaId) {
+  if (!ventaId) return null;
+  const oc = await leer(t, `vp_oc_cliente?select=numero,fecha&venta_id=eq.${q(ventaId)}&estado=eq.vigente&order=creado_en.desc&limit=1`);
+  return oc?.[0] ? { numero: oc[0].numero, fecha: oc[0].fecha } : null;
+}
 export const leerEETT = async (t, id) => (await leer(t, `vp_eett?select=*&id=eq.${q(id)}`))?.[0] || null;
 export const guardarEETT = (t, p) => rpc(t, "vp_guardar_eett", { p });
 export const emitirEETT = (t, id, version) => rpc(t, "vp_emitir_eett", { p_id: id, p_version: version });
