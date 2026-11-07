@@ -14,8 +14,7 @@ import { BarrasResultado, Dona, LineaMensual, BarrasCompetidores, ComparacionMon
 import { importarModulo } from "../../lib/cargaModulos";
 
 const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
-const POR_PAGINA = 15; const AUTO_HORAS = 12; const CLAVE_AUTO = "bfk_ic_auto_sinc";
-const SINC_AUTO = { maxRondas: 40, maxMinutos: 15, maxPausasSeguidas: 4, maxSinAvance: 2, maxFallasRed: 1, maxEnCurso: 1, pausaMaxMs: 120_000, esperaRedMs: 5_000, esperaEnCursoMs: 15_000 };   // automática: más acotada
+const POR_PAGINA = 15;
 const hoyChile = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Santiago" }).format(new Date());
 const pct = (x) => (x === null || x === undefined ? "—" : `${String(x).replace(".", ",")}%`);
 const ESTADO_PROCESO = { publicada: "Publicada", cerrada: "Cerrada (en evaluación)", proveedor_seleccionado: "Proveedor seleccionado", oc_emitida: "OC emitida", desierta: "Desierta", cancelada: "Cancelada", no_encontrada: "No encontrada en ChileCompra", sin_informacion: "Sin información" };
@@ -74,19 +73,13 @@ export default function InteligenciaComercial({ token, perfil, escritorio }) {
     else if (e.activa && e.progreso?.procesados && Date.now() - ultimoRefresco.current > 20_000) { ultimoRefresco.current = Date.now(); fuente.invalidar(); setRecarga((n) => n + 1); }
   }), [fuente]);
   useEffect(() => { if (sinc?.fase !== "pausa") return undefined; const t = setInterval(() => setReloj((n) => n + 1), 1000); return () => clearInterval(t); }, [sinc?.fase]);
-  const sincronizar = useCallback(({ forzar = false, origen = "manual" } = {}) => {
+  const sincronizar = useCallback(({ forzar = false } = {}) => {
     if (controlSincronizacion.estado.activa) return; setMsjSinc(null); ultimoRefresco.current = Date.now();
     controlSincronizacion.iniciar(() => tokenRef.current && (typeof tokenRef.current === "function" ? tokenRef.current() : tokenRef.current),
-      { forzar, origen, ...(origen === "automatica" ? { lim: { ...SINC_AUTO } } : {}) });
+      { forzar, origen: "manual" });
   }, []);
-  // Sincronización automática (solo administradores, en segundo plano, una vez por sesión si la última tiene más de 12 h).
-  useEffect(() => {
-    if (!esAdmin || !res || !["base", "base_v1"].includes(fuente.modo)) return;
-    const ult = res.ultima_sincronizacion; let ya = false; try { ya = sessionStorage.getItem(CLAVE_AUTO) === "1"; } catch { /* sin almacenamiento */ }
-    if (ya || (ult && Date.now() - new Date(ult).getTime() < AUTO_HORAS * 3600_000)) return;
-    try { sessionStorage.setItem(CLAVE_AUTO, "1"); } catch { /* sin almacenamiento */ }
-    sincronizar({ origen: "automatica" });
-  }, [esAdmin, res, fuente, sincronizar]);
+  // 06/11/2026: sin sincronización automática. Abrir o refrescar esta vista solo LEE la base; consultar ChileCompra
+  // requiere que el administrador presione el botón (y que el interruptor central esté habilitado en el servidor).
 
   const exportar = async (tipo) => {
     setExportando(tipo);
@@ -151,7 +144,7 @@ export default function InteligenciaComercial({ token, perfil, escritorio }) {
               <option value="">Todas</option>{Object.entries(RESULTADOS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}</select></label>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 10 }}>
-          {esAdmin && !local && <BotonSecundario data-sincronizar onClick={() => sincronizar({ origen: "manual" })} disabled={!!sinc} activo>{sinc ? `Sincronizando… ${sinc.procesados || 0}` : "↻ Actualizar resultados"}</BotonSecundario>}
+          {esAdmin && !local && <BotonSecundario data-sincronizar onClick={() => sincronizar({ origen: "manual" })} disabled={!!sinc} activo>{sinc ? `Sincronizando… ${sinc.procesados || 0}` : "↻ Consultar ChileCompra (usa la API)"}</BotonSecundario>}
           {esAdmin && sinc && <BotonSecundario data-cancelar-sinc onClick={() => controlSincronizacion.cancelar()}>Cancelar</BotonSecundario>}
           {!esAdmin && !local && <span style={{ fontSize: 12, color: C.inkFaint }}>La consulta a ChileCompra la hace un administrador.</span>}
           <BotonSecundario data-recalcular onClick={() => { fuente.invalidar(); setRecarga((n) => n + 1); }} disabled={cargando}>Recalcular</BotonSecundario>
@@ -166,7 +159,7 @@ export default function InteligenciaComercial({ token, perfil, escritorio }) {
       </Tarjeta>
       {local && <AvisoLinea dato="ic-local" tono="info" icono="ℹ">Módulo pendiente de instalación en la base: se muestran solo los estados registrados en Cotizaciones (sin resultados de ChileCompra).</AvisoLinea>}
       {sinc && <AvisoLinea dato="ic-sinc-avance" tono={sinc.fase === "pausa" ? "warn" : "info"} icono={sinc.fase === "pausa" ? "⚠" : "ℹ"}>
-        {sinc.fase === "pausa" ? `${textoPausa}. ` : "Consultando ChileCompra… "}{textoConteo(sinc)}{textoCola(sinc.cola)}{sincEst.origen === "automatica" ? " (automática)" : ""}</AvisoLinea>}
+        {sinc.fase === "pausa" ? `${textoPausa}. ` : "Consultando ChileCompra… "}{textoConteo(sinc)}{textoCola(sinc.cola)}</AvisoLinea>}
       {msjSinc && !sinc && <AvisoLinea dato="ic-sinc" tono={msjSinc.tono}>{msjSinc.texto}</AvisoLinea>}
       {adj && I && <AvisoLinea dato="ic-criterio" tono="info" icono="ℹ">Criterio: fecha de adjudicación informada por ChileCompra. Solo se cuentan oportunidades con resultado en el período; las pendientes no tienen fecha de adjudicación{I.sin_fecha_adjudicacion ? ` (${plural(I.sin_fecha_adjudicacion, "resultado", "resultados")} sin fecha informada no se incluyen)` : ""}.</AvisoLinea>}
       {!adj && I && faltan > 0 && !local && <AvisoLinea dato="ic-cobertura" tono="warn" accion={esAdmin && !sinc ? "Actualizar" : undefined} onClick={esAdmin && !sinc ? () => sincronizar({ origen: "manual" }) : undefined}>
