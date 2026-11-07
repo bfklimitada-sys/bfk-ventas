@@ -13,6 +13,7 @@ import { leerEETT, guardarEETT, emitirEETT, descartarEETT, leerProductos, guarda
 import { itemEETTDesde, revisarEETT, CUMPLIMIENTOS, NO_INFORMADO, mensajeVP, cantidadTxt, hoyISO, folioRevision, CATEGORIAS_DOCUMENTO } from "../../lib/ventasPrivadas";
 import { generarPdfEETTVP } from "../../lib/vpEETT";
 import { descargarBlob } from "../../lib/eettPdf";
+import { VistaPreviaEETT } from "../cotizaciones/VistaPreviaEETT";
 import { logoBFK } from "../../lib/cotizacionesDatos";
 import logoUrl from "../../assets/bfk-logo.jpg";
 
@@ -48,7 +49,7 @@ export function EditorEETT({ token, cot, datos, vp, eettId, showToast, onCerrar 
   const [borrador, setBorrador] = useState(null);   // {id, folio, revision, version, contenido}
   const [sel, setSel] = useState(() => new Set(lineas.map((l) => l.id)));
   const [cargando, setCargando] = useState(!!eettId); const [ocupado, setOcupado] = useState(""); const [errores, setErrores] = useState([]); const [avisos, setAvisos] = useState([]);
-  const [docsProd, setDocsProd] = useState([]);
+  const [docsProd, setDocsProd] = useState([]); const [pdfPrevia, setPdfPrevia] = useState(null);
   useEffect(() => {
     if (!eettId) return;
     (async () => {
@@ -100,7 +101,7 @@ export function EditorEETT({ token, cot, datos, vp, eettId, showToast, onCerrar 
   };
   const previa = async () => {
     setOcupado("previa");
-    try { const r = await generarPdfEETTVP({ ...borrador, estado: "borrador" }, { logo: await logoBFK(logoUrl), empresa: vp.empresa, imagenes: await imagenesDe(token, borrador.contenido) }); window.open(URL.createObjectURL(r.blob), "_blank"); }
+    try { const r = await generarPdfEETTVP({ ...borrador, estado: "borrador" }, { logo: await logoBFK(logoUrl), empresa: vp.empresa, imagenes: await imagenesDe(token, borrador.contenido) }); setPdfPrevia(r); }
     catch (x) { showToast?.(mensajeVP(x), "error"); } finally { setOcupado(""); }
   };
   const emitir = async () => {
@@ -160,6 +161,7 @@ export function EditorEETT({ token, cot, datos, vp, eettId, showToast, onCerrar 
       {avisos.length > 0 && <div style={{ background: C.warnLight, borderRadius: R.sm, padding: "9px 12px", marginBottom: 10 }}>{avisos.map((e, i) => <div key={i} style={{ fontSize: T.small, color: C.warnText }}>• {e}</div>)}</div>}
       <Campo etiqueta="Objeto del suministro"><Area data-eett-objeto value={c.objeto} onChange={(e) => setC((x) => ({ ...x, objeto: e.target.value }))} placeholder="Ej.: Suministro e instalación de bomba centrífuga para planta…" /></Campo>
       <Campo etiqueta="Alcance"><Area data-eett-alcance value={c.alcance} onChange={(e) => setC((x) => ({ ...x, alcance: e.target.value }))} /></Campo>
+      {pdfPrevia && <VistaPreviaEETT blob={pdfPrevia.blob} nombre={pdfPrevia.nombre} paginas={pdfPrevia.paginas} aviso="Vista previa del borrador: no se emitió ni se registró ninguna EETT." onCerrar={() => setPdfPrevia(null)} />}
       {c.items.map((it, idx) => <ItemEETT key={it.item_id} it={it} idx={idx} setItem={setItem} docsProd={docsProd} onGuardarBiblioteca={() => guardarEnBiblioteca(it)} />)}
       <Campo etiqueta="Observaciones generales"><Area value={c.observaciones} onChange={(e) => setC((x) => ({ ...x, observaciones: e.target.value }))} /></Campo>
     </Ventana>

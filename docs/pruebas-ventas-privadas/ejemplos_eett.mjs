@@ -9,6 +9,8 @@ import { fileURLToPath } from "node:url";
 import { jsPDF } from "jspdf";
 import { crearPdfEETT } from "../../src/lib/eettPdf.js";
 import { crearPdfEETTVP, nombreArchivoEETTVP } from "../../src/lib/vpEETT.js";
+import { crearPdfCotizacion } from "../../src/lib/vpPdf.js";
+import { documentoDesdeEditor } from "../../src/lib/ventasPrivadas.js";
 
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const F = []; let nOk = 0;
@@ -67,6 +69,30 @@ const LARGO = "El equipo opera en régimen continuo de 24 horas con arranque sua
   ok("VP_sin_precios", !/\$\s?\d/.test(t) && !/precio|costo|margen/i.test(t));
   ok("VP_elaboracion", /ELABORACI.N DE ESPECIFICACIONES/.test(t) && /Vendedor de ejemplo/.test(t) && /CP-2026-0007 Rev\. 2/.test(t));
   console.log(`VP: ${ruta} (${doc.getNumberOfPages()} páginas)`);
+}
+// ── Cotización privada (mismo generador que el botón «Ver»/«PDF» de la app; los costos de las líneas NO deben aparecer) ──
+{
+  const empresa = { razon_social: "Ingeniería y Servicios BFK Limitada", nombre_corto: "BFK Ltda.", rut: "77.322.317-3", lema: "Servicios Integrales, Compra y Venta e Ingeniería", direccion: "Villa Celulosa Pasaje 2 #733", comuna: "Laja", correo: "bfklimitada@gmail.com", telefonos: "+56 9 5732 2538 / +56 9 9714 1822" };
+  const items = [
+    { tipo: "producto", codigo: "BC-55", descripcion: "Bomba centrífuga 5,5 kW Pedrollo F 40/200A, impulsor de bronce, sello mecánico carbón-cerámico, motor trifásico 380 V 2.900 rpm, con curva de rendimiento certificada", unidad: "UN", cantidad: 2, precio_unitario: 1850000, descuento_pct: 5, costo_unitario: 1290000 },
+    { tipo: "producto", codigo: "ATV320", descripcion: "Tablero de control con variador de frecuencia Schneider ATV320 7,5 kW, gabinete IP55, protecciones y selector manual/automático", unidad: "UN", cantidad: 1, precio_unitario: 2450000, descuento_pct: 0, costo_unitario: 1710000 },
+    { tipo: "producto", codigo: "", descripcion: "Cable de poder 4x6 mm² RV-K", unidad: "M", cantidad: 12.5, precio_unitario: 4800, descuento_pct: 12.5, costo_unitario: 3100 },
+    { tipo: "servicio", codigo: "", descripcion: "Servicio de montaje, conexionado, pruebas de funcionamiento y capacitación de 2 horas al personal de operación", unidad: "GL", cantidad: 1, precio_unitario: 780000, descuento_pct: 0, costo_unitario: 420000 },
+  ];
+  const cab = { fecha_emision: "2026-11-07", vigencia_hasta: "2026-11-22", afecta_iva: true, contacto_nombre: "Contacto de Ejemplo", contacto_correo: "compras@cliente-ejemplo.cl", contacto_telefono: "+56 9 0000 0000",
+    plazo_entrega: "15 días hábiles desde la recepción de la OC", direccion_entrega: "Camino de Ejemplo 1234, Laja", condiciones_pago: "50 % anticipo con la OC y 50 % contra entrega, a 30 días",
+    observaciones: "Precios en pesos chilenos. " + "Los equipos se entregan probados en fábrica; la instalación considera base de hormigón existente y punto de energía a menos de 10 metros del tablero. ".repeat(3),
+    condiciones_comerciales: "Garantía de 12 meses desde la puesta en marcha. No incluye obras civiles." };
+  const doc = documentoDesdeEditor({ folio: "CP-2026-0007", revision: 2, cab, cliente: { razon_social: "Empresa Cliente de Ejemplo SpA", rut: "76.000.000-0", direccion: "Camino de Ejemplo 1234", comuna: "Laja" }, items, empresa, responsable: "Vendedor de ejemplo" });
+  const pdf = crearPdfCotizacion(doc, { jsPDF, logo });
+  const ruta = join(dir, "EJEMPLO_Cotizacion_privada_CP-2026-0007_Rev2.pdf"); writeFileSync(ruta, Buffer.from(pdf.output("arraybuffer")));
+  const t = texto(ruta);
+  ok("COT_datos_BFK_cliente_contacto_folio", /77\.322\.317-3/.test(t) && /Empresa Cliente de Ejemplo/.test(t) && /76\.000\.000-0/.test(t) && /Contacto de Ejemplo/.test(t) && /CP-2026-0007/.test(t));
+  ok("COT_fechas_plazo_direccion_pago_observaciones", /07\/11\/2026/.test(t) && /22\/11\/2026/.test(t) && /15 d.as h.biles/.test(t) && /Camino de Ejemplo 1234, Laja/.test(t) && /50 % anticipo/.test(t) && /Precios en pesos/.test(t));
+  ok("COT_lineas_cantidades_unidades_descuentos", /BC-55/.test(t) && /12,5/.test(t) && /GL/.test(t) && /12,5%/.test(t) && /5%/.test(t));
+  ok("COT_totales_neto_iva_total", /NETO/.test(t) && /IVA \(19%\)/.test(t) && t.includes(doc.total.toLocaleString("es-CL")) && t.includes(doc.iva.toLocaleString("es-CL")));
+  ok("COT_sin_costos_ni_margenes", !/1\.290\.000|1\.710\.000|420\.000|3\.100/.test(t) && !/costo|margen|utilidad/i.test(t));
+  console.log(`COT: ${ruta} (${pdf.getNumberOfPages()} páginas)`);
 }
 console.log(`RESUMEN ejemplos EETT: ${nOk} OK, ${F.length} FALLA(S)  ·  carpeta ${dir}`);
 process.exit(F.length ? 1 : 0);

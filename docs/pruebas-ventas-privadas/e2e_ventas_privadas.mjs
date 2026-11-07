@@ -84,6 +84,9 @@ try {
   const tCot = await textoPDF(pdfCot);
   ok("Q5 PDF con datos de BFK, cliente, ítems y totales", /77\.322\.317-3/.test(tCot) && /Maderas del Sur/.test(tCot) && /Bomba centr/.test(tCot) && /1\.043\.481/.test(tCot) && tCot.includes(folio));
   ok("Q6 PDF SIN costos ni márgenes", !/240\.000|480\.000|2\.100|506\.256|370\.619/.test(tCot) && !/costo|margen|utilidad/i.test(tCot));
+  await h2.locator("[data-ver-cotizacion]").click(); await p.locator('[data-hoja-lateral="vista-previa-eett"] [data-pagina-preview="1"]').waitFor({ timeout: 15000 });
+  ok("Q6b vista previa de la cotización en la app (mismo PDF) sin registrar envío", /cotizaci/i.test(await p.locator('[data-hoja-lateral="vista-previa-eett"]').innerText()) && q1(`select estado from public.vp_cotizaciones where folio = '${folio}';`) === "borrador");
+  await p.locator('[data-hoja-lateral="vista-previa-eett"] [data-cerrar-hoja], [data-hoja-lateral="vista-previa-eett"] button[aria-label="Cerrar"]').first().click(); await espera(p, 400);
   ok("Q7 descargar el PDF NO marca la cotización como enviada", q1(`select estado from public.vp_cotizaciones where folio = '${folio}';`) === "borrador");
   await h2.locator('[data-accion-cot="enviada"]').click(); await p.locator('[data-ventana="modal-estado"] [data-confirmar-estado]').click(); await espera(p, 1500);
   ok("Q8 envío registrado manualmente; contenido bloqueado", q1(`select estado from public.vp_cotizaciones where folio = '${folio}';`) === "enviada" && (await h2.locator('[data-linea="1"] [data-campo="precio"]').isDisabled()));

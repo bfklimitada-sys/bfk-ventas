@@ -14,6 +14,7 @@ import { leerCotizacion, guardarCotizacion, cambiarEstadoCotizacion, nuevaRevisi
 import { lineaParaGuardar, calcularTotales, validarLineas, accionesCotizacion, ESTADOS_COTIZACION, filtrarCotizaciones, pesos, pct, fechaTxt, hoyISO, sumarDias, folioRevision, mensajeVP, documentoDesdeEditor, cantidadTxt } from "../../lib/ventasPrivadas";
 import { generarPdfCotizacion } from "../../lib/vpPdf";
 import { descargarBlob } from "../../lib/eettPdf";
+import { VistaPreviaEETT } from "../cotizaciones/VistaPreviaEETT";
 import { logoBFK } from "../../lib/cotizacionesDatos";
 import logoUrl from "../../assets/bfk-logo.jpg";
 import { folioVPDesdeHash, hashVP } from "../../lib/navegacion";
@@ -154,8 +155,10 @@ function FichaCotizacion({ token, perfil, vp, id, showToast, onCerrar, onRecarga
     finally { setOcupado(""); }
   };
 
-  const pdf = async () => {
-    setOcupado("pdf");
+  // Ver o descargar el PDF NO cambia el estado de la cotización (el envío y la aceptación se registran aparte).
+  const [previa, setPrevia] = useState(null);
+  const pdf = async (verPrimero = false) => {
+    setOcupado(verPrimero ? "ver" : "pdf");
     try {
       // Revisión enviada: el PDF sale del documento congelado. Borrador: del contenido en pantalla (sin costos).
       const rv = c ? d.revisiones.find((r) => r.id === revVista) : null;
@@ -163,7 +166,7 @@ function FichaCotizacion({ token, perfil, vp, id, showToast, onCerrar, onRecarga
         items: itemsVista, empresa: vp.empresa, responsable: c?.responsable_nombre || perfil?.nombre });
       if (sucio && editable) showToast?.("El PDF incluye cambios aún NO guardados.", "error");
       const r = await generarPdfCotizacion(documento, { logo: await logoBFK(logoUrl) });
-      descargarBlob(r.blob, r.nombre);
+      if (verPrimero) setPrevia(r); else descargarBlob(r.blob, r.nombre);
     } catch (e) { showToast?.(`No se pudo generar el PDF: ${e.message}`, "error"); } finally { setOcupado(""); }
   };
 
@@ -195,7 +198,8 @@ function FichaCotizacion({ token, perfil, vp, id, showToast, onCerrar, onRecarga
       titulo={c ? folioRevision(c.folio, revVista ? d.revisiones.find((r) => r.id === revVista)?.numero : c.revision_actual) : "Nueva cotización privada"}
       subtitulo={c ? `${c.cliente_nombre} · ${ESTADOS_COTIZACION[c.estado_efectivo]?.l}${c.venta_folio ? ` · venta ${c.venta_folio}` : ""}` : "Borrador sin guardar"}
       derecha={<div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
-        <button type="button" data-pdf-cotizacion disabled={!!ocupado} onClick={pdf} style={estiloBoton()}>{ocupado === "pdf" ? "…" : "PDF"}</button>
+        <button type="button" data-ver-cotizacion disabled={!!ocupado} onClick={() => pdf(true)} style={estiloBoton()}>{ocupado === "ver" ? "…" : "Ver"}</button>
+        <button type="button" data-pdf-cotizacion disabled={!!ocupado} onClick={() => pdf(false)} style={estiloBoton()}>{ocupado === "pdf" ? "…" : "PDF"}</button>
         {editable && <button type="button" data-guardar-cotizacion disabled={!!ocupado} onClick={guardar} style={estiloBoton("pri")}>{ocupado === "guardar" ? "Guardando…" : "Guardar"}</button>}
       </div>}>
       <div style={{ padding: 16 }}>
@@ -274,6 +278,9 @@ function FichaCotizacion({ token, perfil, vp, id, showToast, onCerrar, onRecarga
         ocupado={!!ocupado} onCancelar={() => setModal(null)} onConfirmar={(m) => estado("borrador", { motivo: m })} />}
       {modal?.t === "venta" && <CrearVentaDesdeCotizacion token={token} cot={c} vp={vp} showToast={showToast} onCerrar={() => setModal(null)}
         onCreada={async (v) => { setModal(null); await onRecargar(); onAbrir?.("vp_ordenes", v.id); }} />}
+      {previa && <VistaPreviaEETT blob={previa.blob} nombre={previa.nombre} paginas={previa.paginas} titulo="Vista previa de la cotización"
+        aviso="Vista previa: es el mismo PDF que se descarga. Verla o descargarla no la marca como enviada ni aceptada." onCerrar={() => setPrevia(null)}
+        onDescargar={() => { descargarBlob(previa.blob, previa.nombre); setPrevia(null); }} />}
       {modal?.t === "eett" && <EditorEETT token={token} cot={c} datos={d} vp={vp} eettId={modal.id} showToast={showToast} onCerrar={async () => { setModal(null); await cargar(c.id); }} />}
       {modal?.t === "anular_doc" && <PedirMotivo titulo="Anular archivo" texto="El archivo se conserva en el registro, marcado como anulado." etiquetaBoton="Anular" peligro onCancelar={() => setModal(null)}
         onConfirmar={async (m) => { try { await anular(token, "documento", modal.doc.id, m); setModal(null); await cargar(c.id); } catch (e) { showToast?.(mensajeVP(e), "error"); } }} />}

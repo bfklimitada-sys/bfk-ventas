@@ -8,7 +8,8 @@ import { importarModulo } from "../../lib/cargaModulos";
 // No guarda nada: ni en Supabase ni en el dispositivo, y no crea registros ni cambia el estado.
 // Las páginas se dibujan con pdf.js (cargado bajo demanda desde el propio dominio). Si el navegador no lo
 // permite, se ofrece el visor del navegador (pestaña nueva) como alternativa compatible.
-export function VistaPreviaEETT({ blob, nombre, paginas, onCerrar, onDescargar }) {
+// titulo/aviso (opcionales, 07/11/2026): los usa Ventas privadas; sin ellos el texto es el de siempre.
+export function VistaPreviaEETT({ blob, nombre, paginas, onCerrar, onDescargar, titulo = "Vista previa de EETT", aviso = "Vista previa: es el mismo PDF que se descargará. No se guardó la cotización ni se registró ninguna EETT." }) {
   const url = useMemo(() => URL.createObjectURL(blob), [blob]);
   useEffect(() => () => URL.revokeObjectURL(url), [url]);
   const [estado, setEstado] = useState("cargando"); const [error, setError] = useState("");
@@ -45,10 +46,10 @@ export function VistaPreviaEETT({ blob, nombre, paginas, onCerrar, onDescargar }
   }, [blob]);
 
   return (
-    <HojaLateral abierta onCerrar={onCerrar} dato="vista-previa-eett" titulo="Vista previa de EETT" subtitulo={`${nombre} · ${paginas} página${paginas === 1 ? "" : "s"} · no se guarda nada`} ancho={900}
+    <HojaLateral abierta onCerrar={onCerrar} dato="vista-previa-eett" titulo={titulo} subtitulo={`${nombre} · ${paginas} página${paginas === 1 ? "" : "s"} · no se guarda nada`} ancho={900}
       derecha={onDescargar ? <BotonSecundario onClick={onDescargar} style={{ minHeight: 40 }}>Generar y descargar</BotonSecundario> : null}>
       <div style={{ padding: 12, background: "#E5E7EB", minHeight: "100%" }}>
-        <AvisoLinea tono="info" icono="👁" dato="aviso-preview">Vista previa: es el mismo PDF que se descargará. No se guardó la cotización ni se registró ninguna EETT.</AvisoLinea>
+        <AvisoLinea tono="info" icono="👁" dato="aviso-preview">{aviso}</AvisoLinea>
         {estado === "cargando" && <div data-preview-cargando style={{ fontSize: T.sm, color: C.inkMuted, textAlign: "center", padding: 24 }}>Preparando la vista previa…</div>}
         {estado === "error" && (
           <div data-preview-alternativa>
