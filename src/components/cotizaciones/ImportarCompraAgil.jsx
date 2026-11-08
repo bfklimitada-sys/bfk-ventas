@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { C, T, R, iStyle, fmt } from "../../lib/theme";
 import { Modal } from "../ui/Basicos";
 import { AvisoLinea, BotonPrincipal, BotonSecundario, Tarjeta } from "../ui/Sistema";
@@ -22,14 +22,17 @@ export function ImportarCompraAgil({ cot, token, onAplicar, deshabilitado }) {
   const [entrada, setEntrada] = useState(""); const [consultando, setConsultando] = useState(false); const [error, setError] = useState("");
   const [vista, setVista] = useState(null); // { fuente, consultado_en, datos, marcados }
 
+  const enCurso = useRef(false);
   const consultar = async () => {
+    if (enCurso.current || deshabilitado) return;
     setError("");
     if (!codigoCompraAgil(entrada)) { setError("No se reconoce un código de Compra Ágil (por ejemplo 3390-246-COT26). Revisa el enlace o el código."); return; }
+    enCurso.current = true;
     setConsultando(true);
     try {
       const r = await consultarCompraAgil(token, entrada.trim());
       setVista({ ...r, marcados: {} }); // la propuesta se calcula contra los datos ACTUALES (pudieron cambiar mientras se consultaba)
-    } catch (e) { setError(e.message); } finally { setConsultando(false); }
+    } catch (e) { setError(e.message); } finally { enCurso.current = false; setConsultando(false); }
   };
   const filas = vista ? propuestaCompraAgil(cot, vista.datos) : [];
   const marcado = (f) => (vista.marcados[f.campo] ?? !f.sobrescribe);
@@ -43,11 +46,11 @@ export function ImportarCompraAgil({ cot, token, onAplicar, deshabilitado }) {
     <Tarjeta padding="12px" data-importar-compra-agil style={{ borderColor: C.teal }}>
       <div style={{ fontSize: T.sm, fontWeight: 800, color: C.ink, marginBottom: 6 }}>Enlace o código de Compra Ágil</div>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-        <input data-entrada-compra-agil value={entrada} onChange={(e) => { setEntrada(e.target.value); setError(""); }} onKeyDown={(e) => { if (e.key === "Enter") consultar(); }} disabled={deshabilitado}
+        <input data-entrada-compra-agil value={entrada} onChange={(e) => { setEntrada(e.target.value); setError(""); }} onKeyDown={(e) => { if (e.key === "Enter") consultar(); }} disabled={deshabilitado || consultando}
           placeholder="https://… o 3390-246-COT26" style={{ ...iStyle, flex: "1 1 220px", width: "auto" }} />
         <BotonPrincipal data-consultar-compra-agil onClick={consultar} disabled={consultando || !entrada.trim() || deshabilitado} style={{ opacity: consultando || !entrada.trim() ? 0.6 : 1 }}>{consultando ? "Consultando…" : "Consultar y completar"}</BotonPrincipal>
       </div>
-      {consultando && <div data-consultando-compra-agil style={{ fontSize: T.small, color: C.inkMuted, marginTop: 6 }}>Consultando ChileCompra (puede tardar algunos segundos). Mientras tanto puedes seguir completando los datos a mano.</div>}
+      {consultando && <div data-consultando-compra-agil style={{ fontSize: T.small, color: C.inkMuted, marginTop: 6 }}>Consultando ChileCompra (hasta un minuto, con un reintento si hay una falla temporal). Mientras tanto puedes seguir completando los datos a mano.</div>}
       <div style={{ fontSize: T.small, color: C.inkFaint, marginTop: 6 }}>Consulta la API oficial de ChileCompra. Verás los datos antes de aplicarlos; todo queda editable y el ingreso manual sigue disponible.</div>
       {error && <AvisoLinea tono="warn" dato="error-compra-agil">{error}</AvisoLinea>}
 

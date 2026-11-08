@@ -39,11 +39,11 @@ async function validarSesion(req) {
   if (!m) return { error: "Sesión requerida. Inicie sesión en BFK Datos.", status: 401 };
   const token = m[1].trim();
   try {
-    const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` } });
+    const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(4_000) });
     if (!r.ok) return { error: "Sesión inválida o vencida. Vuelva a iniciar sesión.", status: 401 };
     const u = await r.json();
     if (!u?.id) return { error: "Sesión inválida.", status: 401 };
-    const p = await fetch(`${SUPABASE_URL}/rest/v1/perfiles?id=eq.${encodeURIComponent(u.id)}&select=id,rol`, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` } });
+    const p = await fetch(`${SUPABASE_URL}/rest/v1/perfiles?id=eq.${encodeURIComponent(u.id)}&select=id,rol`, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(4_000) });
     const filas = p.ok ? await p.json() : [];
     if (!Array.isArray(filas) || !filas.length) return { error: "Usuario sin perfil autorizado en BFK.", status: 403 };
     return { uid: u.id, admin: filas[0]?.rol === "admin" };
@@ -236,6 +236,43 @@ async function diagnosticar(req, res) {
   return res.status(200).json({ ok: true, region: process.env.VERCEL_REGION || null, entorno: process.env.VERCEL_ENV || null, etapas: e, conclusion, duracion_ms: Date.now() - ahora });
 }
 
+
+// Como máximo dos consultas por acción del usuario; nunca sincroniza en segundo plano.
+// El plazo incluye cabeceras y lectura del cuerpo. No reintenta rechazos de ticket ni 404.
+export async function consultarListadoConRecuperacion(codigo, ticket, {
+  f = fetch, ahora = Date.now, esperar = (ms) => new Promise((r) => setTimeout(r, ms)),
+  intentoMs = 23_000, presupuestoMs = 48_000,
+} = {}) {
+  const inicio = ahora();
+  let ultimo = { falla: "demora", intentos: 0 };
+  for (let n = 1; n <= 2; n++) {
+    const restante = presupuestoMs - (ahora() - inicio);
+    if (restante <= 0) break;
+    const signal = AbortSignal.timeout(Math.max(1, Math.min(intentoMs, restante)));
+    let esperaMs = 1000;
+    try {
+      const r = await f(`${API}?id=${encodeURIComponent(codigo)}`, { headers: { ticket, Accept: "application/json" }, signal });
+      // Un cuerpo truncado/abortado no se confunde con un JSON válido vacío.
+      const texto = await r.text();
+      let cuerpo = null; try { cuerpo = JSON.parse(texto); } catch { /* se informa ERROR_API */ }
+      ultimo = { status: r.status, cuerpo, intentos: n };
+      if (r.status !== 429 && r.status < 500) break;
+      const ra = r.headers?.get?.("retry-after");
+      if (ra) {
+        const segundos = Number(ra);
+        const ms = Number.isFinite(segundos) ? segundos * 1000 : Date.parse(ra) - ahora();
+        if (Number.isFinite(ms)) esperaMs = Math.max(1000, ms);
+      }
+    } catch (e) {
+      ultimo = { falla: signal.aborted || ["TimeoutError", "AbortError"].includes(e?.name) ? "demora" : "conexion", intentos: n };
+    }
+    // Respeta Retry-After; si no cabe, devuelve el error y no hace otra petición.
+    if (n === 2 || presupuestoMs - (ahora() - inicio) < esperaMs + 1000) break;
+    await esperar(esperaMs);
+  }
+  return { ...ultimo, duracion_ms: ahora() - inicio };
+}
+
 export default async function handler(req, res) {
   if (req.query?.diagnostico !== undefined) return diagnosticar(req, res);
   const ses = await validarSesion(req);
@@ -248,12 +285,13 @@ export default async function handler(req, res) {
 
   // Consulta normal: LISTADO oficial filtrado por código (paginación predeterminada). El detalle
   // (/v2/compra-agil/{codigo}) hoy no responde a tiempo, por eso no se usa.
-  let r;
-  try { r = await fetch(`${API}?id=${encodeURIComponent(codigo)}`, { headers: { ticket, Accept: "application/json" }, signal: AbortSignal.timeout(20_000) }); }
-  catch (e) { return res.status(502).json({ ok: false, codigo: e?.name === "TimeoutError" ? "DEMORA_API" : "SIN_CONEXION", error: e?.name === "TimeoutError" ? "La API de ChileCompra no respondió a tiempo. Intenta más tarde o ingresa los datos manualmente." : "No se pudo conectar con la API de ChileCompra. Ingresa los datos manualmente." }); }
-  const cuerpo = await r.json().catch(() => null);
+  const consulta = await consultarListadoConRecuperacion(codigo, ticket);
+  console.info("compra_agil_consulta", JSON.stringify({ intentos: consulta.intentos, duracion_ms: consulta.duracion_ms, http: consulta.status || null, falla: consulta.falla || null }));
+  if (consulta.falla) return res.status(502).json({ ok: false, codigo: consulta.falla === "demora" ? "DEMORA_API" : "SIN_CONEXION", error: consulta.falla === "demora" ? "ChileCompra no respondió dentro del plazo, incluso tras un reintento. Tus datos se conservan; puedes intentar nuevamente o continuar manualmente." : "No se pudo completar la conexión con ChileCompra tras un reintento. Tus datos se conservan." });
+  const r = { status: consulta.status, ok: consulta.status >= 200 && consulta.status < 300 };
+  const cuerpo = consulta.cuerpo;
   if (r.status === 401 || r.status === 403) return res.status(502).json({ ok: false, codigo: "TICKET_INVALIDO", error: `ChileCompra rechazó el ticket configurado para la API de Compra Ágil (HTTP ${r.status}). ${COMO_OBTENER}` });
-  if (r.status === 429) return res.status(429).json({ ok: false, codigo: "CUOTA", error: "Se agotó la cuota diaria del ticket de ChileCompra. Se restablece al comenzar el próximo día. Ingresa los datos manualmente." });
+  if (r.status === 429) return res.status(429).json({ ok: false, codigo: "CUOTA", error: "ChileCompra está limitando las consultas (HTTP 429). Espera antes de volver a intentar; esta respuesta no permite confirmar que se agotó la cuota diaria." });
   if (r.status === 404) return res.status(404).json({ ok: false, codigo: "NO_ENCONTRADA", error: `ChileCompra no encontró la Compra Ágil ${codigo}. Revisa el código.` });
   if (!r.ok || !Array.isArray(cuerpo?.payload?.items)) return res.status(502).json({ ok: false, codigo: "ERROR_API", error: `La API de ChileCompra respondió con un error (HTTP ${r.status}${(cuerpo?.errors || cuerpo?.errores)?.[0]?.mensaje ? `: ${(cuerpo.errors || cuerpo.errores)[0].mensaje}` : ""}). Ingresa los datos manualmente.` });
 
