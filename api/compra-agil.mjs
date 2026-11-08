@@ -304,13 +304,16 @@ export default async function handler(req, res) {
   // (/v2/compra-agil/{codigo}) no se usa: el 08/11/2026 ambas rutas devolvieron 504 de la pasarela de ChileCompra.
   const consulta = await consultarListadoConRecuperacion(codigo, ticket);
   console.info("compra_agil_consulta", JSON.stringify({ codigo, intentos: consulta.intentos, duracion_ms: consulta.duracion_ms, http: consulta.status || null, falla: consulta.falla || null, por_intento: consulta.detalle }));
+  // Si algún intento recibió el 504 de la pasarela de ChileCompra y el otro se cortó por plazo, la causa es su servidor.
+  const msj504 = "El servidor de ChileCompra no está respondiendo (su propia pasarela devolvió HTTP 504), incluso tras un reintento. No es un problema de BFK ni de tu conexión. Tus datos se conservan; puedes continuar manualmente e intentar más tarde.";
+  if (consulta.falla && (consulta.detalle || []).some((x) => x.http === 504)) return res.status(502).json({ ok: false, codigo: "CHILECOMPRA_SIN_RESPUESTA", error: msj504 });
   if (consulta.falla) return res.status(502).json({ ok: false, codigo: consulta.falla === "demora" ? "DEMORA_API" : "SIN_CONEXION", error: consulta.falla === "demora" ? "ChileCompra no respondió dentro del plazo, incluso tras un reintento. Tus datos se conservan; puedes intentar nuevamente o continuar manualmente." : "No se pudo completar la conexión con ChileCompra tras un reintento. Tus datos se conservan." });
   const r = { status: consulta.status, ok: consulta.status >= 200 && consulta.status < 300 };
   const cuerpo = consulta.cuerpo;
   if (r.status === 401 || r.status === 403) return res.status(502).json({ ok: false, codigo: "TICKET_INVALIDO", error: `ChileCompra rechazó el ticket configurado para la API de Compra Ágil (HTTP ${r.status}). ${COMO_OBTENER}` });
   if (r.status === 429) return res.status(429).json({ ok: false, codigo: "CUOTA", error: "ChileCompra está limitando las consultas (HTTP 429). Espera antes de volver a intentar; esta respuesta no permite confirmar que se agotó la cuota diaria." });
   // La pasarela de ChileCompra corta sola sus consultas lentas (~29,5 s) con HTTP 504: el problema está en su servidor.
-  if (r.status === 504) return res.status(502).json({ ok: false, codigo: "CHILECOMPRA_SIN_RESPUESTA", error: "El servidor de ChileCompra no respondió a tiempo (HTTP 504 de su propia pasarela), incluso tras un reintento. No es un problema de la conexión de BFK. Tus datos se conservan; intenta más tarde o continúa manualmente." });
+  if (r.status === 504) return res.status(502).json({ ok: false, codigo: "CHILECOMPRA_SIN_RESPUESTA", error: msj504 });
   if (r.status === 404) return res.status(404).json({ ok: false, codigo: "NO_ENCONTRADA", error: `ChileCompra no encontró la Compra Ágil ${codigo}. Revisa el código.` });
   if (!r.ok || !Array.isArray(cuerpo?.payload?.items)) return res.status(502).json({ ok: false, codigo: "ERROR_API", error: `La API de ChileCompra respondió con un error (HTTP ${r.status}${(cuerpo?.errors || cuerpo?.errores)?.[0]?.mensaje ? `: ${(cuerpo.errors || cuerpo.errores)[0].mensaje}` : ""}). Ingresa los datos manualmente.` });
 

@@ -61,4 +61,20 @@ console.log(`${total} pruebas correctas`);
   assert.equal(reg.http, 504); assert.equal(reg.por_intento.length, 2); assert.equal(reg.por_intento[0].pasarela, 'Endpoint request timed out'); assert.ok('ms_cabeceras' in reg.por_intento[0] && 'ms_cuerpo' in reg.por_intento[0]);
   total++; console.log('OK manejador: 504 de ChileCompra informado, registrado por intento, máximo dos consultas');
 }
+// Caso real del 08/11/2026: primer intento 504 de la pasarela, segundo cortado por plazo → mensaje de ChileCompra caído.
+{
+  const { default: handler } = await import('../../api/compra-agil.mjs');
+  process.env.MP_TICKET_COMPRA_AGIL = 'prueba'; const orig = globalThis.fetch; let aCC = 0; const info = console.info; console.info = () => {};
+  globalThis.fetch = async (url, init) => { const u = String(url);
+    if (u.includes('/auth/v1/user')) return new Response(JSON.stringify({ id: 'u-prueba-2' }));
+    if (u.includes('/rest/v1/perfiles')) return new Response(JSON.stringify([{ id: 'u-prueba-2', rol: 'usuario' }]));
+    if (u.includes('mercadopublico.cl')) { aCC++;
+      if (aCC === 1) return new Response('{"message": "Endpoint request timed out"}', { status: 504 });
+      throw new DOMException('demora', 'TimeoutError'); }
+    throw new Error('inesperado ' + u); };
+  const out = {}; const res = { setHeader() {}, status(c) { out.code = c; return this; }, json(b) { out.body = b; return this; } };
+  try { await handler({ query: { q: codigo }, headers: { authorization: 'Bearer y' } }, res); } finally { globalThis.fetch = orig; console.info = info; }
+  assert.equal(aCC, 2); assert.equal(out.code, 502); assert.equal(out.body.codigo, 'CHILECOMPRA_SIN_RESPUESTA'); assert.match(out.body.error, /servidor de ChileCompra/);
+  total++; console.log('OK 504 y luego plazo: informa que el servidor de ChileCompra no responde');
+}
 console.log(`${total} pruebas correctas (con las de tiempos por intento)`);
