@@ -121,8 +121,14 @@ const legadoCorto = { folio: "ET-2026-0001", revision: 0, estado: "emitida", con
 const a = normalizar(refVP.crearPdfEETTVP(legadoCorto, { jsPDF, logo }).output("arraybuffer")), b = normalizar(vp.crearPdfEETTVP(legadoCorto, { jsPDF, logo }).output("arraybuffer"));
 ok("C4 una EETT emitida con el formato anterior se descarga idéntica (byte a byte) a la versión publicada", a === b);
 ok("C4b nombre de archivo del formato anterior sin cambios", vp.nombreArchivoEETTVP(legadoCorto) === refVP.nombreArchivoEETTVP(legadoCorto));
-const legLargo = await texto(Buffer.from(vp.crearPdfEETTVP({ ...legadoCorto, contenido: { ...legadoCorto.contenido, cliente: FX.cliente } }, { jsPDF, logo }).output("arraybuffer")));
-ok("C5 formato anterior con razón social larga: ahora se lee completa (antes se cortaba «DE CHILE»)", /CARABINEROS DE CHILE/.test(legLargo.s));
+const legadoLargo = { ...legadoCorto, contenido: { ...legadoCorto.contenido, cliente: FX.cliente } };
+ok("C5 formato anterior con razón social larga: también idéntico byte a byte a la versión publicada (el ajuste del cliente es solo del formato nuevo)",
+  normalizar(refVP.crearPdfEETTVP(legadoLargo, { jsPDF, logo }).output("arraybuffer")) === normalizar(vp.crearPdfEETTVP(legadoLargo, { jsPDF, logo }).output("arraybuffer")));
+// El generador sin la opción «completo» corta la celda igual que antes; con ella, la escribe completa.
+const tabla = (completo) => act.crearPdfEETT({ nombre: "X" }, [{ ficha: { nombre: "P" } }], { jsPDF, proceso: [[{ titulo: "Plazo entrega", valor: "1 día" }, { titulo: "Cliente", valor: FX.cliente.razon_social, ...(completo ? { completo: true } : {}) }, { titulo: "RUT", valor: "1-9" }]] }).output("arraybuffer");
+const tablaRef = refPdf.crearPdfEETT({ nombre: "X" }, [{ ficha: { nombre: "P" } }], { jsPDF, proceso: [[{ titulo: "Plazo entrega", valor: "1 día" }, { titulo: "Cliente", valor: FX.cliente.razon_social }, { titulo: "RUT", valor: "1-9" }]] }).output("arraybuffer");
+ok("C5b opción explícita «completo»: sin ella, la tabla es idéntica a la publicada; con ella, el cliente se lee completo",
+  normalizar(tabla(false)) === normalizar(tablaRef) && !/CARABINEROS DE CHILE/.test((await texto(Buffer.from(tabla(false)))).s) && /CARABINEROS DE CHILE/.test((await texto(Buffer.from(tabla(true)))).s));
 // Mercado Público: el generador no cambia (mismo PDF byte a byte que la versión publicada).
 const cotMP = { id_externo: "1525570-33-COT26", nombre: "ADQUISICIÓN DE BOLSOS PARAMÉDICOS PARA EL SERVICIO DE URGENCIA DEL HOSPITAL", fecha: "2026-11-09", plazo: "3 días habiles", institucion: FX.cliente.razon_social, rut: FX.cliente.rut };
 const itemsMP = [{ ficha }, { ficha: { nombre: "Bomba", marca: "Pedrollo", modelo: "CPm 680", generales: [{ etiqueta: "Material", valor: "Hierro fundido" }], especificaciones: [{ etiqueta: "Potencia", valor: "2 HP" }] } }];

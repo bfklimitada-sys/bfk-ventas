@@ -49,7 +49,7 @@ const ELAB_ALTO = 15;                                   // bloque «Elaboración
 // cot: cotización (se usa SOLO cabeceraPublica); items: [{ ficha }];
 // opciones: { jsPDF, logo (dataURL), elaboracion: { vendedor, elaborado_por, fecha, cotizacion, version } }
 // Opciones adicionales (06/11/2026, Ventas privadas; Mercado Público no las usa y su PDF no cambia):
-//   proceso: filas de la tabla de la primera página en lugar de la de Mercado Público: [[{ titulo, valor }], …]
+//   proceso: filas de la tabla de la primera página en lugar de la de Mercado Público: [[{ titulo, valor, completo? }], …]
 //            (1 a 3 celdas por fila; las vacías se omiten, nunca se muestran valores ficticios);
 //   introduccion: secciones a todo el ancho tras esa tabla: [{ titulo, filas: [{ etiqueta, valor }] }];
 //   extras: secciones adicionales por producto (mismo índice que items), a todo el ancho tras sus características;
@@ -133,10 +133,11 @@ export function crearPdfEETT(cot, items, { jsPDF, logo, elaboracion, proceso, in
       lineaH(y + 6);
       doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(0);
       // El plazo de entrega se escribe completo y la fila crece lo necesario (igual que en la tabla de Mercado Público).
-      // El nombre del cliente también se escribe completo (09/11/2026): una razón social larga no se corta.
+      // Opción explícita de Ventas privadas (09/11/2026): una celda con «completo: true» también se escribe completa (nombre
+      // del cliente). Sin esa opción (Mercado Público no usa esta tabla; EETT privadas anteriores) el resultado no cambia.
       let extra = 0;
       celdas.slice(0, 3).forEach((c, i) => {
-        const lineas = doc.splitTextToSize(textoPDF(c.valor), A[i] - 2); const ts = /^\s*(plazo|cliente)/i.test(String(c.titulo || "")) ? lineas : lineas.slice(0, 1);
+        const lineas = doc.splitTextToSize(textoPDF(c.valor), A[i] - 2); const ts = c.completo === true || /^\s*plazo/i.test(String(c.titulo || "")) ? lineas : lineas.slice(0, 1);
         ts.forEach((t, k) => { if (t) doc.text(t, xs[i] + A[i] / 2, y + 10.8 + k * LINEA_CELDA, { align: "center" }); });
         extra = Math.max(extra, (ts.length - 1) * LINEA_CELDA);
       });

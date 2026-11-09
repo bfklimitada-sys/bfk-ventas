@@ -166,7 +166,8 @@ function datosPdfFormatoMP(eett, { imagenes = {}, logo } = {}) {
   // Misma tabla de Mercado Público (ID · NOMBRE · FECHA EMISIÓN / PLAZO · INSTITUCIÓN · RUT) con las referencias del canal.
   const proceso = [
     [{ titulo: "Cotización", valor: cotTxt }, { titulo: "Especificaciones técnicas", valor: eettTxt }, { titulo: "Fecha emisión", valor: fechaCL(fecha) }],
-    [{ titulo: "Plazo entrega", valor: c.plazo_entrega }, { titulo: "Cliente", valor: cl.razon_social }, { titulo: "RUT", valor: cl.rut }],
+    // El nombre del cliente se escribe completo (opción «completo» del generador, solo canal privado).
+    [{ titulo: "Plazo entrega", valor: c.plazo_entrega }, { titulo: "Cliente", valor: cl.razon_social, completo: true }, { titulo: "RUT", valor: cl.rut }],
     ...(oc ? [[{ titulo: "OC del cliente", valor: txt(oc.numero) }, { titulo: "Fecha OC", valor: fechaCL(oc.fecha) }]] : []),
   ];
   const cot = { id_externo: "", nombre: eettTxt || cotTxt, fecha, plazo: txt(c.plazo_entrega), institucion: txt(cl.razon_social), rut: txt(cl.rut) };
