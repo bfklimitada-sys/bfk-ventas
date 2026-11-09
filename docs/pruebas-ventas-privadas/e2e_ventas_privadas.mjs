@@ -12,8 +12,9 @@ const ok = (n, c, det = "") => { if (c) { nOk++; console.log("OK   ", n); } else
 const espera = (p, ms = 500) => p.waitForTimeout(ms);
 const pdfjsMod = await import("pdfjs-dist/legacy/build/pdf.js"); const pdfjs = pdfjsMod.getDocument ? pdfjsMod : pdfjsMod.default;
 async function textoPDF(buf) { const d = await pdfjs.getDocument({ data: new Uint8Array(buf), isEvalSupported: false }).promise; let s = ""; for (let i = 1; i <= d.numPages; i++) s += (await (await d.getPage(i)).getTextContent()).items.map((x) => x.str).join(" ") + "\n"; return s; }
+let ultimoArchivo = "";   // nombre con que se descargó el último PDF
 async function descarga(p, accion) {
-  try { const [dl] = await Promise.all([p.waitForEvent("download", { timeout: 15000 }), accion()]); return readFileSync(await dl.path()); }
+  try { const [dl] = await Promise.all([p.waitForEvent("download", { timeout: 15000 }), accion()]); ultimoArchivo = dl.suggestedFilename(); return readFileSync(await dl.path()); }
   catch (e) { const avisos = await p.locator('[role="status"], [data-errores-eett], [data-error-form]').allInnerTexts().catch(() => []); throw new Error(`sin descarga · ${avisos.join(" | ").slice(0, 400)}`); }
 }
 const q1 = (sql) => psql(sql).split("\n").pop();
@@ -82,6 +83,7 @@ try {
   const pdfCot = await descarga(p, () => h2.locator("[data-pdf-cotizacion]").click());
   const tCot = await textoPDF(pdfCot);
   ok("Q5 PDF con datos de BFK, cliente, ítems y totales", /77\.322\.317-3/.test(tCot) && /Maderas del Sur/.test(tCot) && /Bomba centr/.test(tCot) && /1\.043\.481/.test(tCot) && tCot.includes(folio));
+  ok("Q6a el PDF de la cotización se guarda con su código y revisión (<folio>_Rev0.pdf)", ultimoArchivo === `${folio}_Rev0.pdf`, ultimoArchivo);
   ok("Q6 PDF SIN costos ni márgenes", !/240\.000|480\.000|2\.100|506\.256|370\.619/.test(tCot) && !/costo|margen|utilidad/i.test(tCot));
   await h2.locator("[data-ver-cotizacion]").click(); await p.locator('[data-hoja-lateral="vista-previa-eett"] [data-pagina-preview="1"]').waitFor({ timeout: 15000 });
   ok("Q6b vista previa de la cotización en la app (mismo PDF) sin registrar envío", /cotizaci/i.test(await p.locator('[data-hoja-lateral="vista-previa-eett"]').innerText()) && q1(`select estado from public.vp_cotizaciones where folio = '${folio}';`) === "borrador");
@@ -156,7 +158,9 @@ try {
   const tEv = await textoPDF(await descarga(p, () => fv.locator("[data-pdf-eett-venta]").click()));
   ok("F2c la EETT se recupera desde la venta (mismo folio, revisión y contenido)", /ET-\d{4}-0001/.test(tEv) && /Rev\. 0/.test(tEv) && /CPm 680/.test(tEv) && tEv.replace(/\s+/g, " ") === tE.replace(/\s+/g, " ") && !/\$\s?\d/.test(tEv));
   const tAp = await textoPDF(await descarga(p, async () => { await fv.locator('[data-tab="detalle"]').click(); await fv.locator("[data-pdf-aprobada]").click(); }));
+  const revAp = q1(`select r.numero from public.vp_ventas v join public.vp_cotizacion_revisiones r on r.id = v.revision_id join public.vp_cotizaciones c on c.id = v.cotizacion_id where c.folio = '${folio}';`);
   ok("F2d PDF de la cotización aprobada desde la venta (congelado, sin costos)", tAp.includes(folio) && /1\.043\.481/.test(tAp) && !/costo|margen/i.test(tAp));
+  ok("F2e ese PDF se guarda con el código y la revisión aprobada", ultimoArchivo === `${folio}_Rev${revAp}.pdf`, `${ultimoArchivo} (rev ${revAp})`);
   await fv.locator('[data-tab="documentos"]').click();
   await fv.locator("[data-registrar-factura]").click(); const ff = p.locator('[data-ventana="form-factura"]');
   ok("F3 neto e IVA propuestos para lo pendiente", (await ff.locator("[data-factura-neto]").inputValue()) === "876875" && (await ff.locator("[data-factura-iva]").inputValue()) === "166606");

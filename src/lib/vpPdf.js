@@ -180,11 +180,17 @@ export function crearPdfCotizacion(documento, { jsPDF, logo } = {}) {
   pies(doc, contactoEmpresa(d.empresa));
   return doc;
 }
+// Nombre del archivo (09/11/2026): el código de la cotización y su revisión, p. ej. «CP-2026-0001_Rev0.pdf» (también Rev0).
+// Sin folio (cotización nueva aún no guardada) el PDF dice «BORRADOR» y el archivo se llama igual: «BORRADOR_Rev0.pdf».
+export const nombreArchivoCotizacion = (documento) => {
+  const folio = String(documento?.folio || "").trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9-]+/g, "-").replace(/^-+|-+$/g, "") || "BORRADOR";
+  const rev = Number.isFinite(Number(documento?.revision)) ? Math.max(0, Math.trunc(Number(documento.revision))) : 0;
+  return `${folio}_Rev${rev}.pdf`;
+};
 export async function generarPdfCotizacion(documento, opciones = {}) {
   const { jsPDF } = await importarModulo(() => import("jspdf"));
   const doc = crearPdfCotizacion(documento, { ...opciones, jsPDF });
-  const nombre = `Cotizacion ${documento.folio}${Number(documento.revision) > 0 ? ` Rev${documento.revision}` : ""} - ${String(documento.cliente?.razon_social || "").slice(0, 40)}.pdf`.replace(/[\\/:*?"<>|]+/g, "-");
-  return { blob: doc.output("blob"), nombre, paginas: doc.getNumberOfPages(), doc };
+  return { blob: doc.output("blob"), nombre: nombreArchivoCotizacion(documento), paginas: doc.getNumberOfPages(), doc };
 }
 
 // EETT: lib/vpEETT.js (mismo formato y generador que las EETT de Mercado Público, lib/eettPdf.js).

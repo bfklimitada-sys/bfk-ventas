@@ -8,6 +8,7 @@ import { calcularCotizacion } from "../../src/lib/cotizaciones.js";
 import { calcularCotizacionVP, itemVacioVP, lineaParaGuardarVP, itemDesdeLinea, enviosDesdeItems, cotizacionParaEditor, precioConRecargo, descripcionDeFicha, validarItemsVP } from "../../src/lib/vpCotizacion.js";
 import { calcularTotales, tieneDatosComerciales, itemEETTDesde } from "../../src/lib/ventasPrivadas.js";
 import { datosPdfEETTVP } from "../../src/lib/vpEETT.js";
+import { nombreArchivoCotizacion, generarPdfCotizacion } from "../../src/lib/vpPdf.js";
 
 let ok = 0; const F = [];
 const t = (n, c, det = "") => { if (c) { ok++; } else { F.push(n); console.log("FALLA", n, det); } };
@@ -76,6 +77,13 @@ t("R20 PDF: características generales en «Características Generales» y espec
 const antiguo = itemEETTDesde({ id: "L1", orden: 1, cantidad: 2, unidad: "UN", tipo: "producto", descripcion: "Bomba" }, { id: "p", nombre: "Bomba", marca: "X", modelo: "Y" }, { tipo_producto: "equipo", caracteristicas: [{ caracteristica: "Potencia", valor: "2", unidad: "HP", grupo: "Eléctricas" }] });
 const { items: pdfAntiguo } = datosPdfEETTVP({ folio: "ET-2026-0001", revision: 0, estado: "emitida", contenido: { objeto: "x", items: [antiguo] } });
 t("R21 contenidos anteriores (sin ficha) se imprimen igual que antes", pdfAntiguo[0].ficha.generales.length === 2 && pdfAntiguo[0].ficha.especificaciones.some((p) => p.etiqueta === "Potencia") && !("color" in pdfAntiguo[0].ficha));
+
+// Nombre del PDF de la cotización (09/11/2026): su código y revisión.
+t("R22 PDF de la cotización con su código: CP-2026-0001_Rev0.pdf, CP-2026-0001_Rev2.pdf; sin guardar: BORRADOR_Rev0.pdf",
+  nombreArchivoCotizacion({ folio: "CP-2026-0001", revision: 0 }) === "CP-2026-0001_Rev0.pdf" && nombreArchivoCotizacion({ folio: "CP-2026-0001", revision: 2 }) === "CP-2026-0001_Rev2.pdf"
+  && nombreArchivoCotizacion({ folio: "BORRADOR", revision: 0 }) === "BORRADOR_Rev0.pdf" && nombreArchivoCotizacion({}) === "BORRADOR_Rev0.pdf");
+const gen = await generarPdfCotizacion({ folio: "CP-2026-0001", revision: 0, cliente: { razon_social: "FONDO HOSPITAL DE LA DIRECCION DE PREVISION DE CARABINEROS DE CHILE" }, items: [{ orden: 1, descripcion: "Bolso", unidad: "UN", cantidad: 2, precio_unitario: 1000, subtotal_neto: 2000 }], neto: 2000, iva: 380, total: 2380, empresa: {} });
+t("R23 la descarga y la vista previa usan ese nombre", gen.nombre === "CP-2026-0001_Rev0.pdf" && gen.paginas >= 1);
 
 console.log(`RESUMEN reglas cotización como MP: ${ok} OK, ${F.length} FALLA(S)`);
 process.exit(F.length ? 1 : 0);

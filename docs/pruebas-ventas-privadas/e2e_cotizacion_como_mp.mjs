@@ -22,7 +22,8 @@ const espera = (p, ms = 400) => p.waitForTimeout(ms);
 const q1 = (sql) => psql(sql).split("\n").pop();
 const pdfjsMod = await import("pdfjs-dist/legacy/build/pdf.js"); const pdfjs = pdfjsMod.getDocument ? pdfjsMod : pdfjsMod.default;
 async function textoPDF(buf) { const d = await pdfjs.getDocument({ data: new Uint8Array(buf), isEvalSupported: false }).promise; let s = ""; for (let i = 1; i <= d.numPages; i++) s += (await (await d.getPage(i)).getTextContent()).items.map((x) => x.str).join(" ") + "\n"; return s; }
-async function descarga(p, accion) { const [dl] = await Promise.all([p.waitForEvent("download", { timeout: 20000 }), accion()]); return readFileSync(await dl.path()); }
+let ultimoArchivo = "";   // nombre con que se descargó el último PDF
+async function descarga(p, accion) { const [dl] = await Promise.all([p.waitForEvent("download", { timeout: 20000 }), accion()]); ultimoArchivo = dl.suggestedFilename(); return readFileSync(await dl.path()); }
 // Plazo de entrega largo (09/11/2026): debe leerse completo en la EETT de ambos canales y en el PDF de la cotización.
 const LARGO = "15 días hábiles contados desde la recepción conforme de la orden de compra, sujeto a disponibilidad de stock del proveedor y despacho a la dirección indicada por el cliente en Laja";
 const contiene = (texto, frase) => texto.replace(/\s+/g, " ").includes(frase);
@@ -144,6 +145,7 @@ async function recorrido(browser, { pref, ancho, alto, movil }) {
   await ui.pestana(p, "precios");
   const pdfCot = await descarga(p, () => h.locator("[data-pdf-cotizacion]").click()); writeFileSync(`${CAPT}/${nombre}-documento-cotizacion.pdf`, pdfCot);
   const tCot = await textoPDF(pdfCot);
+  ok(`${pref}25a el PDF de la cotización se guarda con su código y revisión (${folio}_Rev0.pdf)`, ultimoArchivo === `${folio}_Rev0.pdf`, ultimoArchivo);
   ok(`${pref}25 PDF de la cotización: cliente, ítems con marca/modelo y totales`, /Maderas del Sur/.test(tCot) && /Bomba centr/.test(tCot) && /Pedrollo CPm 680/.test(tCot) && /1\.043\.481/.test(tCot) && tCot.includes(folio));
   ok(`${pref}25b PDF de la cotización con el plazo de entrega completo`, contiene(tCot, LARGO));
   ok(`${pref}26 PDF de la cotización SIN costos, proveedor, enlaces ni despachos`, !/Ferreter|tienda\.invalid|285\.600|23\.800|costo|margen|utilidad/i.test(tCot));
