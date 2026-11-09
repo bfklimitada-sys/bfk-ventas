@@ -292,6 +292,7 @@ export function caracteristicasDeFicha(ficha) {
   for (const p of ficha?.especificaciones || []) if (s(p?.etiqueta) || s(p?.valor)) out.push({ caracteristica: s(p.etiqueta), valor: s(p.valor), unidad: "", grupo: "especificaciones", origen: { tipo: "ficha" } });
   return out;
 }
+// Formato ANTERIOR de la EETT (ventana propia). Las EETT nuevas usan lib/vpEETT.contenidoEETTVP (09/11/2026).
 // Desde el 08/11/2026 la línea trae su FICHA técnica (la misma de Mercado Público, ingresada en la cotización): nombre, marca,
 // modelo, color, descripción, características generales, especificaciones e imágenes salen de ella sin volver a escribirse.
 // La biblioteca técnica aporta solo lo que la ficha no tiene (condiciones, accesorios, exclusiones, garantía, normas).
@@ -319,7 +320,8 @@ export function itemEETTDesde(linea, producto, tecnico) {
     fuente: t.fuente_tipo ? { tipo: t.fuente_tipo, detalle: t.fuente_detalle || "" } : null,
   };
 }
-// Revisión previa a emitir (mismas reglas que vp_emitir_eett).
+// Revisión previa a emitir de una EETT con el formato ANTERIOR (ventana propia, hasta el 09/11/2026). Desde esa fecha la
+// EETT se genera con el recorrido de Mercado Público (lib/vpEETT.contenidoEETTVP) y no pide objeto ni requisitos.
 export function revisarEETT(contenido) {
   const errores = [], avisos = [];
   if (!String(contenido?.objeto || "").trim()) errores.push("Falta el objeto del suministro.");

@@ -159,5 +159,5 @@ export function validarItemsVP(items) {
   return errores;
 }
 
-// ── EETT: la ficha técnica del ítem alimenta la EETT privada (sin volver a escribirla): ver itemEETTDesde / caracteristicasDeFicha.
+// ── EETT: la ficha técnica del ítem alimenta la EETT privada (sin volver a escribirla): ver lib/vpEETT.js (normalizarFichaEETT, contenidoEETTVP).
 export { caracteristicasDeFicha } from "./ventasPrivadas.js";

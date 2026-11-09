@@ -7,7 +7,7 @@ import { HojaLateral, Seccion, Pestanas, PanelPestana, AvisoLinea, Badge } from 
 import { Ventana, Campo, Rejilla, Entrada, Area, Selector, ErrorForm, PedirMotivo } from "../proyectos/Comunes";
 import { NoInstalado, Vacio, estiloBoton, Fila, BadgeVP, SubirArchivo, ListaDocumentos, Kpi, RejillaKpi } from "./Comunes";
 import { HistorialLista } from "./PanelCotizacionesPrivadas";
-import { descargarEETT } from "./EditorEETT";
+import { descargarEETT } from "../../lib/vpEETTDescarga";
 import { subirDocumento, leerVenta, actualizarVenta, registrarOcCliente, registrarEntrega, registrarFactura, registrarPago, imputarPago, registrarCompra, anular, anularVenta, buscarGastos, documentoPublico } from "../../lib/ventasPrivadasDatos";
 import { aPesos, ESTADOS_ENTREGA, ESTADOS_FACTURACION, ESTADOS_PAGO, MEDIOS_PAGO, TIPOS_DOCUMENTO_VENTA, filtrarVentas, pesos, pct, fechaTxt, hoyISO, cantidadTxt, mensajeVP, nuevaClave, folioRevision, TASA_IVA, redondear } from "../../lib/ventasPrivadas";
 import { generarPdfCotizacion } from "../../lib/vpPdf";

@@ -63,7 +63,7 @@ Rama local `ventas-privadas` (sin push: las vistas previas de Vercel apuntan a l
 | Cotizaciones privadas | Folio `CP-AAAA-NNNN`, revisiones R0, R1… (la enviada/aceptada queda congelada), costos internos en tabla aparte (solo responsable y administrador), PDF sin costos, envío/aceptación/rechazo/vencimiento **manuales**, duplicar, búsqueda y filtros. |
 | Venta | «Crear venta / Registrar OC» idempotente (doble clic, reintento o dos sesiones → una venta). Orden interna `OV-AAAA-NNNN`; OC del cliente aparte (número, fecha, archivo). Venta directa sin cotización. |
 | Ficha de venta | Detalle (costos estimados y reales, gastos vinculados sin duplicar) · Entregas (parciales/finales) · Documentos (cotización aprobada, EETT, OC, facturas **registradas**, respaldos) · Pagos (anticipos, abonos, aplicación a facturas sin duplicar cobros). Estados de entrega, facturación y pago independientes. Anulación con motivo y trazabilidad. |
-| EETT | Biblioteca técnica (sobre `productos_catalogo`), extracción asistida desde PDF con texto (pendiente de revisión, con página), «Generar EETT» por ítem con numeración de la cotización, «No informado» bloquea la emisión, requisitos del cliente separados de lo ofrecido, folio `ET-AAAA-NNNN` + revisión, contenido congelado con huella SHA-256, vínculo con la venta. |
+| EETT | Desde el 09/11/2026, el MISMO recorrido de la pestaña EETT de Mercado Público: revisión de cada ficha (aprobación de avisos, «Corregir ficha»), «Vista previa de EETT» (no guarda nada) y «Generar y descargar EETT» (guarda si hay cambios, emite y descarga; «Reintentar descarga» si falla), con el mismo generador y plantilla de PDF. La ficha de Productos pasa directo al documento: pares «característica: valor» → características; textos descriptivos → descripción técnica (`lib/vpEETT.normalizarFichaEETT`). Sin ventana propia: no pide objeto, alcance ni requisitos. Folio `ET-AAAA-NNNN` + revisión, contenido congelado con huella SHA-256, vínculo con la venta. Las EETT anteriores se conservan y se descargan como se emitieron. |
 | Integración | Filtro de canal (Todos · Mercado Público · Ventas privadas) en Inicio, Alertas, Agenda y Finanzas › Resumen. Alertas: cotizaciones por vencer, entregas pendientes/atrasadas, pagos vencidos. |
 | Permisos | En la base (RLS + funciones `vp_*`); la interfaz solo los refleja. Historial `vp_historial` inalterable. |
 
@@ -90,4 +90,10 @@ bash docs/pruebas-ventas-privadas/ejecutar.sh
 * `reglas.test.mjs` (50): fórmulas idénticas a la base (60 casos aleatorios), indicadores sin dobles conteos, alertas, agenda, extracción,
   y texto de los PDF (sin costos ni márgenes; EETT sin precios).
 * `e2e_ventas_privadas.mjs` (82): recorrido completo en navegador real (escritorio y celular) con PostgREST real.
+* EETT con el recorrido de Mercado Público (09/11/2026; migración `BORRADOR-2026-11-09-vp-eett-como-mp.sql` + recuperación):
+  `sql_eett_como_mp.test.mjs` (migración sobre la base de producción del 09/11 con datos, reglas que se mantienen, recuperación),
+  `eett_como_mp.test.mjs` (ficha → PDF con la copia aislada de CP-2026-0001, plantilla de Mercado Público, compatibilidad) y
+  `e2e_eett_cp_2026_0001.mjs` (navegador real, escritorio y celular: recorrido privado sobre la copia aislada y el de Mercado Público
+  con la misma ficha; capturas y PDF comparativos en `CAPTURAS`). La copia aislada (`fixture_cp_2026_0001.json` y sus 2 fotos
+  reducidas) contiene solo datos técnicos, sin costos ni precios.
 * Suites existentes de Mercado Público y Proyectos industriales actualizadas al botón «+ Nuevo» y ejecutadas.

@@ -7,6 +7,8 @@
 #      ejemplos_eett.mjs — un ejemplo de EETT por canal con el mismo generador (varios productos, textos largos)
 #   4. e2e              — navegador real (escritorio y celular), PostgREST real, recorrido completo
 #   5. sql_como_mp / reglas_como_mp / e2e_cotizacion_como_mp — cotización privada con la experiencia de Mercado Público (08/11/2026)
+#   6. sql_eett_como_mp / eett_como_mp / e2e_eett_cp_2026_0001 — EETT privada con el recorrido de Mercado Público (09/11/2026),
+#      verificada sobre una copia aislada de la cotización de la captura (CP-2026-0001, «Bolso Paramédico Mediano 47L»)
 # Requisitos: PostgreSQL local (PGHOST/PGPORT, superusuario postgres), postgrest 12 (POSTGREST=ruta), Chromium (CHROME=ruta),
 #             npm install y playwright-core resoluble desde node_modules.
 set -uo pipefail
@@ -28,7 +30,9 @@ echo "== reglas"; node "$D/reglas.test.mjs" 2>/dev/null | tail -1; RC=$((RC | ${
 echo "== cotización privada como Mercado Público: migración 08/11, persistencia y recuperación"; node "$D/sql_como_mp.test.mjs" | tail -1; RC=$((RC | ${PIPESTATUS[0]}))
 echo "== cotización privada como Mercado Público: reglas"; node "$D/reglas_como_mp.test.mjs" 2>/dev/null | tail -1; RC=$((RC | ${PIPESTATUS[0]}))
 echo "== EETT de Mercado Público sin cambios"; node "$D/eett_mp_sin_cambios.test.mjs" | tail -1; RC=$((RC | ${PIPESTATUS[0]}))
-echo "== plazo de entrega largo en la EETT (ambos canales; documentos emitidos iguales)"; node "$D/eett_plazo_largo.test.mjs" 2>/dev/null | tail -1; RC=$((RC | ${PIPESTATUS[0]}))
+echo "== plazo de entrega largo en la EETT (ambos canales; documentos emitidos iguales)"; REF_MP="${REF_PLAZO:-c48378a}" node "$D/eett_plazo_largo.test.mjs" 2>/dev/null | tail -1; RC=$((RC | ${PIPESTATUS[0]}))
+echo "== EETT privada como Mercado Público: migración 09/11, reglas y recuperación"; node "$D/sql_eett_como_mp.test.mjs" | tail -1; RC=$((RC | ${PIPESTATUS[0]}))
+echo "== EETT privada como Mercado Público: ficha → PDF (copia de CP-2026-0001) y compatibilidad"; node "$D/eett_como_mp.test.mjs" 2>/dev/null | tail -1; RC=$((RC | ${PIPESTATUS[0]}))
 echo "== ejemplos de EETT (ambos canales)"; node "$D/ejemplos_eett.mjs" | tail -1; RC=$((RC | ${PIPESTATUS[0]}))
 # e2e sobre una base limpia (la de sql.test quedó con datos de prueba)
 eval "$(bash "$D/entorno.sh" instalar)"; export PGRST_URL JWT_SECRET VP_DB_URL
@@ -39,5 +43,10 @@ echo "== e2e"; node "$D/e2e_ventas_privadas.mjs" "http://127.0.0.1:$PUERTO_APP/"
 # Recorrido completo de la cotización privada (escritorio y celular) sobre otra base limpia + capturas comparativas con Mercado Público.
 eval "$(bash "$D/entorno.sh" instalar)"; export PGRST_URL JWT_SECRET VP_DB_URL
 echo "== e2e cotización privada como Mercado Público"; node "$D/e2e_cotizacion_como_mp.mjs" "http://127.0.0.1:$PUERTO_APP/" 2>/dev/null | grep -E "FALLA|EXCEP|RESUMEN|Capturas"; RC=$((RC | ${PIPESTATUS[0]}))
+# EETT de la cotización de la captura (copia aislada) y comparación con Mercado Público, en escritorio y celular (base limpia cada vez).
+for MODO in escritorio celular; do
+  eval "$(bash "$D/entorno.sh" instalar)"; export PGRST_URL JWT_SECRET VP_DB_URL
+  echo "== e2e EETT CP-2026-0001 ($MODO)"; node "$D/e2e_eett_cp_2026_0001.mjs" "http://127.0.0.1:$PUERTO_APP/" "$MODO" 2>/dev/null | grep -E "FALLA|EXCEP|RESUMEN"; RC=$((RC | ${PIPESTATUS[0]}))
+done
 kill $PV 2>/dev/null; pkill -f "postgrest $D/.pgrst-" 2>/dev/null
 exit $RC

@@ -133,9 +133,10 @@ export function crearPdfEETT(cot, items, { jsPDF, logo, elaboracion, proceso, in
       lineaH(y + 6);
       doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(0);
       // El plazo de entrega se escribe completo y la fila crece lo necesario (igual que en la tabla de Mercado Público).
+      // El nombre del cliente también se escribe completo (09/11/2026): una razón social larga no se corta.
       let extra = 0;
       celdas.slice(0, 3).forEach((c, i) => {
-        const lineas = doc.splitTextToSize(textoPDF(c.valor), A[i] - 2); const ts = /^\s*plazo/i.test(String(c.titulo || "")) ? lineas : lineas.slice(0, 1);
+        const lineas = doc.splitTextToSize(textoPDF(c.valor), A[i] - 2); const ts = /^\s*(plazo|cliente)/i.test(String(c.titulo || "")) ? lineas : lineas.slice(0, 1);
         ts.forEach((t, k) => { if (t) doc.text(t, xs[i] + A[i] / 2, y + 10.8 + k * LINEA_CELDA, { align: "center" }); });
         extra = Math.max(extra, (ts.length - 1) * LINEA_CELDA);
       });

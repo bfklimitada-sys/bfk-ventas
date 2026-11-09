@@ -3,7 +3,7 @@
 # Plantilla: réplica local de BFK + base Supabase de prueba + migraciones existentes que el módulo reutiliza (Cotizaciones v1-v3,
 # seguridad perfil BFK, Proyectos Industriales), instaladas con el rol dueño SIN superusuario (como en Supabase).
 # Luego copia la plantilla, instala la migración de Ventas privadas (modo instalar) y levanta PostgREST 12.
-# Uso: bash docs/pruebas-ventas-privadas/entorno.sh [instalar|solo_0611|sin_modulo]   → imprime PGRST_URL, JWT_SECRET y VP_DB_URL
+# Uso: bash docs/pruebas-ventas-privadas/entorno.sh [instalar|solo_0811|solo_0611|sin_modulo]   → imprime PGRST_URL, JWT_SECRET y VP_DB_URL
 set -euo pipefail
 D="$(cd "$(dirname "$0")" && pwd)"; M="$D/../migraciones"
 PGHOST="${PGHOST:-/var/tmp/pgl}"; PGPORT="${PGPORT:-5499}"; MODO="${1:-instalar}"
@@ -28,10 +28,12 @@ PY
 fi
 pkill -f "postgrest $D/.pgrst-$PUERTO.conf" 2>/dev/null || true
 psql "${P[@]}" -U postgres -c "drop database if exists $DB with (force)" -c "create database $DB template $BASE"
-if [ "$MODO" = instalar ] || [ "$MODO" = solo_0611 ]; then
+if [ "$MODO" = instalar ] || [ "$MODO" = solo_0611 ] || [ "$MODO" = solo_0811 ]; then
   psql "${P[@]}" -U bfk_owner -d "$DB" -f "$M/BORRADOR-2026-11-06-ventas-privadas.sql" > /dev/null
   # Cotización privada con la experiencia de Mercado Público (08/11/2026). «solo_0611»: base tal como quedó en producción el 07/11.
-  [ "$MODO" = instalar ] && psql "${P[@]}" -U bfk_owner -d "$DB" -f "$M/BORRADOR-2026-11-08-vp-cotizacion-como-mp.sql" > /dev/null
+  [ "$MODO" = instalar ] || [ "$MODO" = solo_0811 ] && psql "${P[@]}" -U bfk_owner -d "$DB" -f "$M/BORRADOR-2026-11-08-vp-cotizacion-como-mp.sql" > /dev/null
+  # EETT con el recorrido de Mercado Público (09/11/2026). «solo_0811»: base tal como está en producción el 09/11 (sin esta migración).
+  [ "$MODO" = instalar ] && psql "${P[@]}" -U bfk_owner -d "$DB" -f "$M/BORRADOR-2026-11-09-vp-eett-como-mp.sql" > /dev/null
   [ -f "$D/semilla.sql" ] && psql -h "$PGHOST" -p "$PGPORT" -X -q -At -U postgres -d "$DB" -f "$D/semilla.sql" | grep '^SEMILLA' >&2 || true
 fi
 SECRETO="${JWT_SECRET:-$(openssl rand -hex 32)}"

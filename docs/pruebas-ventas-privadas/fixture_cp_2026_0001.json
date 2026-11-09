@@ -1,0 +1,53 @@
+{
+  "_nota": "Copia aislada (solo datos técnicos, sin costos ni precios) de la cotización privada CP-2026-0001 y su borrador ET-2026-0001, leída de producción el 09/11/2026 en modo lectura. Las 2 fotos de la ficha están en fixture_cp_2026_0001/ (copias reducidas a 558 px). Se usa únicamente en bases locales desechables.",
+  "cot": {"id":"63898d34-08ba-45a6-80da-96beaad19134","folio":"CP-2026-0001","estado":"borrador","revision_actual":0,"cliente_id":"23184cae-a249-42ab-8ff6-301316822818"},
+  "cliente": {"rut":"61.513.003-6","razon_social":"FONDO HOSPITAL DE LA DIRECCION DE PREVISION DE CARABINEROS DE CHILE"},
+  "rev": {"id":"66caaf83-abec-4f38-b1b7-032b94606e98","cotizacion_id":"63898d34-08ba-45a6-80da-96beaad19134","numero":0,"estado":"borrador","plazo_entrega":"3 días habiles","fecha_emision":"2026-11-09"},
+  "item": {
+    "id":"512670a3-8117-452d-a04d-7d1e2e319771","revision_id":"66caaf83-abec-4f38-b1b7-032b94606e98","orden":1,"tipo":"producto",
+    "producto_id":"c6050404-42b6-47bc-9e3e-6efbef5f1a08","codigo":null,"descripcion":"Bolso Paramédico Mediano 47L · TBQ BOL-BPRM-A","unidad":"UN","cantidad":2,
+    "ficha":{
+      "color":"Azul","marca":"TBQ","modelo":"BOL-BPRM-A","nombre":"Bolso Paramédico Mediano 47L",
+      "imagenes":["img/ca9ea8042ed519b4893f233153ad8395901d4078.jpg","img/4692986a1814666ac780fcea613b7ac14584912a.jpg"],
+      "generales":[
+        {"valor":"","etiqueta":"Bolso Paramédico Mediano 47L — Contenedor Clínico de Mano Profesional"},
+        {"valor":"","etiqueta":"El bolso paramédico mediano de TuBotiquín es el contenedor clínico de mano preferido por paramédicos, enfermeros y brigadistas que requieren acceso inmediato a todos sus insumos durante una atención de emergencia. Fabricado en tela RipStop antidesgarro e impermeable de alta resistencia. Disponible en azul médico o rojo emergencia — mismo modelo, mismas especificaciones, misma capacidad de 47 litros. Se entrega sin insumos y con un estuche transparente desmontable incluido: listo para equipar según el protocolo propio de cada servicio o brigada."}
+      ],
+      "descripcion":"Capacidad: 47 litros\nDimensiones: 35 cm ancho × 45 cm largo × 30 cm alto\nMaterial: Tela RipStop antidesgarro e impermeable\nColores disponibles: Azul médico / Rojo emergencia\nSKU Azul: BOL-BPRM-A\nSKU Rojo: BOL-BPRM-R\nContenido: Bolso vacío (sin insumos) + estuche transparente desmontable con velcro",
+      "especificaciones":[
+        {"valor":"","etiqueta":"Material RipStop impermeable — tela antidesgarro de alta resistencia que protege los insumos en condiciones de terreno, lluvia o manejo brusco."},
+        {"valor":"","etiqueta":"Apertura total de doble cremallera — se abre completamente con una sola maniobra, exponiendo todos los compartimentos simultáneamente para acceso inmediato en emergencias."},
+        {"valor":"","etiqueta":"Compartimento principal con divisiones ajustables — organización personalizable según el protocolo de cada servicio."},
+        {"valor":"","etiqueta":"Estuche transparente desmontable incluido — se fija con velcro al interior de la tapa; permite ver su contenido de un vistazo y retirarlo para llevar insumos pequeños por separado."},
+        {"valor":"","etiqueta":"Bolsillos laterales de acceso rápido — para elementos de uso frecuente como guantes, tijeras y vías IV."},
+        {"valor":"","etiqueta":"Bolsillo frontal con divisiones internas — para instrumentos pequeños como lapiceros, linterna y documentación."},
+        {"valor":"","etiqueta":"Cinta reflectante perimetral — visibilidad en condiciones de baja luminosidad durante atenciones nocturnas o en faenas."},
+        {"valor":"","etiqueta":"Cremalleras reforzadas de alta resistencia — diseñadas para apertura y cierre repetido en condiciones de uso intensivo."},
+        {"valor":"","etiqueta":"Asa superior y correa de hombro ajustable — transporte versátil según la situación de atención."},
+        {"valor":"","etiqueta":"Disponible en azul o rojo — permite diferenciar bolsos por color según nivel de atención o brigada."}
+      ]
+    },
+    "ficha_aprobada":false
+  },
+  "cat": {
+    "id":"c6050404-42b6-47bc-9e3e-6efbef5f1a08","nombre":"Bolso Paramédico Mediano 47L","marca":"TBQ","modelo":"BOL-BPRM-A","color":"Azul","fuente":"Falabella",
+    "descripcion_tecnica":"Capacidad: 47 litros\nDimensiones: 35 cm ancho × 45 cm largo × 30 cm alto\nMaterial: Tela RipStop antidesgarro e impermeable\nColores disponibles: Azul médico / Rojo emergencia\nSKU Azul: BOL-BPRM-A\nSKU Rojo: BOL-BPRM-R\nContenido: Bolso vacío (sin insumos) + estuche transparente desmontable con velcro",
+    "caracteristicas":"=item.ficha.generales",
+    "especificaciones":"=item.ficha.especificaciones",
+    "imagenes":["img/ca9ea8042ed519b4893f233153ad8395901d4078.jpg","img/4692986a1814666ac780fcea613b7ac14584912a.jpg"]
+  },
+  "eett": {
+    "id":"19ac5b0a-d75a-4f3a-b7ad-2c2657f2abdf","cotizacion_id":"63898d34-08ba-45a6-80da-96beaad19134","folio":"ET-2026-0001","revision":0,"estado":"borrador",
+    "cotizacion_revision_id":"66caaf83-abec-4f38-b1b7-032b94606e98","version":1,"creado_en":"2026-11-09T20:43:23.428358+00:00","emitida_en":null,
+    "contenido":{
+      "fecha":"2026-11-09",
+      "items":"=item convertido por itemEETTDesde (generales→grupo generales, especificaciones→grupo especificaciones, origen ficha, valor vacío)",
+      "anexos":[],"objeto":"","alcance":"","observaciones":"","plazo_entrega":"3 días habiles",
+      "cliente":{"rut":"61.513.003-6","razon_social":"FONDO HOSPITAL DE LA DIRECCION DE PREVISION DE CARABINEROS DE CHILE"},
+      "empresa":{"comuna":"Laja","correo":"bfklimitada@gmail.com","telefonos":"+56 9 5732 2538 / +56 9 9714 1822","razon_social":"Ingeniería y Servicios BFK Limitada"},
+      "cotizacion":{"folio":"CP-2026-0001","revision":0},
+      "responsable":"Kevin Vergara"
+    },
+    "item_contenido_base":{"tipo":"producto","color":"Azul","marca":"TBQ","orden":1,"anexos":[],"codigo":"","fuente":null,"modelo":"BOL-BPRM-A","nombre":"Bolso Paramédico Mediano 47L","normas":[],"unidad":"UN","item_id":"512670a3-8117-452d-a04d-7d1e2e319771","cantidad":2,"garantia":"","imagenes":["img/ca9ea8042ed519b4893f233153ad8395901d4078.jpg","img/4692986a1814666ac780fcea613b7ac14584912a.jpg"],"accesorios":[],"requisitos":[],"exclusiones":[],"producto_id":"c6050404-42b6-47bc-9e3e-6efbef5f1a08","origen_ficha":"cotizacion","condiciones_operacion":"","condiciones_instalacion":""}
+  }
+}

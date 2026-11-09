@@ -170,23 +170,18 @@ async function recorrido(browser, { pref, ancho, alto, movil }) {
   // Envío y aceptación de R1 → EETT emitida desde las fichas → venta.
   await ui.registrarEstado(p, "enviada"); await ui.registrarEstado(p, "aceptada");
   ok(`${pref}32 R1 aceptada: disponible «Crear venta / Registrar OC»`, q1(`select estado from public.vp_cotizaciones where folio = '${folio}';`) === "aceptada" && (await h.locator('[data-accion-cot="crear-venta"]').count()) === 1);
-  await ui.pestana(p, "eett"); await h.locator("[data-generar-eett]").click();
-  await p.locator('[data-ventana="eett-seleccion"]').waitFor(); await p.locator("[data-armar-eett]").click();
-  const ed = p.locator('[data-ventana="eett-editor"]'); await ed.waitFor(); await espera(p, 600);
-  const it1 = ed.locator("[data-desplegable='eett-item-1']");
-  const caract = await it1.locator("[data-caracteristica]").evaluateAll((xs) => xs.map((x) => x.dataset.caracteristica));
-  ok(`${pref}33 la EETT trae la ficha sin volver a escribirla (marca, modelo, características)`, (await it1.locator("[data-eett-marca]").inputValue()) === "Pedrollo" && (await it1.locator("[data-eett-modelo]").inputValue()) === "CPm 680" && caract.includes("Material") && caract.includes("Altura máxima"), JSON.stringify(caract));
-  await ed.locator("[data-eett-objeto]").fill("Suministro de bomba, manguera e instalación");
-  await it1.locator("[data-agregar-requisito]").click(); await it1.locator("[data-requisito='0'] input").first().fill("Caudal mínimo 100 L/min"); await it1.locator("[data-requisito='0'] [data-cumplimiento]").selectOption("cumple");
-  await ed.locator("[data-emitir-eett]").click(); await espera(p, 600);
-  ok(`${pref}34 respaldo de cumplimiento exigido antes de emitir`, /sin respaldo/.test(await ed.locator("[data-errores-eett]").innerText().catch(() => "")));
-  await it1.locator("[data-requisito='0'] input").nth(2).fill("Ficha del fabricante, pág. 2").catch(async () => { await it1.locator("[data-requisito='0'] [data-cumplimiento]").selectOption("sin_declarar"); });
-  const pdfEETT = await descarga(p, () => ed.locator("[data-emitir-eett]").click()); await espera(p, 1500); writeFileSync(`${CAPT}/${nombre}-documento-eett.pdf`, pdfEETT);
+  await ui.pestana(p, "eett");
+  ok(`${pref}33 pestaña EETT igual a la de Mercado Público (revisión de fichas, vista previa, «Generar y descargar EETT»)`, (await h.locator("[data-revision-eett]").count()) === 3 && /Generar y descargar EETT/.test(await h.locator("[data-generar-eett]").innerText()));
+  const pdfEETT = await descarga(p, () => h.locator("[data-generar-eett]").click()); await espera(p, 1500); writeFileSync(`${CAPT}/${nombre}-documento-eett.pdf`, pdfEETT);
+  ok(`${pref}34 sin ventana adicional (objeto, alcance, requisitos, emisión aparte)`, !(await p.locator('[data-ventana^="eett"], [data-eett-objeto]').count()));
   const tE = await textoPDF(pdfEETT);
-  ok(`${pref}35 EETT emitida con el formato de Mercado Público y la ficha (marca, modelo, generales, especificaciones, cantidades)`, /INFORMACI.N\s+T.CNICA DE/.test(tE) && /Pedrollo/.test(tE) && /CPm 680/.test(tE) && /Hierro fundido/.test(tE) && /Altura m.xima/.test(tE) && /2 UN/.test(tE) && /12,5 M/.test(tE) && !/\$\s?\d/.test(tE) && !/Ferreter/.test(tE));
+  ok(`${pref}35 EETT emitida con el formato de Mercado Público y la ficha (marca, modelo, generales, especificaciones)`, /INFORMACI.N\s+T.CNICA DE/.test(tE) && /Pedrollo/.test(tE) && /CPm 680/.test(tE) && /Hierro fundido/.test(tE) && /Altura m.xima/.test(tE) && !/\$\s?\d/.test(tE) && !/Ferreter/.test(tE) && !/BOM-01/.test(tE) && !/Objeto del suministro/.test(tE));
   ok(`${pref}35a EETT privada con el plazo de entrega largo completo (la fila crece)`, contiene(tE, LARGO), tE.slice(0, 300));
   ok(`${pref}35b la foto de la ficha va en la EETT (como en Mercado Público)`, pdfEETT.toString("latin1").includes("/Subtype /Image"));
-  ok(`${pref}36 EETT emitida y congelada en la base`, q1(`select count(*)||'|'||bool_and(hash is not null) from public.vp_eett e join public.vp_cotizaciones c on c.id = e.cotizacion_id where c.folio = '${folio}' and e.estado = 'emitida';`) === "1|true");
+  ok(`${pref}36 EETT emitida y congelada en la base (formato de Mercado Público)`, q1(`select count(*)||'|'||bool_and(hash is not null)||'|'||bool_and(contenido->>'formato' = 'mp') from public.vp_eett e join public.vp_cotizaciones c on c.id = e.cotizacion_id where c.folio = '${folio}' and e.estado = 'emitida';`) === "1|true|true");
+  // Generar otra vez sin cambios: vuelve a descargar la misma emisión (no emite una revisión idéntica).
+  const pdfEETT2 = await descarga(p, () => h.locator("[data-generar-eett]").click()); await espera(p, 1200);
+  ok(`${pref}36b generar otra vez sin cambios descarga la misma EETT (sin revisión nueva)`, q1(`select count(*) from public.vp_eett e join public.vp_cotizaciones c on c.id = e.cotizacion_id where c.folio = '${folio}';`) === "1" && (await textoPDF(pdfEETT2)).replace(/\s+/g, " ") === tE.replace(/\s+/g, " "));
   await h.locator('[data-accion-cot="crear-venta"]').click(); await p.locator('[data-ventana="crear-venta"]').waitFor();
   await p.locator('[data-ventana="crear-venta"] [data-confirmar-venta]').dblclick(); await espera(p, 3000);
   const ov = q1(`select v.folio from public.vp_ventas v join public.vp_cotizaciones c on c.id = v.cotizacion_id where c.folio = '${folio}';`);
