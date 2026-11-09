@@ -27,6 +27,8 @@ const LINEA = [64, 64, 64];      // renglones de las columnas
 const LINEA_SUAVE = [150, 150, 150];
 
 // Helvetica estándar (WinAnsi): se reemplazan los caracteres que no puede dibujar.
+// Interlineado (mm) de una celda de la tabla del proceso cuando su texto ocupa varias líneas (9 pt).
+const LINEA_CELDA = 3.9;
 const REEMPLAZOS = { "“": '"', "”": '"', "„": '"', "‘": "'", "’": "'", "–": "-", "—": "-", "…": "...", "•": "·", "≥": ">=", "≤": "<=", "″": '"', "′": "'", "™": "(TM)", "€": "EUR", " ": " ", "​": "" };
 export const textoPDF = (s) => String(s ?? "").replace(/[^\u0000-ÿ]/g, (c) => REEMPLAZOS[c] ?? "").replace(/[\u0000-\u0008\u000b-\u001f]/g, "").trim();
 
@@ -91,17 +93,22 @@ export function crearPdfEETT(cot, items, { jsPDF, logo, elaboracion, proceso, in
     if (proceso) return tablaPropia(y0);
     const conId = !!cab.id_externo;
     const lineaH = (y) => { doc.setDrawColor(0); doc.setLineWidth(0.2); doc.line(CX0, y, CX1, y); };
-    const fila = (y, titulos, valores, xs, anchos) => {
+    // completos: índices de las celdas que se escriben COMPLETAS (plazo de entrega): la fila crece lo necesario. Con una
+    // sola línea el resultado es idéntico al anterior; las demás celdas conservan su comportamiento (una línea).
+    const fila = (y, titulos, valores, xs, anchos, completos = []) => {
       lineaH(y);
       doc.setFont("helvetica", "bold"); doc.setFontSize(8.8); doc.setTextColor(0);
       titulos.forEach((t, i) => doc.text(t, xs[i], y + 4.2));
       lineaH(y + 6);
       doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(0);
+      let extra = 0;
       valores.forEach((v, i) => {
-        const t = doc.splitTextToSize(textoPDF(v), anchos[i] - 2)[0] || "";
-        if (t) doc.text(t, xs[i] + anchos[i] / 2, y + 10.8, { align: "center" });
+        const lineas = doc.splitTextToSize(textoPDF(v), anchos[i] - 2);
+        const ts = completos.includes(i) ? lineas : lineas.slice(0, 1);
+        ts.forEach((t, k) => { if (t) doc.text(t, xs[i] + anchos[i] / 2, y + 10.8 + k * LINEA_CELDA, { align: "center" }); });
+        extra = Math.max(extra, (ts.length - 1) * LINEA_CELDA);
       });
-      return y + 13;
+      return y + 13 + extra;
     };
     const X = [CX0, CX0 + 33.6, CX0 + 146.2]; const A = [33.6, 112.6, CANCHO - 146.2];
     let y = y0 + 3.8;
@@ -109,7 +116,7 @@ export function crearPdfEETT(cot, items, { jsPDF, logo, elaboracion, proceso, in
       ? fila(y, ["ID LICITACIÓN", "NOMBRE LICITACIÓN", "FECHA EMISIÓN"], [cab.id_externo, cab.nombre, fechaCL(cab.fecha)], X, A)
       : fila(y, ["NOMBRE LICITACIÓN", "FECHA EMISIÓN"], [cab.nombre, fechaCL(cab.fecha)], [CX0, X[2]], [A[0] + A[1], A[2]]);
     lineaH(y);
-    y = fila(y, ["PLAZO ENTREGA", "INSTITUCIÓN SOLICITANTE", "RUT"], [cab.plazo, cab.institucion, cab.rut], X, A);
+    y = fila(y, ["PLAZO ENTREGA", "INSTITUCIÓN SOLICITANTE", "RUT"], [cab.plazo, cab.institucion, cab.rut], X, A, [0]);
     return y + 5;
   };
 
@@ -125,8 +132,14 @@ export function crearPdfEETT(cot, items, { jsPDF, logo, elaboracion, proceso, in
       celdas.slice(0, 3).forEach((c, i) => doc.text(textoPDF(c.titulo).toUpperCase(), xs[i], y + 4.2));
       lineaH(y + 6);
       doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(0);
-      celdas.slice(0, 3).forEach((c, i) => { const t = doc.splitTextToSize(textoPDF(c.valor), A[i] - 2)[0] || ""; if (t) doc.text(t, xs[i] + A[i] / 2, y + 10.8, { align: "center" }); });
-      y += 13;
+      // El plazo de entrega se escribe completo y la fila crece lo necesario (igual que en la tabla de Mercado Público).
+      let extra = 0;
+      celdas.slice(0, 3).forEach((c, i) => {
+        const lineas = doc.splitTextToSize(textoPDF(c.valor), A[i] - 2); const ts = /^\s*plazo/i.test(String(c.titulo || "")) ? lineas : lineas.slice(0, 1);
+        ts.forEach((t, k) => { if (t) doc.text(t, xs[i] + A[i] / 2, y + 10.8 + k * LINEA_CELDA, { align: "center" }); });
+        extra = Math.max(extra, (ts.length - 1) * LINEA_CELDA);
+      });
+      y += 13 + extra;
     });
     return y + 5;
   }

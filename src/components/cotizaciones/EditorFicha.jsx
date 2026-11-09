@@ -6,6 +6,9 @@ import { revisarFicha, paresDeTexto, textoDePares, ESTADOS_ENVIO, proveedorDeEnl
 import { normalizarImagen, traerImagen, rutaConocida } from "../../lib/cotizacionesDatos";
 
 const m = (x) => fmt.money(Math.round(Number(x) || 0));
+// En cotizaciones privadas todo el contenido va en un fieldset (una revisión enviada se muestra deshabilitada); en Mercado
+// Público no se agrega ningún elemento.
+const Grupo = ({ vp, deshabilitado, children }) => (vp ? <fieldset disabled={deshabilitado} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>{children}</fieldset> : <>{children}</>);
 const mismoTexto = (a, b) => String(a || "").trim().toLowerCase() === String(b || "").trim().toLowerCase();
 
 // Ficha de un producto (ingreso manual). Arriba: lo que va a la EETT (solo técnico).
@@ -13,7 +16,10 @@ const mismoTexto = (a, b) => String(a || "").trim().toLowerCase() === String(b |
 // que se registra aquí mismo sin pasar por la pestaña Precios.
 // modo: "item" (línea de cotización) | "biblioteca" (solo ficha técnica).
 // protegido: cotización adjudicada → lo ofertado no se modifica (solo enlace, proveedor y ficha técnica).
-export function EditorFicha({ inicial, envios = [], items = [], destino = "", destinoValido = !!destino, dirCliente = null, onDireccion, modo = "item", almacen, token, onGuardar, onCerrar, esNuevo, protegido = false, respaldo = null, onBorrador }) {
+// vp (08/11/2026): la MISMA ventana para cotizaciones privadas; agrega tipo (producto/servicio), unidad y código.
+//   En un servicio no se piden marca, modelo ni color, y el despacho no aplica. soloLectura: revisión ya enviada (solo ver).
+//   Sin vp la ventana es idéntica a la de Mercado Público.
+export function EditorFicha({ inicial, envios = [], items = [], destino = "", destinoValido = !!destino, dirCliente = null, onDireccion, modo = "item", almacen, token, onGuardar, onCerrar, esNuevo, protegido = false, respaldo = null, onBorrador, vp = false, soloLectura = false }) {
   // respaldo: estado recuperado del borrador local (recarga o cierre inesperado). onBorrador: informa cada cambio
   // para la copia local de recuperación (aunque aún no se presione «Agregar a la cotización»).
   const R0 = respaldo || {};
@@ -47,6 +53,7 @@ export function EditorFicha({ inicial, envios = [], items = [], destino = "", de
   useEffect(() => { if (inicio.current === null) inicio.current = JSON.stringify(estadoActual()); onBorrador?.(estadoActual()); }, [it, txtGen, txtEsp, guardarBib, actualizarBib, urlImg, despMod, desp, reverificado]); // eslint-disable-line react-hooks/exhaustive-deps
   // Cerrar sin agregar: si hay datos escritos, se pide confirmación (evita perderlos por un toque accidental fuera de la ventana).
   const cerrar = () => {
+    if (soloLectura) { onCerrar(); return; }
     const cambiado = !!respaldo || (inicio.current !== null && JSON.stringify(estadoActual()) !== inicio.current);
     if (cambiado && !window.confirm("Este producto tiene datos sin agregar a la cotización. ¿Descartarlos?")) return;
     onCerrar();
@@ -72,6 +79,7 @@ export function EditorFicha({ inicial, envios = [], items = [], destino = "", de
   const setF = (k, v) => setIt((x) => ({ ...x, ficha: { ...x.ficha, [k]: v } }));
   const set = (k, v) => setIt((x) => ({ ...x, [k]: v }));
   const imgs = it.ficha.imagenes || [];
+  const servicio = vp && it.tipo === "servicio";
 
   const agregarArchivos = async (files) => {
     setError(""); setCargandoImg(true);
@@ -87,8 +95,9 @@ export function EditorFicha({ inicial, envios = [], items = [], destino = "", de
 
   const guardar = () => {
     setError("");
-    if (!ficha.nombre?.trim()) { setError("Falta el nombre exacto del producto."); return; }
-    if (modo === "item" && !protegido) {
+    if (!ficha.nombre?.trim()) { setError(servicio ? "Falta el nombre del servicio." : "Falta el nombre exacto del producto."); return; }
+    if (vp && !String(it.unidad || "").trim()) { setError("Indica la unidad (UN, M, KG, GL…)."); return; }
+    if (modo === "item" && !protegido && !servicio) {
       if (!(Number(it.cantidad) > 0)) { setError("La cantidad debe ser mayor que cero."); return; }
       if (despMod === "existente" && !desp.key) { setError("Elige el despacho ya registrado que comparte este producto."); return; }
       if (envioConfirmado(desp) && destinoValido && !String(desp.evidencia || "").trim()) { setError("Registra brevemente cómo se verificó el despacho (simulación de compra, cotización del proveedor, captura…)."); return; }
@@ -100,16 +109,26 @@ export function EditorFicha({ inicial, envios = [], items = [], destino = "", de
     if (modo === "item" && inicial.enlace && !mismoTexto(inicial.enlace, it.enlace) && !inicial.enlace_original) item.enlace_original = inicial.enlace;
     // Sin dirección válida el producto se guarda igual, con el despacho «Por verificar» (nunca confirmado).
     const sinDireccion = envioConfirmado(desp) && !destinoValido;
-    const envio = modo === "item" && !protegido ? (sinDireccion ? { modo: despMod, ...desp, estado: "pendiente", destino: "" }
+    const envio = servicio ? { modo: "ninguno" } : modo === "item" && !protegido ? (sinDireccion ? { modo: despMod, ...desp, estado: "pendiente", destino: "" }
       : { modo: despMod, ...desp, destino: envioConfirmado(desp) ? (reverificado ? destino : desp.destino) : "", fecha_cotizacion: reverificado ? new Date().toISOString().slice(0, 10) : desp.fecha_cotizacion }) : null;
     onGuardar(item, { guardarBiblioteca: guardarBib, actualizarBiblioteca: actualizarBib, envio });
   };
 
   const consulta = it.consulta;
-  const bloq = { disabled: protegido, style: protegido ? { opacity: 0.6 } : undefined };
+  // Campos bloqueados en una cotización adjudicada: mismo estilo que los demás (solo se atenúan). Antes «style: undefined»
+  // reemplazaba el estilo del campo y «Cantidad» y «Precio unitario de compra» quedaban sin formato.
+  const bloq = { disabled: protegido, style: protegido ? { ...iMono, opacity: 0.6 } : iMono };
   return (
-    <Modal title={modo === "biblioteca" ? "Ficha de la biblioteca" : esNuevo ? "Ingresar producto" : "Editar producto"} onClose={cerrar}>
-      <div data-editor-ficha>
+    <Modal title={soloLectura ? (servicio ? "Servicio" : "Producto") : modo === "biblioteca" ? "Ficha de la biblioteca" : esNuevo ? (servicio ? "Ingresar servicio" : "Ingresar producto") : servicio ? "Editar servicio" : "Editar producto"} onClose={cerrar}>
+      <div data-editor-ficha {...(vp ? { "data-editor-ficha-vp": it.tipo || "producto" } : {})}>
+        {soloLectura && <AvisoLinea tono="info" icono="🔒" dato="item-solo-lectura">Esta revisión ya fue enviada: su contenido no se modifica. Para cambiarla crea una revisión nueva.</AvisoLinea>}
+        <Grupo vp={vp} deshabilitado={soloLectura}>
+        {vp && (
+          <div data-tipo-item style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+            <BotonSecundario data-tipo="producto" activo={!servicio} onClick={() => set("tipo", "producto")}>Producto</BotonSecundario>
+            <BotonSecundario data-tipo="servicio" activo={servicio} onClick={() => set("tipo", "servicio")}>Servicio</BotonSecundario>
+          </div>
+        )}
         {respaldo && <AvisoLinea tono="warn" icono="↺" dato="ficha-recuperada">Producto recuperado localmente: estos datos aún no se han agregado a la cotización ni guardado en BFK.</AvisoLinea>}
         {consulta && (
           <div data-origen-consulta style={{ fontSize: T.small, color: C.inkMuted, background: C.paper, border: `1px solid ${C.border}`, borderRadius: R.sm, padding: "8px 10px", marginBottom: 12 }}>
@@ -120,14 +139,16 @@ export function EditorFicha({ inicial, envios = [], items = [], destino = "", de
         {protegido && <AvisoLinea tono="info" icono="🔒" dato="item-protegido">Cotización adjudicada: el producto ofertado (marca y modelo), la cantidad, los precios y el despacho quedan protegidos. Puedes actualizar el enlace de compra, el proveedor y corregir la ficha técnica.</AvisoLinea>}
 
         <div style={{ fontSize: T.small, fontWeight: 800, color: C.tealDark, textTransform: "uppercase", letterSpacing: 0.5, margin: "4px 0 8px" }}>Ficha técnica · va en la EETT</div>
-        <Field label="Nombre exacto del producto" required><textarea data-campo="nombre" rows={2} value={it.ficha.nombre || ""} onChange={(e) => setF("nombre", e.target.value)} style={{ ...iStyle, resize: "vertical" }} /></Field>
+        <Field label={servicio ? "Nombre del servicio" : "Nombre exacto del producto"} required><textarea data-campo="nombre" rows={2} value={it.ficha.nombre || ""} onChange={(e) => setF("nombre", e.target.value)} style={{ ...iStyle, resize: "vertical" }} /></Field>
+        {!servicio && <>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
           <Field label="Marca"><input data-campo="marca" value={it.ficha.marca || ""} onChange={(e) => setF("marca", e.target.value)} style={iStyle} disabled={protegido} /></Field>
           <Field label="Modelo"><input data-campo="modelo" value={it.ficha.modelo || ""} onChange={(e) => setF("modelo", e.target.value)} style={iStyle} disabled={protegido} /></Field>
         </div>
         <Field label="Color"><input data-campo="color" value={it.ficha.color || ""} onChange={(e) => setF("color", e.target.value)} style={iStyle} /></Field>
-        <Field label="Características generales" hint="Una por línea: Etiqueta: valor (marca, modelo y color van arriba)."><textarea data-campo="generales" rows={3} value={txtGen} onChange={(e) => setTxtGen(e.target.value)} style={{ ...iStyle, resize: "vertical" }} placeholder={"Material: Acero\nGarantía: 12 meses"} /></Field>
-        <Field label="Especificaciones técnicas" hint="Una por línea: Etiqueta: valor."><textarea data-campo="especificaciones" rows={6} value={txtEsp} onChange={(e) => setTxtEsp(e.target.value)} style={{ ...iStyle, resize: "vertical" }} placeholder={"Capacidad bruta: 590 L\nVoltaje: 220 V"} /></Field>
+        </>}
+        <Field label={servicio ? "Alcance y condiciones" : "Características generales"} hint={servicio ? "Una por línea: Etiqueta: valor (alcance, duración, lugar de ejecución…)." : "Una por línea: Etiqueta: valor (marca, modelo y color van arriba)."}><textarea data-campo="generales" rows={3} value={txtGen} onChange={(e) => setTxtGen(e.target.value)} style={{ ...iStyle, resize: "vertical" }} placeholder={servicio ? "Alcance: Instalación y puesta en marcha\nDuración: 1 día" : "Material: Acero\nGarantía: 12 meses"} /></Field>
+        <Field label="Especificaciones técnicas" hint="Una por línea: Etiqueta: valor."><textarea data-campo="especificaciones" rows={servicio ? 3 : 6} value={txtEsp} onChange={(e) => setTxtEsp(e.target.value)} style={{ ...iStyle, resize: "vertical" }} placeholder={"Capacidad bruta: 590 L\nVoltaje: 220 V"} /></Field>
         <Field label="Descripción técnica (opcional)"><textarea data-campo="descripcion" rows={3} value={it.ficha.descripcion || ""} onChange={(e) => setF("descripcion", e.target.value)} style={{ ...iStyle, resize: "vertical" }} /></Field>
 
         <Field label={`Imágenes (${imgs.length} de 4) · las 2 primeras van en la EETT`}>
@@ -166,15 +187,21 @@ export function EditorFicha({ inicial, envios = [], items = [], destino = "", de
             </Field>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
               <Field label="Proveedor"><input data-campo="proveedor" value={it.proveedor || ""} onChange={(e) => set("proveedor", e.target.value)} style={iStyle} /></Field>
-              <Field label="Cantidad" required><input data-campo="cantidad" type="number" inputMode="numeric" min="1" value={it.cantidad} onChange={(e) => set("cantidad", e.target.value)} style={iMono} {...bloq} /></Field>
+              <Field label="Cantidad" required><input data-campo="cantidad" type="number" inputMode={vp ? "decimal" : "numeric"} min={vp ? "0" : "1"} step={vp ? "any" : undefined} value={it.cantidad} onChange={(e) => set("cantidad", e.target.value)} style={iMono} {...bloq} /></Field>
             </div>
-            <Field label="Precio unitario de compra" hint={it.precio_origen ? `${m(it.precio_origen)} ${it.precio_incluye_iva === false ? "+ IVA" : "con IVA incluido"}` : "Precio por unidad publicado por el proveedor."}>
+            {vp && (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                <Field label="Unidad" required hint="UN, M, KG, GL…"><input data-campo="unidad" value={it.unidad ?? ""} maxLength={20} onChange={(e) => set("unidad", e.target.value.toUpperCase())} style={iStyle} /></Field>
+                <Field label="Código (opcional)"><input data-campo="codigo" value={it.codigo ?? ""} maxLength={60} onChange={(e) => set("codigo", e.target.value)} style={iMono} /></Field>
+              </div>
+            )}
+            <Field label={servicio ? "Costo unitario del servicio (compra o subcontrato)" : "Precio unitario de compra"} hint={it.precio_origen ? `${m(it.precio_origen)} ${it.precio_incluye_iva === false ? "+ IVA" : "con IVA incluido"}` : servicio ? "Lo que cuesta a BFK por unidad (vacío si aún no se conoce)." : "Precio por unidad publicado por el proveedor."}>
               <input data-campo="precio" type="number" inputMode="decimal" min="0" value={it.precio_origen ?? ""} onChange={(e) => set("precio_origen", e.target.value)} style={iMono} {...bloq} />
             </Field>
             <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: T.sm, marginBottom: 6, minHeight: 32 }}><input type="checkbox" disabled={protegido} checked={it.precio_incluye_iva !== false} onChange={(e) => set("precio_incluye_iva", e.target.checked)} /> El precio publicado incluye IVA</label>
             <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: T.sm, marginBottom: 12, minHeight: 32 }}><input type="checkbox" disabled={protegido} checked={it.con_factura !== false} onChange={(e) => set("con_factura", e.target.checked)} /> Se compra con factura</label>
 
-            <div data-despacho-ficha style={{ border: `1px solid ${C.border}`, borderRadius: R.md, padding: "10px 12px", marginBottom: 12, background: C.paper, opacity: protegido ? 0.7 : 1 }}>
+            {servicio ? <div data-despacho-no-aplica style={{ fontSize: T.small, color: C.inkMuted, marginBottom: 12 }}>Servicio: el despacho no aplica.</div> : <div data-despacho-ficha style={{ border: `1px solid ${C.border}`, borderRadius: R.md, padding: "10px 12px", marginBottom: 12, background: C.paper, opacity: protegido ? 0.7 : 1 }}>
               <div style={{ fontSize: T.sm, fontWeight: 800, color: C.ink, marginBottom: 6 }}>Despacho</div>
               {mostrarDir && dirCliente && (
                 <div data-direccion-en-ficha style={{ border: `1px solid ${destinoValido ? C.ok : C.warn}`, background: destinoValido ? C.okLight : C.warnLight, borderRadius: R.sm, padding: "8px 10px", marginBottom: 10 }}>
@@ -216,17 +243,18 @@ export function EditorFicha({ inicial, envios = [], items = [], destino = "", de
                   `Verificado para: ${verificadoPara}`}
               </div>
               {compartidoCon.length > 0 && <div style={{ fontSize: T.small, color: C.inkMuted, marginTop: 4 }}>Compartido con: {compartidoCon.map((x) => x.ficha?.nombre || "producto").join(", ")}. El costo total se ingresa una sola vez y se reparte según el valor de cada producto.</div>}
-            </div>
+            </div>}
 
             {it.producto_id
               ? <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: T.sm, marginBottom: 8 }}><input type="checkbox" checked={actualizarBib} onChange={(e) => setActualizarBib(e.target.checked)} /> Actualizar también la ficha en la biblioteca compartida</label>
               : <label data-guardar-biblioteca style={{ display: "flex", alignItems: "center", gap: 8, fontSize: T.sm, marginBottom: 8 }}><input type="checkbox" checked={guardarBib} onChange={(e) => setGuardarBib(e.target.checked)} /> Guardar en la biblioteca compartida (solo la ficha técnica)</label>}
           </div>
         )}
+        </Grupo>
         {error && <AvisoLinea tono="danger" dato="error-ficha">{error}</AvisoLinea>}
         <div style={{ display: "flex", gap: 8, marginTop: 8, position: "sticky", bottom: -20, background: C.card, padding: "10px 0" }}>
-          <BotonSecundario onClick={cerrar} style={{ flex: 1, justifyContent: "center", minHeight: 44 }}>Cancelar</BotonSecundario>
-          <BotonPrincipal data-guardar-ficha onClick={guardar} style={{ flex: 2, justifyContent: "center" }}>{modo === "biblioteca" ? "Guardar ficha" : esNuevo ? "Agregar a la cotización" : "Guardar cambios"}</BotonPrincipal>
+          <BotonSecundario onClick={cerrar} style={{ flex: 1, justifyContent: "center", minHeight: 44 }}>{soloLectura ? "Cerrar" : "Cancelar"}</BotonSecundario>
+          {!soloLectura && <BotonPrincipal data-guardar-ficha onClick={guardar} style={{ flex: 2, justifyContent: "center" }}>{modo === "biblioteca" ? "Guardar ficha" : esNuevo ? "Agregar a la cotización" : "Guardar cambios"}</BotonPrincipal>}
         </div>
         {avisos.some((a) => a.nivel === "revisar") && modo === "item" && <div style={{ fontSize: T.small, color: C.inkFaint, textAlign: "center" }}><Badge tono="warn">Revisar</Badge> Los avisos no impiden guardar; se aprueban antes de generar la EETT.</div>}
       </div>

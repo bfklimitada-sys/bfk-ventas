@@ -284,16 +284,33 @@ export function tieneDatosComerciales(o) {
 }
 // Ítem de EETT a partir de la línea de la cotización y la ficha técnica del producto (si existe).
 // Lo que falta se marca «No informado» (nunca se completa por suposición).
+// Ficha técnica (modelo de Mercado Público) → características de la EETT privada. Generales → grupo «generales» (van en
+// «Características Generales» del PDF, como en Mercado Público); especificaciones → grupo «especificaciones».
+export function caracteristicasDeFicha(ficha) {
+  const s = (v) => String(v ?? "").trim(); const out = [];
+  for (const p of ficha?.generales || []) if (s(p?.etiqueta) || s(p?.valor)) out.push({ caracteristica: s(p.etiqueta), valor: s(p.valor), unidad: "", grupo: "generales", origen: { tipo: "ficha" } });
+  for (const p of ficha?.especificaciones || []) if (s(p?.etiqueta) || s(p?.valor)) out.push({ caracteristica: s(p.etiqueta), valor: s(p.valor), unidad: "", grupo: "especificaciones", origen: { tipo: "ficha" } });
+  return out;
+}
+// Desde el 08/11/2026 la línea trae su FICHA técnica (la misma de Mercado Público, ingresada en la cotización): nombre, marca,
+// modelo, color, descripción, características generales, especificaciones e imágenes salen de ella sin volver a escribirse.
+// La biblioteca técnica aporta solo lo que la ficha no tiene (condiciones, accesorios, exclusiones, garantía, normas).
 export function itemEETTDesde(linea, producto, tecnico) {
   const t = tecnico || {};
-  const sugeridos = PARAMETROS_SUGERIDOS[t.tipo_producto || (linea.tipo === "servicio" ? "servicio" : "otro")] || [];
-  const car = (t.caracteristicas || []).map((c) => ({ caracteristica: c.caracteristica, valor: c.valor, unidad: c.unidad || "", grupo: c.grupo || "", origen: c.origen || null }));
+  const ficha = linea?.ficha && typeof linea.ficha === "object" ? linea.ficha : null;
+  const sugeridos = ficha ? [] : PARAMETROS_SUGERIDOS[t.tipo_producto || (linea.tipo === "servicio" ? "servicio" : "otro")] || [];
+  const car = ficha ? caracteristicasDeFicha(ficha)
+    : (t.caracteristicas || []).map((c) => ({ caracteristica: c.caracteristica, valor: c.valor, unidad: c.unidad || "", grupo: c.grupo || "", origen: c.origen || null }));
   for (const s of sugeridos) if (!car.some((c) => plano(c.caracteristica) === plano(s))) car.push({ caracteristica: s, valor: NO_INFORMADO, unidad: "", sugerido: true, excluir: false });
   return {
     item_id: linea.id, orden: linea.orden, cantidad: Number(linea.cantidad), unidad: linea.unidad, tipo: linea.tipo,
     producto_id: producto?.id || linea.producto_id || null,
-    nombre: producto?.nombre || linea.descripcion, marca: producto?.marca || "", modelo: producto?.modelo || "", codigo: t.codigo || linea.codigo || "",
-    descripcion: producto?.descripcion_tecnica || "",
+    nombre: (ficha && String(ficha.nombre || "").trim()) || producto?.nombre || linea.descripcion,
+    marca: ficha ? String(ficha.marca || "").trim() : producto?.marca || "", modelo: ficha ? String(ficha.modelo || "").trim() : producto?.modelo || "",
+    ...(ficha && String(ficha.color || "").trim() ? { color: String(ficha.color).trim() } : {}),
+    codigo: t.codigo || linea.codigo || "",
+    descripcion: ficha ? String(ficha.descripcion || "").trim() : producto?.descripcion_tecnica || "",
+    ...(ficha ? { imagenes: (ficha.imagenes || []).filter((x) => typeof x === "string" && x && !x.startsWith("data:")).slice(0, 2), origen_ficha: "cotizacion" } : {}),
     caracteristicas: car,
     condiciones_operacion: t.condiciones_operacion || "", condiciones_instalacion: t.condiciones_instalacion || "",
     accesorios: [...(t.accesorios || [])], exclusiones: [...(t.exclusiones || [])], garantia: t.garantia || "",

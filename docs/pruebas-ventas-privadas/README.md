@@ -1,3 +1,54 @@
+# Cotización privada con la experiencia de Mercado Público — 08/11/2026
+
+Estado: autorizado por Kevin el 09/11/2026 (migración en producción tras respaldo y ensayo en copia; luego integración a `main`).
+El registro de la operación queda en `bfk-respaldos` (docs/registro-operaciones).
+
+Ajustes del 09/11/2026 (pedidos al autorizar):
+* Ventana compartida de productos: «Cantidad» y «Precio unitario de compra» con el mismo estilo que los demás campos (también en
+  Mercado Público; antes un `style: undefined` les quitaba el formato).
+* Generador ÚNICO de EETT (`eettPdf.js`, Mercado Público y Ventas privadas): el plazo de entrega se escribe completo y la fila crece lo
+  necesario. Con un plazo de una línea el PDF es idéntico byte a byte al anterior (documentos ya emitidos), las demás celdas no cambian
+  (`eett_plazo_largo.test.mjs`, 11 comprobaciones en ambos canales).
+
+Criterio: quien ya sabe cotizar en Mercado Público crea una cotización privada sin aprender otra interfaz.
+
+| Área | Implementación |
+|---|---|
+| Estructura | `EditorCotizacionPrivada.jsx`: misma hoja lateral, botón «Guardar •/Guardado», línea de estado de guardado, pasos y pestañas **Datos · Productos · Precios · EETT** de `EditorCotizacion.jsx`. Los datos se conservan al cambiar de pestaña; cerrar con cambios pide confirmación y hay copia de recuperación local (IndexedDB, espacio `vp:` separado del de Mercado Público). |
+| Datos | Cliente del registro compartido (en lugar de institución), razón social y RUT, contacto, correo, teléfono, dirección de entrega (mismo bloque que Mercado Público), responsable, folio automático, emisión, vigencia, plazo, condiciones de pago, IVA, condiciones comerciales y observaciones. Sin código de Compra Ágil, licitación ni consulta a ChileCompra. La OC del cliente se registra al crear la venta. Respaldos e historial al final. |
+| Productos | Las mismas «＋ Ingresar manual», «Desde la biblioteca de fichas», tarjetas y ventana `EditorFicha.jsx` (con `vp`: tipo producto/servicio, unidad y código; un servicio no pide marca, modelo, color ni despacho). Foto en `cz-productos`, enlace, proveedor, cantidad, costo y despacho propio o compartido con su verificación contra la dirección. |
+| Precios | Costo de adquisición idéntico a Mercado Público (`lib/vpCotizacion.js`, probado contra `calcularCotizacion` en 400 casos). **Diferencia explícita:** el precio unitario de venta y el descuento siguen la fórmula de ventas privadas (la de la base); el «recargo sobre costo» solo escribe el precio (costo × (1 + recargo), hacia arriba) cuando se usa. Nada se recalcula solo ni cambia documentos guardados. Costos, utilidad, margen y recargo solo para el responsable y los administradores. |
+| EETT | Revisión de fichas como Mercado Público (aprobación de avisos) y vista previa sin guardar. «Generar EETT» arma la EETT privada desde la ficha de cada ítem (marca, modelo, color, características generales, especificaciones, descripción e imágenes) sin volver a escribirla; se conservan requisitos del cliente, respaldos de cumplimiento, folio ET, revisiones e inmutabilidad. Mismo generador de PDF de Mercado Público (`eettPdf.js`). |
+| PDF de la cotización | Vista previa y descarga en Precios. Sin costos, proveedores, enlaces, despachos ni márgenes. Ver o descargar no cambia el estado. |
+| Flujo privado | Sin cambios: borrador, registro manual de envío/aceptación/rechazo/vencimiento, revisiones (las enviadas quedan de solo lectura), duplicar, «Crear venta / Registrar OC» idempotente, adjuntos, permisos e historial. Inteligencia Comercial sigue desactivada; no hay sincronizaciones ni IA nuevas. |
+| Venta | La venta conserva la ficha técnica y los datos de compra (proveedor, enlace, precio, despacho); la ficha de la venta muestra proveedor e «Ir a comprar» al responsable. |
+
+## Migración del 08/11 (compatible, con recuperación)
+
+* `docs/migraciones/BORRADOR-2026-11-08-vp-cotizacion-como-mp.sql` — columnas nuevas nulas o con valor por defecto
+  (`vp_cotizacion_items.ficha/ficha_aprobada`, datos de compra en `vp_cotizacion_item_costos`, `vp_venta_items.ficha`, datos de compra en
+  `vp_venta_item_costos`), costo unitario opcional (un ítem puede tener proveedor y enlace antes de su precio), nuevas versiones de
+  `vp_reemplazar_lineas`, `vp_cotizacion_nueva_revision`, `vp_duplicar_cotizacion`, `vp_crear_venta_desde_cotizacion` y de las vistas de margen
+  (misma fórmula; un costo vacío cuenta como «sin costo»). Antes de cambiar nada exige que las 4 funciones sean exactamente las del 07/11
+  (huella del cuerpo). No reescribe filas ni toca documentos congelados, EETT, ventas ni Mercado Público.
+* `docs/migraciones/BORRADOR-2026-11-08-vp-cotizacion-como-mp-deshacer.sql` — restituye el texto exacto de las funciones del 07/11 sin borrar
+  datos (las columnas nuevas se conservan; `-v quitar_columnas=si` las quita solo si están vacías). Sin datos nuevos deja el catálogo idéntico
+  al del 07/11 (probado por huella).
+* La interfaz detecta si la migración está instalada; si no, avisa y **no guarda** (para no perder fichas ni datos de compra).
+
+## Pruebas (además de las de abajo)
+
+* `sql_como_mp.test.mjs` (45): migración sobre datos reales del 07/11 sin alterar nada histórico; persistencia al guardar, nueva revisión,
+  duplicar y convertir en venta; permisos de costos; márgenes; EETT emitida desde fichas; recuperación y re-aplicación.
+* `reglas_como_mp.test.mjs` (21): costos idénticos a Mercado Público, fórmula privada, ida y vuelta sin pérdidas, EETT desde la ficha.
+* `eett_plazo_largo.test.mjs` (11): plazo largo completo en ambos canales; plazo corto idéntico a main.
+* `e2e_cotizacion_como_mp.mjs` (106): plazo largo en la EETT de ambos canales y en el PDF comercial; estilo de los campos; sin llamadas a
+  Inteligencia Comercial, IA ni Compra Ágil; recorrido completo en escritorio y celular (crear, productos y fichas, calcular, guardar, reabrir,
+  editar, ambos documentos, revisión, aceptación, EETT emitida y venta), permisos de otro usuario y capturas comparativas
+  (`CAPTURAS=carpeta`) del editor de Mercado Público y del privado.
+
+---
+
 # Ventas privadas (línea VP) y EETT de cotizaciones privadas — 06/11/2026
 
 Estado: **implementado y probado en bases desechables locales. NO publicado y migración NO aplicada en producción.**

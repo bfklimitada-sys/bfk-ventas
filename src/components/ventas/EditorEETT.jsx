@@ -17,14 +17,19 @@ import { VistaPreviaEETT } from "../cotizaciones/VistaPreviaEETT";
 import { logoBFK } from "../../lib/cotizacionesDatos";
 import logoUrl from "../../assets/bfk-logo.jpg";
 
-// Imágenes para el PDF: fotos adjuntas al producto (vp-documentos) o, si no hay, las de la biblioteca (cz-productos).
-async function imagenesDe(token, contenido) {
-  const ids = (contenido.items || []).map((i) => i.producto_id).filter(Boolean);
-  if (!ids.length) return {};
-  const { productos, documentos } = await leerProductos(token, ids);
+// Imágenes para el PDF: las de la ficha técnica del ítem en la cotización (cz-productos, las 2 primeras, como en Mercado
+// Público); si el ítem no trae ficha, las fotos adjuntas al producto (vp-documentos) o las de la biblioteca (cz-productos).
+export async function imagenesDe(token, contenido) {
   const out = {};
+  for (const it of contenido.items || []) {
+    if (!Array.isArray(it.imagenes) || !it.imagenes.length) continue;
+    out[it.item_id] = (await Promise.all(it.imagenes.slice(0, 2).map((r) => (typeof r === "string" ? imagenComoDataURL(token, { bucket: "cz-productos", ruta: r }) : null)))).filter(Boolean);
+  }
+  const ids = (contenido.items || []).filter((i) => !out[i.item_id]).map((i) => i.producto_id).filter(Boolean);
+  if (!ids.length) return out;
+  const { productos, documentos } = await leerProductos(token, ids);
   for (const it of contenido.items) {
-    if (!it.producto_id) continue;
+    if (!it.producto_id || out[it.item_id]) continue;
     const fotos = documentos.filter((d) => d.producto_id === it.producto_id && d.categoria === "foto" && /^image\/(jpe?g|png)/i.test(d.tipo_mime || "")).slice(0, 2);
     let imgs = (await Promise.all(fotos.map((f) => imagenComoDataURL(token, { bucket: "vp-documentos", ruta: f.ruta, sha256: f.sha256 })))).filter(Boolean);
     if (!imgs.length) {
@@ -82,7 +87,11 @@ export function EditorEETT({ token, cot, datos, vp, eettId, showToast, onCerrar 
         items: elegidas.map((l) => {
           const antes = previo?.items?.find((x) => x.item_id === l.id || (x.orden === l.orden && x.producto_id === l.producto_id));
           const base = itemEETTDesde(l, productos.find((p) => p.id === l.producto_id), tecnicos.find((t) => t.producto_id === l.producto_id));
-          return antes ? { ...base, ...antes, item_id: l.id, orden: l.orden, cantidad: Number(l.cantidad), unidad: l.unidad } : base;
+          if (!antes) return base;
+          // Con ficha técnica en la cotización, lo técnico (nombre, marca, modelo, características, imágenes) sale SIEMPRE de la
+          // ficha vigente; de la EETT anterior se conserva solo lo revisado propio de la EETT (requisitos, normas, condiciones…).
+          if (l.ficha) return { ...base, ...Object.fromEntries(["condiciones_operacion", "condiciones_instalacion", "accesorios", "exclusiones", "garantia", "normas", "requisitos", "anexos"].filter((k) => antes[k] != null).map((k) => [k, antes[k]])), item_id: l.id, orden: l.orden, cantidad: Number(l.cantidad), unidad: l.unidad };
+          return { ...base, ...antes, item_id: l.id, orden: l.orden, cantidad: Number(l.cantidad), unidad: l.unidad };
         }),
       };
       const r = await guardarEETT(token, { cotizacion_id: cot.id, contenido });
@@ -141,7 +150,7 @@ export function EditorEETT({ token, cot, datos, vp, eettId, showToast, onCerrar 
           <b style={{ fontFamily: MONO, color: C.tealDark }}>{l.orden}</b>
           <span style={{ flex: 1, fontSize: T.sm }}>{l.descripcion}</span>
           <span style={{ fontSize: T.small, color: C.inkMuted }}>{cantidadTxt(l.cantidad)} {l.unidad}</span>
-          {l.producto_id ? <Badge tono="info">Con ficha</Badge> : <Badge tono="warn">Sin ficha</Badge>}
+          {l.ficha || l.producto_id ? <Badge tono="info">Con ficha</Badge> : <Badge tono="warn">Sin ficha</Badge>}
         </label>
       ))}
     </Ventana>

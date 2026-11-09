@@ -4,6 +4,7 @@
 // Uso: (entorno.sh instalar) → PGRST_URL, JWT_SECRET, VP_DB_URL · node docs/pruebas-ventas-privadas/e2e_ventas_privadas.mjs http://127.0.0.1:4330/
 import { readFileSync } from "node:fs";
 import { abrir, chromium, CHROME, U, psql, sinDesborde, registro, desde, calma, marca, escriturasMP } from "./arnes_vp.mjs";
+import * as ui from "./ui_cotizacion_vp.mjs";
 
 const URL_APP = process.argv[2] || "http://127.0.0.1:4330/";
 let nOk = 0; const F = [];
@@ -57,29 +58,27 @@ try {
   await f.locator("[data-cerrar-ventana]").click();
   ok("C3 un solo cliente con ese RUT en la base", q1(`select count(*) from public.pi_clientes where rut_clave = '760864285';`) === "1");
 
-  // ── 3. Cotización privada ───────────────────────────────────────────────────────────────────────
+  // ── 3. Cotización privada (misma experiencia que Mercado Público; recorrido completo en e2e_cotizacion_como_mp.mjs) ──────
   await p.locator("aside [data-boton-nuevo]").click(); await p.locator('[data-nuevo="vp_cotizacion"]').click(); await p.locator('[data-hoja-lateral="ficha-cotizacion"]').waitFor();
-  const h = p.locator('[data-hoja-lateral="ficha-cotizacion"]');
-  await h.locator("[data-buscar-cliente]").fill("Maderas"); await espera(p, 200); await h.locator('[data-opcion-cliente="76.086.428-5"]').click(); await espera(p, 200);
+  const h = ui.hoja(p);
+  await ui.elegirCliente(p, "Maderas", "76.086.428-5");
   ok("Q1 al elegir el cliente se proponen contacto y condiciones", (await h.locator('[data-campo="contacto"]').inputValue()) === "Rosa Pérez" && (await h.locator('[data-campo="pago"]').inputValue()) === "50% anticipo y saldo a 30 días");
   await h.locator('[data-campo="plazo"]').fill("10 días hábiles desde la aceptación");
-  const linea = (i) => h.locator(`[data-linea="${i}"]`);
-  await linea(1).locator('[data-campo="descripcion"]').fill("Bomba centrífuga 2 HP"); await linea(1).locator('[data-campo="cantidad"]').fill("2");
-  await linea(1).locator('[data-campo="precio"]').fill("350000"); await linea(1).locator('[data-campo="descuento"]').fill("5"); await linea(1).locator('[data-campo="costo"]').fill("240000");
-  await h.locator("[data-agregar-linea]").click();
-  await linea(2).locator('[data-campo="descripcion"]').fill("Manguera 1 pulgada"); await linea(2).locator('[data-campo="unidad"]').fill("M"); await linea(2).locator('[data-campo="cantidad"]').fill("12,5");
-  await linea(2).locator('[data-campo="precio"]').fill("3990"); await linea(2).locator('[data-campo="costo"]').fill("2100.5");
-  await h.locator("[data-agregar-linea]").click();
-  await linea(3).locator("select").first().selectOption("servicio");
-  await linea(3).locator('[data-campo="descripcion"]').fill("Instalación y puesta en marcha"); await linea(3).locator('[data-campo="unidad"]').fill("GL");
-  await linea(3).locator('[data-campo="precio"]').fill("180000"); await linea(3).locator('[data-campo="descuento"]').fill("10");
+  await ui.pestana(p, "productos");
+  await ui.ingresarManual(p, { nombre: "Bomba centrífuga 2 HP", marca: "Pedrollo", modelo: "CPm 680", especificaciones: "Potencia: 2 HP", cantidad: 2, unidad: "UN", precio: 240000, incluyeIva: false,
+    despacho: { modo: "propio", monto: 0, estado: "sin_costo_confirmado", evidencia: "Retiro en tienda del proveedor" }, biblioteca: false });
+  await ui.ingresarManual(p, { nombre: "Manguera 1 pulgada", cantidad: "12.5", unidad: "M", precio: "2100.5", incluyeIva: false, despacho: { modo: "existente" }, biblioteca: false });
+  await h.locator("[data-ingreso-manual]").click(); await ui.llenarFicha(p, { tipo: "servicio", nombre: "Instalación y puesta en marcha", cantidad: 1, unidad: "GL", biblioteca: false }); await ui.guardarFicha(p);
+  await ui.pestana(p, "precios");
+  await ui.fijarPrecio(p, 1, 350000, 5); await ui.fijarPrecio(p, 2, 3990); await ui.fijarPrecio(p, 3, 180000, 10); await espera(p, 300);
   const totTxt = await h.locator('[data-resumen="totales"]').innerText();
-  ok("Q2 totales en pantalla (neto, IVA, total) y margen interno", /\$876\.875/.test(totTxt) && /\$166\.606/.test(totTxt) && /\$1\.043\.481/.test(totTxt) && /Utilidad estimada/i.test(totTxt) && /no aparece en el PDF/i.test(totTxt), totTxt.replace(/\n/g, " "));
-  await h.locator("[data-guardar-cotizacion]").click(); await espera(p, 2200);
+  ok("Q2 totales en pantalla (neto, IVA, total) y margen interno", /\$876\.875/.test(totTxt) && /\$166\.606/.test(totTxt) && /\$1\.043\.481/.test(totTxt) && /Utilidad estimada/i.test(totTxt) && /no aparecen? en el PDF/i.test(totTxt), totTxt.replace(/\n/g, " "));
+  await ui.guardarCotizacion(p);
   const folio = q1(`select folio from public.vp_cotizaciones order by creado_en desc limit 1;`);
   ok("Q3 guardada con folio automático", /^CP-\d{4}-0001$/.test(folio) && (await p.locator('[data-hoja-lateral="ficha-cotizacion"]').innerText()).includes(folio), folio);
   ok("Q4 totales de la base = pantalla", q1(`select neto||'|'||iva||'|'||total from public.vp_cotizacion_revisiones r join public.vp_cotizaciones c on c.id = r.cotizacion_id where c.folio = '${folio}';`) === "876875|166606|1043481");
-  const h2 = p.locator('[data-hoja-lateral="ficha-cotizacion"]');
+  const h2 = ui.hoja(p);
+  await ui.pestana(p, "precios");
   const pdfCot = await descarga(p, () => h2.locator("[data-pdf-cotizacion]").click());
   const tCot = await textoPDF(pdfCot);
   ok("Q5 PDF con datos de BFK, cliente, ítems y totales", /77\.322\.317-3/.test(tCot) && /Maderas del Sur/.test(tCot) && /Bomba centr/.test(tCot) && /1\.043\.481/.test(tCot) && tCot.includes(folio));
@@ -88,38 +87,35 @@ try {
   ok("Q6b vista previa de la cotización en la app (mismo PDF) sin registrar envío", /cotizaci/i.test(await p.locator('[data-hoja-lateral="vista-previa-eett"]').innerText()) && q1(`select estado from public.vp_cotizaciones where folio = '${folio}';`) === "borrador");
   await p.locator('[data-hoja-lateral="vista-previa-eett"] [data-cerrar-hoja], [data-hoja-lateral="vista-previa-eett"] button[aria-label="Cerrar"]').first().click(); await espera(p, 400);
   ok("Q7 descargar el PDF NO marca la cotización como enviada", q1(`select estado from public.vp_cotizaciones where folio = '${folio}';`) === "borrador");
-  await h2.locator('[data-accion-cot="enviada"]').click(); await p.locator('[data-ventana="modal-estado"] [data-confirmar-estado]').click(); await espera(p, 1500);
-  ok("Q8 envío registrado manualmente; contenido bloqueado", q1(`select estado from public.vp_cotizaciones where folio = '${folio}';`) === "enviada" && (await h2.locator('[data-linea="1"] [data-campo="precio"]').isDisabled()));
+  await ui.registrarEstado(p, "enviada");
+  ok("Q8 envío registrado manualmente; contenido bloqueado", q1(`select estado from public.vp_cotizaciones where folio = '${folio}';`) === "enviada" && !(await h2.locator("[data-precio-unitario]").count()) && !(await h2.locator("[data-ingreso-manual]").count()));
   // Duplicar (cotización nueva, folio nuevo) y una segunda cotización enviada que vence pronto (para Alertas).
-  await h2.locator('[data-accion-cot="duplicar"]').click(); await espera(p, 2000);
+  await h2.locator('[data-accion-cot="duplicar"]').click(); await espera(p, 2500);
   const folio2 = q1(`select folio from public.vp_cotizaciones order by creado_en desc limit 1;`);
-  const h3 = p.locator('[data-hoja-lateral="ficha-cotizacion"]');
-  ok("Q9 duplicar crea otra cotización con las mismas líneas", folio2 !== folio && /^CP-/.test(folio2) && (await h3.locator("[data-linea]").count()) === 3);
+  const h3 = ui.hoja(p);
+  ok("Q9 duplicar crea otra cotización con los mismos ítems y fichas", folio2 !== folio && /^CP-/.test(folio2) && (await h3.locator("[data-item-cotizacion]").count()) === 3 && q1(`select count(*) from public.vp_cotizacion_items i join public.vp_cotizacion_revisiones r on r.id = i.revision_id join public.vp_cotizaciones c on c.id = r.cotizacion_id where c.folio = '${folio2}' and i.ficha is not null;`) === "3");
+  await ui.pestana(p, "datos");
   await h3.locator('[data-campo="vigencia"]').fill(new Date(Date.now() + 2 * 86400000 - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10));
-  await h3.locator("[data-guardar-cotizacion]").click(); await espera(p, 1500);
-  await h3.locator('[data-accion-cot="enviada"]').click(); await p.locator('[data-ventana="modal-estado"] [data-confirmar-estado]').click(); await espera(p, 1200);
+  await ui.guardarCotizacion(p);
+  await ui.registrarEstado(p, "enviada");
   await h3.locator("[data-cerrar-hoja]").click(); await espera(p, 400);
   await p.locator(`[data-cotizacion="${folio}"]`).click(); await espera(p, 1500);
-  const h4 = p.locator('[data-hoja-lateral="ficha-cotizacion"]');
-  await h4.locator('[data-accion-cot="aceptada"]').click(); await p.locator('[data-ventana="modal-estado"] [data-confirmar-estado]').click(); await espera(p, 1500);
+  const h4 = ui.hoja(p);
+  await ui.registrarEstado(p, "aceptada");
   ok("Q10 aceptación registrada", q1(`select estado from public.vp_cotizaciones where folio = '${folio}';`) === "aceptada" && (await h4.locator('[data-accion-cot="crear-venta"]').count()) === 1);
 
-  // ── 4. EETT ─────────────────────────────────────────────────────────────────────────────────────
+  // ── 4. EETT (desde las fichas de la cotización) ───────────────────────────────────────────────
+  await ui.pestana(p, "eett");
   await h4.locator("[data-generar-eett]").click(); await p.locator('[data-ventana="eett-seleccion"]').waitFor();
   await p.locator('[data-ventana="eett-seleccion"] [data-eett-item="2"] input').uncheck();
   await p.locator("[data-armar-eett]").click(); await p.locator('[data-ventana="eett-editor"]').waitFor(); await espera(p, 600);
   const ed = p.locator('[data-ventana="eett-editor"]');
   ok("E1 borrador EETT con los ítems elegidos y su numeración (1 y 3)", (await ed.locator("[data-desplegable^='eett-item-']").count()) === 2 && (await ed.locator("[data-desplegable='eett-item-3']").count()) === 1);
-  await ed.locator("[data-eett-objeto]").fill("Suministro e instalación de bomba centrífuga");
-  await ed.locator("[data-emitir-eett]").click(); await espera(p, 800);
-  ok("E2 no se emite con datos «No informado»", /No informado/.test(await ed.locator("[data-errores-eett]").innerText().catch(() => "")) && q1(`select count(*) from public.vp_eett where estado = 'emitida';`) === "0");
   const it1 = ed.locator("[data-desplegable='eett-item-1']");
-  await it1.locator("[data-eett-marca]").fill("Pedrollo"); await it1.locator("[data-eett-modelo]").fill("CPm 680");
-  await it1.locator("[data-agregar-caracteristica]").click();
-  const nueva = it1.locator("[data-caracteristica]").last();
-  await nueva.locator('input[aria-label="Característica"]').fill("Potencia"); await nueva.locator("[data-valor-caracteristica]").fill("2"); await nueva.locator('input[aria-label="Unidad"]').fill("HP");
+  ok("E2 marca, modelo y características vienen de la ficha (sin volver a escribirlas)", (await it1.locator("[data-eett-marca]").inputValue()) === "Pedrollo" && (await it1.locator("[data-eett-modelo]").inputValue()) === "CPm 680" && (await it1.locator('[data-caracteristica="Potencia"] [data-valor-caracteristica]').inputValue()) === "2 HP");
+  await ed.locator("[data-eett-objeto]").fill("Suministro e instalación de bomba centrífuga");
   await it1.locator("[data-guardar-biblioteca]").click(); await espera(p, 1500);
-  ok("E2b datos técnicos completados y guardados en la biblioteca para reutilizarlos", q1(`select count(*) from public.vp_productos_tecnicos t join public.productos_catalogo p on p.id = t.producto_id where p.modelo = 'CPm 680' and t.caracteristicas @> '[{"caracteristica":"Potencia","valor":"2","unidad":"HP"}]';`) === "1");
+  ok("E2b datos técnicos guardados en la biblioteca para reutilizarlos", q1(`select count(*) from public.vp_productos_tecnicos t join public.productos_catalogo p on p.id = t.producto_id where p.modelo = 'CPm 680' and t.caracteristicas @> '[{"caracteristica":"Potencia","valor":"2 HP"}]';`) === "1");
   await ed.locator("[data-desplegable='eett-item-3'] > button").click(); await espera(p, 300);
   for (const cb of await ed.locator("[data-caracteristica]").all()) { const v = await cb.locator("[data-valor-caracteristica]").inputValue(); if (!v.trim() || v === "No informado") await cb.locator("[data-excluir-caracteristica]").check(); }
   await it1.locator("[data-agregar-requisito]").click(); await it1.locator("[data-requisito='0'] input").first().fill("Caudal mínimo 100 L/min"); await it1.locator("[data-requisito='0'] [data-cumplimiento]").selectOption("cumple");

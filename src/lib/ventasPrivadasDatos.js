@@ -68,6 +68,12 @@ export async function leerCotizacion(t, id) {
   return { cab, revisiones: revs || [], items: items || [], costos: costos || [], margenes: margenes || [], eett: eett || [], documentos: docs || [] };
 }
 export const guardarCotizacion = (t, p) => rpc(t, "vp_guardar_cotizacion", { p });
+// ¿Está instalada la actualización de la base del 08/11/2026 (ficha técnica y datos de compra por ítem)? Sin ella, guardar desde
+// el editor perdería esos datos: la interfaz lo informa y no guarda. null si no se pudo comprobar (sin conexión).
+export async function esquemaFichaVP(t) {
+  try { await leer(t, "vp_cotizacion_items?select=ficha,ficha_aprobada&limit=1"); await leer(t, "vp_cotizacion_item_costos?select=precio_compra,despacho&limit=1"); return true; }
+  catch (e) { if (e.status === 400 || ["42703", "PGRST204", "PGRST100"].includes(e.code)) return false; return null; }
+}
 export const cambiarEstadoCotizacion = (t, id, estado, datos, version) => rpc(t, "vp_cotizacion_estado", { p_cotizacion: id, p_estado: estado, p_datos: datos || {}, p_version: version });
 export const nuevaRevision = (t, id, version) => rpc(t, "vp_cotizacion_nueva_revision", { p_cotizacion: id, p_version: version });
 export const duplicarCotizacion = (t, id) => rpc(t, "vp_duplicar_cotizacion", { p_cotizacion: id });

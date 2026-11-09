@@ -118,7 +118,9 @@ const pedirAnular = (setModal, tabla, id, titulo, texto) => setModal({ t: "anula
 // ── Detalle: cliente, origen, OC, ítems, precios, costos, margen y condiciones ─────────────────────
 function Detalle({ token, d, v, esResp, esAdmin, vigente, vp, showToast, refrescar, setModal, onAbrir }) {
   const [editando, setEditando] = useState(false); const [f, setF] = useState(null); const [oc, setOc] = useState(false); const [compra, setCompra] = useState(false);
-  const costos = new Map(d.costos.map((k) => [k.item_id, Number(k.costo_unitario_estimado)]));
+  // Costo estimado por ítem (puede faltar: ítem con proveedor y enlace pero sin precio de compra al cotizar).
+  const costos = new Map(d.costos.map((k) => [k.item_id, k.costo_unitario_estimado == null ? null : Number(k.costo_unitario_estimado)]));
+  const compras = new Map(d.costos.map((k) => [k.item_id, k]));
   const m = d.margen; const verCostos = m?.costo_estimado != null;
   const entregado = (itemId) => d.entregaItems.filter((ei) => d.entregas.find((e) => e.id === ei.entrega_id)?.estado === "vigente" && ei.venta_item_id === itemId).reduce((s, x) => s + Number(x.cantidad), 0);
   const pdfAprobada = async () => {
@@ -154,7 +156,7 @@ function Detalle({ token, d, v, esResp, esAdmin, vigente, vp, showToast, refresc
     </Seccion>}
     <Seccion titulo={`Ítems · ${d.items.length}`}>
       {d.items.map((it) => {
-        const ent = entregado(it.id); const cu = costos.get(it.id);
+        const ent = entregado(it.id); const cu = costos.get(it.id); const k = compras.get(it.id);
         return (
           <div key={it.id} data-item-venta={it.orden} style={{ ...cardStyle, borderRadius: R.md, padding: "9px 12px", marginBottom: 6 }}>
             <div style={{ display: "flex", gap: 8 }}><b style={{ fontFamily: MONO, color: C.tealDark }}>{it.orden}</b><span style={{ flex: 1, fontSize: T.sm, fontWeight: 700 }}>{it.descripcion}</span><b style={{ fontFamily: MONO }}>{pesos(it.subtotal_neto)}</b></div>
@@ -162,6 +164,10 @@ function Detalle({ token, d, v, esResp, esAdmin, vigente, vp, showToast, refresc
               {cantidadTxt(it.cantidad)} {it.unidad} × {pesos(it.precio_unitario)}{Number(it.descuento_pct) ? ` − ${String(it.descuento_pct).replace(".", ",")} %` : ""} · entregado <b data-entregado={it.orden}>{cantidadTxt(ent)}</b> de {cantidadTxt(it.cantidad)}
               {verCostos && cu != null && <span style={{ color: C.warnText }}> · costo est. {pesos(redondear(cu * Number(it.cantidad)))}</span>}
             </div>
+            {verCostos && (k?.proveedor || k?.enlace) && <div data-compra-item={it.orden} style={{ fontSize: T.small, color: C.inkMuted, marginTop: 3 }}>
+              Proveedor: <b style={{ color: C.ink }}>{k.proveedor || "—"}</b>{k.precio_compra != null ? <> · compra {pesos(k.precio_compra)}{k.precio_incluye_iva === false ? " + IVA" : ""}</> : null}
+              {/^https?:\/\/\S+$/i.test(String(k.enlace || "").trim()) && <> · <a data-ir-a-comprar href={k.enlace.trim()} target="_blank" rel="noopener noreferrer" style={{ color: C.tealDark, fontWeight: 700 }}>Ir a comprar ↗</a></>}
+            </div>}
           </div>
         );
       })}

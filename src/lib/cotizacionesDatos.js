@@ -83,6 +83,8 @@ async function bajarImagen(token, ruta) {
   cacheImg.set(ruta, d); rutaDeImg.set(d, ruta); return d;
 }
 const subirImagenes = (token, imgs) => Promise.all((imgs || []).map((d) => (String(d).startsWith("data:") ? subirImagen(token, d) : d)));
+// Mismo depósito y misma huella para las fichas de las cotizaciones privadas (08/11/2026): sube solo las imágenes nuevas.
+export const subirImagenesFicha = (token, imgs) => subirImagenes(token, imgs);
 // Una imagen ya guardada vuelve a su ruta (así la cotización no cambia por solo haber visto la foto).
 export const rutaConocida = (d) => (typeof d === "string" && d.startsWith("data:") && rutaDeImg.get(d)) || d;
 

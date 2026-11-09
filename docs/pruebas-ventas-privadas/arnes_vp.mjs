@@ -21,7 +21,8 @@ const lit = (s) => { const tag = "q" + Math.random().toString(36).slice(2, 8); r
 export const comoUsuario = (sub) => `set role authenticated;\nselect set_config('request.jwt.claims', ${lit(JSON.stringify({ sub, role: "authenticated" }))}, false) \\gset _\n`;
 export const archivos = new Map();
 export const registro = [];
-const esVP = (obj, search) => obj.startsWith("vp_") || obj.startsWith("rpc/vp_") || ["perfiles", "pi_clientes", "productos_catalogo"].includes(obj)
+// rpc/cz_guardar_producto: la biblioteca compartida de fichas (misma que usa Mercado Público) se guarda en la base desechable.
+const esVP = (obj, search) => obj.startsWith("vp_") || obj.startsWith("rpc/vp_") || ["perfiles", "pi_clientes", "productos_catalogo", "rpc/cz_guardar_producto"].includes(obj)
   || (obj === "gastos_indirectos" && /select=id%2Cfecha%2Cmonto%2Cdescripcion|select=id,fecha,monto,descripcion/.test(search));
 
 export function crearMP() { return crearBase(crearDatos(), { mp: RESPUESTAS_MP }); }
@@ -60,7 +61,9 @@ export async function abrir(browser, { usuario, url, hash = "", ancho = 1440, al
       if (m === "GET" && sto[1]) {
         const visto = psql(`${comoUsuario(usuario)}select count(*) from storage.objects where bucket_id = ${lit(bucket)} and name = ${lit(ruta)};`).split("\n").pop();
         if (visto !== "1" || !archivos.has(bucket + "/" + ruta)) return route.fulfill({ status: 400, json: { statusCode: "404", error: "not_found", message: "Object not found" } });
-        return route.fulfill({ status: 200, headers: { "content-type": "application/octet-stream" }, body: archivos.get(bucket + "/" + ruta) });
+        // Como Supabase Storage: las imágenes se sirven con su tipo (lo exige el PDF para incluir fotos).
+        const tipo = /\.jpe?g$/i.test(ruta) ? "image/jpeg" : /\.png$/i.test(ruta) ? "image/png" : "application/octet-stream";
+        return route.fulfill({ status: 200, headers: { "content-type": tipo }, body: archivos.get(bucket + "/" + ruta) });
       }
       return route.fulfill({ status: 400, json: { message: "operación no permitida en el depósito" } });
     }

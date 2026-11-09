@@ -54,18 +54,23 @@ export function datosPdfEETTVP(eett, { empresa: empresaActual = {}, imagenes = {
   for (const it of c.items) {
     const car = caracteristicasVisibles(it).filter((k) => informado(k.valor));
     const esServicio = it.tipo === "servicio";
+    // Ficha técnica de la cotización (08/11/2026): sus características generales van en «Características Generales» y sus
+    // especificaciones en «Especificaciones», igual que en Mercado Público. Contenidos anteriores (sin grupo «generales»): sin cambios.
+    const par = (k) => ({ etiqueta: txt(k.caracteristica), valor: [txt(k.valor), txt(k.unidad)].filter(Boolean).join(" ") });
     const generales = [
       { etiqueta: "ÍTEM", valor: String(it.orden) },
       { etiqueta: "CANTIDAD", valor: `${cantidadTxt(it.cantidad)} ${txt(it.unidad)}`.trim() },
       ...(informado(it.codigo) ? [{ etiqueta: "CÓDIGO", valor: txt(it.codigo) }] : []),
       ...(esServicio ? [{ etiqueta: "TIPO", valor: "Servicio" }] : []),
+      ...car.filter((k) => k.grupo === "generales" && k.origen?.tipo === "ficha").map(par),
     ];
     items.push({ ficha: {
       nombre: `${it.orden}. ${txt(it.nombre)}`,
       marca: esServicio ? "" : (informado(it.marca) ? txt(it.marca) : NO_INFORMADO),
       modelo: esServicio ? "" : (informado(it.modelo) ? txt(it.modelo) : NO_INFORMADO),
+      ...(!esServicio && informado(it.color) ? { color: txt(it.color) } : {}),
       generales,
-      especificaciones: car.map((k) => ({ etiqueta: txt(k.caracteristica), valor: [txt(k.valor), txt(k.unidad)].filter(Boolean).join(" ") })),
+      especificaciones: car.filter((k) => !(k.grupo === "generales" && k.origen?.tipo === "ficha")).map(par),
       descripcion: txt(it.descripcion),
       imagenes: (imagenes[it.item_id] || []).filter((x) => typeof x === "string" && x.startsWith("data:image/")).slice(0, 2),
     } });
