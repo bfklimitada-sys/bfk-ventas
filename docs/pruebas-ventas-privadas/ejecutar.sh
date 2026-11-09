@@ -9,6 +9,7 @@
 #   5. sql_como_mp / reglas_como_mp / e2e_cotizacion_como_mp — cotización privada con la experiencia de Mercado Público (08/11/2026)
 #   6. sql_eett_como_mp / eett_como_mp / e2e_eett_cp_2026_0001 — EETT privada con el recorrido de Mercado Público (09/11/2026),
 #      verificada sobre una copia aislada de la cotización de la captura (CP-2026-0001, «Bolso Paramédico Mediano 47L»)
+#   7. mp_byte_a_byte — Mercado Público en la versión publicada y en la nueva: pantallas y PDF idénticos
 # Requisitos: PostgreSQL local (PGHOST/PGPORT, superusuario postgres), postgrest 12 (POSTGREST=ruta), Chromium (CHROME=ruta),
 #             npm install y playwright-core resoluble desde node_modules.
 set -uo pipefail
@@ -48,5 +49,15 @@ for MODO in escritorio celular; do
   eval "$(bash "$D/entorno.sh" instalar)"; export PGRST_URL JWT_SECRET VP_DB_URL
   echo "== e2e EETT CP-2026-0001 ($MODO)"; node "$D/e2e_eett_cp_2026_0001.mjs" "http://127.0.0.1:$PUERTO_APP/" "$MODO" 2>/dev/null | grep -E "FALLA|EXCEP|RESUMEN"; RC=$((RC | ${PIPESTATUS[0]}))
 done
+# Mercado Público sin cambios en navegador: misma ruta en la versión publicada (REF_PUBLICADA, por defecto origin/main) y en la
+# nueva → pantallas idénticas píxel a píxel y PDF de EETT idénticos byte a byte.
+WT="${TMPDIR:-/tmp}/wt-publicada"; git worktree remove --force "$WT" > /dev/null 2>&1; git worktree prune
+if git worktree add -q --detach "$WT" "${REF_PUBLICADA:-origin/main}" && ln -s "$R/node_modules" "$WT/node_modules" && (cd "$WT" && npx vite build --outDir "${TMPDIR:-/tmp}/dist-publicada" --emptyOutDir > /dev/null 2>&1); then
+  npx vite preview --outDir "${TMPDIR:-/tmp}/dist-publicada" --host 127.0.0.1 --port $((PUERTO_APP + 1)) --strictPort > /dev/null 2>&1 & PP=$!
+  for i in $(seq 1 30); do curl -fsS "http://127.0.0.1:$((PUERTO_APP + 1))/" > /dev/null 2>&1 && break; sleep 0.5; done
+  echo "== Mercado Público byte a byte (publicada vs nueva)"; node "$D/mp_byte_a_byte.mjs" "http://127.0.0.1:$((PUERTO_APP + 1))/" "http://127.0.0.1:$PUERTO_APP/" 2>/dev/null | grep -E "FALLA|EXCEP|RESUMEN"; RC=$((RC | ${PIPESTATUS[0]}))
+  kill $PP 2>/dev/null
+else echo "FALLA: no se pudo compilar la versión publicada"; RC=1; fi
+git worktree remove --force "$WT" > /dev/null 2>&1
 kill $PV 2>/dev/null; pkill -f "postgrest $D/.pgrst-" 2>/dev/null
 exit $RC
