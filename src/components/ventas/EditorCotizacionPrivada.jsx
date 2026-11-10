@@ -29,7 +29,9 @@ import { EditorFicha } from "../cotizaciones/EditorFicha";
 import { SelectorBiblioteca } from "../cotizaciones/EditorCotizacion";
 import { ImagenFicha } from "../cotizaciones/ImagenFicha";
 import { VistaPreviaEETT } from "../cotizaciones/VistaPreviaEETT";
-import { leerCotizacion, guardarCotizacion, cambiarEstadoCotizacion, nuevaRevision, duplicarCotizacion, historialCotizacion, anular, esquemaFichaVP, leerEETT, guardarEETT, emitirEETT, ocClienteDeVenta } from "../../lib/ventasPrivadasDatos";
+import { ConflictoVersion } from "../ui/ConflictoVersion";
+import { combinarVersiones, aplicarCombinacion, normalizarProductos, resumenProductos, textoValor } from "../../lib/conflictoVersion";
+import { leerCotizacion, guardarCotizacion, cambiarEstadoCotizacion, nuevaRevision, duplicarCotizacion, historialCotizacion, anular, esquemaFichaVP, leerEETT, listarEETT, guardarEETT, emitirEETT, ocClienteDeVenta } from "../../lib/ventasPrivadasDatos";
 import { accionesCotizacion, ESTADOS_COTIZACION, fechaTxt, hoyISO, sumarDias, folioRevision, mensajeVP, documentoDesdeEditor, cantidadTxt } from "../../lib/ventasPrivadas";
 import { itemVacioVP, cotizacionParaEditor, calcularCotizacionVP, precioConRecargo, lineaParaGuardarVP, validarItemsVP, descripcionDeFicha } from "../../lib/vpCotizacion";
 import { ESTADOS_ENVIO, envioConfirmado, envioVacio, nuevaClave, proveedorDeEnlace, invalidarDespachosPorDireccion, revisarFicha } from "../../lib/cotizaciones";
@@ -50,6 +52,18 @@ const CAMPOS_CAB = ["contacto_nombre", "contacto_correo", "contacto_telefono", "
 // Recuperación local (este dispositivo): mismo almacén de borradores que Mercado Público, en un espacio propio («vp:»)
 // para que no aparezca en la lista de borradores de Mercado Público.
 const usuarioLocal = (u) => (u ? `vp:${u}` : null);
+// Campos que se comparan si otra pestaña o persona guardó una versión más nueva (lib/conflictoVersion.js).
+const ETIQUETAS_CAB = { contacto_nombre: "Contacto", contacto_correo: "Correo del contacto", contacto_telefono: "Teléfono del contacto", fecha_emision: "Fecha de emisión",
+  vigencia_hasta: "Vigencia", plazo_entrega: "Plazo de entrega", direccion_entrega: "Dirección de entrega", condiciones_pago: "Condiciones de pago", observaciones: "Observaciones",
+  condiciones_comerciales: "Condiciones comerciales" };
+const gruposConflicto = (clientes) => [
+  { k: "cliente_id", etiqueta: "Cliente", claves: ["cliente_id"], resumen: (v) => clientes.find((x) => x.id === v.cliente_id)?.razon_social || textoValor(v.cliente_id) },
+  ...CAMPOS_CAB.map((k) => ({ k, etiqueta: ETIQUETAS_CAB[k] || k, claves: [k] })),
+  { k: "afecta_iva", etiqueta: "Afecta IVA", claves: ["afecta_iva"], resumen: (v) => (v.afecta_iva === false ? "No" : "Sí") },
+  { k: "productos", etiqueta: "Productos, precios y despachos", claves: ["items", "envios"], normalizar: normalizarProductos, resumen: resumenProductos },
+];
+const cotDesde = (x) => { const { rev, items, envios } = cotizacionParaEditor(x, x.cab.revision_id);
+  return { cliente_id: x.cab.cliente_id, ...Object.fromEntries(CAMPOS_CAB.map((k) => [k, rev[k] ?? ""])), afecta_iva: rev.afecta_iva !== false, items, envios }; };
 
 // Campo de porcentaje (igual al de Mercado Público): muestra % y entrega fracción; conserva el texto mientras se escribe.
 function CampoPorcentaje({ id, dato, valor, onCambiar, disabled, ancho = 80 }) {
@@ -83,17 +97,25 @@ export function EditorCotizacionPrivada({ token, perfil, vp, id, showToast, onCe
   const [nuevoCliente, setNuevoCliente] = useState(false); const [previa, setPrevia] = useState(null);
   const [esquema, setEsquema] = useState(undefined); const [recuperable, setRecuperable] = useState(null);
   const yaCargo = useRef(false);
+  // Punto de partida de esta pestaña (lo último cargado o guardado): sirve para combinar si otra versión se guardó después.
+  const baseRef = useRef(null); const dRef = useRef(null); dRef.current = d;
+  const recuperableRef = useRef(null); recuperableRef.current = recuperable;
+  const [conflicto, setConflicto] = useState(null);   // { x2, bfk, mio, campos, nota }
 
   const cargar = useCallback(async (cid) => {
     try {
       const x = await leerCotizacion(tokenRef.current, cid); if (!x) { setErr("La cotización no existe o no tienes acceso."); return null; }
       setD(x); setRevVista(x.cab.revision_id);
-      const { rev, items, envios } = cotizacionParaEditor(x, x.cab.revision_id);
-      setCot({ cliente_id: x.cab.cliente_id, ...Object.fromEntries(CAMPOS_CAB.map((k) => [k, rev[k] ?? ""])), afecta_iva: rev.afecta_iva !== false, items, envios });
+      const nuevaCot = cotDesde(x); baseRef.current = clonar(nuevaCot);
+      setCot(nuevaCot);
       setSucio(false); setErr("");
       return x;
-    } catch (e) { setErr(mensajeVP(e)); return null; }
-  }, []);
+    } catch (e) {
+      // Ya abierta: una falla al recargar (p. ej. sin conexión) no reemplaza la pantalla ni lo escrito.
+      if (dRef.current) { showToast?.(`No se pudo recargar la cotización: ${mensajeVP(e)}`, "error"); return null; }
+      setErr(mensajeVP(e)); return null;
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (yaCargo.current) return; yaCargo.current = true;
     esquemaFichaVP(tokenRef.current).then(setEsquema);
@@ -105,7 +127,8 @@ export function EditorCotizacionPrivada({ token, perfil, vp, id, showToast, onCe
       // Borrador de recuperación de este dispositivo (cambios que no alcanzaron a guardarse).
       const b = await leerBorrador(usuarioLocal(usuarioId), id || "nueva").catch(() => null);
       if (b?.cot && (!id || b.versionBase === x?.cab?.version)) setRecuperable(b);
-      else if (b) borrarBorrador(usuarioLocal(usuarioId), id || "nueva").catch(() => {});
+      // Copia de una versión anterior (otra pestaña o persona guardó después): NO se borra; se ofrece revisar y combinar.
+      else if (b?.cot && x) setRecuperable({ ...b, desactualizado: true, versionBFK: x.cab.version });
     })();
   }, [id, cargar, usuarioId]);
 
@@ -136,8 +159,8 @@ export function EditorCotizacionPrivada({ token, perfil, vp, id, showToast, onCe
   const respaldar = () => {
     const { cot: x, sucio: s, pestana: p, version, editable: ed, folio } = vivo.current;
     if (!usuarioId || !x || !ed) return;
-    if (!s) { borrarBorrador(usuarioLocal(usuarioId), id || "nueva").catch(() => {}); return; }
-    guardarBorrador({ usuario: usuarioLocal(usuarioId), idLocal: id || "nueva", cotId: id || null, versionBase: version, titulo: folio || "Nueva cotización privada", cot: x, pestana: p }).catch(() => {});
+    if (!s) { if (!recuperableRef.current) borrarBorrador(usuarioLocal(usuarioId), id || "nueva").catch(() => {}); return; }   // una copia pendiente de decidir no se borra
+    guardarBorrador({ usuario: usuarioLocal(usuarioId), idLocal: id || "nueva", cotId: id || null, versionBase: version, base: baseRef.current, titulo: folio || "Nueva cotización privada", cot: x, pestana: p }).catch(() => {});
   };
   useEffect(() => { const t = setTimeout(respaldar, 400); return () => clearTimeout(t); }, [cot, sucio, pestana]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -147,7 +170,28 @@ export function EditorCotizacionPrivada({ token, perfil, vp, id, showToast, onCe
     document.addEventListener("visibilitychange", alOcultar); window.addEventListener("pagehide", ya); window.addEventListener("beforeunload", antesDeSalir);
     return () => { document.removeEventListener("visibilitychange", alOcultar); window.removeEventListener("pagehide", ya); window.removeEventListener("beforeunload", antesDeSalir); if (!cerrandoAdrede.current) ya(); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  const recuperar = () => { setCot(recuperable.cot); setSucio(true); if (recuperable.pestana) setPestana(recuperable.pestana); setRecuperable(null); showToast?.("Cambios recuperados: revísalos y presiona «Guardar»"); };
+  const recuperar = () => {
+    if (recuperable.desactualizado) { abrirConflicto({ mio: recuperable.cot, base: recuperable.base || null }); return; }
+    setCot(recuperable.cot); setSucio(true); if (recuperable.pestana) setPestana(recuperable.pestana); setRecuperable(null); showToast?.("Cambios recuperados: revísalos y presiona «Guardar»");
+  };
+  // ── Versión más nueva en BFK: lo escrito se conserva y se combina campo por campo (nada se sobrescribe solo) ──
+  const abrirConflicto = async ({ mio = vivo.current.cot, base = baseRef.current } = {}) => {
+    if (!c) return;
+    try {
+      const x2 = await leerCotizacion(tokenRef.current, c.id); if (!x2) return;
+      const bfk = cotDesde(x2); const grupos = gruposConflicto(vp.clientes);
+      const revEstado = x2.revisiones.find((r) => r.id === x2.cab.revision_id)?.estado;
+      setConflicto({ x2, bfk, mio: clonar(mio), grupos, campos: combinarVersiones({ base, mio, bfk, grupos }),
+        nota: revEstado && revEstado !== "borrador" ? `La revisión vigente (R${x2.cab.revision_actual}) ya fue enviada: para incorporar tus cambios crea una revisión nueva desde la versión de BFK.` : "" });
+    } catch (e) { showToast?.(`No se pudo leer la versión de BFK: ${mensajeVP(e)}. Tus cambios siguen en la pantalla y en este dispositivo.`, "error"); }
+  };
+  const combinarConflicto = (elecciones) => {
+    const k = conflicto; const resultado = aplicarCombinacion({ mio: k.mio, bfk: k.bfk, grupos: k.grupos, campos: k.campos, elecciones });
+    setD(k.x2); setRevVista(k.x2.cab.revision_id); baseRef.current = clonar(k.bfk);
+    setCot(resultado); setSucio(true); setConflicto(null); setRecuperable(null);
+    showToast?.(`Combinado sobre la versión ${k.x2.cab.version} de BFK: revisa y presiona «Guardar».`);
+  };
+  const descartarConflicto = async () => { setConflicto(null); setRecuperable(null); borrarBorrador(usuarioLocal(usuarioId), id || "nueva").catch(() => {}); await cargar(c.id); showToast?.("Se abrió la versión guardada en BFK"); };
   const descartarRecuperable = () => { borrarBorrador(usuarioLocal(usuarioId), id || "nueva").catch(() => {}); setRecuperable(null); };
 
   // ── Datos ──
@@ -229,12 +273,14 @@ export function EditorCotizacionPrivada({ token, perfil, vp, id, showToast, onCe
     borrarBorrador(usuarioLocal(usuarioId), id || "nueva").catch(() => {});
     await onRecargar?.();
     const x = await cargar(r.id); if (!c) { cerrandoAdrede.current = true; onAbierta?.(r.id); }
+    // Guardada, pero la relectura falló (p. ej. se cortó la conexión): lo de la pantalla es lo guardado.
+    if (!x) { baseRef.current = clonar(cot); setSucio(false); }
     return { r, x };
   };
   const guardar = async () => {
     setOcupado("guardar");
     try { const { r } = await guardarInterno(); showToast?.(c ? "Cotización guardada" : `Cotización ${r.folio} creada`); return r; }
-    catch (e) { showToast?.(`No se guardó: ${mensajeVP(e)}`, "error"); if (e.conflicto && c) await cargar(c.id); return null; }
+    catch (e) { showToast?.(`No se guardó: ${mensajeVP(e)}`, "error"); if (e.conflicto && c) await abrirConflicto(); return null; }
     finally { setOcupado(""); }
   };
 
@@ -290,9 +336,11 @@ export function EditorCotizacionPrivada({ token, perfil, vp, id, showToast, onCe
   const emitirDesde = async (x) => {
     const t = tokenRef.current; const rv = x.revisiones.find((r) => r.id === x.cab.revision_id);
     const lineas = x.items.filter((i) => i.revision_id === x.cab.revision_id).sort((a, b) => a.orden - b.orden);
-    const borr = x.eett.find((e) => e.estado === "borrador");
-    const ultima = x.eett.find((e) => e.estado === "emitida" && e.cotizacion_revision_id === x.cab.revision_id);
-    const previa = borr || x.eett.find((e) => e.estado === "emitida") || null;
+    // Estado actual (no el de la pantalla): si un intento anterior quedó sin respuesta y sí se emitió, se reutiliza esa emisión.
+    const eett = await listarEETT(t, x.cab.id);
+    const borr = eett.find((e) => e.estado === "borrador");
+    const ultima = eett.find((e) => e.estado === "emitida" && e.cotizacion_revision_id === x.cab.revision_id);
+    const previa = borr || eett.find((e) => e.estado === "emitida") || null;
     const [previo, ult, oc] = await Promise.all([previa ? leerEETT(t, previa.id) : null, ultima ? leerEETT(t, ultima.id) : null, x.cab.venta_id ? ocClienteDeVenta(t, x.cab.venta_id) : null]);
     const contenido = contenidoEETTVP({ cotizacion: { folio: x.cab.folio, revision: rv?.numero ?? x.cab.revision_actual }, cliente: { razon_social: x.cab.cliente_nombre, rut: x.cab.cliente_rut },
       plazo_entrega: rv?.plazo_entrega, fecha: hoyISO(), responsable: x.cab.responsable_nombre || "", elaborado_por: perfil?.nombre || "", oc_cliente: oc, items: lineas, previo: previo?.contenido });
@@ -315,10 +363,11 @@ export function EditorCotizacionPrivada({ token, perfil, vp, id, showToast, onCe
     setOcupado("generar-eett"); setFalla(null);
     let x = d; let guardada = false;
     try { if (!c || (sucio && editable)) { x = (await guardarInterno()).x; guardada = true; } }
-    catch (e) { setOcupado(""); showToast?.(`No se guardó la cotización: ${mensajeVP(e)} No se generó la EETT.`, "error"); return; }
+    catch (e) { setOcupado(""); showToast?.(`No se guardó la cotización: ${mensajeVP(e)} No se generó la EETT.`, "error"); if (e.conflicto && c) await abrirConflicto(); return; }
+    if (!x) { setOcupado(""); showToast?.("La cotización quedó guardada, pero no se pudo leer de vuelta. No se generó la EETT: vuelve a intentarlo.", "error"); return; }
     let em;
     try { em = await emitirDesde(x); }
-    catch (e) { setOcupado(""); showToast?.(`${guardada ? "La cotización quedó guardada, pero no" : "No"} se generó la EETT: ${mensajeVP(e)}`, "error"); await cargar(x.cab.id); return; }
+    catch (e) { setOcupado(""); showToast?.(`${guardada ? "La cotización quedó guardada, pero no" : "No"} se generó la EETT: ${mensajeVP(e)}${e?.status === 0 ? " Al reintentar, la app comprueba primero si ya quedó emitida (no se emite dos veces)." : ""}`, "error"); await cargar(x.cab.id).catch(() => {}); return; }
     try {
       const r = await descargarEmitida(em.eett);
       showToast?.(em.reutilizada ? `EETT ${etqEETT(em.eett)} descargada (sin cambios desde su emisión): ${pags(r.paginas)}`
@@ -378,8 +427,8 @@ export function EditorCotizacionPrivada({ token, perfil, vp, id, showToast, onCe
       <div style={{ padding: 16 }} data-editor-cotizacion data-editor-cotizacion-privada>
         {esquema === false && <AvisoLinea tono="danger" dato="esquema-vp-pendiente">Falta instalar la actualización de la base de cotizaciones privadas (fichas técnicas y datos de compra por ítem). Puedes revisar la cotización, pero no se guardará nada hasta que se instale (pendiente de autorización).</AvisoLinea>}
         {recuperable && (
-          <AvisoLinea tono="warn" icono="↺" dato="borrador-recuperado" accion="Recuperar cambios" onClick={recuperar}>
-            <b>Hay cambios sin guardar de esta cotización en este dispositivo</b> ({fechaHora(recuperable.actualizado)}). <button type="button" data-descartar-recuperado onClick={descartarRecuperable} style={{ border: "none", background: "none", color: C.tealDark, textDecoration: "underline", cursor: "pointer", padding: 0, fontSize: T.small }}>Descartarlos</button>
+          <AvisoLinea tono="warn" icono="↺" dato={recuperable.desactualizado ? "borrador-desactualizado" : "borrador-recuperado"} accion={recuperable.desactualizado ? "Revisar y combinar" : "Recuperar cambios"} onClick={recuperar}>
+            <b>Hay cambios sin guardar de esta cotización en este dispositivo</b> ({fechaHora(recuperable.actualizado)}).{recuperable.desactualizado ? <> Se escribieron sobre la versión {recuperable.versionBase}; en BFK hay una más nueva (versión {recuperable.versionBFK}): no se sobrescribirá, se combinan campo por campo.</> : null} <button type="button" data-descartar-recuperado onClick={descartarRecuperable} style={{ border: "none", background: "none", color: C.tealDark, textDecoration: "underline", cursor: "pointer", padding: 0, fontSize: T.small }}>Descartarlos</button>
           </AvisoLinea>
         )}
         {editable && <div data-estado-guardado={sucio || !c ? "local" : "bfk"} style={{ fontSize: T.small, color: sucio || !c ? C.warnText : C.inkMuted, marginBottom: 6 }}>
@@ -630,6 +679,8 @@ export function EditorCotizacionPrivada({ token, perfil, vp, id, showToast, onCe
       {editor && <EditorFicha key={editor.item.key} vp soloLectura={ro} inicial={editor.item} esNuevo={editor.esNuevo} envios={vista.envios} items={vista.items} destino={destino} destinoValido={dirOk}
         almacen={almacen} token={token} onGuardar={guardarItem} onCerrar={() => setEditor(null)} modo={verInterno ? "item" : "biblioteca"} />}
       {verBib && <SelectorBiblioteca almacen={almacen} onElegir={desdeBiblioteca} onCerrar={() => setVerBib(false)} />}
+      {conflicto && <ConflictoVersion version={conflicto.x2.cab.version} campos={conflicto.campos} nota={conflicto.nota} bloqueado={!!conflicto.nota}
+        onCombinar={combinarConflicto} onDescartarMios={descartarConflicto} onCancelar={() => setConflicto(null)} />}
       {previa?.tipo === "eett" && <VistaPreviaEETT blob={previa.blob} nombre={previa.nombre} paginas={previa.paginas}
         onCerrar={() => setPrevia(null)} onDescargar={eettLista && puedeGenerarEETT ? () => { setPrevia(null); generarYDescargar(); } : null} />}
       {previa?.tipo === "cotizacion" && <VistaPreviaEETT blob={previa.blob} nombre={previa.nombre} paginas={previa.paginas} titulo="Vista previa de la cotización"

@@ -6,14 +6,16 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./supabase";
 
 const H = (t, extra = {}) => ({ "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${t}`, ...extra });
 export class ErrorVP extends Error {
-  constructor(message, { status, code, detalle, noInstalado, conflicto, sinPermiso, duplicado } = {}) {
-    super(message); Object.assign(this, { status, code, detalle, noInstalado: !!noInstalado, conflicto: !!conflicto, sinPermiso: !!sinPermiso, duplicado: !!duplicado });
+  constructor(message, { status, code, detalle, noInstalado, conflicto, sinPermiso, duplicado, incierto } = {}) {
+    super(message); Object.assign(this, { status, code, detalle, noInstalado: !!noInstalado, conflicto: !!conflicto, sinPermiso: !!sinPermiso, duplicado: !!duplicado, incierto: !!incierto });
   }
 }
 const esNoInstalado = (status, j) => status === 404 || ["PGRST205", "PGRST202", "42P01", "42883"].includes(j?.code);
-async function pedir(t, metodo, ruta, cuerpo) {
+// limite (ms, opcional): si el servidor no responde en ese plazo se trata como respuesta incierta (quien llama comprueba el resultado).
+async function pedir(t, metodo, ruta, cuerpo, limite) {
   let r;
-  try { r = await fetch(`${SUPABASE_URL}/rest/v1/${ruta}`, { method: metodo, headers: H(t, { Prefer: "return=representation" }), body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo) }); }
+  try { r = await fetch(`${SUPABASE_URL}/rest/v1/${ruta}`, { method: metodo, headers: H(t, { Prefer: "return=representation" }), body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo),
+    ...(limite && typeof AbortSignal !== "undefined" && AbortSignal.timeout ? { signal: AbortSignal.timeout(limite) } : {}) }); }
   catch { throw new ErrorVP("Sin conexión con la base de datos. Intenta nuevamente.", { status: 0 }); }
   const txt = await r.text(); let j = null; try { j = txt ? JSON.parse(txt) : null; } catch { j = null; }
   if (!r.ok) {
@@ -24,7 +26,8 @@ async function pedir(t, metodo, ruta, cuerpo) {
   return j;
 }
 const leer = (t, ruta) => pedir(t, "GET", ruta);
-const rpc = (t, fn, args) => pedir(t, "POST", `rpc/${fn}`, args);
+const rpc = (t, fn, args, limite) => pedir(t, "POST", `rpc/${fn}`, args, limite);
+const LIMITE_GUARDAR = 45000;
 const q = encodeURIComponent;
 
 // ── Carga general (listas livianas para las pantallas y para Inicio, Alertas, Agenda y Finanzas) ─────
@@ -67,7 +70,62 @@ export async function leerCotizacion(t, id) {
   const margenes = ids.length ? await leer(t, `vp_margen_revisiones?select=*&revision_id=in.(${ids.join(",")})`) : [];
   return { cab, revisiones: revs || [], items: items || [], costos: costos || [], margenes: margenes || [], eett: eett || [], documentos: docs || [] };
 }
-export const guardarCotizacion = (t, p) => rpc(t, "vp_guardar_cotizacion", { p });
+// Guardar con protección ante respuestas inciertas (09/11/2026). Si la conexión se corta después de enviar, no se sabe si la
+// base guardó: NUNCA se repite a ciegas. Se comprueba el resultado (versión y contenido de la revisión; para una cotización
+// nueva, si apareció una nueva de esta cuenta para el cliente) y, si quedó guardada, se continúa con ella; si no, se informa
+// que no se guardó. Si ni siquiera se puede comprobar, el siguiente intento comprueba primero (no se duplica).
+// Un rechazo por sesión vencida lo resuelve lib/sesion.js (renueva y reintenta una vez: el servidor no ejecutó nada).
+const pendientesGuardar = new Map();
+const uidDe = (t) => { try { return JSON.parse(atob(String(t).split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))).sub || null; } catch { return null; } };
+const mismoTexto = (a, b) => String(a ?? "").trim() === String(b ?? "").trim();
+async function comprobarGuardado(t, p, info) {
+  if (p.id) {
+    const [c] = await leer(t, `vp_cotizaciones?select=id,folio,version,revision_actual&id=eq.${q(p.id)}`);
+    if (!c || Number(c.version) === Number(p.version)) return null;              // no se guardó
+    const [r] = await leer(t, `vp_cotizacion_revisiones?select=*&cotizacion_id=eq.${q(p.id)}&numero=eq.${c.revision_actual}`);
+    const lineas = r ? await leer(t, `vp_cotizacion_items?select=orden,descripcion,cantidad,precio_unitario&revision_id=eq.${q(r.id)}&order=orden`) : [];
+    const cab = ["contacto_nombre", "contacto_correo", "contacto_telefono", "plazo_entrega", "direccion_entrega", "condiciones_pago", "observaciones", "condiciones_comerciales"];
+    const igual = Number(c.version) === Number(p.version) + 1 && r && cab.every((k) => !(k in p) || mismoTexto(p[k], r[k]))
+      && lineas.length === (p.items || []).length && lineas.every((l, i) => mismoTexto(l.descripcion, p.items[i]?.descripcion) && Number(l.cantidad) === Number(p.items[i]?.cantidad) && Number(l.precio_unitario) === Number(p.items[i]?.precio_unitario));
+    if (!igual) throw new ErrorVP("VP409: otra persona guardó cambios en esta cotización mientras se perdía la conexión; tus cambios no se guardaron", { status: 409, conflicto: true });
+    return { id: c.id, folio: c.folio, revision_id: r.id, revision: r.numero, version: c.version };
+  }
+  const uid = uidDe(t); if (!uid || !info?.previas) return null;
+  const cands = (await leer(t, `vp_cotizaciones?select=id,folio,version,revision_actual&cliente_id=eq.${q(p.cliente_id)}&creado_por=eq.${q(uid)}&order=creado_en.desc&limit=20`)).filter((c) => !info.previas.has(c.id));
+  for (const c of cands) {
+    const [r] = await leer(t, `vp_cotizacion_revisiones?select=id,numero&cotizacion_id=eq.${q(c.id)}&numero=eq.${c.revision_actual}`);
+    const n = r ? (await leer(t, `vp_cotizacion_items?select=id&revision_id=eq.${q(r.id)}`)).length : -1;
+    if (n === (p.items || []).length) return { id: c.id, folio: c.folio, revision_id: r.id, revision: r.numero, version: c.version };
+  }
+  return null;
+}
+export async function guardarCotizacion(t, p) {
+  const clave = p.id ? `cot:${p.id}:${p.version}` : `cot:nueva:${p.cliente_id}`;
+  let info = pendientesGuardar.get(clave);
+  if (info) {   // un intento anterior quedó sin respuesta: primero se comprueba si ya se guardó
+    const hecho = await comprobarGuardado(t, p, info).catch((e) => { if (e.conflicto) throw e; throw new ErrorVP("Sin conexión: todavía no se puede comprobar si el guardado anterior quedó registrado. Intenta nuevamente en un momento (no se duplicará).", { status: 0, incierto: true }); });
+    if (hecho) { pendientesGuardar.delete(clave); return { ...hecho, comprobado: true }; }
+  }
+  // Nunca impide guardar: si esta lectura previa falla, solo se pierde la posibilidad de comprobar una creación incierta.
+  if (!p.id && !info) { const uid = uidDe(t); info = { previas: uid ? await leer(t, `vp_cotizaciones?select=id&cliente_id=eq.${q(p.cliente_id)}&creado_por=eq.${q(uid)}`).then((l) => new Set(l.map((c) => c.id))).catch(() => null) : null }; }
+  // Versión antigua (otra pestaña o persona guardó después): se detecta ANTES de enviar y no se envía nada. La base lo rechaza
+  // igual, pero ese rechazo (SQLSTATE 40001) puede dejar la solicitud sin respuesta en el servidor de la API; así no se llega a eso.
+  if (p.id) {
+    const [vig] = await leer(t, `vp_cotizaciones?select=version&id=eq.${q(p.id)}`).catch(() => []);
+    if (vig && Number(vig.version) !== Number(p.version)) throw new ErrorVP("VP409: otra persona guardó cambios en esta cotización; tus cambios no se guardaron", { status: 409, conflicto: true });
+  }
+  try { const r = await rpc(t, "vp_guardar_cotizacion", { p }, LIMITE_GUARDAR); pendientesGuardar.delete(clave); return r; }
+  catch (e) {
+    if (e.status !== 0) { pendientesGuardar.delete(clave); throw e; }
+    pendientesGuardar.set(clave, info || {});
+    let hecho;
+    try { hecho = await comprobarGuardado(t, p, info || {}); }
+    catch (e2) { if (e2.conflicto) { pendientesGuardar.delete(clave); throw e2; } throw new ErrorVP("Se perdió la conexión al guardar y aún no se puede comprobar si quedó guardada. Al volver a guardar, la app lo comprobará primero (no se duplicará).", { status: 0, incierto: true }); }
+    pendientesGuardar.delete(clave);
+    if (hecho) return { ...hecho, comprobado: true };
+    throw new ErrorVP("Se perdió la conexión al guardar. Se comprobó que NO quedó guardada: puedes volver a guardar.", { status: 0 });
+  }
+}
 // ¿Está instalada la actualización de la base del 08/11/2026 (ficha técnica y datos de compra por ítem)? Sin ella, guardar desde
 // el editor perdería esos datos: la interfaz lo informa y no guarda. null si no se pudo comprobar (sin conexión).
 export async function esquemaFichaVP(t) {
@@ -152,6 +210,9 @@ export async function ocClienteDeVenta(t, ventaId) {
   return oc?.[0] ? { numero: oc[0].numero, fecha: oc[0].fecha } : null;
 }
 export const leerEETT = async (t, id) => (await leer(t, `vp_eett?select=*&id=eq.${q(id)}`))?.[0] || null;
+// Estado ACTUAL de las EETT de una cotización (se lee justo antes de emitir: si un intento anterior quedó sin respuesta, se ve
+// si ya quedó emitida y no se emite otra).
+export const listarEETT = async (t, cotId) => (await leer(t, `vp_eett?select=id,folio,revision,estado,cotizacion_revision_id,hash,emitida_en,version&cotizacion_id=eq.${q(cotId)}&order=revision.desc`)) || [];
 export const guardarEETT = (t, p) => rpc(t, "vp_guardar_eett", { p });
 export const emitirEETT = (t, id, version) => rpc(t, "vp_emitir_eett", { p_id: id, p_version: version });
 export const descartarEETT = (t, id) => rpc(t, "vp_descartar_eett", { p_id: id });

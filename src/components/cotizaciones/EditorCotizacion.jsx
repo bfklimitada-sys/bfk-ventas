@@ -14,6 +14,8 @@ import { EliminarCotizacion } from "./EliminarCotizacion";
 import { ClasificacionTributaria } from "../ficha/ClasificacionTributaria";
 import logoUrl from "../../assets/bfk-logo.jpg";
 import { guardarBorrador, borrarBorrador, idLocalDe } from "../../lib/borradoresCotizacion";
+import { ConflictoVersion } from "../ui/ConflictoVersion";
+import { combinarVersiones, aplicarCombinacion, normalizarProductos, resumenProductos, textoValor } from "../../lib/conflictoVersion";
 
 const m = (x) => fmt.money(Math.round(Number(x) || 0));
 const pct = (x) => `${(Math.round(Number(x) * 1000) / 10).toLocaleString("es-CL")}%`;
@@ -39,10 +41,25 @@ function CampoPorcentaje({ id, dato, valor, onCambiar, disabled }) {
     style={{ ...iMono, width: 80 }} />;
 }
 
+// Campos que se comparan si otra pestaña o persona guardó una versión más nueva (lib/conflictoVersion.js). Solo lectura de
+// los datos del formulario: no cambia cómo se calculan ni se guardan.
+const GRUPOS_CONFLICTO = [
+  ["id_externo", "Código Mercado Público"], ["nombre", "Nombre de la licitación / compra ágil"], ["descripcion", "Descripción (del comprador)"], ["institucion", "Institución"],
+  ["unidad_compra", "Unidad solicitante"], ["rut", "RUT"], ["fecha", "Fecha de emisión (BFK)"], ["plazo", "Plazo de entrega"], ["presupuesto_estimado", "Presupuesto del comprador"],
+  ["fecha_publicacion", "Publicación"], ["fecha_cierre", "Cierre"], ["estado", "Estado"], ["oc_codigo", "OC adjudicada"], ["observaciones", "Observaciones (internas)"],
+].map(([k, etiqueta]) => ({ k, etiqueta, claves: [k] })).concat([
+  { k: "direccion", etiqueta: "Dirección de entrega", claves: ["direccion_entrega", "comuna", "region"] },
+  { k: "vendedor", etiqueta: "Vendedor responsable", claves: ["vendedor_id", "vendedor_nombre"], resumen: (v) => v.vendedor_nombre || textoValor(v.vendedor_id) },
+  { k: "recargo", etiqueta: "Recargo general", claves: ["recargo"], resumen: (v) => (v.recargo === "" || v.recargo == null ? "—" : pct(v.recargo)) },
+  { k: "requerimientos", etiqueta: "Requerimientos del comprador", claves: ["requerimientos"] },
+  { k: "productos", etiqueta: "Productos, precios y despachos", claves: ["items", "envios"], normalizar: normalizarProductos, resumen: resumenProductos },
+]);
+const clonarJ = (x) => (x == null ? x : JSON.parse(JSON.stringify(x)));
+
 // Quita los despachos que ya no usa ningún producto (evita costos duplicados o huérfanos).
 const limpiarEnvios = (c) => { c.envios = c.envios.filter((e) => c.items.some((it) => it.envio_key === e.key)); return c; };
 
-// recuperado: { actualizado, versionBFK } cuando se abre desde un borrador local (cambios NO guardados en BFK).
+// recuperado: { actualizado, versionBFK, base } cuando se abre desde un borrador local (cambios NO guardados en BFK).
 // fichaRecuperada: { esNuevo, item, estado } de la ventana «Ingresar/Editar producto» que estaba abierta.
 export function EditorCotizacion({ tributario = null, almacen, inicial, token, perfil, entidadesCatalogo = [], showToast, onGuardada, onEliminada, onBibliotecaCambio, onCerrar, usuarioId, recuperado = null, pestanaInicial, fichaRecuperada = null, onDescartarBorrador }) {
   const [cot, setCot] = useState(() => JSON.parse(JSON.stringify(inicial)));
@@ -54,6 +71,9 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
   const [pestana, setPestana] = useState(pestanaInicial || (inicial.id ? "productos" : "datos"));
   const [editor, setEditor] = useState(() => (fichaRecuperada?.item ? { item: fichaRecuperada.item, esNuevo: !!fichaRecuperada.esNuevo, respaldo: fichaRecuperada.estado || null } : null)); // { item, esNuevo, respaldo }
   const [aviso, setAviso] = useState(recuperado); // banner «Borrador recuperado localmente»
+  // Punto de partida de esta pestaña (lo cargado o lo último guardado; si se abrió desde una copia local, el que esa copia registró).
+  const baseRef = useRef(recuperado ? clonarJ(recuperado.base || null) : clonarJ(inicial));
+  const [conflicto, setConflicto] = useState(null);   // { bfk, mio, campos }
   const [verBib, setVerBib] = useState(false);
   const [guardando, setGuardando] = useState(false); const [generando, setGenerando] = useState(""); const [falla, setFalla] = useState(null);
   const [preview, setPreview] = useState(null);     // { blob, nombre, paginas }
@@ -100,7 +120,7 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
     if (!usuarioId || !idLocal.current) return Promise.resolve();
     if (!s && !e) return borrarBorrador(usuarioId, idLocal.current);
     const ficha = e ? { esNuevo: e.esNuevo, item: e.item, estado: fichaEstado.current } : null;
-    return guardarBorrador({ usuario: usuarioId, idLocal: idLocal.current, cotId: c.id || null, versionBase: c.version || 0, titulo: c.id_externo || c.nombre || c.institucion || "Nueva cotización", cot: c, pestana: p, ficha });
+    return guardarBorrador({ usuario: usuarioId, idLocal: idLocal.current, cotId: c.id || null, versionBase: c.version || 0, base: baseRef.current, titulo: c.id_externo || c.nombre || c.institucion || "Nueva cotización", cot: c, pestana: p, ficha });
   };
   useEffect(() => { const t = setTimeout(respaldar, 400); return () => clearTimeout(t); }, [cot, sucio, pestana, editor, tickFicha]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { // al cambiar de app/pestaña, bloquear el teléfono o cerrar: respaldo inmediato
@@ -167,7 +187,7 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
     const enviada = cot; const { _idLocal, ...paraBFK } = { ...enviada, ...cotTrib, items: enviada.items, envios: enviada.envios }; // eslint-disable-line no-unused-vars
     const r = await almacen.guardarCotizacion(paraBFK);
     setFormulaGuardada(formulaParaGuardar(paraBFK));
-    const nueva = { ...enviada, id: r.id, version: r.version };
+    const nueva = { ...enviada, id: r.id, version: r.version }; baseRef.current = clonarJ(nueva);
     // Lo escrito DURANTE el guardado se conserva (y sigue marcado como pendiente de guardar).
     const posterior = vivo.current.cot !== enviada;
     setCot((c) => ({ ...c, id: r.id, version: r.version })); setSucio(posterior); setEstadoGuardado(nueva.estado); onGuardada?.(nueva);
@@ -180,7 +200,28 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
   const guardar = async () => {
     setGuardando(true);
     try { await guardarInterno(); showToast?.("Cotización guardada"); }
-    catch (e) { showToast?.(`No se guardó: ${mensajeVendedor(e)}`, "error"); if (/vendedor/i.test(e.message)) setPestana("datos"); } finally { setGuardando(false); }
+    catch (e) { showToast?.(`No se guardó: ${mensajeVendedor(e)}`, "error"); if (/vendedor/i.test(e.message)) setPestana("datos"); if (e.conflicto && cot.id) await abrirConflicto(); } finally { setGuardando(false); }
+  };
+  // ── Versión más nueva en BFK: lo escrito se conserva y se combina campo por campo (nada se sobrescribe solo) ──
+  const abrirConflicto = async () => {
+    const mio = vivo.current.cot; if (!mio?.id) return;
+    try {
+      const bfk = await almacen.cargarCotizacion(mio.id);
+      setConflicto({ bfk, mio: clonarJ(mio), campos: combinarVersiones({ base: baseRef.current, mio, bfk, grupos: GRUPOS_CONFLICTO }) });
+    } catch (e) { showToast?.(`No se pudo leer la versión de BFK: ${e.message}. Tus cambios siguen en la pantalla y en este dispositivo.`, "error"); }
+  };
+  const tomarVersionBFK = (bfk, contenido, pendiente) => {
+    baseRef.current = clonarJ(bfk); setFormulaGuardada(bfk.formula || null); setEstadoGuardado(bfk.estado);
+    setGuardada({ estado: bfk.estado, vendedor_id: bfk.vendedor_id || null, vendedor_nombre: bfk.vendedor_nombre || "" });
+    setCot(contenido); setSucio(pendiente); setConflicto(null); setAviso(null);
+  };
+  const combinarConflicto = (elecciones) => {
+    const k = conflicto; tomarVersionBFK(k.bfk, aplicarCombinacion({ mio: k.mio, bfk: k.bfk, grupos: GRUPOS_CONFLICTO, campos: k.campos, elecciones }), true);
+    showToast?.(`Combinado sobre la versión ${k.bfk.version} de BFK: revisa y presiona «Guardar».`);
+  };
+  const descartarConflicto = () => {
+    const k = conflicto; if (usuarioId && idLocal.current) borrarBorrador(usuarioId, idLocal.current).catch(() => {});
+    tomarVersionBFK(k.bfk, clonarJ(k.bfk), false); showToast?.("Se abrió la versión guardada en BFK");
   };
 
   // ── EETT: mismo generador para vista previa y descarga ──
@@ -211,7 +252,7 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
     setGenerando("descarga"); setFalla(null);
     let base = cot;
     try { if (!cot.id || sucio) base = await guardarInterno(); }
-    catch (e) { setGenerando(""); showToast?.(`No se guardó la cotización: ${mensajeVendedor(e)} No se generó la EETT.`, "error"); return; }
+    catch (e) { setGenerando(""); showToast?.(`No se guardó la cotización: ${mensajeVendedor(e)} No se generó la EETT.`, "error"); if (e.conflicto && cot.id) await abrirConflicto(); return; }
     try {
       const r = await descargarDe(base);
       showToast?.(`Cotización guardada (versión ${base.version}) y EETT descargada: ${r.paginas} página${r.paginas === 1 ? "" : "s"}`);
@@ -286,9 +327,9 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
       derecha={<BotonPrincipal data-guardar-cotizacion onClick={guardar} disabled={guardando} style={{ minHeight: 40, padding: "8px 14px", opacity: guardando ? 0.6 : 1 }}>{guardando ? "Guardando…" : sucio ? "Guardar •" : "Guardado"}</BotonPrincipal>}>
       <div style={{ padding: 16 }} data-editor-cotizacion>
         {aviso && (
-          <AvisoLinea tono="warn" icono="↺" dato="borrador-recuperado" {...(aviso.versionBFK && cot.id ? { accion: "Descartar y abrir la versión de BFK", onClick: descartarYAbrirBFK } : {})}>
+          <AvisoLinea tono="warn" icono="↺" dato="borrador-recuperado" {...(aviso.versionBFK && cot.id ? { accion: "Revisar y combinar", onClick: abrirConflicto } : {})}>
             <b>Borrador recuperado localmente</b> ({fechaHora(aviso.actualizado)}): estos cambios están solo en este dispositivo y <b>aún no se han guardado en BFK</b>. Revísalos y presiona «Guardar».
-            {aviso.versionBFK ? <> En BFK hay una versión más reciente (versión {aviso.versionBFK}) guardada después de este borrador: no se sobrescribirá; al guardar, BFK lo rechazará para que puedas revisar.</> : null}
+            {aviso.versionBFK ? <> En BFK hay una versión más reciente (versión {aviso.versionBFK}) guardada después de este borrador: no se sobrescribirá; con «Revisar y combinar» comparas campo por campo y eliges qué conservar. <button type="button" data-descartar-abrir-bfk onClick={(e) => { e.stopPropagation(); descartarYAbrirBFK(); }} style={{ border: "none", background: "none", color: C.tealDark, textDecoration: "underline", cursor: "pointer", padding: 0, fontSize: "inherit" }}>Descartar y abrir la versión de BFK</button></> : null}
           </AvisoLinea>
         )}
         <div data-estado-guardado={sucio ? "local" : "bfk"} style={{ fontSize: T.small, color: sucio ? C.warnText : C.inkMuted, marginBottom: 6 }}>
@@ -554,6 +595,7 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
 
       {editor && <EditorFicha key={editor.item.key} inicial={editor.item} esNuevo={editor.esNuevo} envios={cot.envios} items={cot.items} destino={destino} destinoValido={dirOk} dirCliente={{ direccion_entrega: cot.direccion_entrega, comuna: cot.comuna, region: cot.region }} onDireccion={setDireccion} almacen={almacen} token={token} protegido={protegido && !editor.esNuevo} onGuardar={guardarItem} onCerrar={cerrarFicha} respaldo={editor.respaldo} onBorrador={alCambiarFicha} />}
       {verBib && <SelectorBiblioteca almacen={almacen} onElegir={desdeBiblioteca} onCerrar={() => setVerBib(false)} />}
+      {conflicto && <ConflictoVersion version={conflicto.bfk.version} campos={conflicto.campos} onCombinar={combinarConflicto} onDescartarMios={descartarConflicto} onCancelar={() => setConflicto(null)} />}
       {preview && <VistaPreviaEETT {...preview} onCerrar={() => setPreview(null)} onDescargar={pdf.listo ? () => { setPreview(null); generarYDescargar(); } : null} />}
       {eliminar && <EliminarCotizacion cot={{ ...cot, estado: estadoGuardado || cot.estado, oc_codigo: inicial.oc_codigo || cot.oc_codigo }} nEett={historial.length} onCancelar={() => setEliminar(false)} onEliminar={eliminarCot} />}
     </HojaLateral>

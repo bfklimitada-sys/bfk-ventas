@@ -9,7 +9,8 @@
 #   5. sql_como_mp / reglas_como_mp / e2e_cotizacion_como_mp — cotización privada con la experiencia de Mercado Público (08/11/2026)
 #   6. sql_eett_como_mp / eett_como_mp / e2e_eett_cp_2026_0001 — EETT privada con el recorrido de Mercado Público (09/11/2026),
 #      verificada sobre una copia aislada de la cotización de la captura (CP-2026-0001, «Bolso Paramédico Mediano 47L»)
-#   7. mp_byte_a_byte — Mercado Público en la versión publicada y en la nueva: pantallas y PDF idénticos
+#   7. e2e_sesion_vp / e2e_sesion_mp — renovación de sesión y sesiones vencidas (10/11/2026)
+#   8. mp_byte_a_byte — Mercado Público en la versión publicada y en la nueva: pantallas y PDF idénticos
 # Requisitos: PostgreSQL local (PGHOST/PGPORT, superusuario postgres), postgrest 12 (POSTGREST=ruta), Chromium (CHROME=ruta),
 #             npm install y playwright-core resoluble desde node_modules.
 set -uo pipefail
@@ -49,6 +50,11 @@ for MODO in escritorio celular; do
   eval "$(bash "$D/entorno.sh" instalar)"; export PGRST_URL JWT_SECRET VP_DB_URL
   echo "== e2e EETT CP-2026-0001 ($MODO)"; node "$D/e2e_eett_cp_2026_0001.mjs" "http://127.0.0.1:$PUERTO_APP/" "$MODO" 2>/dev/null | grep -E "FALLA|EXCEP|RESUMEN"; RC=$((RC | ${PIPESTATUS[0]}))
 done
+# Renovación de sesión y sesiones vencidas (10/11/2026): sesión vencida, varias pestañas, suspensión, pérdida de conexión, fallo de
+# renovación y pestaña desactualizada; guardar, emitir EETT y crear ventas ocurren una sola vez (base limpia; MP con su simulador).
+eval "$(bash "$D/entorno.sh" instalar)"; export PGRST_URL JWT_SECRET VP_DB_URL
+echo "== sesión: Ventas privadas"; node "$R/docs/pruebas-sesion/e2e_sesion_vp.mjs" "http://127.0.0.1:$PUERTO_APP/" 2>/dev/null | grep -E "FALLA|EXCEP|RESUMEN"; RC=$((RC | ${PIPESTATUS[0]}))
+echo "== sesión: Mercado Público"; node "$R/docs/pruebas-sesion/e2e_sesion_mp.mjs" "http://127.0.0.1:$PUERTO_APP/" 2>/dev/null | grep -E "FALLA|EXCEP|RESUMEN"; RC=$((RC | ${PIPESTATUS[0]}))
 # Mercado Público sin cambios en navegador: misma ruta en la versión publicada (REF_PUBLICADA, por defecto origin/main) y en la
 # nueva → pantallas idénticas píxel a píxel y PDF de EETT idénticos byte a byte.
 WT="${TMPDIR:-/tmp}/wt-publicada"; git worktree remove --force "$WT" > /dev/null 2>&1; git worktree prune

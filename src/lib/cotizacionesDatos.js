@@ -95,8 +95,10 @@ const rango = (r) => { const m = String(r.headers.get("content-range") || "").ma
 export function crearAlmacen(token, modo, esquema = 1) {
   // token: texto o función que entrega el token VIGENTE (la renovación de sesión no recrea el almacén ni cierra el editor).
   const tk = () => (typeof token === "function" ? token() : token);
-  const rpc = async (fn, body) => {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, { method: "POST", headers: cab(tk(), { "Content-Type": "application/json" }), body: JSON.stringify(body) });
+  // limite (ms, opcional): sin respuesta en ese plazo = respuesta incierta (guardarProtegido comprueba el resultado).
+  const rpc = async (fn, body, limite) => {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, { method: "POST", headers: cab(tk(), { "Content-Type": "application/json" }), body: JSON.stringify(body),
+      ...(limite && typeof AbortSignal !== "undefined" && AbortSignal.timeout ? { signal: AbortSignal.timeout(limite) } : {}) });
     const c = await json(r); if (!r.ok) throw errorDe(r, c, "No se pudo guardar"); return c;
   };
   const leer = async (tabla, q, { contar = false } = {}) => {
@@ -105,6 +107,54 @@ export function crearAlmacen(token, modo, esquema = 1) {
     return contar ? { filas: c || [], total: rango(r) ?? (c || []).length } : (c || []);
   };
   const resolver = async (imgs, max = 4) => (await Promise.all((imgs || []).slice(0, max).map((x) => bajarImagen(tk(), x)))).filter(Boolean);
+
+  // Guardar con protección ante respuestas inciertas (09/11/2026, solo manejo de sesión/conexión; el guardado es el mismo):
+  // si la conexión se corta después de enviar, NUNCA se repite a ciegas. Se comprueba si la base guardó (misma cotización con
+  // la versión siguiente y el mismo total; o, si era nueva, una nueva de esta cuenta con el mismo total) y se sigue
+  // con ella; si no se guardó, se informa. Si ni siquiera se puede comprobar, el próximo intento comprueba primero.
+  const sinRed = (e) => e instanceof TypeError || ["AbortError", "TimeoutError"].includes(e?.name) || /Failed to fetch|NetworkError|Load failed/i.test(String(e?.message || ""));
+  const uidTk = () => { try { return JSON.parse(atob(String(tk()).split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))).sub || null; } catch { return null; } };
+  const filtroNueva = () => `creado_por=eq.${encodeURIComponent(uidTk() || "")}&order=fecha_creacion.desc&limit=50`;
+  const comprobar = async (p, info) => {
+    if (p.id) {
+      const [c] = await leer("cotizaciones", `select=id,version,total,institucion,id_externo,estado,plazo,observaciones&id=eq.${encodeURIComponent(p.id)}`);
+      if (!c || Number(c.version) === Number(p.version)) return null;
+      const igual = (k) => String(c[k] ?? "").trim() === String(p[k] ?? "").trim();
+      if (Number(c.version) === Number(p.version) + 1 && Math.round(Number(c.total)) === Math.round(Number(p.total)) && ["institucion", "id_externo", "estado", "plazo", "observaciones"].every(igual)) return { id: c.id, version: c.version };
+      throw Object.assign(new Error("Otra persona guardó cambios en esta cotización mientras se perdía la conexión (tus cambios no se guardaron)."), { conflicto: true });
+    }
+    if (!info?.previas) return null;
+    const c = (await leer("cotizaciones", `select=id,version,total&${filtroNueva()}`)).find((x) => !info.previas.has(x.id) && Math.round(Number(x.total)) === Math.round(Number(p.total)));
+    return c ? { id: c.id, version: c.version } : null;
+  };
+  const pendientesGuardar = new Map(); const pendientesEETT = new Map();
+  const guardarProtegido = async (p, ejecutar) => {
+    const clave = p.id ? `${p.id}:${p.version}` : `nueva:${p.id_externo || ""}:${p.nombre || ""}`;
+    let info = pendientesGuardar.get(clave);
+    if (info) {
+      const hecho = await comprobar(p, info).catch((e) => { if (e.conflicto) throw e; throw new Error("Sin conexión: todavía no se puede comprobar si el guardado anterior quedó registrado. Intenta nuevamente en un momento (no se duplicará)."); });
+      if (hecho) { pendientesGuardar.delete(clave); return { ...hecho, comprobado: true }; }
+    }
+    // Versión antigua (otra pestaña o persona guardó después): se detecta ANTES de enviar y no se envía nada. La base lo rechaza
+    // igual (CZ409), pero ese rechazo (SQLSTATE 40001) puede quedar sin respuesta en el servidor de la API; así no se llega a eso.
+    if (p.id) {
+      const [vig] = await leer("cotizaciones", `select=id,version&id=eq.${encodeURIComponent(p.id)}`).catch(() => []);
+      if (vig && Number(vig.version) !== Number(p.version)) throw Object.assign(new Error("Otra persona guardó cambios en esta cotización. Revisa y combina antes de guardar (tus cambios no se guardaron)."), { conflicto: true, status: 409 });
+    }
+    // Nunca impide guardar: si esta lectura previa falla, solo se pierde la posibilidad de comprobar una creación incierta.
+    if (!p.id && !info) info = { previas: await leer("cotizaciones", `select=id&${filtroNueva()}`).then((l) => new Set(l.map((c) => c.id))).catch(() => null) };
+    try { const r = await ejecutar(); pendientesGuardar.delete(clave); return r; }
+    catch (e) {
+      if (!sinRed(e)) { pendientesGuardar.delete(clave); throw e; }
+      pendientesGuardar.set(clave, info || {});
+      let hecho;
+      try { hecho = await comprobar(p, info || {}); }
+      catch (e2) { if (e2.conflicto) { pendientesGuardar.delete(clave); throw e2; } throw new Error("Se perdió la conexión al guardar y aún no se puede comprobar si quedó guardada. Al volver a guardar, la app lo comprobará primero (no se duplicará)."); }
+      pendientesGuardar.delete(clave);
+      if (hecho) return { ...hecho, comprobado: true };
+      throw new Error("Se perdió la conexión al guardar. Se comprobó que NO quedó guardada: puedes volver a guardar.");
+    }
+  };
 
   if (modo !== "base" && modo !== "prueba") return null; // modo "error": sin almacén (no se guarda nada)
   const comunes = {
@@ -203,8 +253,9 @@ export function crearAlmacen(token, modo, esquema = 1) {
       // Fase 2 exentas: la clasificación tributaria se gestiona aparte (trib_*): nunca viaja al guardar la cotización.
       // Fase 3: la fórmula guardada registra si los precios se calcularon como exentos (afecta: FORMULA idéntica a la actual).
       const { tratamiento_iva, fundamento_iva, respaldo_iva, tratamiento_aprobado_por, tratamiento_aprobado_en, clasificacion_id, _exenta_fija, ...cotSinTrib } = cot;   // eslint-disable-line no-unused-vars
-      return rpc(v2 ? "cz_guardar_cotizacion_v2" : "cz_guardar_cotizacion", { p: { ...cotSinTrib, items, formula: formulaParaGuardar(cot), subtotal_neto: calc.totales.neto, impuestos: calc.totales.iva_debito, total: calc.totales.total,
-        costo_neto: Math.round(calc.totales.costo_neto), iva_credito: Math.round(calc.totales.iva_credito) } });
+      const p = { ...cotSinTrib, items, formula: formulaParaGuardar(cot), subtotal_neto: calc.totales.neto, impuestos: calc.totales.iva_debito, total: calc.totales.total,
+        costo_neto: Math.round(calc.totales.costo_neto), iva_credito: Math.round(calc.totales.iva_credito) };
+      return guardarProtegido(p, () => rpc(v2 ? "cz_guardar_cotizacion_v2" : "cz_guardar_cotizacion", { p }, 45000));
     },
     // Biblioteca: página de fichas SIN imágenes (solo rutas); la miniatura se carga al mostrarse.
     async listarProductos({ q = "", pagina = 0, porPagina = 30 } = {}) {
@@ -220,9 +271,26 @@ export function crearAlmacen(token, modo, esquema = 1) {
       return rpc("cz_guardar_producto", { p: { ...f, id: id || null, fuente: fuente || null, fecha_verificacion: fecha_verificacion || null } });
     },
     // Solo metadatos del PDF generado (el archivo queda en el dispositivo; no se sube al depósito).
+    // Registro de la EETT generada: si la conexión se corta tras enviarlo, no se repite a ciegas (se comprueba si quedó registrado).
     async registrarEETT(meta) {
-      if (v2) return rpc("cz_registrar_eett_v2", { p: meta });
-      return rpc("cz_registrar_eett", { p_cotizacion: meta.cotizacion_id, p_version: meta.version, p_ruta: null, p_hash: meta.hash, p_paginas: meta.paginas });
+      const clave = `${meta.cotizacion_id}:${meta.version}`;
+      const registros = async () => new Set((await leer("eett_documentos", `select=id,version&cotizacion_id=eq.${encodeURIComponent(meta.cotizacion_id)}&version=eq.${Number(meta.version)}&order=fecha.desc&limit=50`))
+        .filter((e) => Number(e.version) === Number(meta.version)).map((e) => e.id));
+      const nuevoDesde = async (previos) => { for (const id of await registros()) if (!previos.has(id)) return id; return null; };
+      let previos = pendientesEETT.get(clave);
+      if (previos) {
+        const id = await nuevoDesde(previos).catch(() => { throw new Error("Sin conexión: todavía no se puede comprobar si la generación anterior quedó registrada. Intenta nuevamente en un momento (no se duplicará)."); });
+        pendientesEETT.delete(clave); if (id) return id;
+      }
+      previos = await registros().catch(() => null);
+      try { return await (v2 ? rpc("cz_registrar_eett_v2", { p: meta }) : rpc("cz_registrar_eett", { p_cotizacion: meta.cotizacion_id, p_version: meta.version, p_ruta: null, p_hash: meta.hash, p_paginas: meta.paginas })); }
+      catch (e) {
+        if (!sinRed(e) || !previos) throw e;
+        pendientesEETT.set(clave, previos);
+        const id = await nuevoDesde(previos).catch(() => { throw new Error("Se perdió la conexión al registrar la EETT y aún no se puede comprobar si quedó registrada. Al reintentar, la app lo comprobará primero (no se duplicará)."); });
+        pendientesEETT.delete(clave); if (id) return id;
+        throw new Error("Se perdió la conexión al registrar la EETT. Se comprobó que NO quedó registrada: puedes reintentar.");
+      }
     },
     // Bitácora de asignaciones y cambios de vendedor (vacía si la migración del vendedor responsable no está instalada).
     async historialVendedor(cotId) {

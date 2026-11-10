@@ -29,13 +29,15 @@ import { PanelUsuarios } from "./components/panels/PanelUsuarios";
 import { PanelVendedores } from "./components/panels/PanelVendedores";
 import { Modal, Toast } from "./components/ui/Basicos";
 import { PanelNotificaciones, calcularAlertas } from "./components/ui/Multiusuario";
-import { SESSION_KEY, SUPABASE_URL, crearNotificacion, del, delConfirmado, genId, hdrs, ins, leerPerfil, registrarCambio, sel, selOCs, selPerfiles, storageGet, storageSet, supaRefresh, supaSignOut, upd, updRol } from "./lib/supabase";
+import { SUPABASE_URL, crearNotificacion, del, delConfirmado, genId, hdrs, ins, leerPerfil, registrarCambio, sel, selOCs, selPerfiles, supaSignOut, upd, updRol } from "./lib/supabase";
 import { buscarOCPorCodigo, esCodigoMP, esErrorDuplicado, estadoMP, fechaOCEditable, mensajeDuplicado, normalizarCodigoOC, resultadoConsultaMP } from "./lib/ocs";
 import { cambiosProducto } from "./lib/productosOC";
 import { CLAVE_REVISION_AUTO, LIMITE_USO_DIARIO, PREFIJO_FOTO_MP, cambiosOCDesdeMP, claveFotoMP, elegirRevisionAutomatica, fotoMP, lineaVentaDesdeMP, mpCancelada, planProductosVenta, toca } from "./lib/mercadoPublico";
 import { alimentarCatalogoDesdeOC } from "./lib/entidadesOC";
 import { ContactosContext } from "./components/ficha/ContactosInstitucion";
 import { AvisoVersionNueva } from "./components/ui/AvisoVersionNueva";
+import { AvisoSesion } from "./components/auth/AvisoSesion";
+import { iniciarSesion, fijarSesion, cerrarSesionLocal, suscribirSesion, estadoSesion, restanteMs } from "./lib/sesion";
 import { avisosConciliacion } from "./lib/contactosInstitucionales";
 import { rpcTransferirVendedor } from "./lib/supabase";
 import { rpcConciliarContactosOC, rpcGuardarContacto, rpcResolverContacto, rpcContactoObsoleto, rpcResolverPropuesta, rpcFusionarContactos, rpcCorreoCobranza } from "./lib/supabase";
@@ -186,17 +188,35 @@ export default function App() {
     if(destino===tab) setReinicio(n=>n+1); // tocar la pantalla actual vuelve a su vista inicial (p. ej. cierra la ficha abierta)
     setTab(destino); setFiltroCompras(null); setOcFoco(null); setVolverA(null); setMenuMas(false);
   };
+  // Sesión (09/11/2026, lib/sesion.js): se renueva antes de vencer y al volver a la pestaña, una sola vez a la vez entre pestañas,
+  // y cada pestaña adopta la vigente. Si la renovación es rechazada, se pide reingresar con la misma cuenta sin cerrar la pantalla.
+  const [estadoSes,setEstadoSes]=useState({estado:"sin_sesion",motivo:""});
   useEffect(()=>{
+    const quitar=suscribirSesion(({sesion,estado,motivo})=>{
+      setEstadoSes({estado,motivo});
+      if(estado==="vigente"&&sesion) setSession(prev=>(prev?.access_token===sesion.access_token?prev:sesion));
+      if(estado==="cerrada"){   // otra pestaña cerró la sesión o ingresó con otra cuenta: los cambios quedan en este dispositivo
+        const email=sesionRef.current?.user?.email||"";
+        setSession(null); setPerfil(null); revisoBorradores.current=false;
+        setAvisoLogin({email,aviso:motivo==="otra_cuenta"
+          ?"Se ingresó con otra cuenta en otra pestaña de este navegador. Los cambios sin guardar de tu cuenta quedan en este dispositivo: vuelve a ingresar con ella para recuperarlos."
+          :"La sesión se cerró en otra pestaña. Los cambios sin guardar quedan en este dispositivo: vuelve a ingresar con la misma cuenta para recuperarlos."});
+      }
+    });
     (async()=>{
-      const saved=storageGet(SESSION_KEY);
-      if(saved){ try {
-        let s=JSON.parse(saved);
-        try{ s=await supaRefresh(s.refresh_token); storageSet(SESSION_KEY,JSON.stringify(s)); } catch{}
-        setSession(s); await aplicarAcceso(s);
-      } catch{} }
+      try{
+        const s=await iniciarSesion();
+        if(s){
+          if(estadoSesion().estado==="vencida"&&restanteMs(s)<=0){   // la renovación fue rechazada y el token ya venció
+            setAvisoLogin({email:s.user?.email||"",aviso:"Tu sesión venció. Vuelve a ingresar con la misma cuenta: los cambios sin guardar de este dispositivo se recuperan al entrar."});
+            cerrarSesionLocal();
+          } else { setSession(s); await aplicarAcceso(s); }
+        }
+      } catch{}
       setLoadingApp(false);
     })();
-  },[]);
+    return quitar;
+  },[]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Lee el perfil de la cuenta de la sesión. Sin perfil (o si no se pudo comprobar) la cuenta queda fuera de la app.
   // Antes la app creaba un perfil «usuario» (o «admin» si era la primera cuenta) a quien no lo tuviera: eliminado.
@@ -207,43 +227,14 @@ export default function App() {
     const aislada=String(s.user?.app_metadata?.bfk_tipo||"").trim();
     setAccesoEstado(r.estado==="error"?"error":aislada?"aislada":"sin_perfil"); setAccesoMensaje(r.mensaje||"");
   }
-  const handleLogin=async(s)=>{
-    setSession(s); storageSet(SESSION_KEY,JSON.stringify(s));
-    await aplicarAcceso(s);
+  const handleLogin=async(s0)=>{
+    const s=fijarSesion(s0); setAvisoLogin(null);
+    setSession(s); await aplicarAcceso(s);
   };
   const reintentarAcceso=async()=>{ const s=sesionRef.current; if(s) await aplicarAcceso(s); };
-  const handleLogout=async()=>{ try{ await bloqueoOC.cerrar(); }catch{} try{ await supaSignOut(session.access_token); }catch{} setSession(null); setPerfil(null); setAccesoEstado(null); setAccesoMensaje(""); storageSet(SESSION_KEY,""); };
+  const handleLogout=async()=>{ try{ await bloqueoOC.cerrar(); }catch{} try{ await supaSignOut(session.access_token); }catch{} setSession(null); setPerfil(null); setAccesoEstado(null); setAccesoMensaje(""); cerrarSesionLocal(); revisoBorradores.current=false; };
 
-  // Renovar el token automáticamente cada 45 minutos mientras la app
-  // sigue abierta — antes solo se renovaba una vez, al iniciar, y por
-  // eso el token expiraba a la hora (limite de Supabase) si se dejaba
-  // la app abierta más tiempo, dando error "JWT expired".
-  useEffect(()=>{
-    if(!session?.refresh_token) return;
-    const intervalo=setInterval(async()=>{
-      try{
-        const s=await supaRefresh(session.refresh_token);
-        setSession(s); storageSet(SESSION_KEY,JSON.stringify(s));
-      }catch{}
-    }, 45*60*1000);
-    return ()=>clearInterval(intervalo);
-  },[session?.refresh_token]);
-
-  // Cuando el celular estuvo bloqueado o la app en segundo plano, el
-  // navegador pausa los temporizadores — por eso el intervalo de arriba
-  // solo no basta. Al volver a la pantalla, renovar también ahí.
-  useEffect(()=>{
-    if(!session?.refresh_token) return;
-    const alVolver=async()=>{
-      if(document.visibilityState!=="visible") return;
-      try{
-        const s=await supaRefresh(session.refresh_token);
-        setSession(s); storageSet(SESSION_KEY,JSON.stringify(s));
-      }catch{}
-    };
-    document.addEventListener("visibilitychange",alVolver);
-    return ()=>document.removeEventListener("visibilitychange",alVolver);
-  },[session?.refresh_token]);
+  // (La renovación periódica y al volver a la pestaña la hace lib/sesion.js; antes aquí: cada 45 min y en cada visibilidad.)
 
   // Si la pestaña se recargó o el sistema la cerró con una cotización sin guardar, al volver el MISMO usuario
   // se abre Cotizaciones, que restaura el borrador local (marcado como «recuperado», no guardado en BFK).
@@ -251,7 +242,12 @@ export default function App() {
   useEffect(()=>{
     const uid=autorizado?session?.user?.id:null; if(!uid||revisoBorradores.current) return;
     revisoBorradores.current=true;
-    listarBorradores(uid).then(l=>{ if(l.length){ setTab("cotizaciones"); showToast("Se recuperaron cambios de cotización no guardados en este dispositivo (aún no están guardados en BFK)."); } }).catch(()=>{});
+    listarBorradores(uid).then(async l=>{
+      if(l.length){ setTab("cotizaciones"); showToast("Se recuperaron cambios de cotización no guardados en este dispositivo (aún no están guardados en BFK)."); return; }
+      // Cotizaciones privadas (mismo almacén, espacio «vp:»): el aviso indica dónde recuperarlos.
+      const vp=await listarBorradores(`vp:${uid}`).catch(()=>[]);
+      if(vp.length) showToast(`Hay cambios de cotizaciones privadas no guardados en este dispositivo (${vp.map(b=>b.titulo).filter(Boolean).slice(0,3).join(", ")}): ábrelas en «Cotizaciones privadas» para recuperarlos.`);
+    }).catch(()=>{});
   },[autorizado,session?.user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reintenta una función asíncrona hasta 2 veces antes de rendirse.
@@ -1938,7 +1934,7 @@ export default function App() {
   // ─── RENDER ───────────────────────────────────
   if(retornoRecuperacion) return <RestablecerContrasena retorno={retornoRecuperacion} onSalir={({email,aviso,usuarioId,cambiada})=>{
     // Tras cambiar la contraseña se cerraron todas las sesiones de esa cuenta: si la guardada era suya, se descarta.
-    if(cambiada&&(!session||!usuarioId||session.user?.id===usuarioId)){ setSession(null); setPerfil(null); storageSet(SESSION_KEY,""); }
+    if(cambiada&&(!session||!usuarioId||session.user?.id===usuarioId)){ setSession(null); setPerfil(null); cerrarSesionLocal(); }
     setAvisoLogin({email:email||"",aviso:aviso||""}); setRetornoRecuperacion(null);
   }} />;
   if(loadingApp) return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",color:C.inkMuted,fontFamily:SANS}}>Cargando…</div>;
@@ -2065,6 +2061,7 @@ export default function App() {
 
       <Toast toast={toast} />
       <AvisoVersionNueva />
+      {estadoSes.estado==="vencida"&&<AvisoSesion email={session.user?.email||""} onCerrarSesion={handleLogout} />}
     </>
   );
 

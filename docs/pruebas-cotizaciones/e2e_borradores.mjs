@@ -126,6 +126,10 @@ const fichaCompleta = (v) => v.nombre === "TALADRO PERCUTOR 750W" && /Mandril: 1
   ok("A10_datos_del_cliente_restaurados", (await H(p).locator('[data-campo="institucion"]').inputValue()) === "Municipalidad de Laja" && (await H(p).locator('[data-campo="direccion"]').inputValue()) === "Balmaceda 292");
 
   // A3. Guardar en BFK: la copia local se limpia y el estado cambia a «Guardada en BFK».
+  // (10/11/2026) La sesión ya no se renueva en cada regreso a la pestaña, sino cuando hace falta: aquí se fuerza una renovación
+  // para comprobar lo mismo de siempre (el editor sigue abierto y el guardado usa el token renovado).
+  await p.evaluate(() => window.__bfkSesion.renovarAhora()); await espera(p, 600);
+  ok("A10b_renovacion_no_cierra_editor", await H(p).isVisible() && (await H(p).locator('[data-campo="institucion"]').inputValue()) === "Municipalidad de Laja");
   await H(p).locator("[data-guardar-cotizacion]").click(); await espera(p, 1200);
   const guardada = [...S.M.cots.values()][0];
   const rpcGuardar = S.tokens.filter((x) => /cz_guardar_cotizacion/.test(x.url)).pop();
@@ -155,7 +159,22 @@ const fichaCompleta = (v) => v.nombre === "TALADRO PERCUTOR 750W" && /Mandril: 1
   ok("A17_advierte_version_mas_reciente_en_bfk", /versión más reciente \(versión 5\)/.test(await H(p).innerText()));
   await H(p).locator("[data-guardar-cotizacion]").click(); await espera(p, 1200);
   ok("A18_no_sobrescribe_version_mas_reciente", S.M.cots.get(guardada.id).institucion === "Cambio de otra persona" && S.M.cots.get(guardada.id).version === 5);
+  // (10/11/2026) El rechazo abre la comparación campo por campo; nada se sobrescribe ni se pierde.
+  const dlgC = p.locator("[data-conflicto-version]");
+  ok("A18b_rechazo_abre_comparacion", await dlgC.isVisible() && (await dlgC.locator('[data-campo-conflicto="institucion"]').getAttribute("data-estado-conflicto")) === "conflicto"
+    && (await dlgC.locator('[data-campo-conflicto="recargo"]').getAttribute("data-estado-conflicto")) === "solo_mio", await dlgC.innerText().catch(() => ""));
+  await dlgC.locator("[data-cancelar-conflicto]").click(); await espera(p, 400);
   ok("A19_cambios_locales_siguen_disponibles", (await H(p).locator('[data-campo="institucion"]').inputValue()) === "Municipalidad de Laja (editada)" && (await borradoresIDB(p)).length === 1);
+  // «Revisar y combinar» desde el aviso: se conserva lo mío donde solo yo cambié (recargo) y se elige en el conflicto (institución: la mía).
+  await H(p).locator('[data-aviso-linea="borrador-recuperado"]').click({ position: { x: 12, y: 12 } }); await espera(p, 800);
+  await dlgC.locator('[data-elegir="institucion:mio"]').check(); await dlgC.locator("[data-combinar-conflicto]").click(); await espera(p, 600);
+  ok("A19b_combinado_sin_guardar", !(await dlgC.count()) && (await H(p).locator('[data-campo="institucion"]').inputValue()) === "Municipalidad de Laja (editada)"
+    && (await H(p).locator("[data-estado-guardado]").getAttribute("data-estado-guardado")) === "local" && S.M.cots.get(guardada.id).version === 5 && S.M.cots.get(guardada.id).institucion === "Cambio de otra persona");
+  await H(p).locator("[data-guardar-cotizacion]").click(); await espera(p, 1500);
+  ok("A19c_guardado_sobre_la_version_vigente", S.M.cots.get(guardada.id).version === 6 && S.M.cots.get(guardada.id).institucion === "Municipalidad de Laja (editada)" && Number(S.M.cots.get(guardada.id).recargo) === 0.35
+    && S.M.rpc.filter((x) => /guardar_cotizacion/.test(x.fn) && x.b.p.id === guardada.id && x.b.p.version === 5).length === 1, { v: S.M.cots.get(guardada.id).version, r: S.M.cots.get(guardada.id).recargo });
+  S.M.cots.get(guardada.id).institucion = "Cambio de otra persona";   // lo que sigue de la prueba parte de este valor
+  await llenar(H(p).locator('[data-campo="institucion"]'), "Municipalidad de Laja (editada)"); await espera(p, 900);
 
   // A6. Descartar expresamente: pide confirmación y borra solo su borrador local.
   await p.locator('[data-cerrar-hoja]').first().click(); await espera(p, 800);

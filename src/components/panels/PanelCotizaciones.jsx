@@ -50,7 +50,7 @@ export function PanelCotizaciones({ token, perfil, entidadesCatalogo, showToast,
   const recuperar = useCallback(async (b) => {
     let versionBFK = null;
     if (b.cotId) { try { const srv = await almacen.cargarCotizacion(b.cotId); if (Number(srv.version) > Number(b.versionBase || 0)) versionBFK = srv.version; } catch { /* sin conexión: se abre igual el borrador */ } }
-    setAbierta({ cot: b.cot, recuperado: { actualizado: b.actualizado, versionBFK }, pestana: b.pestana, ficha: b.ficha });
+    setAbierta({ cot: b.cot, recuperado: { actualizado: b.actualizado, versionBFK, base: b.base || null }, pestana: b.pestana, ficha: b.ficha });
   }, [almacen]);
   useEffect(() => {
     if (!almacen || !usuarioId) return;
