@@ -39,11 +39,11 @@ async function validarSesion(req) {
   if (!m) return { error: "Sesión requerida. Inicie sesión en BFK Datos.", status: 401 };
   const token = m[1].trim();
   try {
-    const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(4_000) });
+    const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` } });
     if (!r.ok) return { error: "Sesión inválida o vencida. Vuelva a iniciar sesión.", status: 401 };
     const u = await r.json();
     if (!u?.id) return { error: "Sesión inválida.", status: 401 };
-    const p = await fetch(`${SUPABASE_URL}/rest/v1/perfiles?id=eq.${encodeURIComponent(u.id)}&select=id,rol`, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(4_000) });
+    const p = await fetch(`${SUPABASE_URL}/rest/v1/perfiles?id=eq.${encodeURIComponent(u.id)}&select=id,rol`, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` } });
     const filas = p.ok ? await p.json() : [];
     if (!Array.isArray(filas) || !filas.length) return { error: "Usuario sin perfil autorizado en BFK.", status: 403 };
     return { uid: u.id, admin: filas[0]?.rol === "admin" };
@@ -99,12 +99,10 @@ const COMO_OBTENER = "Solicítalo en https://www.chilecompra.cl/api/ («Pide tu 
 // Etapas: DNS → conexión TCP → TLS → API sin ticket (espera 400) → ticket inválido de control (espera 401).
 // El ticket configurado SOLO se prueba si se pide expresamente (&ticket=1), si la red respondió, y como máximo
 // 1 vez cada 10 minutos por instancia (cuida la cuota diaria de ChileCompra).
-// Plazo total: 50 s, siempre bajo maxDuration (60 s); cada etapa usa como máximo el tiempo que queda. Las consultas con
-// ticket esperan hasta 32 s para observar el HTTP 504 que la pasarela de ChileCompra devuelve a los ~29,5 s.
-// &codigo=<código> elige la Compra Ágil (por defecto 3390-246-COT26). El resultado también queda en los registros.
+// Plazo total: 25 s, siempre bajo maxDuration (30 s); cada etapa usa como máximo el tiempo que queda.
 const HOST = "api2.mercadopublico.cl";
 const TICKET_CONTROL = "00000000-0000-0000-0000-000000000000"; // ticket inexistente: solo para comprobar la respuesta 401
-const PLAZO_TOTAL_MS = 50_000;
+const PLAZO_TOTAL_MS = 25_000;
 const conLimite = (ms, fn) => new Promise((ok) => {
   if (ms < 500) return ok({ ok: false, ms: 0, falla: "sin_tiempo" });
   const t0 = Date.now(); const fin = setTimeout(() => ok({ ok: false, ms: Date.now() - t0, falla: "demora" }), ms);
@@ -137,12 +135,7 @@ async function medir(url, ticket, ms) {
     if (out.url_tipo === "listado") {
       out.total_resultados = c?.payload?.paginacion?.total_resultados ?? null; out.items = Array.isArray(c?.payload?.items) ? c.payload.items.length : null;
       out.payload_valido = r.status === 200 && Array.isArray(c?.payload?.items);
-      out.codigo_coincide = out.payload_valido ? c.payload.items.some((x) => txt(x?.codigo).toUpperCase() === url.split("id=")[1]?.toUpperCase()) : null;
-    } else {
-      out.payload_valido = r.status === 200 && !!c?.payload && typeof c.payload === "object";
-      out.codigo_coincide = out.payload_valido ? txt(c.payload.codigo).toUpperCase() === decodeURIComponent(url.split("/").pop()).toUpperCase() : null;
-    }
-    if (r.status === 504) out.pasarela = txt(c?.message).slice(0, 60) || null;   // p. ej. «Endpoint request timed out»
+    } else out.payload_valido = r.status === 200 && !!c?.payload && typeof c.payload === "object";
     out.ok = true;
   } catch (e) {
     out.ok = false; out.ms_total = Date.now() - t0;
@@ -192,7 +185,6 @@ async function diagnosticar(req, res) {
   e.tls = e.tcp.ok ? await conLimite(queda(5_000), socket(true)) : omitido;
   e.api_sin_ticket = e.tls.ok ? await conLimite(queda(6_000), pedir(null)) : omitido;
   e.ticket_control = e.api_sin_ticket.ok ? await conLimite(queda(6_000), pedir(TICKET_CONTROL)) : omitido;
-  const cod = codigoCompraAgil(req.query?.codigo) || "3390-246-COT26";
   const comparar = req.query?.ticket === "comparar";
   const soloListado = req.query?.ticket === "listado";
   const pedido = req.query?.ticket === "1" || comparar || soloListado;
@@ -204,14 +196,14 @@ async function diagnosticar(req, res) {
   else if (soloListado) {
     // Solo el listado oficial filtrado por id (paginación predeterminada), 1 consulta de la cuota, sin llamar al detalle.
     ultimaPruebaTicket = Date.now();
-    e.ticket_configurado = { solo_listado: true, codigo: cod, listado: await medir(`${API}?id=${encodeURIComponent(cod)}`, ticket, queda(32_000)) };
+    e.ticket_configurado = { solo_listado: true, listado: await medir(`${API}?id=3390-246-COT26`, ticket, queda(20_000)) };
   }
   else if (comparar) {
     // Misma Compra Ágil por las dos vías oficiales, en paralelo (2 consultas de la cuota): listado filtrado por id
     // (1 resultado) y detalle. Ambas con el mismo plazo, dentro del límite total.
-    ultimaPruebaTicket = Date.now(); const ms = queda(32_000);
-    const [listado, detalle] = await Promise.all([medir(`${API}?id=${encodeURIComponent(cod)}`, ticket, ms), medir(`${API}/${encodeURIComponent(cod)}`, ticket, ms)]);
-    e.ticket_configurado = { comparacion: true, codigo: cod, listado, detalle };
+    ultimaPruebaTicket = Date.now(); const ms = queda(20_000);
+    const [listado, detalle] = await Promise.all([medir(`${API}?id=3390-246-COT26`, ticket, ms), medir(`${API}/3390-246-COT26`, ticket, ms)]);
+    e.ticket_configurado = { comparacion: true, listado, detalle };
   }
   else { ultimaPruebaTicket = Date.now(); e.ticket_configurado = await conLimite(queda(20_000), pedir(ticket)); }
   const h = e.ticket_configurado.http;
@@ -241,53 +233,7 @@ async function diagnosticar(req, res) {
     : conclusionComparar ? conclusionComparar
     : !e.ticket_configurado.ok ? "demora_solo_con_ticket_real"
     : h === 200 || h === 404 ? "ticket_aceptado" : h === 401 || h === 403 ? "ticket_rechazado" : h === 429 ? "cuota_agotada" : "error_api";
-  console.info("compra_agil_diagnostico", JSON.stringify({ region: process.env.VERCEL_REGION || null, conclusion, ticket_configurado: e.ticket_configurado }));
   return res.status(200).json({ ok: true, region: process.env.VERCEL_REGION || null, entorno: process.env.VERCEL_ENV || null, etapas: e, conclusion, duracion_ms: Date.now() - ahora });
-}
-
-
-// Como máximo dos consultas por acción del usuario; nunca sincroniza en segundo plano.
-// El plazo incluye cabeceras y lectura del cuerpo. No reintenta rechazos de ticket ni 404.
-// Cada intento queda registrado por separado: ruta, HTTP, ms hasta las cabeceras, ms hasta el cuerpo completo y falla.
-// El primer intento espera hasta 30 s: la pasarela de ChileCompra corta sola a los ~29,5 s con HTTP 504
-// («Endpoint request timed out»), y así se distingue esa respuesta de una demora sin respuesta.
-export async function consultarListadoConRecuperacion(codigo, ticket, {
-  f = fetch, ahora = Date.now, esperar = (ms) => new Promise((r) => setTimeout(r, ms)),
-  intentoMs = 30_000, presupuestoMs = 50_000,
-} = {}) {
-  const inicio = ahora();
-  let ultimo = { falla: "demora", intentos: 0 }; const detalle = [];
-  for (let n = 1; n <= 2; n++) {
-    const restante = presupuestoMs - (ahora() - inicio);
-    if (restante <= 0) break;
-    const signal = AbortSignal.timeout(Math.max(1, Math.min(intentoMs, restante)));
-    const t0 = ahora(); const reg = { ruta: "listado" }; detalle.push(reg);
-    let esperaMs = 1000;
-    try {
-      const r = await f(`${API}?id=${encodeURIComponent(codigo)}`, { headers: { ticket, Accept: "application/json" }, signal });
-      reg.http = r.status; reg.ms_cabeceras = ahora() - t0;
-      // Un cuerpo truncado/abortado no se confunde con un JSON válido vacío.
-      const texto = await r.text(); reg.ms_cuerpo = ahora() - t0;
-      let cuerpo = null; try { cuerpo = JSON.parse(texto); } catch { /* se informa ERROR_API */ }
-      if (r.status === 504 && cuerpo?.message) reg.pasarela = String(cuerpo.message).slice(0, 60);
-      ultimo = { status: r.status, cuerpo, intentos: n };
-      if (r.status !== 429 && r.status < 500) break;
-      const ra = r.headers?.get?.("retry-after");
-      if (ra) {
-        const segundos = Number(ra);
-        const ms = Number.isFinite(segundos) ? segundos * 1000 : Date.parse(ra) - ahora();
-        if (Number.isFinite(ms)) esperaMs = Math.max(1000, ms);
-      }
-    } catch (e) {
-      reg.ms_cuerpo = null; reg.ms_total = ahora() - t0;
-      reg.falla = signal.aborted || ["TimeoutError", "AbortError"].includes(e?.name) ? (reg.http ? "cuerpo_demora" : "sin_cabeceras_demora") : "conexion";
-      ultimo = { falla: reg.falla === "conexion" ? "conexion" : "demora", intentos: n };
-    }
-    // Respeta Retry-After; si no cabe, devuelve el error y no hace otra petición.
-    if (n === 2 || presupuestoMs - (ahora() - inicio) < esperaMs + 1000) break;
-    await esperar(esperaMs);
-  }
-  return { ...ultimo, detalle, duracion_ms: ahora() - inicio };
 }
 
 export default async function handler(req, res) {
@@ -301,19 +247,13 @@ export default async function handler(req, res) {
   if (limitado(ses.uid)) return res.status(429).json({ ok: false, codigo: "LIMITE", error: "Demasiadas consultas. Espera un minuto e intenta de nuevo." });
 
   // Consulta normal: LISTADO oficial filtrado por código (paginación predeterminada). El detalle
-  // (/v2/compra-agil/{codigo}) no se usa: el 08/11/2026 ambas rutas devolvieron 504 de la pasarela de ChileCompra.
-  const consulta = await consultarListadoConRecuperacion(codigo, ticket);
-  console.info("compra_agil_consulta", JSON.stringify({ codigo, intentos: consulta.intentos, duracion_ms: consulta.duracion_ms, http: consulta.status || null, falla: consulta.falla || null, por_intento: consulta.detalle }));
-  // Si algún intento recibió el 504 de la pasarela de ChileCompra y el otro se cortó por plazo, la causa es su servidor.
-  const msj504 = "El servidor de ChileCompra no está respondiendo (su propia pasarela devolvió HTTP 504), incluso tras un reintento. No es un problema de BFK ni de tu conexión. Tus datos se conservan; puedes continuar manualmente e intentar más tarde.";
-  if (consulta.falla && (consulta.detalle || []).some((x) => x.http === 504)) return res.status(502).json({ ok: false, codigo: "CHILECOMPRA_SIN_RESPUESTA", error: msj504 });
-  if (consulta.falla) return res.status(502).json({ ok: false, codigo: consulta.falla === "demora" ? "DEMORA_API" : "SIN_CONEXION", error: consulta.falla === "demora" ? "ChileCompra no respondió dentro del plazo, incluso tras un reintento. Tus datos se conservan; puedes intentar nuevamente o continuar manualmente." : "No se pudo completar la conexión con ChileCompra tras un reintento. Tus datos se conservan." });
-  const r = { status: consulta.status, ok: consulta.status >= 200 && consulta.status < 300 };
-  const cuerpo = consulta.cuerpo;
+  // (/v2/compra-agil/{codigo}) hoy no responde a tiempo, por eso no se usa.
+  let r;
+  try { r = await fetch(`${API}?id=${encodeURIComponent(codigo)}`, { headers: { ticket, Accept: "application/json" }, signal: AbortSignal.timeout(20_000) }); }
+  catch (e) { return res.status(502).json({ ok: false, codigo: e?.name === "TimeoutError" ? "DEMORA_API" : "SIN_CONEXION", error: e?.name === "TimeoutError" ? "La API de ChileCompra no respondió a tiempo. Intenta más tarde o ingresa los datos manualmente." : "No se pudo conectar con la API de ChileCompra. Ingresa los datos manualmente." }); }
+  const cuerpo = await r.json().catch(() => null);
   if (r.status === 401 || r.status === 403) return res.status(502).json({ ok: false, codigo: "TICKET_INVALIDO", error: `ChileCompra rechazó el ticket configurado para la API de Compra Ágil (HTTP ${r.status}). ${COMO_OBTENER}` });
-  if (r.status === 429) return res.status(429).json({ ok: false, codigo: "CUOTA", error: "ChileCompra está limitando las consultas (HTTP 429). Espera antes de volver a intentar; esta respuesta no permite confirmar que se agotó la cuota diaria." });
-  // La pasarela de ChileCompra corta sola sus consultas lentas (~29,5 s) con HTTP 504: el problema está en su servidor.
-  if (r.status === 504) return res.status(502).json({ ok: false, codigo: "CHILECOMPRA_SIN_RESPUESTA", error: msj504 });
+  if (r.status === 429) return res.status(429).json({ ok: false, codigo: "CUOTA", error: "Se agotó la cuota diaria del ticket de ChileCompra. Se restablece al comenzar el próximo día. Ingresa los datos manualmente." });
   if (r.status === 404) return res.status(404).json({ ok: false, codigo: "NO_ENCONTRADA", error: `ChileCompra no encontró la Compra Ágil ${codigo}. Revisa el código.` });
   if (!r.ok || !Array.isArray(cuerpo?.payload?.items)) return res.status(502).json({ ok: false, codigo: "ERROR_API", error: `La API de ChileCompra respondió con un error (HTTP ${r.status}${(cuerpo?.errors || cuerpo?.errores)?.[0]?.mensaje ? `: ${(cuerpo.errors || cuerpo.errores)[0].mensaje}` : ""}). Ingresa los datos manualmente.` });
 

@@ -8,7 +8,6 @@ import { Seccion, Tarjeta, Badge, Monto, Desplegable, Indicador, Indicadores, Av
 import { useEsEscritorio } from "../ui/Navegacion";
 import { registrosConAlerta } from "../../lib/registroCartola";
 
-// Inteligencia Comercial (06/11/2026): retirada de Inicio. Su estado y su acceso están en Administración.
 
 const MAX_PRIOR=5; // prioridades visibles de entrada; el resto con «Ver más»
 import { FILTROS_PANEL, estaCerrada, filtrarPanel, valeVistasPendientes } from "../../lib/ocs";

@@ -8,12 +8,9 @@ import { Seccion, Tarjeta, Badge, BotonAdmin, Pestanas, PanelPestana } from "../
 import { ImportarEntidades } from "../forms/ImportarEntidades";
 import { ContactosCatalogo } from "../ficha/ContactosInstitucion";
 import { AutorizacionCuentas } from "./AutorizacionCuentas";
-import { AdminInteligencia } from "../inteligencia/AdminInteligencia";
-import { useEsEscritorio } from "../ui/Navegacion";
 
 export function PanelUsuarios({ perfilPropio, onRecargar, perfiles, ocs, ocsArchivadas, onRestaurarOC, onChangeRol, session, showToast, entidadesCatalogo, onEntidadesImportadas, usoMP, sincronizando, validandoTodo, exportando, onCorregirFechas, onValidarTodo, onExportarTodo, difsHistoricas, onEliminarOC, eliminacionesVersion }) {
   const [verDifs,setVerDifs]=useState(false);
-  const escritorio=useEsEscritorio();
   const [pestana,setPestana]=useState("usuarios");
   const [showImport,setShowImport]=useState(false);
   const [filtroArch,setFiltroArch]=useState("");
@@ -57,10 +54,7 @@ export function PanelUsuarios({ perfilPropio, onRecargar, perfiles, ocs, ocsArch
         {key:"mp",label:"Mercado Público"},
         {key:"archivadas",label:"OCs archivadas",n:(ocsArchivadas||[]).length||null},
         {key:"correcciones",label:"Correcciones",n:(difsHistoricas||[]).length||null,tono:(difsHistoricas||[]).length?"warn":null},
-        {key:"ic",label:"Inteligencia Comercial"},
       ]} />
-      {/* Solo se monta (y lee el estado del interruptor) al elegir la pestaña; nunca consulta ChileCompra por sí sola. */}
-      {pestana==="ic"&&<PanelPestana visible titulo="Inteligencia Comercial"><AdminInteligencia token={session?.access_token} perfil={perfilPropio} escritorio={escritorio} /></PanelPestana>}
       <PanelPestana visible={pestana==="usuarios"} titulo="Usuarios y permisos">
       {/* ── 1. Usuarios y permisos ── */}
       <AutorizacionCuentas session={session} showToast={showToast} onAutorizada={onRecargar} visible={pestana==="usuarios"} />

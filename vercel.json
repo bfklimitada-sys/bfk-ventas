@@ -13,10 +13,7 @@
       "maxDuration": 60
     },
     "api/compra-agil.mjs": {
-      "maxDuration": 60
-    },
-    "api/inteligencia.mjs": {
-      "maxDuration": 60
+      "maxDuration": 30
     }
   }
 }
