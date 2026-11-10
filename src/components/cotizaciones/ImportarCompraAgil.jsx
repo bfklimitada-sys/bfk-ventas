@@ -50,7 +50,7 @@ export function ImportarCompraAgil({ cot, token, onAplicar, deshabilitado }) {
           placeholder="https://… o 3390-246-COT26" style={{ ...iStyle, flex: "1 1 220px", width: "auto" }} />
         <BotonPrincipal data-consultar-compra-agil onClick={consultar} disabled={consultando || !entrada.trim() || deshabilitado} style={{ opacity: consultando || !entrada.trim() ? 0.6 : 1 }}>{consultando ? "Consultando…" : "Consultar y completar"}</BotonPrincipal>
       </div>
-      {consultando && <div data-consultando-compra-agil style={{ fontSize: T.small, color: C.inkMuted, marginTop: 6 }}>Consultando ChileCompra (hasta un minuto, con un reintento si hay una falla temporal). Mientras tanto puedes seguir completando los datos a mano.</div>}
+      {consultando && <div data-consultando-compra-agil style={{ fontSize: T.small, color: C.inkMuted, marginTop: 6 }}>Consultando ChileCompra (puede tardar algunos segundos). Mientras tanto puedes seguir completando los datos a mano.</div>}
       <div style={{ fontSize: T.small, color: C.inkFaint, marginTop: 6 }}>Consulta la API oficial de ChileCompra. Verás los datos antes de aplicarlos; todo queda editable y el ingreso manual sigue disponible.</div>
       {error && <AvisoLinea tono="warn" dato="error-compra-agil">{error}</AvisoLinea>}
 
