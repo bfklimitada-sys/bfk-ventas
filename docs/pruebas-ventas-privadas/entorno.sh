@@ -34,6 +34,8 @@ if [ "$MODO" = instalar ] || [ "$MODO" = solo_0611 ] || [ "$MODO" = solo_0811 ];
   [ "$MODO" = instalar ] || [ "$MODO" = solo_0811 ] && psql "${P[@]}" -U bfk_owner -d "$DB" -f "$M/BORRADOR-2026-11-08-vp-cotizacion-como-mp.sql" > /dev/null
   # EETT con el recorrido de Mercado Público (09/11/2026). «solo_0811»: base tal como está en producción el 09/11 (sin esta migración).
   [ "$MODO" = instalar ] && psql "${P[@]}" -U bfk_owner -d "$DB" -f "$M/BORRADOR-2026-11-09-vp-eett-como-mp.sql" > /dev/null
+  # Compra desde la cotización aprobada, como en Mercado Público (10/11/2026). «solo_0911»: base tal como está en producción el 10/11.
+  [ "$MODO" = instalar ] && psql "${P[@]}" -U bfk_owner -d "$DB" -v ON_ERROR_STOP=1 -f "$M/BORRADOR-2026-11-10-vp-compras-como-mp.sql" > /dev/null
   [ -f "$D/semilla.sql" ] && psql -h "$PGHOST" -p "$PGPORT" -X -q -At -U postgres -d "$DB" -f "$D/semilla.sql" | grep '^SEMILLA' >&2 || true
 fi
 SECRETO="${JWT_SECRET:-$(openssl rand -hex 32)}"

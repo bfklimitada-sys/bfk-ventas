@@ -15,6 +15,8 @@ import { descargarBlob } from "../../lib/eettPdf";
 import { logoBFK } from "../../lib/cotizacionesDatos";
 import logoUrl from "../../assets/bfk-logo.jpg";
 import { folioVPDesdeHash, hashVP } from "../../lib/navegacion";
+import { CompraVentaPrivada } from "./CompraVentaPrivada";
+import { tieneBaseCotizacion } from "../../lib/compraVentaPrivada";
 
 const FILTROS = [{ key: "", label: "Vigentes" }, { key: "por_entregar", label: "Por entregar" }, { key: "por_facturar", label: "Por facturar" }, { key: "por_cobrar", label: "Por cobrar" }, { key: "vencidas", label: "Pago vencido" }, { key: "anuladas", label: "Anuladas" }];
 
@@ -122,6 +124,7 @@ function Detalle({ token, d, v, esResp, esAdmin, vigente, vp, showToast, refresc
   const costos = new Map(d.costos.map((k) => [k.item_id, k.costo_unitario_estimado == null ? null : Number(k.costo_unitario_estimado)]));
   const compras = new Map(d.costos.map((k) => [k.item_id, k]));
   const m = d.margen; const verCostos = m?.costo_estimado != null;
+  const compradoItem = (itemId) => { const fs = d.compras.filter((k) => k.estado === "vigente" && k.concepto === "producto" && k.venta_item_id === itemId); return fs.length ? fs.reduce((s, k) => s + Number(k.cantidad || 0), 0) : null; };
   const entregado = (itemId) => d.entregaItems.filter((ei) => d.entregas.find((e) => e.id === ei.entrega_id)?.estado === "vigente" && ei.venta_item_id === itemId).reduce((s, x) => s + Number(x.cantidad), 0);
   const pdfAprobada = async () => {
     try { const doc = await documentoPublico(token, v.revision_id); const r = await generarPdfCotizacion(doc, { logo: await logoBFK(logoUrl) }); descargarBlob(r.blob, r.nombre); }
@@ -163,6 +166,7 @@ function Detalle({ token, d, v, esResp, esAdmin, vigente, vp, showToast, refresc
             <div style={{ fontSize: T.small, color: C.inkMuted, marginTop: 3 }}>
               {cantidadTxt(it.cantidad)} {it.unidad} × {pesos(it.precio_unitario)}{Number(it.descuento_pct) ? ` − ${String(it.descuento_pct).replace(".", ",")} %` : ""} · entregado <b data-entregado={it.orden}>{cantidadTxt(ent)}</b> de {cantidadTxt(it.cantidad)}
               {verCostos && cu != null && <span style={{ color: C.warnText }}> · costo est. {pesos(redondear(cu * Number(it.cantidad)))}</span>}
+              {verCostos && compradoItem(it.id) != null && <span data-comprado-item={it.orden}> · comprado <b>{cantidadTxt(compradoItem(it.id))}</b> de {cantidadTxt(it.cantidad)}</span>}
             </div>
             {verCostos && (k?.proveedor || k?.enlace) && <div data-compra-item={it.orden} style={{ fontSize: T.small, color: C.inkMuted, marginTop: 3 }}>
               Proveedor: <b style={{ color: C.ink }}>{k.proveedor || "—"}</b>{k.precio_compra != null ? <> · compra {pesos(k.precio_compra)}{k.precio_incluye_iva === false ? " + IVA" : ""}</> : null}
@@ -172,7 +176,7 @@ function Detalle({ token, d, v, esResp, esAdmin, vigente, vp, showToast, refresc
         );
       })}
     </Seccion>
-    {verCostos ? <Seccion titulo="Costos y margen (interno)" accion={vigente && <button type="button" data-registrar-compra onClick={() => setCompra(true)} style={estiloBoton()}>Registrar costo real</button>}>
+    {verCostos ? <Seccion titulo="Costos y margen (interno)" accion={vigente && <button type="button" data-registrar-compra onClick={() => setCompra(tieneBaseCotizacion(v, d) ? "cotizacion" : "manual")} style={estiloBoton()}>Registrar compra</button>}>
       <div data-margen-venta style={{ ...cardStyle, borderRadius: R.md, padding: "8px 14px", background: "#FFFBF0" }}>
         <Fila k="Venta neta" v={pesos(v.neto)} />
         <Fila k="Costo estimado (cotización)" v={pesos(m.costo_estimado)} dato="costo-estimado" />
@@ -184,7 +188,7 @@ function Detalle({ token, d, v, esResp, esAdmin, vigente, vp, showToast, refresc
       </div>
       {d.compras.map((k) => (
         <div key={k.id} data-compra={k.origen} style={{ ...cardStyle, borderRadius: R.md, padding: "8px 12px", marginTop: 6, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", opacity: k.estado === "vigente" ? 1 : 0.55 }}>
-          <span style={{ flex: 1, fontSize: T.sm }}><b>{k.proveedor || (k.origen === "gasto_existente" ? "Gasto vinculado" : "Compra")}</b> · {fechaTxt(k.fecha)}{k.documento_numero ? ` · ${k.documento_tipo || "doc."} ${k.documento_numero}` : ""}{k.origen === "gasto_existente" ? " · desde Gastos" : ""}{k.estado !== "vigente" ? ` · anulada: ${k.anulacion_motivo}` : ""}</span>
+          <span style={{ flex: 1, fontSize: T.sm }}><b>{k.proveedor || (k.origen === "gasto_existente" ? "Gasto vinculado" : "Compra")}</b>{k.concepto ? <span data-compra-detalle style={{ color: C.inkMuted }}> · {k.descripcion}</span> : null} · {fechaTxt(k.fecha)}{k.documento_numero ? ` · ${k.documento_tipo || "doc."} ${k.documento_numero}` : ""}{k.origen === "gasto_existente" ? " · desde Gastos" : ""}{k.estado !== "vigente" ? ` · anulada: ${k.anulacion_motivo}` : ""}</span>
           <b style={{ fontFamily: MONO }}>{pesos(k.iva_recuperable ? k.neto : k.total)}</b>
           {k.estado === "vigente" && <button type="button" onClick={() => pedirAnular(setModal, "compra", k.id, "Anular costo real")} style={estiloBoton("peligro")}>Anular</button>}
         </div>
@@ -209,7 +213,8 @@ function Detalle({ token, d, v, esResp, esAdmin, vigente, vp, showToast, refresc
     </Seccion>
     <Seccion titulo="Historial"><HistorialLista filas={d.historial} /></Seccion>
     {oc && <FormOC token={token} v={v} vp={vp} showToast={showToast} onCerrar={() => setOc(false)} onListo={async () => { setOc(false); await refrescar(); }} />}
-    {compra && <FormCompra token={token} v={v} d={d} vp={vp} showToast={showToast} onCerrar={() => setCompra(false)} onListo={async () => { setCompra(false); await refrescar(); }} />}
+    {compra === "cotizacion" && <CompraVentaPrivada token={token} v={v} d={d} showToast={showToast} onCerrar={() => setCompra(false)} onManual={() => setCompra("manual")} onListo={async () => { setCompra(false); await refrescar(); }} />}
+    {compra === "manual" && <FormCompra token={token} v={v} d={d} vp={vp} showToast={showToast} onCerrar={() => setCompra(false)} onListo={async () => { setCompra(false); await refrescar(); }} />}
   </>);
 }
 
@@ -255,7 +260,7 @@ function FormCompra({ token, v, d, vp, showToast, onCerrar, onListo }) {
   };
   const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value }));
   return (
-    <Ventana titulo="Registrar costo real" onCerrar={onCerrar} dato="form-compra" ancho={600}
+    <Ventana titulo="Registrar compra (manual o gasto existente)" onCerrar={onCerrar} dato="form-compra" ancho={600}
       pie={<><button type="button" onClick={onCerrar} style={estiloBoton()}>Cancelar</button><button type="button" data-guardar-compra disabled={ocupado} onClick={ok} style={{ ...estiloBoton("pri"), minHeight: 44 }}>{ocupado ? "Guardando…" : "Registrar"}</button></>}>
       <Pestanas etiqueta="Origen del costo" activa={origen} onCambiar={setOrigen} items={[{ key: "registro", label: "Compra de esta venta" }, { key: "gasto_existente", label: "Vincular gasto ya registrado" }]} />
       <ErrorForm>{err}</ErrorForm>

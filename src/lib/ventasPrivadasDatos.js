@@ -172,6 +172,9 @@ export const registrarFactura = (t, p) => rpc(t, "vp_registrar_factura", { p });
 export const registrarPago = (t, p) => rpc(t, "vp_registrar_pago", { p });
 export const imputarPago = (t, pago, factura, monto) => rpc(t, "vp_imputar_pago", { p_pago: pago, p_factura: factura, p_monto: monto });
 export const registrarCompra = (t, p) => rpc(t, "vp_registrar_compra", { p });
+// Compra desde la cotización aprobada (10/11/2026): todos los pedidos en una transacción. Cada fila lleva una clave fija:
+// si la respuesta se pierde, reintentar devuelve «ya_existia» sin duplicar nada.
+export const registrarComprasCotizacion = (t, p) => rpc(t, "vp_registrar_compras_cotizacion", { p });
 export const anular = (t, tabla, id, motivo) => rpc(t, "vp_anular", { p_tabla: tabla, p_id: id, p_motivo: motivo });
 export const anularVenta = (t, id, motivo) => rpc(t, "vp_anular_venta", { p_id: id, p_motivo: motivo });
 // Gastos ya registrados (solo lectura) para vincularlos como costo real sin duplicarlos.
