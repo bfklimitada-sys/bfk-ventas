@@ -30,7 +30,7 @@ export const contarAlertas = (notificaciones, urgentes) =>
   (notificaciones || []).filter((n) => !n.leida).length + Number(urgentes || 0);
 
 const Contador = ({ n, oscuro }) => (n > 0
-  ? <span aria-hidden="true" style={{ background: C.danger, color: "#fff", borderRadius: 12, fontSize: 12, fontWeight: 800, padding: "1px 6px", marginLeft: 4, lineHeight: "16px", boxShadow: oscuro ? "0 0 0 2px #0B1120" : "none" }}>{n > 9 ? "9+" : n}</span>
+  ? <span aria-hidden="true" style={{ background: C.danger, color: "#fff", borderRadius: 12, fontSize: 12, fontWeight: 700, padding: "1px 6px", marginLeft: 4, lineHeight: "16px", boxShadow: oscuro ? "0 0 0 2px #0B1120" : "none" }}>{n > 9 ? "9+" : n}</span>
   : null);
 
 const nombreAccesible = (p, nAlertas) => (p.key === "notif" && nAlertas > 0 ? `${p.label}, ${nAlertas} pendiente${nAlertas > 1 ? "s" : ""}` : p.label);
@@ -52,7 +52,7 @@ export function BarraInferior({ visibles, tab, onIr, menuAbierto, onAlternarMenu
               <Ic n={p.icono} />
               {p.key === "notif" && <Contador n={nAlertas} />}
             </span>
-            <span style={{ fontSize: 12, fontWeight: activo ? 800 : 600, color: activo ? C.tealDark : C.inkMuted }}>{p.label}</span>
+            <span style={{ fontSize: 12, fontWeight: activo ? 700 : 500, color: activo ? C.tealDark : C.inkMuted }}>{p.label}</span>
           </button>
         );
       })}
@@ -60,7 +60,7 @@ export function BarraInferior({ visibles, tab, onIr, menuAbierto, onAlternarMenu
         <button data-nav="mas" aria-haspopup="dialog" aria-expanded={menuAbierto} aria-label="Más pantallas y cuenta" onClick={onAlternarMenu}
           style={{ flex: 1, background: "none", border: "none", padding: "6px 1px", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
           <span style={{ fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center", width: 44, height: 28, borderRadius: 12, background: enMas || menuAbierto ? C.tealLight : "transparent", transition: "all 0.18s" }}><Ic n="☰" /></span>
-          <span style={{ fontSize: 12, fontWeight: enMas || menuAbierto ? 800 : 600, color: enMas || menuAbierto ? C.tealDark : C.inkMuted }}>Más</span>
+          <span style={{ fontSize: 12, fontWeight: enMas || menuAbierto ? 700 : 500, color: enMas || menuAbierto ? C.tealDark : C.inkMuted }}>Más</span>
         </button>
       )}
     </nav>
@@ -82,7 +82,7 @@ export function MenuMas({ abierto, onCerrar, visibles, tab, onIr, perfil, onImpr
   const grupos = GRUPOS.map((g) => ({ ...g, items: secundarias.filter((p) => p.grupo === g.key) })).filter((g) => g.items.length);
   const esAdmin = perfil?.rol === "admin";
   const act = entradaDe(tab);
-  const titulo = { fontSize: 12, fontWeight: 800, color: C.inkFaint, textTransform: "uppercase", letterSpacing: 0.6, margin: "4px 6px 6px" };
+  const titulo = { fontSize: 12, fontWeight: 700, color: C.inkFaint, textTransform: "uppercase", letterSpacing: 0.6, margin: "4px 6px 6px" };
   const fila = (activo) => ({ width: "100%", display: "flex", alignItems: "center", gap: 12, background: activo ? C.tealLight : "transparent", border: "none", borderRadius: 12, padding: "10px 10px", cursor: "pointer", textAlign: "left" });
   return (
     <div data-noprint onClick={onCerrar} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.35)", zIndex: 40 }}>
@@ -96,7 +96,7 @@ export function MenuMas({ abierto, onCerrar, visibles, tab, onIr, perfil, onImpr
               <button key={p.key} data-nav={p.key} aria-current={act === p.key ? "page" : undefined} onClick={() => onIr(p.key)} style={fila(act === p.key)}>
                 <span style={{ width: 38, height: 38, borderRadius: 12, background: act === p.key ? "#fff" : C.paper, color: act === p.key ? C.tealDark : C.inkMuted, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}><Ic n={p.icono} /></span>
                 <span style={{ minWidth: 0, flex: 1 }}>
-                  <span style={{ display: "block", fontSize: 14, fontWeight: 700, color: act === p.key ? C.tealDark : C.ink }}>{p.label}</span>
+                  <span style={{ display: "block", fontSize: 14, fontWeight: 600, color: act === p.key ? C.tealDark : C.ink }}>{p.label}</span>
                   <span style={{ display: "block", fontSize: 12, color: C.inkMuted, lineHeight: 1.35 }}>{p.desc}</span>
                 </span>
                 <span style={{ color: C.inkFaint, flexShrink: 0 }}><Ic n="chevR" /></span>
@@ -112,12 +112,12 @@ export function MenuMas({ abierto, onCerrar, visibles, tab, onIr, perfil, onImpr
           {esAdmin && onImprimir && (
             <button aria-label="Imprimir o guardar como PDF todas las pantallas" onClick={onImprimir} style={fila(false)}>
               <span style={{ width: 38, height: 38, borderRadius: 12, background: C.paper, color: C.inkMuted, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}><Ic n="printer" /></span>
-              <span style={{ fontSize: 14, fontWeight: 700, color: C.ink }}>Imprimir o guardar PDF de todas las pantallas</span>
+              <span style={{ fontSize: 14, fontWeight: 600, color: C.ink }}>Imprimir o guardar PDF de todas las pantallas</span>
             </button>
           )}
           <button data-nav="salir" onClick={onSalir} style={fila(false)}>
             <span style={{ width: 38, height: 38, borderRadius: 12, background: C.paper, color: C.dangerText, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}><Ic n="salir" /></span>
-            <span style={{ fontSize: 14, fontWeight: 700, color: C.dangerText }}>Cerrar sesión</span>
+            <span style={{ fontSize: 14, fontWeight: 600, color: C.dangerText }}>Cerrar sesión</span>
           </button>
         </div>
       </div>
@@ -146,8 +146,8 @@ export function MenuNuevo({ onElegir, oscuro, compacto, alinear = "izquierda" })
     <div ref={caja} style={{ position: "relative", width: compacto ? "auto" : "100%", marginBottom: compacto ? 0 : 14, flexShrink: 0 }}>
       <button type="button" data-boton-nuevo aria-haspopup="menu" aria-expanded={abierto} onClick={() => setAbierto((v) => !v)}
         style={compacto
-          ? { background: C.teal, border: "none", color: "#fff", borderRadius: 8, padding: "9px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }
-          : { width: "100%", background: C.teal, border: "none", color: "#fff", borderRadius: 12, padding: "11px 14px", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 3px 10px rgba(20,184,166,0.35)", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+          ? { background: C.teal, border: "none", color: "#fff", borderRadius: 8, padding: "9px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }
+          : { width: "100%", background: C.teal, border: "none", color: "#fff", borderRadius: 12, padding: "11px 14px", fontSize: 14, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
         + Nuevo <span aria-hidden="true" style={{ display: "inline-flex", transform: abierto ? "rotate(180deg)" : "none", transition: "transform .15s" }}><Ic n="chevD" size="1em" /></span>
       </button>
       {abierto && (
@@ -159,7 +159,7 @@ export function MenuNuevo({ onElegir, oscuro, compacto, alinear = "izquierda" })
               style={{ width: "100%", display: "flex", gap: 10, alignItems: "flex-start", textAlign: "left", background: "transparent", border: "none", borderRadius: 8, padding: "9px 10px", cursor: "pointer", color: oscuro ? "#E2E8F0" : C.ink, minHeight: 44 }}>
               <span style={{ color: oscuro ? "#5EEAD4" : C.tealDark, marginTop: 1 }}><Ic n={o.icono} /></span>
               <span style={{ minWidth: 0 }}>
-                <span style={{ display: "block", fontSize: 13, fontWeight: 800 }}>{o.label}</span>
+                <span style={{ display: "block", fontSize: 13, fontWeight: 700 }}>{o.label}</span>
                 <span style={{ display: "block", fontSize: 12, color: oscuro ? "#8B9AB5" : C.inkMuted, lineHeight: 1.35 }}>{o.desc}</span>
               </span>
             </button>
@@ -174,13 +174,13 @@ export function MenuNuevo({ onElegir, oscuro, compacto, alinear = "izquierda" })
 export function BarraLateral({ visibles, tab, onIr, nAlertas, perfil, onNuevo, onImprimir, onSalir }) {
   const grupos = GRUPOS.map((g) => ({ ...g, items: visibles.filter((p) => p.grupo === g.key) })).filter((g) => g.items.length);
   const esAdmin = perfil?.rol === "admin";
-  const sec = { width: "100%", display: "flex", alignItems: "center", gap: 10, background: "transparent", border: "1px solid rgba(255,255,255,0.10)", borderRadius: 12, padding: "8px 10px", color: "#B8C4D9", fontSize: 13, fontWeight: 600, cursor: "pointer", textAlign: "left", minHeight: 40 };
+  const sec = { width: "100%", display: "flex", alignItems: "center", gap: 10, background: "transparent", border: "1px solid rgba(255,255,255,0.10)", borderRadius: 12, padding: "8px 10px", color: "#B8C4D9", fontSize: 13, fontWeight: 500, cursor: "pointer", textAlign: "left", minHeight: 40 };
   return (
     <aside data-noprint aria-label="Navegación" style={{ position: "sticky", top: 0, height: "100vh", width: ANCHO_LATERAL, flexShrink: 0, boxSizing: "border-box", display: "flex", flexDirection: "column", background: `linear-gradient(180deg,${C.night} 0%,#16213E 100%)`, color: "#fff", padding: "18px 14px 14px", overflowY: "auto", zIndex: 30 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 4px 16px" }}>
-        <div style={{ width: 38, height: 38, background: "rgba(20,184,166,0.15)", border: `1.5px solid ${C.teal}`, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: MONO, color: C.teal, fontWeight: 800, fontSize: 13, flexShrink: 0 }}>BFK</div>
+        <div style={{ width: 38, height: 38, background: "rgba(20,184,166,0.15)", border: `1px solid ${C.teal}`, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: MONO, color: C.teal, fontWeight: 700, fontSize: 13, flexShrink: 0 }}>BFK</div>
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontWeight: 800, fontSize: 16, letterSpacing: -0.3 }}>BFK Ltda</div>
+          <div style={{ fontWeight: 700, fontSize: 16, letterSpacing: -0.3 }}>BFK Ltda</div>
           <div style={{ fontSize: 12, color: "#8B9AB5" }}>Gestión comercial</div>
         </div>
       </div>
@@ -188,12 +188,12 @@ export function BarraLateral({ visibles, tab, onIr, nAlertas, perfil, onNuevo, o
       <nav aria-label="Pantallas" style={{ flex: 1 }}>
         {grupos.map((g) => (
           <div key={g.key} style={{ marginBottom: 14 }}>
-            <div style={{ fontSize: 12, fontWeight: 800, color: "#8B9AB5", textTransform: "uppercase", letterSpacing: 0.7, padding: "0 10px 6px" }}>{g.label}</div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#8B9AB5", textTransform: "uppercase", letterSpacing: 0.7, padding: "0 10px 6px" }}>{g.label}</div>
             {g.items.map((p) => {
               const activo = entradaDe(tab) === p.key;
               return (
                 <button key={p.key} data-nav={p.key} aria-current={activo ? "page" : undefined} aria-label={nombreAccesible(p, nAlertas)} title={p.desc} onClick={() => onIr(p.key)}
-                  style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, background: activo ? "rgba(20,184,166,0.16)" : "transparent", border: "none", borderLeft: `3px solid ${activo ? C.teal : "transparent"}`, borderRadius: 8, padding: "9px 10px", marginBottom: 2, color: activo ? "#5EEAD4" : "#CBD5E1", fontSize: 14, fontWeight: activo ? 800 : 600, cursor: "pointer", textAlign: "left", minHeight: 40 }}>
+                  style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, background: activo ? "rgba(20,184,166,0.16)" : "transparent", border: "none", borderLeft: `3px solid ${activo ? C.teal : "transparent"}`, borderRadius: 8, padding: "9px 10px", marginBottom: 2, color: activo ? "#5EEAD4" : "#CBD5E1", fontSize: 14, fontWeight: activo ? 700 : 500, cursor: "pointer", textAlign: "left", minHeight: 40 }}>
                   <Ic n={p.icono} />
                   <span style={{ flex: 1 }}>{p.label}</span>
                   {p.key === "notif" && <Contador n={nAlertas} oscuro />}
@@ -205,7 +205,7 @@ export function BarraLateral({ visibles, tab, onIr, nAlertas, perfil, onNuevo, o
       </nav>
       <div style={{ borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
         <div style={{ padding: "0 4px", fontSize: 13, lineHeight: 1.35 }}>
-          <div style={{ fontWeight: 700, color: "#E2E8F0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{perfil?.nombre || "—"}</div>
+          <div style={{ fontWeight: 600, color: "#E2E8F0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{perfil?.nombre || "—"}</div>
           <div style={{ color: "#8B9AB5", fontSize: 12 }}>{esAdmin ? "Administrador" : "Usuario"}</div>
         </div>
         {esAdmin && onImprimir && (

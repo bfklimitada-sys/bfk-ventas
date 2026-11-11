@@ -20,9 +20,9 @@ export function ConfigVentasPrivadas({ token, vp, onRecargar, showToast }) {
     catch (e) { setErr(mensajeVP(e)); setPedir(null); }
   };
   return (
-    <Seccion titulo="Ventas privadas · configuración">
+    <Seccion titulo="Configuración de Ventas privadas">
       <div data-config-vp style={{ ...cardStyle, borderRadius: R.md, padding: "12px 14px", marginBottom: 10 }}>
-        <div style={{ fontWeight: 800, fontSize: T.sm, marginBottom: 6 }}>Datos de BFK en cotizaciones y EETT</div>
+        <div style={{ fontWeight: 700, fontSize: T.sm, marginBottom: 6 }}>Datos de BFK en cotizaciones y EETT</div>
         <div style={{ fontSize: T.small, color: C.inkMuted, marginBottom: 8 }}>Se imprimen tal cual en los PDF. Los campos vacíos no se imprimen (por ejemplo, el giro, mientras no esté registrado).</div>
         <ErrorForm>{err}</ErrorForm>
         <Rejilla>{CAMPOS.map(([k, l]) => <Campo key={k} etiqueta={l}><Entrada data-config-campo={k} value={f[k]} onChange={(e) => setF((x) => ({ ...x, [k]: e.target.value }))} maxLength={300} /></Campo>)}</Rejilla>

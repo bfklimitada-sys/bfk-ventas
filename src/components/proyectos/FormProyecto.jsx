@@ -107,7 +107,7 @@ export function FormProyecto({ token, yo, esAdmin, perfiles, clientes, proyecto,
       </Rejilla>
       {nuevoCliente && (
         <div data-form-cliente style={{ background: C.paper, border: `1px solid ${C.border}`, borderRadius: R.md, padding: S.md, marginBottom: S.md }}>
-          <div style={{ fontWeight: 800, fontSize: T.sm, marginBottom: 8 }}>Nuevo {nuevoCliente.para === "mandante" ? "mandante" : "cliente"} (catálogo industrial, separado de Mercado Público)</div>
+          <div style={{ fontWeight: 700, fontSize: T.sm, marginBottom: 8 }}>Nuevo {nuevoCliente.para === "mandante" ? "mandante" : "cliente"} (catálogo industrial, separado de Mercado Público)</div>
           <ErrorForm>{nuevoCliente.errs?.general}</ErrorForm>
           <Rejilla>
             <Campo etiqueta="RUT" error={nuevoCliente.errs?.rut}><Entrada data-cliente="rut" value={nuevoCliente.rut} onChange={(e) => setNuevoCliente({ ...nuevoCliente, rut: e.target.value, errs: {} })} placeholder="76.123.456-7" /></Campo>
@@ -134,7 +134,7 @@ export function FormProyecto({ token, yo, esAdmin, perfiles, clientes, proyecto,
         <div data-campo="especialidades" style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
           {ESPECIALIDADES.map((e) => { const sel = f.especialidades.includes(e.v); return (
             <button key={e.v} type="button" aria-pressed={sel} data-especialidad={e.v} onClick={() => alternarEsp(e.v)}
-              style={{ minHeight: 36, padding: "6px 12px", borderRadius: R.pill, border: `1.5px solid ${sel ? C.teal : C.border}`, background: sel ? C.tealLight : C.card, color: sel ? C.tealDark : C.inkMuted, fontWeight: 700, fontSize: T.small, cursor: "pointer" }}>{e.l}</button>); })}
+              style={{ minHeight: 36, padding: "6px 12px", borderRadius: R.pill, border: `1px solid ${sel ? C.teal : C.border}`, background: sel ? C.tealLight : C.card, color: sel ? C.tealDark : C.inkMuted, fontWeight: 600, fontSize: T.small, cursor: "pointer" }}>{e.l}</button>); })}
         </div>
       </Campo>
       <Campo etiqueta="Descripción"><Area data-campo="descripcion" value={f.descripcion || ""} onChange={set("descripcion")} maxLength={4000} /></Campo>
@@ -170,9 +170,9 @@ export function FormProyecto({ token, yo, esAdmin, perfiles, clientes, proyecto,
         <div style={{ fontSize: T.small, color: C.inkMuted, marginBottom: 8 }}>{nombrePerfil(f.responsable_id)} queda como jefe de proyecto.{!esAdmin && f.responsable_id !== yo ? " Tú quedas como editor." : ""} Los datos económicos los ve el responsable; a otros integrantes se les autoriza después, en la pestaña Equipo.</div>
         {equipo.map((m, i) => (
           <div key={m.usuario_id} data-integrante-form={m.usuario_id} style={{ display: "flex", gap: 8, alignItems: "center", background: C.paper, borderRadius: R.sm, padding: "8px 10px", marginBottom: 6 }}>
-            <span style={{ flex: 1, minWidth: 0, fontWeight: 700, fontSize: T.sm }}>{nombrePerfil(m.usuario_id)}</span>
+            <span style={{ flex: 1, minWidth: 0, fontWeight: 600, fontSize: T.sm }}>{nombrePerfil(m.usuario_id)}</span>
             <Selector style={{ width: 140, minHeight: 36 }} value={m.rol_proyecto} onChange={(e) => setEquipo(equipo.map((x, j) => (j === i ? { ...x, rol_proyecto: e.target.value } : x)))} opciones={ROLES} />
-            <button type="button" onClick={() => setEquipo(equipo.filter((_, j) => j !== i))} style={{ border: "none", background: "none", color: C.danger, fontWeight: 700, cursor: "pointer", minHeight: 36 }}>Quitar</button>
+            <button type="button" onClick={() => setEquipo(equipo.filter((_, j) => j !== i))} style={{ border: "none", background: "none", color: C.danger, fontWeight: 600, cursor: "pointer", minHeight: 36 }}>Quitar</button>
           </div>
         ))}
         {disponibles.length > 0 && (

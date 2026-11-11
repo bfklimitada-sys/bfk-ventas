@@ -346,15 +346,15 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
           const pasos = [["Datos del cliente", !!String(cot.institucion || "").trim(), "datos"], ["Dirección", dirOk, "datos"], ["Productos", cot.items.length > 0, "productos"],
             ["Verificación de despacho", despOk && calc.listo, "productos"], ["Precios", calc.listo && cot.items.length > 0, "precios"], ["EETT", pdf.listo, "eett"]];
           return <div data-pasos-cotizacion style={{ display: "flex", flexWrap: "wrap", gap: 4, margin: "8px 0 12px", fontSize: T.small }}>
-            {pasos.map(([t, ok, tab], i) => <button key={t} type="button" onClick={() => setPestana(tab)} style={{ border: `1px solid ${ok ? C.ok : C.border}`, background: ok ? C.okLight : C.card, color: ok ? C.okText : C.inkMuted, borderRadius: 999, padding: "3px 9px", cursor: "pointer", fontWeight: 700 }}>{ok ? "✓" : i + 1} {t}</button>)}
+            {pasos.map(([t, ok, tab], i) => <button key={t} type="button" onClick={() => setPestana(tab)} style={{ border: `1px solid ${ok ? C.ok : C.border}`, background: ok ? C.okLight : C.card, color: ok ? C.okText : C.inkMuted, borderRadius: 999, padding: "3px 9px", cursor: "pointer", fontWeight: 600 }}>{ok ? "✓" : i + 1} {t}</button>)}
           </div>;
         })()}
         {protegido && <AvisoLinea tono="info" icono="🔒" dato="cotizacion-protegida">Adjudicada: lo ofertado (productos, cantidades y precios) y el vínculo con la OC quedan protegidos. Puedes actualizar enlaces de compra y fichas técnicas y regenerar la EETT.</AvisoLinea>}
 
         <PanelPestana visible={pestana === "datos"} titulo="Datos">
           <Tarjeta padding="12px" data-bloque-direccion style={{ borderColor: dirOk ? C.ok : C.warn, background: dirOk ? C.card : C.warnLight }}>
-            <div style={{ fontSize: T.sm, fontWeight: 800, color: C.ink }}>Dirección de entrega del cliente</div>
-            <div style={{ fontSize: T.small, color: dirOk ? C.okText : C.warnText, fontWeight: 700, margin: "2px 0 8px" }}>{dirOk ? "✓ Registrada: los despachos se verifican contra esta dirección." : "Complétala antes de confirmar despachos (los productos se pueden ingresar igual; su despacho quedará «Por verificar»)."}</div>
+            <div style={{ fontSize: T.sm, fontWeight: 700, color: C.ink }}>Dirección de entrega del cliente</div>
+            <div style={{ fontSize: T.small, color: dirOk ? C.okText : C.warnText, fontWeight: 600, margin: "2px 0 8px" }}>{dirOk ? "✓ Registrada: los despachos se verifican contra esta dirección." : "Complétala antes de confirmar despachos (los productos se pueden ingresar igual; su despacho quedará «Por verificar»)."}</div>
             <Field label="Dirección de entrega"><input data-campo="direccion" value={cot.direccion_entrega} onChange={(e) => setDireccion({ direccion_entrega: e.target.value })} style={iStyle} placeholder="Calle, número, oficina/bodega" /></Field>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
               <Field label="Comuna / ciudad"><input data-campo="comuna" value={cot.comuna} onChange={(e) => setDireccion({ comuna: e.target.value })} style={iStyle} /></Field>
@@ -424,7 +424,7 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
           <Field label="Observaciones (internas)"><textarea rows={3} value={cot.observaciones} onChange={(e) => setCampo("observaciones", e.target.value)} style={{ ...iStyle, resize: "vertical" }} /></Field>
           {esAdmin && cot.id && cap.eliminar && (
             <div style={{ borderTop: `1px solid ${C.border}`, marginTop: 16, paddingTop: 12 }}>
-              <button type="button" data-eliminar-cotizacion onClick={() => { if (sucio) { showToast?.("Guarda o descarta los cambios antes de eliminar la cotización.", "error"); return; } setEliminar(true); }} style={{ border: `1px solid ${C.danger}`, background: "#fff", color: C.dangerText, borderRadius: 10, padding: "8px 14px", minHeight: 40, fontWeight: 700, cursor: "pointer" }}>Eliminar cotización</button>
+              <button type="button" data-eliminar-cotizacion onClick={() => { if (sucio) { showToast?.("Guarda o descarta los cambios antes de eliminar la cotización.", "error"); return; } setEliminar(true); }} style={{ border: `1px solid ${C.danger}`, background: "#fff", color: C.dangerText, borderRadius: 10, padding: "8px 14px", minHeight: 40, fontWeight: 600, cursor: "pointer" }}>Eliminar cotización</button>
               <div style={{ fontSize: T.small, color: C.inkFaint, marginTop: 4 }}>Solo administradores. Pide confirmación escrita; no se permite en adjudicadas.</div>
             </div>
           )}
@@ -459,13 +459,13 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
                 <div style={{ display: "flex", gap: 10 }}>
                   <ImagenFicha src={it.ficha.imagenes?.[0]} almacen={almacen} style={{ width: 56, height: 56, flexShrink: 0, borderRadius: R.sm, border: `1px solid ${C.border}` }} />
                   <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={{ fontSize: T.sm, fontWeight: 800, color: C.ink, lineHeight: 1.3, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{i + 1}. {it.ficha.nombre || "Sin nombre"}</div>
+                    <div style={{ fontSize: T.sm, fontWeight: 700, color: C.ink, lineHeight: 1.3, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{i + 1}. {it.ficha.nombre || "Sin nombre"}</div>
                     <div data-resumen-item style={{ fontSize: T.small, color: C.inkMuted, marginTop: 3, lineHeight: 1.5 }}>
                       <div>Proveedor: <b style={{ color: C.ink }}>{it.proveedor || "—"}</b> · Cantidad: <b style={{ color: C.ink }}>{l.cantidad}</b></div>
                       {Number(it.precio_origen) > 0
                         ? <div>Precio unitario de compra: <b style={{ color: C.ink, fontFamily: MONO }}>{m(it.precio_origen)}</b>{it.precio_incluye_iva === false ? " + IVA" : ""}</div>
-                        : <div style={{ color: C.warnText, fontWeight: 700 }}>Falta el precio de compra · toca Editar</div>}
-                      <div data-despacho-item>Despacho: {env ? <><b style={{ color: C.ink, fontFamily: MONO }}>{m(l.envio_asignado)}</b>{nComp > 1 ? ` (parte de ${m(env.monto)} compartido con ${nComp - 1} producto${nComp > 2 ? "s" : ""})` : ""} · <span style={{ color: envioConfirmado(env) ? C.okText : C.warnText, fontWeight: 700 }}>{ESTADOS_ENVIO[env.estado]?.label}</span></> : <span style={{ color: C.warnText, fontWeight: 700 }}>sin registrar</span>}</div>
+                        : <div style={{ color: C.warnText, fontWeight: 600 }}>Falta el precio de compra · toca Editar</div>}
+                      <div data-despacho-item>Despacho: {env ? <><b style={{ color: C.ink, fontFamily: MONO }}>{m(l.envio_asignado)}</b>{nComp > 1 ? ` (parte de ${m(env.monto)} compartido con ${nComp - 1} producto${nComp > 2 ? "s" : ""})` : ""} · <span style={{ color: envioConfirmado(env) ? C.okText : C.warnText, fontWeight: 600 }}>{ESTADOS_ENVIO[env.estado]?.label}</span></> : <span style={{ color: C.warnText, fontWeight: 600 }}>sin registrar</span>}</div>
                       <div>Costo de adquisición: <b style={{ color: C.ink, fontFamily: MONO }}>{m(l.costo_bruto)}</b></div>
                     </div>
                     <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>
@@ -478,9 +478,9 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
                 <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap", alignItems: "center" }}>
                   {enlaceValido(it.enlace)
                     ? (protegido
-                      ? <a data-ir-a-comprar href={it.enlace.trim()} target="_blank" rel="noopener noreferrer" style={{ background: C.teal, color: "#fff", borderRadius: 10, padding: "8px 16px", fontWeight: 800, fontSize: T.sm, textDecoration: "none", minHeight: 40, display: "inline-flex", alignItems: "center" }}>🛒 Ir a comprar</a>
-                      : <a data-abrir-publicacion href={it.enlace.trim()} target="_blank" rel="noopener noreferrer" style={{ border: `1px solid ${C.teal}`, color: C.tealDark, borderRadius: 10, padding: "6px 12px", fontWeight: 700, fontSize: T.small, textDecoration: "none", minHeight: 34, display: "inline-flex", alignItems: "center" }}>Abrir publicación ↗</a>)
-                    : <span data-sin-enlace style={{ fontSize: T.small, color: C.warnText, fontWeight: 700 }}>Sin enlace registrado · <button type="button" onClick={() => abrirEditar(it)} style={{ border: "none", background: "none", color: C.tealDark, textDecoration: "underline", cursor: "pointer", padding: 0, fontSize: T.small }}>Agregar enlace</button></span>}
+                      ? <a data-ir-a-comprar href={it.enlace.trim()} target="_blank" rel="noopener noreferrer" style={{ background: C.teal, color: "#fff", borderRadius: 10, padding: "8px 16px", fontWeight: 700, fontSize: T.sm, textDecoration: "none", minHeight: 40, display: "inline-flex", alignItems: "center" }}>🛒 Ir a comprar</a>
+                      : <a data-abrir-publicacion href={it.enlace.trim()} target="_blank" rel="noopener noreferrer" style={{ border: `1px solid ${C.teal}`, color: C.tealDark, borderRadius: 10, padding: "6px 12px", fontWeight: 600, fontSize: T.small, textDecoration: "none", minHeight: 34, display: "inline-flex", alignItems: "center" }}>Abrir publicación ↗</a>)
+                    : <span data-sin-enlace style={{ fontSize: T.small, color: C.warnText, fontWeight: 600 }}>Sin enlace registrado · <button type="button" onClick={() => abrirEditar(it)} style={{ border: "none", background: "none", color: C.tealDark, textDecoration: "underline", cursor: "pointer", padding: 0, fontSize: T.small }}>Agregar enlace</button></span>}
                   <div style={{ flex: 1 }} />
                   {i > 0 && !protegido && <BotonSecundario aria-label="Subir" onClick={() => mover(i, -1)} style={{ minHeight: 34, padding: "4px 10px" }}>↑</BotonSecundario>}
                   {!protegido && <BotonSecundario onClick={() => quitar(it.key)} style={{ minHeight: 34, padding: "4px 10px", color: C.dangerText }}>Quitar</BotonSecundario>}
@@ -499,10 +499,10 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
             const l = calc.lineas[i];
             return (
               <Tarjeta key={it.key} padding="14px" data-precio-item={i + 1} style={{ borderColor: l.avisos.length ? C.warn : C.teal }}>
-                <div style={{ fontSize: T.sm, fontWeight: 800, color: C.ink, lineHeight: 1.3 }}>{i + 1}. {it.ficha.nombre || "Producto"}</div>
-                <div style={{ fontSize: T.small, fontWeight: 800, color: C.tealDark, letterSpacing: 0.4, marginTop: 10 }}>{calc.exenta ? "VALOR UNITARIO EXENTO PARA MERCADO PÚBLICO" : "VALOR UNITARIO NETO PARA MERCADO PÚBLICO"}</div>
+                <div style={{ fontSize: T.sm, fontWeight: 700, color: C.ink, lineHeight: 1.3 }}>{i + 1}. {it.ficha.nombre || "Producto"}</div>
+                <div style={{ fontSize: T.small, fontWeight: 700, color: C.tealDark, letterSpacing: 0.4, marginTop: 10 }}>{calc.exenta ? "VALOR UNITARIO EXENTO PARA MERCADO PÚBLICO" : "VALOR UNITARIO NETO PARA MERCADO PÚBLICO"}</div>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginTop: 2 }}>
-                  <span data-unitario={i + 1} style={{ fontSize: 34, fontWeight: 900, color: l.avisos.length ? C.inkMuted : C.ink, fontFamily: MONO, letterSpacing: -0.5 }}>{m(l.unitario_neto)}</span>
+                  <span data-unitario={i + 1} style={{ fontSize: 34, fontWeight: 700, color: l.avisos.length ? C.inkMuted : C.ink, fontFamily: MONO, letterSpacing: -0.5 }}>{m(l.unitario_neto)}</span>
                   <BotonPrincipal data-copiar-valor={i + 1} onClick={() => copiarUno(i)} disabled={!!l.avisos.length} style={{ minHeight: 40, opacity: l.avisos.length ? 0.5 : 1 }}>Copiar valor</BotonPrincipal>
                 </div>
                 <div style={{ fontSize: T.sm, color: C.inkMuted, marginTop: 6, lineHeight: 1.6 }}>
@@ -561,12 +561,12 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
             return (
               <Tarjeta key={p.key} padding="10px 12px" data-revision-eett={i + 1}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start" }}>
-                  <div style={{ fontSize: T.sm, fontWeight: 800, color: C.ink, minWidth: 0 }}>Ficha {i + 1}: {it.ficha.nombre || "Sin nombre"}</div>
+                  <div style={{ fontSize: T.sm, fontWeight: 700, color: C.ink, minWidth: 0 }}>Ficha {i + 1}: {it.ficha.nombre || "Sin nombre"}</div>
                   <Badge tono={p.bloqueos.length ? "danger" : p.aprobado ? "ok" : "warn"}>{p.bloqueos.length ? "Bloqueada" : p.aprobado ? "Lista" : "Revisar"}</Badge>
                 </div>
                 {p.avisos.map((a, j) => <div key={j} style={{ fontSize: T.small, color: a.nivel === "bloqueo" ? C.dangerText : C.warnText, marginTop: 4 }}>• {a.mensaje}</div>)}
                 {p.revisar.length > 0 && !p.bloqueos.length && (
-                  <label data-aprobar-ficha style={{ display: "flex", alignItems: "center", gap: 8, fontSize: T.sm, marginTop: 8, minHeight: 36, fontWeight: 700 }}>
+                  <label data-aprobar-ficha style={{ display: "flex", alignItems: "center", gap: 8, fontSize: T.sm, marginTop: 8, minHeight: 36, fontWeight: 600 }}>
                     <input type="checkbox" checked={!!it.ficha_aprobada} onChange={(e) => cambiar((c) => { c.items[i].ficha_aprobada = e.target.checked; return c; })} />
                     Revisé estos avisos y apruebo la ficha tal como está
                   </label>
@@ -618,7 +618,7 @@ export function SelectorBiblioteca({ almacen, onElegir, onCerrar }) {
         <Tarjeta key={p.id} onClick={() => onElegir(p)} padding="8px 10px" data-producto-biblioteca={p.nombre}>
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
             <ImagenFicha src={p.imagenes?.[0]} almacen={almacen} style={{ width: 44, height: 44, flexShrink: 0, border: `1px solid ${C.border}`, borderRadius: R.sm }} />
-            <div style={{ minWidth: 0 }}><div style={{ fontSize: T.sm, fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.nombre}</div><div style={{ fontSize: T.small, color: C.inkMuted }}>{[p.marca, p.modelo].filter(Boolean).join(" · ")}</div></div>
+            <div style={{ minWidth: 0 }}><div style={{ fontSize: T.sm, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.nombre}</div><div style={{ fontSize: T.small, color: C.inkMuted }}>{[p.marca, p.modelo].filter(Boolean).join(" · ")}</div></div>
           </div>
         </Tarjeta>
       ))}

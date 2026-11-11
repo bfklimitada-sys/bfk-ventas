@@ -11,11 +11,11 @@ function ResumenAtraso({ titulo, monto, color, fondo, onVerAlertas }) {
   // Aviso compacto de una línea (el detalle está en Alertas)
   return (
     <div data-resumen-atraso style={{background:fondo,border:`1px solid ${color}33`,borderRadius:8,marginBottom:8,display:"flex",alignItems:"center",gap:8,padding:"4px 4px 4px 12px",minHeight:40}}>
-      <span style={{flex:1,minWidth:0,display:"flex",alignItems:"center",gap:6,color,fontWeight:700,fontSize:13,lineHeight:1.3}}>
+      <span style={{flex:1,minWidth:0,display:"flex",alignItems:"center",gap:6,color,fontWeight:600,fontSize:13,lineHeight:1.3}}>
         <Ic n="⚠"/>
-        <span>{titulo}{monto>0&&<span style={{fontFamily:MONO,fontWeight:800}}> · {fmt.money(monto)}</span>}</span>
+        <span>{titulo}{monto>0&&<span style={{fontFamily:MONO,fontWeight:700}}> · {fmt.money(monto)}</span>}</span>
       </span>
-      {onVerAlertas&&<button onClick={onVerAlertas} style={{background:"none",border:"none",cursor:"pointer",color,fontWeight:800,fontSize:12,minHeight:36,padding:"0 8px",whiteSpace:"nowrap",textDecoration:"underline"}}>Ver alertas</button>}
+      {onVerAlertas&&<button onClick={onVerAlertas} style={{background:"none",border:"none",cursor:"pointer",color,fontWeight:700,fontSize:12,minHeight:36,padding:"0 8px",whiteSpace:"nowrap",textDecoration:"underline"}}>Ver alertas</button>}
     </div>
   );
 }
@@ -132,9 +132,9 @@ export function PanelCalendario({ ocs, onMarcarFecha, onVerAlertas, eventosExtra
       )}
 
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-        <button onClick={()=>cambiarMes(-1)} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 12px",fontSize:14,cursor:"pointer"}}><Ic n="chevL"/></button>
-        <div style={{fontWeight:800,fontSize:14}}>{MESES[mes]} {anio}</div>
-        <button onClick={()=>cambiarMes(1)} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 12px",fontSize:14,cursor:"pointer"}}><Ic n="chevR"/></button>
+        <button aria-label="Mes anterior" onClick={()=>cambiarMes(-1)} style={{background:C.card,border:`1px solid ${C.borderFuerte}`,borderRadius:8,padding:"6px 12px",fontSize:14,cursor:"pointer",color:C.ink}}><Ic n="chevL"/></button>
+        <div style={{fontWeight:700,fontSize:16,color:C.ink}}>{MESES[mes]} {anio}</div>
+        <button aria-label="Mes siguiente" onClick={()=>cambiarMes(1)} style={{background:C.card,border:`1px solid ${C.borderFuerte}`,borderRadius:8,padding:"6px 12px",fontSize:14,cursor:"pointer",color:C.ink}}><Ic n="chevR"/></button>
       </div>
 
       <div style={{display:"flex",gap:12,marginBottom:8,fontSize:12,color:C.inkMuted}}>
@@ -147,7 +147,7 @@ export function PanelCalendario({ ocs, onMarcarFecha, onVerAlertas, eventosExtra
 
       <div style={{background:C.card,borderRadius:12,padding:"10px 8px",border:`1px solid ${C.border}`}}>
         <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2,marginBottom:4}}>
-          {DIAS.map((d,i)=><div key={i} style={{textAlign:"center",fontSize:12,fontWeight:700,color:C.inkFaint}}>{d}</div>)}
+          {DIAS.map((d,i)=><div key={i} style={{textAlign:"center",fontSize:12,fontWeight:600,color:C.inkFaint}}>{d}</div>)}
         </div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2}}>
           {celdas.map((d,i)=>{
@@ -161,12 +161,12 @@ export function PanelCalendario({ ocs, onMarcarFecha, onVerAlertas, eventosExtra
             const esHoy=d===hoyD;
             const sel=d===diaSel;
             return (
-              <button key={i} onClick={()=>setDiaSel(sel?null:d)} style={{
-                aspectRatio:"1",border:sel?`2px solid ${C.teal}`:esHoy?`2px solid ${C.ink}`:`1px solid ${C.border}`,
-                borderRadius:8,background:sel?C.tealLight:C.paper,cursor:"pointer",
-                display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:1,padding:2,
+              <button key={i} data-compact className="bfk-dia" aria-pressed={sel} aria-current={esHoy?"date":undefined} onClick={()=>setDiaSel(sel?null:d)} style={{
+                border:sel?`1px solid ${C.teal}`:esHoy?`1px solid ${C.ink}`:"1px solid transparent",
+                borderRadius:8,background:sel?C.tealLight:"transparent",cursor:"pointer",
+                display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:3,padding:2,
               }}>
-                <span style={{fontSize:12,fontWeight:esHoy||sel?800:500,color:C.ink}}>{d}</span>
+                <span style={{fontSize:13,fontWeight:esHoy||sel?700:500,color:sel?C.tealDark:C.ink}}>{d}</span>
                 <div style={{display:"flex",gap:2}}>
                   {tieneEst&&<span style={{width:5,height:5,borderRadius:"50%",background:C.info}} />}
                   {tieneReal&&<span style={{width:5,height:5,borderRadius:"50%",background:C.ok}} />}
@@ -183,8 +183,8 @@ export function PanelCalendario({ ocs, onMarcarFecha, onVerAlertas, eventosExtra
       {diaSel&&(
         <div style={{background:C.card,borderRadius:12,padding:"12px 14px",marginTop:10,border:`1px solid ${C.border}`}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-            <span style={{fontWeight:800,fontSize:13}}>{diaSel} de {MESES[mes]}</span>
-            <button onClick={()=>{setMarcando(v=>!v);setErr("");}} style={{fontSize:12,background:C.teal,color:"#fff",border:"none",borderRadius:8,padding:"5px 10px",fontWeight:700,cursor:"pointer"}}>
+            <span style={{fontWeight:700,fontSize:13}}>{diaSel} de {MESES[mes]}</span>
+            <button onClick={()=>{setMarcando(v=>!v);setErr("");}} style={{fontSize:12,background:C.teal,color:"#fff",border:"none",borderRadius:8,padding:"5px 10px",fontWeight:600,cursor:"pointer"}}>
               {marcando?"Cancelar":"+ Marcar entrega estimada"}
             </button>
           </div>
@@ -194,7 +194,7 @@ export function PanelCalendario({ ocs, onMarcarFecha, onVerAlertas, eventosExtra
               <Field label="Código de la OC">
                 <input style={iMono} value={codOC} onChange={e=>setCodOC(e.target.value)} placeholder="ej: 2436-690-AG26" />
               </Field>
-              {err&&<div style={{fontSize:12,color:C.dangerText,fontWeight:600,marginBottom:8}}>{err}</div>}
+              {err&&<div style={{fontSize:12,color:C.dangerText,fontWeight:500,marginBottom:8}}>{err}</div>}
               <button onClick={handleMarcar} disabled={saving} style={btnP(saving?C.inkFaint:C.teal)}>
                 {saving?"Guardando…":`✓ Marcar entrega estimada para el ${diaSel}/${mes+1}`}
               </button>
@@ -203,13 +203,13 @@ export function PanelCalendario({ ocs, onMarcarFecha, onVerAlertas, eventosExtra
 
           {(estimadasPorDia[kSel]||[]).length>0&&(
             <div style={{marginBottom:8}}>
-              <div style={{fontSize:12,fontWeight:700,color:C.info,textTransform:"uppercase",marginBottom:4}}>● Entregas estimadas</div>
+              <div style={{fontSize:12,fontWeight:600,color:C.info,textTransform:"uppercase",marginBottom:4}}>● Entregas estimadas</div>
               {(estimadasPorDia[kSel]||[]).map(oc=>{
                 const entregada=estaEntregada(oc);
                 return (
                   <div key={oc.id} style={{fontSize:12,display:"flex",justifyContent:"space-between",marginBottom:3}}>
-                    <span style={{fontFamily:MONO,fontWeight:700}}>{oc.numero_oc}</span>
-                    <span data-estado-agenda style={{color:entregada?C.ok:C.warn,fontSize:12,fontWeight:600}}>{entregada?"✓ Entregada":estadoOperativo(oc).texto}</span>
+                    <span style={{fontFamily:MONO,fontWeight:600}}>{oc.numero_oc}</span>
+                    <span data-estado-agenda style={{color:entregada?C.ok:C.warn,fontSize:12,fontWeight:500}}>{entregada?"✓ Entregada":estadoOperativo(oc).texto}</span>
                   </div>
                 );
               })}
@@ -217,10 +217,10 @@ export function PanelCalendario({ ocs, onMarcarFecha, onVerAlertas, eventosExtra
           )}
           {(realesPorDia[kSel]||[]).length>0&&(
             <div>
-              <div style={{fontSize:12,fontWeight:700,color:C.okText,textTransform:"uppercase",marginBottom:4}}>● Entregas realizadas</div>
+              <div style={{fontSize:12,fontWeight:600,color:C.okText,textTransform:"uppercase",marginBottom:4}}>● Entregas realizadas</div>
               {(realesPorDia[kSel]||[]).map(oc=>(
                 <div key={oc.id} style={{fontSize:12,display:"flex",justifyContent:"space-between",marginBottom:3}}>
-                  <span style={{fontFamily:MONO,fontWeight:700}}>{oc.numero_oc}</span>
+                  <span style={{fontFamily:MONO,fontWeight:600}}>{oc.numero_oc}</span>
                   <span style={{color:C.okText,fontSize:12}}>✓</span>
                 </div>
               ))}
@@ -228,10 +228,10 @@ export function PanelCalendario({ ocs, onMarcarFecha, onVerAlertas, eventosExtra
           )}
           {(vencenPorDia[kSel]||[]).length>0&&(
             <div style={{marginTop:8}}>
-              <div style={{fontSize:12,fontWeight:700,color:C.warnText,textTransform:"uppercase",marginBottom:4}}>● Vencen facturas</div>
+              <div style={{fontSize:12,fontWeight:600,color:C.warnText,textTransform:"uppercase",marginBottom:4}}>● Vencen facturas</div>
               {(vencenPorDia[kSel]||[]).map(({oc,evF})=>(
                 <div key={oc.id} style={{fontSize:12,display:"flex",justifyContent:"space-between",marginBottom:3}}>
-                  <span style={{fontFamily:MONO,fontWeight:700}}>{oc.numero_oc}</span>
+                  <span style={{fontFamily:MONO,fontWeight:600}}>{oc.numero_oc}</span>
                   <span style={{color:C.inkMuted}}>Factura {evF.numero_factura||"—"} · {fmt.money((oc.monto_facturado||0)-(oc.monto_cobrado||0))}</span>
                 </div>
               ))}
@@ -239,10 +239,10 @@ export function PanelCalendario({ ocs, onMarcarFecha, onVerAlertas, eventosExtra
           )}
           {(promesasPorDia[kSel]||[]).length>0&&(
             <div style={{marginTop:8}}>
-              <div style={{fontSize:12,fontWeight:700,color:C.purple,textTransform:"uppercase",marginBottom:4}}>● Promesas de pago</div>
+              <div style={{fontSize:12,fontWeight:600,color:C.purple,textTransform:"uppercase",marginBottom:4}}>● Promesas de pago</div>
               {(promesasPorDia[kSel]||[]).map(({oc})=>(
                 <div key={oc.id} style={{fontSize:12,display:"flex",justifyContent:"space-between",marginBottom:3}}>
-                  <span style={{fontFamily:MONO,fontWeight:700}}>{oc.numero_oc}</span>
+                  <span style={{fontFamily:MONO,fontWeight:600}}>{oc.numero_oc}</span>
                   <span style={{color:C.inkMuted}}>{oc.cliente||""}</span>
                 </div>
               ))}
@@ -250,10 +250,10 @@ export function PanelCalendario({ ocs, onMarcarFecha, onVerAlertas, eventosExtra
           )}
           {(extraPorDia[kSel]||[]).length>0&&(
             <div style={{marginTop:8}} data-agenda-vp>
-              <div style={{fontSize:12,fontWeight:700,color:C.tealDark,textTransform:"uppercase",marginBottom:4}}>● Ventas privadas</div>
+              <div style={{fontSize:12,fontWeight:600,color:C.tealDark,textTransform:"uppercase",marginBottom:4}}>● Ventas privadas</div>
               {(extraPorDia[kSel]||[]).map((e,i)=>(
                 <button key={i} type="button" data-evento-vp={e.tipo} onClick={()=>onAbrirExtra&&onAbrirExtra(e.destino)} style={{width:"100%",background:"none",border:"none",padding:"2px 0",cursor:"pointer",fontSize:12,display:"flex",justifyContent:"space-between",gap:8,textAlign:"left"}}>
-                  <span style={{fontWeight:700,color:C.ink}}>{e.titulo}</span>
+                  <span style={{fontWeight:600,color:C.ink}}>{e.titulo}</span>
                   <span style={{color:C.inkMuted}}>{e.detalle||""}{e.monto>0?` · ${fmt.money(e.monto)}`:""}</span>
                 </button>
               ))}

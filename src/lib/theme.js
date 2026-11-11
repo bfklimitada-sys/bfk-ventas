@@ -1,7 +1,7 @@
 
 export const C = {
   night:"#0B1120", nightSoft:"#141B2E", paper:"#F7F8FA", card:"#FFFFFF",
-  border:"#E2E5EB", borderDark:"#232C42", ink:"#0F172A", inkMuted:"#475569", inkFaint:"#64748B", inkOnDark:"#94A3B8", okText:"#047857", warnText:"#B45309", dangerText:"#DC2626",
+  border:"#E2E5EB", borderFuerte:"#CFD5DE", borderDark:"#232C42", relleno:"#EEF1F5", ink:"#0F172A", inkMuted:"#475569", inkFaint:"#64748B", inkOnDark:"#94A3B8", okText:"#047857", warnText:"#B45309", dangerText:"#DC2626",
   teal:"#14B8A6", tealLight:"#E6FBF8", tealDark:"#0D9488",
   ok:"#10B981", okLight:"#E7F8F0", warn:"#F59E0B", warnLight:"#FEF3E2",
   danger:"#EF4444", dangerLight:"#FEEAEA", transit:"#6366F1", transitLight:"#EEEDFC",
@@ -20,10 +20,12 @@ export const R = { sm:8, md:12, lg:12, xl:16, pill:999 };
 export const T = { min:12, small:12, sm:13, body:14, title:16, h2:20, h1:28 };
 export const TOUCH = 44;
 
+// Orden visual (11/2026): las tarjetas son planas (solo borde). La sombra queda para lo que flota sobre la pantalla.
 export const sombra = {
-  card:"0 1px 2px rgba(15,23,42,0.04), 0 1px 3px rgba(15,23,42,0.06)",
+  card:"none",
   panel:"-12px 0 40px rgba(15,23,42,0.18)",
   flotante:"0 8px 24px rgba(0,0,0,0.25)",
+  ventana:"0 24px 60px rgba(11,17,32,0.28)",
 };
 
 // Estilo de tarjeta reutilizable
@@ -41,12 +43,28 @@ export const fmt = {
   diasDesde: (fechaStr) => { if(!fechaStr) return null; const hoy=new Date(); hoy.setHours(0,0,0,0); const f=new Date(fechaStr+"T00:00:00"); return Math.floor((hoy-f)/(1000*60*60*24)); },
 };
 
-export const iStyle = { width:"100%", padding:"10px 12px", minHeight:42, borderRadius:R.sm, border:`1.5px solid ${C.border}`, fontSize:14, color:C.ink, background:C.card, boxSizing:"border-box", fontFamily:SANS };
+export const iStyle = { width:"100%", padding:"10px 12px", minHeight:42, borderRadius:R.sm, border:`1px solid ${C.borderFuerte}`, fontSize:14, color:C.ink, background:C.card, boxSizing:"border-box", fontFamily:SANS };
 
 export const iMono = { ...iStyle, fontFamily:MONO };
 
 export const selStyle = { ...iStyle, cursor:"pointer" };
 
-export const btnP = (bg=C.teal) => ({ padding:"11px 16px", minHeight:TOUCH, borderRadius:R.sm, border:"none", background:bg, color:"#fff", fontWeight:700, fontSize:14, cursor:"pointer", width:"100%" });
+// Botón principal de un formulario. Un solo color de marca: el color ya no distingue formularios (antes verde, azul,
+// índigo, ámbar o morado según la ventana). Se conservan el rojo (acción destructiva) y el azul noche;
+// el gris (ocupado o no disponible) se muestra apagado en vez de un bloque oscuro.
+const ACENTOS_A_MARCA = new Set([C.info, C.ok, C.purple, C.transit, C.tealDark, C.warn]);
+const APAGADOS = new Set([C.inkFaint, C.inkMuted]);
+export const btnP = (bg=C.teal) => {
+  const apagado = APAGADOS.has(bg);
+  return { padding:"11px 16px", minHeight:TOUCH, borderRadius:R.sm, border:"none", background:apagado?C.relleno:ACENTOS_A_MARCA.has(bg)?C.teal:bg, color:apagado?C.inkFaint:"#fff", fontWeight:600, fontSize:14, cursor:apagado?"default":"pointer", width:"100%" };
+};
 
-export const btnG = { padding:"11px 16px", minHeight:TOUCH, borderRadius:R.sm, border:`1.5px solid ${C.border}`, background:C.card, color:C.ink, fontWeight:600, fontSize:14, cursor:"pointer" };
+export const btnG = { padding:"11px 16px", minHeight:TOUCH, borderRadius:R.sm, border:`1px solid ${C.borderFuerte}`, background:C.card, color:C.ink, fontWeight:500, fontSize:14, cursor:"pointer" };
+
+// Botón pequeño dentro de una fila o tarjeta (Editar, Quitar, Ver…). tipo: "sec" (por defecto) · "marca" · "peligro".
+export const btnMini = (tipo="sec") => ({ minHeight:32, padding:"5px 10px", borderRadius:R.sm, fontSize:12, fontWeight:500, cursor:"pointer", whiteSpace:"nowrap",
+  border:`1px solid ${tipo==="peligro"?"#F3C5C5":C.border}`, background:C.card, color:tipo==="peligro"?C.dangerText:tipo==="marca"?C.tealDark:C.inkMuted });
+
+// Etiqueta de un campo de formulario y botón de cerrar de una ventana: los mismos en Mercado Público, Ventas privadas y Proyectos.
+export const estiloEtiqueta = { display:"block", fontSize:13, fontWeight:600, color:C.inkMuted, marginBottom:5, lineHeight:1.3 };
+export const estiloCerrar = { width:40, height:40, minHeight:40, flexShrink:0, borderRadius:R.sm, border:"none", background:"transparent", color:C.inkMuted, cursor:"pointer", fontSize:16, display:"flex", alignItems:"center", justifyContent:"center" };

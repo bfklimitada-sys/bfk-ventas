@@ -35,9 +35,9 @@ export function PanelBanco({ ocs, financiadores, gastos, pagosVendedor, ivaMensu
             {r.conciliacion.hayCorte ? (<>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 8, color: C.inkMuted, padding: "4px 0" }}><span>Saldo informado del banco al {fmt.date(r.conciliacion.corte)}</span><Monto tam="sm">{fmt.money(r.conciliacion.saldoBancoCorte)}</Monto></div>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 8, color: C.inkMuted, padding: "4px 0" }}><span>+ Movimientos registrados después de esa fecha ({r.conciliacion.nPosteriores})</span><Monto tam="sm">{fmt.money(r.conciliacion.movPosteriores)}</Monto></div>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontWeight: 700, padding: "4px 0" }}><span>= Saldo esperado en el banco</span><Monto tam="sm">{fmt.money(r.conciliacion.esperado)}</Monto></div>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontWeight: 700, padding: "4px 0" }}><span>Caja registrada BFK</span><Monto tam="sm">{fmt.money(r.caja)}</Monto></div>
-              <div data-pendiente-conciliacion style={{ display: "flex", justifyContent: "space-between", gap: 8, fontWeight: 800, color: conciliado ? C.okText : C.warnText, marginTop: 4, paddingTop: 6, borderTop: `1px solid ${C.border}` }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontWeight: 600, padding: "4px 0" }}><span>= Saldo esperado en el banco</span><Monto tam="sm">{fmt.money(r.conciliacion.esperado)}</Monto></div>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontWeight: 600, padding: "4px 0" }}><span>Caja registrada BFK</span><Monto tam="sm">{fmt.money(r.caja)}</Monto></div>
+              <div data-pendiente-conciliacion style={{ display: "flex", justifyContent: "space-between", gap: 8, fontWeight: 700, color: conciliado ? C.okText : C.warnText, marginTop: 4, paddingTop: 6, borderTop: `1px solid ${C.border}` }}>
                 <span>{conciliado ? "Conciliado" : "Diferencia banco − caja registrada"}{!conciliado && <Ayuda etiqueta="Qué significa la diferencia">La caja registrada incluye operaciones que no pasaron por BancoEstado (compras anteriores a la apertura o pagadas por un socio, pagos compensados fuera del banco) y movimientos del banco sin registro en BFK. No es pérdida ni ganancia ni dinero adicional: se explica con el expediente de conciliación. El saldo proyectado parte del saldo del banco.</Ayuda>}</span>
                 <Monto tam="sm">{fmt.money(r.diferenciaBancoCaja)}</Monto>
               </div>
@@ -53,7 +53,7 @@ export function PanelBanco({ ocs, financiadores, gastos, pagosVendedor, ivaMensu
         <Seccion nota="Importa la cartola de BancoEstado (Excel) para registrar cobros, egresos y retiros que aún no están en BFK.">
           <BotonPrincipal data-importar-cartola onClick={onImportarCartola} style={{ width: "100%", justifyContent: "center", marginBottom: 12 }}><Ic n="🏦" /> Importar y conciliar cartola</BotonPrincipal>
           <Tarjeta padding="12px 14px">
-            <div style={{ fontSize: 12, fontWeight: 800, color: C.inkMuted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Última cartola importada</div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.inkMuted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Última cartola importada</div>
             {ultimaCartola
               ? <div data-ultima-cartola style={{ fontSize: 13, color: C.ink }}>Del {fmt.date(String(ultimaCartola.fecha_desde || "").slice(0, 10))} al {fmt.date(String(ultimaCartola.fecha_hasta || "").slice(0, 10))}{ultimaCartola.n_movimientos != null ? ` · ${ultimaCartola.n_movimientos} movimientos` : ""}</div>
               : <div style={{ fontSize: 13, color: C.inkFaint }}>Aún no se ha importado ninguna cartola.</div>}
@@ -62,7 +62,7 @@ export function PanelBanco({ ocs, financiadores, gastos, pagosVendedor, ivaMensu
             <Desplegable dato="banco-mensual" titulo="Movimiento mensual de la cuenta" resumen={`${bancoMensual.length} mes${bancoMensual.length > 1 ? "es" : ""}`}>
               {bancoMensual.map((m) => (
                 <div key={m.id} style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 4, padding: "7px 0", borderBottom: `1px solid ${C.border}`, fontSize: 12 }}>
-                  <span style={{ fontWeight: 700, color: C.ink }}>{m.mes ? `${MESES[m.mes - 1]}-${m.anio}` : m.id}</span>
+                  <span style={{ fontWeight: 600, color: C.ink }}>{m.mes ? `${MESES[m.mes - 1]}-${m.anio}` : m.id}</span>
                   <span style={{ fontFamily: MONO, color: C.inkMuted, textAlign: "right" }}>entró {fmt.money(m.entro)} · salió {fmt.money(m.salio)}{m.saldo_cierre != null ? ` · cierre ${fmt.money(m.saldo_cierre)}` : ""}</span>
                 </div>
               ))}
@@ -72,7 +72,7 @@ export function PanelBanco({ ocs, financiadores, gastos, pagosVendedor, ivaMensu
       </PanelPestana>
 
       <PanelPestana visible={pestana === "revisar"} titulo="Registros por revisar">
-        {nAlertas === 0 && <Tarjeta><span style={{ fontSize: 14, color: C.okText, fontWeight: 700 }}>✓ Sin posibles duplicados con la cartola</span></Tarjeta>}
+        {nAlertas === 0 && <Tarjeta><span style={{ fontSize: 14, color: C.okText, fontWeight: 600 }}>✓ Sin posibles duplicados con la cartola</span></Tarjeta>}
         <AlertasCartola ocs={ocs} gastos={gastos} pagosVendedor={pagosVendedor} pagoFinSueltos={pagoFinSueltos} aportes={aportes} onQuitar={onQuitarAlertaCartola} />
       </PanelPestana>
     </div>

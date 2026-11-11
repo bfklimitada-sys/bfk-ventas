@@ -44,7 +44,7 @@ export function ImportarCompraAgil({ cot, token, onAplicar, deshabilitado }) {
 
   return (
     <Tarjeta padding="12px" data-importar-compra-agil style={{ borderColor: C.teal }}>
-      <div style={{ fontSize: T.sm, fontWeight: 800, color: C.ink, marginBottom: 6 }}>Enlace o código de Compra Ágil</div>
+      <div style={{ fontSize: T.sm, fontWeight: 700, color: C.ink, marginBottom: 6 }}>Enlace o código de Compra Ágil</div>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
         <input data-entrada-compra-agil value={entrada} onChange={(e) => { setEntrada(e.target.value); setError(""); }} onKeyDown={(e) => { if (e.key === "Enter") consultar(); }} disabled={deshabilitado || consultando}
           placeholder="https://… o 3390-246-COT26" style={{ ...iStyle, flex: "1 1 220px", width: "auto" }} />
@@ -65,9 +65,9 @@ export function ImportarCompraAgil({ cot, token, onAplicar, deshabilitado }) {
               <label key={f.campo} data-fila-importar={f.campo} style={{ display: "flex", gap: 8, alignItems: "flex-start", padding: "8px 0", borderBottom: `1px solid ${C.border}`, fontSize: T.sm, cursor: "pointer" }}>
                 <input type="checkbox" checked={marcado(f)} onChange={(e) => setVista((v) => ({ ...v, marcados: { ...v.marcados, [f.campo]: e.target.checked } }))} style={{ marginTop: 3 }} />
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ fontWeight: 800, color: C.ink }}>{f.etiqueta}</div>
+                  <div style={{ fontWeight: 700, color: C.ink }}>{f.etiqueta}</div>
                   <div style={{ color: C.ink, wordBreak: "break-word" }}>{mostrar(f.campo, f.valor)}</div>
-                  {f.sobrescribe && <div data-sobrescribe style={{ color: C.warnText, fontWeight: 700, marginTop: 2 }}>Reemplazaría el valor actual: {mostrar(f.campo, f.actual)}</div>}
+                  {f.sobrescribe && <div data-sobrescribe style={{ color: C.warnText, fontWeight: 600, marginTop: 2 }}>Reemplazaría el valor actual: {mostrar(f.campo, f.actual)}</div>}
                   {f.campo === "requerimientos" && (
                     <div style={{ marginTop: 4 }}>{f.valor.map((p, i) => (
                       <div key={i} style={{ fontSize: T.small, color: C.inkMuted, background: C.paper, borderRadius: R.sm, padding: "4px 8px", marginTop: 4 }}>

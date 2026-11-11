@@ -19,7 +19,7 @@ export function PestanaHistorial({ token, proyecto: p, nombres, version }) {
         const d = describirHistorial(h, nombres);
         return (
           <div key={h.id} data-historial={h.tabla} data-historial-accion={h.accion} style={{ borderLeft: `3px solid ${h.accion === "crear" ? C.teal : h.accion === "eliminar" ? C.danger : C.border}`, padding: "8px 12px", marginBottom: S.sm, background: "transparent" }}>
-            <div style={{ fontWeight: 800, color: C.ink, fontSize: T.sm, overflowWrap: "anywhere" }}>{d.titulo}</div>
+            <div style={{ fontWeight: 700, color: C.ink, fontSize: T.sm, overflowWrap: "anywhere" }}>{d.titulo}</div>
             <div style={{ fontSize: T.small, color: C.inkMuted }}>{h.usuario_nombre || (h.usuario_id ? nombres[h.usuario_id] || "Usuario" : "Sistema")} · {new Date(h.fecha).toLocaleString("es-CL", { dateStyle: "short", timeStyle: "short" })}</div>
             {d.detalles.length > 0 && (
               <ul style={{ margin: "4px 0 0", paddingLeft: 18, fontSize: T.small, color: C.ink, lineHeight: 1.5 }}>

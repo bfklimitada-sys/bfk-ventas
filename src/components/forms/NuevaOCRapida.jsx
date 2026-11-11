@@ -182,8 +182,8 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
 
   const Dato = ({ label, valor, alerta }) => (
     <div style={{ marginBottom: 7 }}>
-      <div style={{ fontSize: 12, color: C.inkMuted, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.3 }}>{label}</div>
-      <div style={{ fontSize: 13, color: alerta ? C.warn : C.ink, fontWeight: alerta ? 700 : 500 }}>{valor || "—"}</div>
+      <div style={{ fontSize: 12, color: C.inkMuted, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.3 }}>{label}</div>
+      <div style={{ fontSize: 13, color: alerta ? C.warn : C.ink, fontWeight: alerta ? 600 : 500 }}>{valor || "—"}</div>
     </div>
   );
 
@@ -192,7 +192,7 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
     return (
       <div style={{ fontFamily: SANS }}>
         <div style={{ background: C.tealLight, borderRadius: 12, padding: "12px 14px", marginBottom: 16 }}>
-          <div style={{ fontSize: 13, color: C.tealDark, fontWeight: 700, marginBottom: 4 }}>Solo necesitas el código</div>
+          <div style={{ fontSize: 13, color: C.tealDark, fontWeight: 600, marginBottom: 4 }}>Solo necesitas el código</div>
           <div style={{ fontSize: 12, color: C.inkMuted, lineHeight: 1.5 }}>
             La app trae sola el cliente, los productos, cantidades y montos desde Mercado Público.
           </div>
@@ -206,7 +206,7 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
             ))}
           </select>
           {!vendedorId && (
-            <div data-aviso="sin-vendedor" style={{ fontSize: 12, color: C.warnText, fontWeight: 600, marginTop: 5 }}>
+            <div data-aviso="sin-vendedor" style={{ fontSize: 12, color: C.warnText, fontWeight: 500, marginTop: 5 }}>
               <Ic n="⚠"/> Sin vendedor: esta OC no entrará en ninguna comisión hasta que se le asigne uno.
             </div>
           )}
@@ -218,7 +218,7 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
             <input type="checkbox" checked={ventaPropia} onChange={e=>setVentaPropia(e.target.checked)}
               style={{marginTop:2,width:16,height:16,flexShrink:0}} />
             <span>
-              <span style={{display:"block",fontSize:13,fontWeight:700,color:C.ink}}>Es venta propia del vendedor</span>
+              <span style={{display:"block",fontSize:13,fontWeight:600,color:C.ink}}>Es venta propia del vendedor</span>
               <span style={{display:"block",fontSize:12,color:C.inkFaint,marginTop:1}}>Se lleva el 100% de la utilidad (menos el IVA de su propia factura), en vez del 50% general</span>
             </span>
           </label>
@@ -231,7 +231,7 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
             placeholder="ej: 3013-587-AG26" />
         </Field>
 
-        {err && <div style={{ background: C.dangerLight, color:C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 10, fontWeight: 600 }}>{err}</div>}
+        {err && <div style={{ background: C.dangerLight, color:C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 10, fontWeight: 500 }}>{err}</div>}
 
         <button onClick={() => buscar()} disabled={cargando} style={btnP(cargando ? C.inkFaint : C.teal)}>
           {cargando ? "Consultando Mercado Público…" : "Buscar OC →"}
@@ -249,7 +249,7 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
     <div style={{ fontFamily: SANS }}>
       {pendiente ? (
         <div data-estado-mp="no_disponible" style={{ background: C.warnLight, border: `1px solid ${C.warn}`, borderRadius: 12, padding: "12px 14px", marginBottom: 14 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color:C.warnText, marginBottom: 4 }}><Ic n="⏳"/> Todavía no disponible en Mercado Público</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color:C.warnText, marginBottom: 4 }}><Ic n="⏳"/> Todavía no disponible en Mercado Público</div>
           <div style={{ fontSize: 12, color: C.inkMuted, lineHeight: 1.5 }}>
             Mercado Público respondió que no tiene esta OC: puede que aún no esté publicada o aceptada,
             o que el código tenga un error (revísalo). Si el código es correcto, guárdala igual con el link:
@@ -260,19 +260,19 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
         const est = estadoMP(oc.codigo_estado);
         if (est.tipo === "cancelada") return (
           <div data-estado-mp="cancelada" style={{ background: C.dangerLight, border: `1px solid ${C.danger}`, borderRadius: 12, padding: "12px 14px", marginBottom: 14 }}>
-            <div style={{ fontSize: 13, fontWeight: 800, color: C.dangerText, marginBottom: 4 }}><Ic n="⚠"/> Cancelada en Mercado Público</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: C.dangerText, marginBottom: 4 }}><Ic n="⚠"/> Cancelada en Mercado Público</div>
             <div style={{ fontSize: 12, color: C.inkMuted, lineHeight: 1.5, marginBottom: 8 }}>
               El comprador canceló esta OC. Normalmente no se carga: no se debe comprar ni facturar.
             </div>
             <label style={{ display: "flex", alignItems: "flex-start", gap: 7, cursor: "pointer" }}>
               <input type="checkbox" checked={confirmaCancelada} onChange={e => { setConfirmaCancelada(e.target.checked); setErr(""); }} style={{ marginTop: 2 }} />
-              <span style={{ fontSize: 12, color: C.ink, fontWeight: 600 }}>Entiendo que está cancelada y quiero cargarla igual</span>
+              <span style={{ fontSize: 12, color: C.ink, fontWeight: 500 }}>Entiendo que está cancelada y quiero cargarla igual</span>
             </label>
           </div>
         );
         if (est.tipo === "sin_aceptar") return (
           <div data-estado-mp="sin_aceptar" style={{ background: C.warnLight, border: `1px solid ${C.warn}`, borderRadius: 12, padding: "12px 14px", marginBottom: 14 }}>
-            <div style={{ fontSize: 13, fontWeight: 800, color: C.warnText, marginBottom: 4 }}><Ic n="⏳"/> {est.texto}</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: C.warnText, marginBottom: 4 }}><Ic n="⏳"/> {est.texto}</div>
             <div style={{ fontSize: 12, color: C.inkMuted, lineHeight: 1.5 }}>
               Los datos ya vienen de Mercado Público, pero la OC sigue sin aceptar. Acéptala en el portal antes de comprar.
             </div>
@@ -280,14 +280,14 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
         );
         return (
           <div data-estado-mp={est.tipo} style={{ background: C.okLight, borderRadius: 12, padding: "10px 14px", marginBottom: 14 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color:C.okText }}>✓ Datos traídos de Mercado Público · {est.texto}</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color:C.okText }}>✓ Datos traídos de Mercado Público · {est.texto}</div>
           </div>
         );
       })()}
 
       {/* Resumen de lo que trajo la API */}
       <div style={{ background: C.paper, borderRadius: 12, padding: "12px 14px", marginBottom: 14 }}>
-        <div style={{ fontFamily: MONO, fontWeight: 800, fontSize: 14, color: C.ink, marginBottom: 10 }}>{oc.numero_oc}</div>
+        <div style={{ fontFamily: MONO, fontWeight: 700, fontSize: 14, color: C.ink, marginBottom: 10 }}>{oc.numero_oc}</div>
         {!pendiente && (
           <>
             <Dato label="Cliente" valor={oc.cliente} />
@@ -305,12 +305,12 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
       {/* Productos que trajo la API */}
       {!pendiente && (oc.productos || []).length > 0 && (
         <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 12, fontWeight: 800, color: C.inkMuted, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: C.inkMuted, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>
             {oc.productos.length} producto{oc.productos.length > 1 ? "s" : ""}
           </div>
           {oc.productos.map((p, i) => (
             <div key={i} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: "10px 12px", marginBottom: 6 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: C.ink, lineHeight: 1.4 }}>{p.descripcion}</div>
+              <div style={{ fontSize: 13, fontWeight: 500, color: C.ink, lineHeight: 1.4 }}>{p.descripcion}</div>
               <div style={{ fontSize: 12, color: C.inkMuted, marginTop: 4 }}>
                 {p.cantidad} × {fmt.money(p.precio_venta_unitario)} = <b>{fmt.money(p.total_linea)}</b>
               </div>
@@ -329,7 +329,7 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
 
       {/* Links de compra — lo único obligatorio para Mati (con cotización, vienen de ella) */}
       <div style={{ marginBottom: 14 }} data-links-oc>
-        <div style={{ fontSize: 12, fontWeight: 800, color: C.inkMuted, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: C.inkMuted, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>
           Link de compra <span style={{ color:C.dangerText }}>*</span>
         </div>
         {cotSel && links.some(l => l.trim()) && (
@@ -394,14 +394,14 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
               <span>La cotización tiene como vendedor responsable a <b>{enBFK.nombre}</b>.</span>
               <button data-usar-vendedor-cotizacion onClick={() => setVendedorId(enBFK.id)} style={{ background: "none", border: `1px solid ${C.teal}`, borderRadius: 8, color: C.tealDark, cursor: "pointer", fontSize: 12, padding: "4px 10px", minHeight: 32 }}>Asignarlo a esta OC</button>
             </div>);
-          return <div data-aviso-vendedor style={{ fontSize: 12, color: C.warnText, fontWeight: 600, marginTop: 6 }}><Ic n="⚠"/> El vendedor responsable de la cotización es {cotSel.cot.vendedor_nombre || vc}{vendedorId ? ", distinto del elegido para la OC" : ""}. Revisa antes de guardar.</div>;
+          return <div data-aviso-vendedor style={{ fontSize: 12, color: C.warnText, fontWeight: 500, marginTop: 6 }}><Ic n="⚠"/> El vendedor responsable de la cotización es {cotSel.cot.vendedor_nombre || vc}{vendedorId ? ", distinto del elegido para la OC" : ""}. Revisa antes de guardar.</div>;
         })()}
       </Field>
 
       {/* ¿Qué se guarda? Solo con cotización elegida. La compra real se registra únicamente si el usuario confirma que compró. */}
       {cotSel && (
         <div data-modo-guardado style={{ marginBottom: 12 }}>
-          <div style={{ fontSize: 12, fontWeight: 800, color: C.inkMuted, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>¿Qué quieres guardar?</div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: C.inkMuted, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>¿Qué quieres guardar?</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             <button data-modo="solo_oc" aria-pressed={modo === "solo_oc"} onClick={() => setModo("solo_oc")} style={{ ...btnP(modo === "solo_oc" ? C.teal : C.inkFaint), minHeight: 56, fontSize: 13 }}>Solo la OC<br /><span style={{ fontWeight: 500, fontSize: 11 }}>aún no compro</span></button>
             <button data-modo="con_compra" aria-pressed={modo === "con_compra"} onClick={() => setModo("con_compra")} style={{ ...btnP(modo === "con_compra" ? C.teal : C.inkFaint), minHeight: 56, fontSize: 13 }}>OC y compra<br /><span style={{ fontWeight: 500, fontSize: 11 }}>ya compré</span></button>
@@ -415,11 +415,11 @@ export function NuevaOCRapida({ perfil, vendedores, entidadesCatalogo, codigoIni
           avisoBloqueo={estadoMP(oc.codigo_estado).tipo === "cancelada" ? "La OC figura cancelada en Mercado Público: no se registra una compra. Guarda solo la OC si de todas formas quieres cargarla." : ""} />
       )}
       {cotSel && modo === "con_compra" && estadoMP(oc.codigo_estado).tipo === "sin_aceptar" && (
-        <div data-aviso-sin-aceptar style={{ fontSize: 12, color: C.warnText, fontWeight: 600, marginBottom: 10 }}><Ic n="⚠"/> La OC aún no está aceptada en Mercado Público: confirma la compra solo si ya la realizaste.</div>
+        <div data-aviso-sin-aceptar style={{ fontSize: 12, color: C.warnText, fontWeight: 500, marginBottom: 10 }}><Ic n="⚠"/> La OC aún no está aceptada en Mercado Público: confirma la compra solo si ya la realizaste.</div>
       )}
 
-      {avisoParcial && <div data-aviso-oc-creada style={{ background: C.warnLight, color: C.warnText, borderRadius: 8, padding: "8px 12px", fontSize: 12, marginBottom: 10, fontWeight: 600 }}>{avisoParcial}</div>}
-      {err && <div data-error-nueva-oc style={{ background: C.dangerLight, color:C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 10, fontWeight: 600 }}>{err}</div>}
+      {avisoParcial && <div data-aviso-oc-creada style={{ background: C.warnLight, color: C.warnText, borderRadius: 8, padding: "8px 12px", fontSize: 12, marginBottom: 10, fontWeight: 500 }}>{avisoParcial}</div>}
+      {err && <div data-error-nueva-oc style={{ background: C.dangerLight, color:C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 10, fontWeight: 500 }}>{err}</div>}
 
       <div style={{ display: "flex", gap: 8 }}>
         <button onClick={() => { setPaso(1); setErr(""); }} disabled={!!ocCreada.current} style={{ ...btnP(C.inkFaint), flex: 1, opacity: ocCreada.current ? 0.45 : 1 }}>← Atrás</button>

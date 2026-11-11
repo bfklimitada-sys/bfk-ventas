@@ -118,7 +118,7 @@ export function FormEditarDatosOC({ oc, onSave, entidadesCatalogo, perfil, ocs, 
             <option key={v.id} value={v.id}>{v.nombre}</option>
           ))}
         </select>
-        {!vendedorId&&<div data-aviso="sin-vendedor" style={{fontSize:12,color:C.warnText,fontWeight:600,marginTop:5}}><Ic n="⚠"/> Sin vendedor: esta OC no entra en ninguna comisión.</div>}
+        {!vendedorId&&<div data-aviso="sin-vendedor" style={{fontSize:12,color:C.warnText,fontWeight:500,marginTop:5}}><Ic n="⚠"/> Sin vendedor: esta OC no entra en ninguna comisión.</div>}
       </Field>
 
       {vendedorId&&(
@@ -127,13 +127,13 @@ export function FormEditarDatosOC({ oc, onSave, entidadesCatalogo, perfil, ocs, 
           <input type="checkbox" checked={ventaPropia} onChange={e=>setVentaPropia(e.target.checked)}
             style={{marginTop:2,width:16,height:16,flexShrink:0}} />
           <span>
-            <span style={{display:"block",fontSize:13,fontWeight:700,color:C.ink}}>Es venta propia del vendedor</span>
+            <span style={{display:"block",fontSize:13,fontWeight:600,color:C.ink}}>Es venta propia del vendedor</span>
             <span style={{display:"block",fontSize:12,color:C.inkFaint,marginTop:1}}>Se lleva el 100% de la utilidad de esta OC (menos el IVA de su propia factura), en vez del 50% general</span>
           </span>
         </label>
       )}
       {cambiaVentaPropia&&(oc.eventos_compra||[]).length>0&&(
-        <div data-aviso="venta-propia-deuda" style={{background:C.warnLight,borderRadius:8,padding:"8px 12px",fontSize:12,color:C.warnText,fontWeight:600,marginBottom:12,lineHeight:1.45}}>
+        <div data-aviso="venta-propia-deuda" style={{background:C.warnLight,borderRadius:8,padding:"8px 12px",fontSize:12,color:C.warnText,fontWeight:500,marginBottom:12,lineHeight:1.45}}>
           <Ic n="⚠"/> Esta OC ya tiene la compra registrada: cambiar la venta propia es un cambio de financiamiento. La base recalcula la deuda con el financiador (venta propia no genera deuda) y no lo permite si ya hay pagos al financiador registrados.
         </div>
       )}
@@ -142,7 +142,7 @@ export function FormEditarDatosOC({ oc, onSave, entidadesCatalogo, perfil, ocs, 
         <Field label="Código de la OC" hint="Corrígelo si se ingresó mal. Debe ser único.">
           <input style={iMono} value={numeroOc} onChange={e=>{setNumeroOc(e.target.value);setErr("");}} />
           {codigoRepetido&&(
-            <div style={{fontSize:12,color:C.dangerText,fontWeight:700,marginTop:5}}>
+            <div style={{fontSize:12,color:C.dangerText,fontWeight:600,marginTop:5}}>
               <Ic n="⚠"/> {mensajeDuplicado(ocRepetida)}
             </div>
           )}
@@ -150,7 +150,7 @@ export function FormEditarDatosOC({ oc, onSave, entidadesCatalogo, perfil, ocs, 
             <label style={{display:"flex",alignItems:"flex-start",gap:7,marginTop:8,cursor:"pointer",
               background:C.tealLight,borderRadius:8,padding:"8px 10px"}}>
               <input type="checkbox" checked={resincronizar} onChange={e=>setResincronizar(e.target.checked)} style={{marginTop:2}} />
-              <span style={{fontSize:12,color:C.tealDark,fontWeight:600}}>
+              <span style={{fontSize:12,color:C.tealDark,fontWeight:500}}>
                 Traer de nuevo los datos desde Mercado Público con el código corregido
               </span>
             </label>
@@ -159,7 +159,7 @@ export function FormEditarDatosOC({ oc, onSave, entidadesCatalogo, perfil, ocs, 
       )}
 
       <Field label="RUT del cliente" hint="Si ya existe en el catálogo, autocompleta los demás datos"><input style={iStyle} value={rutCliente} onChange={e=>handleRutChange(e.target.value)} placeholder="ej: 12.345.678-9" /></Field>
-      {autocompletado&&<div style={{background:C.okLight,borderRadius:8,padding:"8px 12px",fontSize:12,color:C.okText,fontWeight:600,marginBottom:12}}>✓ Datos autocompletados desde el catálogo de entidades</div>}
+      {autocompletado&&<div style={{background:C.okLight,borderRadius:8,padding:"8px 12px",fontSize:12,color:C.okText,fontWeight:500,marginBottom:12}}>✓ Datos autocompletados desde el catálogo de entidades</div>}
       <Field label="Nombre del cliente" hint="Se guarda en mayúscula"><input style={iStyle} value={cliente} onChange={e=>setCliente(e.target.value)} placeholder="Nombre del cliente" /></Field>
       <Field label="Entidad (organismo público)" hint="Se guarda en mayúscula"><input style={iStyle} value={entidad} onChange={e=>setEntidad(e.target.value)} placeholder="ej: I. Municipalidad de..." /></Field>
       <Field label="Comuna" hint="Se guarda en mayúscula"><input style={iStyle} value={comuna} onChange={e=>setComuna(e.target.value)} placeholder="ej: Concepción" /></Field>
@@ -170,7 +170,7 @@ export function FormEditarDatosOC({ oc, onSave, entidadesCatalogo, perfil, ocs, 
         : <Field label="Fecha de la OC" hint="Viene de Mercado Público (se actualiza desde ahí). La fecha real de compra es otro dato y se corrige en la etapa Compra.">
             <div data-fecha-oc-mp style={{...iStyle,background:C.paper,color:C.inkMuted}}>{oc.fecha_emision_mp?fmt.date(String(oc.fecha_emision_mp).slice(0,10)):"Sin fecha de Mercado Público todavía"}</div>
           </Field>}
-      {err&&<div style={{background:C.dangerLight,color:C.dangerText,borderRadius:8,padding:"8px 12px",fontSize:13,marginBottom:10,fontWeight:600}}>{err}</div>}
+      {err&&<div style={{background:C.dangerLight,color:C.dangerText,borderRadius:8,padding:"8px 12px",fontSize:13,marginBottom:10,fontWeight:500}}>{err}</div>}
       <button onClick={handleSave} disabled={saving} style={btnP(saving?C.inkFaint:C.info)}>{saving?"Guardando…":"✓ Guardar datos"}</button>
     </div>
   );
@@ -205,7 +205,7 @@ export function FormEditarEvento({ item, onSave, onCancel }) {
 
   return (
     <div>
-      <div style={{background:C.warnLight,borderRadius:8,padding:"10px 12px",fontSize:12,color:C.warnText,fontWeight:600,marginBottom:14}}>
+      <div style={{background:C.warnLight,borderRadius:8,padding:"10px 12px",fontSize:12,color:C.warnText,fontWeight:500,marginBottom:14}}>
         <Ic n="⚠"/> Al guardar, la base recalcula desde los eventos los totales de la OC y el saldo del financiador (no se escriben desde este teléfono).
       </div>
       <Field label={({eventos_compra:"Fecha de compra",eventos_entrega:"Fecha de entrega",eventos_factura:"Fecha de emisión de la factura",eventos_pago_cliente:"Fecha de pago",eventos_pago_financiamiento:"Fecha de pago al financiador"})[tabla]||"Fecha"} required
@@ -240,7 +240,7 @@ export function FormEditarEvento({ item, onSave, onCancel }) {
             <input type="checkbox" checked={cobradoEnBanco} onChange={ev=>setCobradoEnBanco(ev.target.checked)}
               style={{marginTop:2,width:16,height:16,flexShrink:0}} />
             <span>
-              <span style={{display:"block",fontSize:13,fontWeight:700,color:C.ink}}>Ya lo cobré / depositó en el banco</span>
+              <span style={{display:"block",fontSize:13,fontWeight:600,color:C.ink}}>Ya lo cobré / depositó en el banco</span>
               <span style={{display:"block",fontSize:12,color:C.inkFaint,marginTop:1}}>
                 {cobradoEnBanco?"Se cuenta como plata real en la cuenta.":"Aparecerá en \"Vale vistas por cobrar\" hasta que la marques cobrada."}
               </span>
@@ -251,7 +251,7 @@ export function FormEditarEvento({ item, onSave, onCancel }) {
       {tabla==="eventos_pago_financiamiento"&&(
         <Field label="Monto ($)" required><input style={iMono} type="number" value={monto} onChange={ev=>setMonto(ev.target.value)} /></Field>
       )}
-      {err&&<div style={{background:C.dangerLight,color:C.dangerText,borderRadius:8,padding:"8px 12px",fontSize:13,marginBottom:10,fontWeight:600}}>{err}</div>}
+      {err&&<div style={{background:C.dangerLight,color:C.dangerText,borderRadius:8,padding:"8px 12px",fontSize:13,marginBottom:10,fontWeight:500}}>{err}</div>}
       <button onClick={handleSave} disabled={saving} style={btnP(saving?C.inkFaint:C.warn)}>{saving?"Guardando…":"✓ Guardar corrección"}</button>
       <button onClick={onCancel} style={{...btnG,marginTop:8,width:"100%"}}>Cancelar</button>
     </div>
@@ -327,7 +327,7 @@ export function DetalleOC({ oc, perfil, parte, onEditarLink, onEliminarLink, onG
   const Dato=({k,v})=> v ? (
     <div style={{display:"flex",justifyContent:"space-between",gap:10,padding:"5px 0",borderBottom:`1px solid ${C.border}`}}>
       <span style={{fontSize:12,color:C.inkMuted,flexShrink:0}}>{k}</span>
-      <span style={{fontSize:12,color:C.ink,fontWeight:600,textAlign:"right",wordBreak:"break-word"}}>{v}</span>
+      <span style={{fontSize:12,color:C.ink,fontWeight:500,textAlign:"right",wordBreak:"break-word"}}>{v}</span>
     </div>
   ) : null;
 
@@ -339,7 +339,7 @@ export function DetalleOC({ oc, perfil, parte, onEditarLink, onEliminarLink, onG
       {!parte&&<button data-consulta="1" onClick={()=>setAbierto(v=>!v)}
         style={{width:"100%",background:C.card,border:`1px solid ${C.border}`,borderRadius:12,
           padding:"9px 12px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <span style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4}}>
+        <span style={{fontSize:12,fontWeight:600,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4}}>
           Productos y números{pv.n>0&&<span style={{color:C.tealDark}}> · {textoProductosVendidos(oc)}</span>}
         </span>
         <span style={{color:C.inkFaint,fontSize:12}}>{abierto?"▲":"▼"}</span>
@@ -354,7 +354,7 @@ export function DetalleOC({ oc, perfil, parte, onEditarLink, onEliminarLink, onG
             const mp=oc.mp; const rec=recepcionMP(mp.codigo_estado);
             return (
               <div data-mp-detalle style={{background:C.paper,border:`1px solid ${C.border}`,borderRadius:8,padding:"8px 10px",marginBottom:12}}>
-                <div style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:4}}>Mercado Público</div>
+                <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:4}}>Mercado Público</div>
                 <Dato k="Estado" v={mp.estado||"—"} />
                 <Dato k="Aceptación" v={mp.fecha_aceptacion?fmt.date(String(mp.fecha_aceptacion).slice(0,10)):(mp.aceptada?"Aceptada":"Sin aceptar")} />
                 <Dato k="Recepción" v={rec?rec.texto:"Sin información"} />
@@ -387,11 +387,11 @@ export function DetalleOC({ oc, perfil, parte, onEditarLink, onEliminarLink, onG
           {ver("productos")&&links.length===0&&parte&&pv.n===0&&<div style={{fontSize:12,color:C.inkFaint}}>Sin productos registrados.</div>}
           {ver("productos")&&links.length>0&&(
             <div style={{marginBottom:12}}>
-              <div style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Productos</div>
+              <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Productos</div>
               {/* ═══ LO QUE VENDEMOS — viene de la OC de Mercado Público ═══ */}
               {vendidos.length>0&&(
                 <>
-                  <div style={{fontSize:12,fontWeight:800,color:C.inkFaint,textTransform:"uppercase",
+                  <div style={{fontSize:12,fontWeight:700,color:C.inkFaint,textTransform:"uppercase",
                     letterSpacing:0.5,marginBottom:6}}>Lo que vendemos · según la OC</div>
 
                   {vendidos.map(l=>{
@@ -400,15 +400,15 @@ export function DetalleOC({ oc, perfil, parte, onEditarLink, onEliminarLink, onG
                     return (
                       <div key={l.id} style={{background:C.paper,borderRadius:8,padding:"9px 11px",marginBottom:5}}>
                         <div style={{display:"flex",gap:8,alignItems:"flex-start"}}>
-                          <span style={{flex:1,minWidth:0,fontSize:12,color:C.ink,fontWeight:600,lineHeight:1.4}}>
+                          <span style={{flex:1,minWidth:0,fontSize:12,color:C.ink,fontWeight:500,lineHeight:1.4}}>
                             {l.descripcion}
                           </span>
                           <span style={{width:34,flexShrink:0,textAlign:"center",fontFamily:MONO,
-                            fontSize:12,fontWeight:800,color:cant?C.tealDark:C.inkFaint}}>
+                            fontSize:12,fontWeight:700,color:cant?C.tealDark:C.inkFaint}}>
                             {cant?`×${cant}`:"—"}
                           </span>
                           <span style={{width:76,flexShrink:0,textAlign:"right",fontFamily:MONO,
-                            fontSize:12,fontWeight:800,color:C.ink}}>
+                            fontSize:12,fontWeight:700,color:C.ink}}>
                             {venta?fmt.money(venta):"—"}
                           </span>
                         </div>
@@ -420,7 +420,7 @@ export function DetalleOC({ oc, perfil, parte, onEditarLink, onEliminarLink, onG
                         )}
                         {(l.direccion_entrega||oc.direccion_entrega)&&(
                           <div style={{fontSize:12,marginTop:4,lineHeight:1.4,
-                            color:l.direccion_entrega?C.warn:C.info,fontWeight:l.direccion_entrega?700:400}}>
+                            color:l.direccion_entrega?C.warn:C.info,fontWeight:l.direccion_entrega?600:400}}>
                             {l.direccion_entrega?"Despacho distinto: ":"Entregar en: "}
                             {l.direccion_entrega||oc.direccion_entrega}
                           </div>
@@ -428,7 +428,7 @@ export function DetalleOC({ oc, perfil, parte, onEditarLink, onEliminarLink, onG
                         {esAdmin&&(
                           <div style={{marginTop:5}}>
                             <button onClick={()=>abrirEdicion(l)}
-                              style={{background:"none",border:"none",color:C.inkFaint,fontSize:12,cursor:"pointer",fontWeight:600,padding:0}}>Corregir</button>
+                              style={{background:"none",border:"none",color:C.inkFaint,fontSize:12,cursor:"pointer",fontWeight:500,padding:0}}>Corregir</button>
                           </div>
                         )}
                       </div>
@@ -439,7 +439,7 @@ export function DetalleOC({ oc, perfil, parte, onEditarLink, onEliminarLink, onG
                     padding:"6px 11px 10px"}}>
                     <span style={{fontSize:12,color:C.inkMuted}}>Total vendido</span>
                     <span style={{textAlign:"right"}}>
-                      <span style={{fontFamily:MONO,fontWeight:800,fontSize:13,color:C.ink}}>
+                      <span style={{fontFamily:MONO,fontWeight:700,fontSize:13,color:C.ink}}>
                         {fmt.money(vendidos.reduce((s,l)=>s+(Number(l.precio_venta)||0),0))}
                       </span>
                       {(()=>{
@@ -448,7 +448,7 @@ export function DetalleOC({ oc, perfil, parte, onEditarLink, onEliminarLink, onG
                         const exenta=ventaExenta(oc);   // fase 3: también por clasificación aprobada
                         const neto=exenta?(Number(oc.monto_total)||0):Math.round((Number(oc.monto_total)||0)/1.19);
                         return Math.abs(tv-neto)>1&&Math.abs(tv-(Number(oc.monto_total)||0))>1?(
-                          <span style={{display:"block",fontSize:12,color:C.warnText,fontWeight:700}}>
+                          <span style={{display:"block",fontSize:12,color:C.warnText,fontWeight:600}}>
                             <Ic n="⚠"/> la OC dice {fmt.money(oc.monto_total)}
                           </span>
                         ):(
@@ -464,7 +464,7 @@ export function DetalleOC({ oc, perfil, parte, onEditarLink, onEliminarLink, onG
 
               {/* ═══ LO QUE COMPRAMOS — lo carga el vendedor ═══ */}
               <div style={{borderTop:`1px solid ${C.border}`,paddingTop:11,marginTop:4}}>
-                <div style={{fontSize:12,fontWeight:800,color:C.inkFaint,textTransform:"uppercase",
+                <div style={{fontSize:12,fontWeight:700,color:C.inkFaint,textTransform:"uppercase",
                   letterSpacing:0.5,marginBottom:6}}>Lo que compramos · proveedor y link</div>
 
                 {comprados.length===0&&!nuevo&&(
@@ -486,15 +486,15 @@ export function DetalleOC({ oc, perfil, parte, onEditarLink, onEliminarLink, onG
                   return (
                     <div key={l.id} style={{background:C.paper,borderRadius:8,padding:"9px 11px",marginBottom:5}}>
                       <div style={{display:"flex",gap:8,alignItems:"flex-start"}}>
-                        <span style={{flex:1,minWidth:0,fontSize:12,color:C.ink,fontWeight:600,lineHeight:1.4}}>
+                        <span style={{flex:1,minWidth:0,fontSize:12,color:C.ink,fontWeight:500,lineHeight:1.4}}>
                           {l.descripcion}
                         </span>
                         <span style={{width:34,flexShrink:0,textAlign:"center",fontFamily:MONO,
-                          fontSize:12,fontWeight:800,color:cant?C.tealDark:C.inkFaint}}>
+                          fontSize:12,fontWeight:700,color:cant?C.tealDark:C.inkFaint}}>
                           {cant?`×${cant}`:"—"}
                         </span>
                         <span style={{width:76,flexShrink:0,textAlign:"right",fontFamily:MONO,
-                          fontSize:12,fontWeight:800,color:C.dangerText}}>
+                          fontSize:12,fontWeight:700,color:C.dangerText}}>
                           {costo?fmt.money(costo):"—"}
                         </span>
                       </div>
@@ -504,7 +504,7 @@ export function DetalleOC({ oc, perfil, parte, onEditarLink, onEliminarLink, onG
                         paddingTop:6,borderTop:`1px solid ${C.border}`}}>
                         {tieneUrl?(
                           <a href={l.url} target="_blank" rel="noopener noreferrer"
-                            style={{flex:1,minWidth:0,fontSize:12,color:C.tealDark,textDecoration:"none",fontWeight:600,
+                            style={{flex:1,minWidth:0,fontSize:12,color:C.tealDark,textDecoration:"none",fontWeight:500,
                               overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                             <Ic n="🔗"/> {dominio||l.url} ↗
                           </a>
@@ -514,14 +514,14 @@ export function DetalleOC({ oc, perfil, parte, onEditarLink, onEliminarLink, onG
                         {protegidaDe(l)?(
                           <span data-linea-protegida={protegidaDe(l).clave} style={{flexShrink:0,fontSize:12,color:C.inkMuted,display:"flex",alignItems:"center",gap:6}}>
                             🔒 Compra confirmada · Pedido {protegidaDe(l).clave}
-                            {onCorregirCompra&&<button data-corregir-desde-linea onClick={()=>onCorregirCompra(protegidaDe(l).evento)} style={{background:"none",border:"none",color:C.tealDark,fontSize:12,cursor:"pointer",fontWeight:700,padding:0,textDecoration:"underline"}}>Corregir compra</button>}
+                            {onCorregirCompra&&<button data-corregir-desde-linea onClick={()=>onCorregirCompra(protegidaDe(l).evento)} style={{background:"none",border:"none",color:C.tealDark,fontSize:12,cursor:"pointer",fontWeight:600,padding:0,textDecoration:"underline"}}>Corregir compra</button>}
                           </span>
                         ):<>
                         <button onClick={()=>abrirEdicion(l)}
-                          style={{flexShrink:0,background:"none",border:"none",color:C.inkMuted,fontSize:12,cursor:"pointer",fontWeight:600,padding:0}}>Editar</button>
+                          style={{flexShrink:0,background:"none",border:"none",color:C.inkMuted,fontSize:12,cursor:"pointer",fontWeight:500,padding:0}}>Editar</button>
                         {esAdmin&&(
                           <button onClick={async()=>{ if(window.confirm("¿Eliminar este producto?")) await onEliminarLink(l.id,oc); }}
-                            style={{flexShrink:0,background:"none",border:"none",color:C.dangerText,fontSize:12,cursor:"pointer",fontWeight:600,padding:0}}>Eliminar</button>
+                            style={{flexShrink:0,background:"none",border:"none",color:C.dangerText,fontSize:12,cursor:"pointer",fontWeight:500,padding:0}}>Eliminar</button>
                         )}
                         </>}
                       </div>
@@ -532,7 +532,7 @@ export function DetalleOC({ oc, perfil, parte, onEditarLink, onEliminarLink, onG
                 {libres.length>1&&!repartiendo&&!nuevo&&!editando&&(
                   <button onClick={()=>setRepartiendo(true)}
                     style={{fontSize:12,background:C.purpleLight,border:`1px solid ${C.purple}55`,borderRadius:8,
-                      padding:"7px 12px",color:C.purple,cursor:"pointer",width:"100%",fontWeight:700,marginBottom:6}}>
+                      padding:"7px 12px",color:C.purple,cursor:"pointer",width:"100%",fontWeight:600,marginBottom:6}}>
                     <Ic n="💰"/> Solo sé cuánto invertí en total — repartir
                   </button>
                 )}
@@ -587,7 +587,7 @@ export function DetalleOC({ oc, perfil, parte, onEditarLink, onEliminarLink, onG
                 {!nuevo&&!editando&&(
                   <button onClick={()=>{setNuevo(true);limpiar();}}
                     style={{fontSize:12,background:"none",border:`1px dashed ${C.teal}66`,borderRadius:8,
-                      padding:"7px 12px",color:C.tealDark,cursor:"pointer",width:"100%",fontWeight:700}}>
+                      padding:"7px 12px",color:C.tealDark,cursor:"pointer",width:"100%",fontWeight:600}}>
                     + Agregar producto comprado
                   </button>
                 )}
@@ -600,9 +600,9 @@ export function DetalleOC({ oc, perfil, parte, onEditarLink, onEliminarLink, onG
                   return (
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",
                       marginTop:10,paddingTop:9,borderTop:`2px solid ${C.border}`}}>
-                      <span style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4}}>Ganancia de la OC</span>
+                      <span style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4}}>Ganancia de la OC</span>
                       <span style={{textAlign:"right"}}>
-                        <span style={{fontFamily:MONO,fontWeight:800,fontSize:16,color:col}}>{fmt.money(util)}</span>
+                        <span style={{fontFamily:MONO,fontWeight:700,fontSize:16,color:col}}>{fmt.money(util)}</span>
                         <span style={{display:"block",fontSize:12,color:C.inkFaint,marginTop:1}}>
                           {pct}% · venta {fmt.money(venta)} · costo {fmt.money(costo)}
                           {g.extra>0&&<span style={{color:C.dangerText}}> (incluye {fmt.money(g.extra)} de post-venta)</span>}
@@ -617,7 +617,7 @@ export function DetalleOC({ oc, perfil, parte, onEditarLink, onEliminarLink, onG
 
           {ver("info")&&<>
           {/* Datos comerciales */}
-          <div style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:4}}>Datos</div>
+          <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:4}}>Datos</div>
           <Dato k="Cliente"      v={oc.cliente} />
           <Dato k="Unidad"       v={oc.entidad} />
           <Dato k="RUT"          v={oc.rut_cliente} />
@@ -627,12 +627,13 @@ export function DetalleOC({ oc, perfil, parte, onEditarLink, onEliminarLink, onG
           <Dato k="Despacho"     v={oc.tipo_despacho} />
           <Dato k="Dirección"    v={oc.direccion_entrega} />
           <Dato k="Plazo de pago" v={oc.dias_pago?`${oc.dias_pago} días`:null} />
-          <Dato k="Vendedor"     v={oc.vendedores?.nombre} />
-          <Dato k="Financiador"  v={oc.financiadores?.nombre} />
+          {/* En la ficha, vendedor y financiador ya están arriba (con «Editar»): aquí solo se listan fuera de ella. */}
+          {!parte&&<Dato k="Vendedor"     v={oc.vendedores?.nombre} />}
+          {!parte&&<Dato k="Financiador"  v={oc.financiadores?.nombre} />}
 
           {/* Números (en la ficha están en el resumen financiero) */}
           {!parte&&<>
-          <div style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,margin:"10px 0 4px"}}>Números</div>
+          <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,margin:"10px 0 4px"}}>Números</div>
           <Dato k="Venta"     v={fmt.money(oc.monto_total)} />
           <Dato k="Costo"     v={oc.costo_total?fmt.money(oc.costo_total):null} />
           <Dato k="Utilidad"  v={oc.costo_total?`${fmt.money(margen.pesos)} (${margen.pct}%)`:null} />
@@ -641,7 +642,7 @@ export function DetalleOC({ oc, perfil, parte, onEditarLink, onEliminarLink, onG
           </>}
 
           {/* Línea de tiempo */}
-          <div style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,margin:"10px 0 4px"}}>Fechas</div>
+          <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,margin:"10px 0 4px"}}>Fechas</div>
           {(()=>{ const f=fechaOC(oc); return f.origen==="emision"
             ? <Dato k="Fecha de la OC" v={fmtFechaHora(f.valor)} />
             : <Dato k="Fecha de la OC" v="Sin fecha de emisión registrada" />; })()}
@@ -651,18 +652,18 @@ export function DetalleOC({ oc, perfil, parte, onEditarLink, onEliminarLink, onG
           {!parte&&<Dato k="Factura"          v={evF?.fecha?`N°${evF.numero_factura} · ${fmt.date(String(evF.fecha).slice(0,10))}`:null} />}
           {!parte&&evF?.numero_factura&&(
             <div style={{background:C.infoLight,border:`1px solid ${C.info}33`,borderRadius:8,padding:"10px 11px",margin:"8px 0"}}>
-              <div style={{fontSize:12,fontWeight:800,color:C.info,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Verificar en el SII</div>
+              <div style={{fontSize:12,fontWeight:700,color:C.info,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Verificar en el SII</div>
               <div style={{fontSize:12,color:C.inkMuted,lineHeight:1.7,marginBottom:9}}>
                 RUT emisor <b style={{color:C.ink}}>77.322.317-3</b> (BFK Ltda) · Factura electrónica<br/>
                 Folio{" "}
                 <b onClick={()=>copiarFolio(evF.numero_factura)}
                   style={{color:C.ink,cursor:"pointer",textDecoration:"underline dotted"}}>{evF.numero_factura}</b>
-                {copiado&&<span style={{color:C.okText,fontWeight:700}}> ✓ copiado</span>}
+                {copiado&&<span style={{color:C.okText,fontWeight:600}}> ✓ copiado</span>}
                 {" · "}Monto <b style={{color:C.ink}}>{fmt.money(oc.monto_facturado||oc.monto_total)}</b>
               </div>
               <a href="https://palena.sii.cl/dte/mn_verif_doc.html" target="_blank" rel="noopener noreferrer"
                 style={{display:"block",textAlign:"center",background:C.info,color:"#fff",borderRadius:8,
-                  padding:"9px 12px",fontSize:12,fontWeight:700,textDecoration:"none"}}>
+                  padding:"9px 12px",fontSize:12,fontWeight:600,textDecoration:"none"}}>
                 Abrir verificador del SII ↗
               </a>
               <div style={{fontSize:12,color:C.inkFaint,marginTop:6,lineHeight:1.4}}>
@@ -689,26 +690,26 @@ function HistorialReclamos({ reclamos, onRegistrarRespuesta }){
 
   return (
     <div style={{marginBottom:10}}>
-      <div style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>
+      <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>
         Historial de reclamos ({ordenados.length})
       </div>
       {ordenados.map(r=>(
         <div key={r.id} style={{background:C.paper,borderRadius:12,padding:"10px 12px",marginBottom:6,border:`1px solid ${C.border}`}}>
-          <span style={{fontSize:12,fontWeight:700,color:C.ink}}><Ic n="📧"/> {fmt.datetime(r.fecha)}</span>
+          <span style={{fontSize:12,fontWeight:600,color:C.ink}}><Ic n="📧"/> {fmt.datetime(r.fecha)}</span>
           <div style={{fontSize:12,color:C.inkMuted,marginTop:2}}>Enviado a {r.correo}</div>
 
           {r.respondido_en ? (
             <div style={{marginTop:8,paddingTop:8,borderTop:`1px solid ${C.border}`}}>
-              <div style={{fontSize:12,fontWeight:700,color:C.okText}}>↩ Respondió</div>
+              <div style={{fontSize:12,fontWeight:600,color:C.okText}}>↩ Respondió</div>
               {r.fecha_prometida&&<div style={{fontSize:12,color:C.ink,marginTop:2}}>Prometió pagar: <b>{fmt.date(r.fecha_prometida)}</b></div>}
               {r.respuesta_notas&&<div style={{fontSize:12,color:C.inkMuted,marginTop:2,lineHeight:1.4}}>{r.respuesta_notas}</div>}
             </div>
           ) : editando===r.id ? (
             <div style={{marginTop:8,paddingTop:8,borderTop:`1px solid ${C.border}`}}>
-              <label style={{fontSize:12,color:C.inkFaint,fontWeight:700,display:"block",marginBottom:3}}>Fecha que prometió pagar (opcional)</label>
+              <label style={{fontSize:12,color:C.inkFaint,fontWeight:600,display:"block",marginBottom:3}}>Fecha que prometió pagar (opcional)</label>
               <input type="date" value={fecha} onChange={e=>setFecha(e.target.value)}
                 style={{...iStyle,fontSize:12,padding:"7px 9px",marginBottom:8}} />
-              <label style={{fontSize:12,color:C.inkFaint,fontWeight:700,display:"block",marginBottom:3}}>Notas (opcional)</label>
+              <label style={{fontSize:12,color:C.inkFaint,fontWeight:600,display:"block",marginBottom:3}}>Notas (opcional)</label>
               <textarea value={notas} onChange={e=>setNotas(e.target.value)} rows={2}
                 placeholder="Ej: dice que pasó a contabilidad, pagan los viernes…"
                 style={{...iStyle,fontSize:12,padding:"7px 9px",marginBottom:8,resize:"vertical",width:"100%",boxSizing:"border-box"}} />
@@ -723,7 +724,7 @@ function HistorialReclamos({ reclamos, onRegistrarRespuesta }){
             </div>
           ) : (
             <button onClick={()=>{setEditando(r.id);setFecha("");setNotas("");}}
-              style={{marginTop:6,background:"none",border:"none",color:C.info,fontSize:12,fontWeight:700,cursor:"pointer",padding:0}}>
+              style={{marginTop:6,background:"none",border:"none",color:C.info,fontSize:12,fontWeight:600,cursor:"pointer",padding:0}}>
               <Ic n="📩"/> Registrar respuesta
             </button>
           )}
@@ -769,7 +770,7 @@ function NotasEHistorial({ oc, perfil, historialCambios, onAgregarComentario, on
     <div style={{marginBottom:12,background:C.card,borderRadius:12,border:`1px solid ${C.border}`,overflow:"hidden"}}>
       <button type="button" onClick={()=>setAbierto(v=>!v)} aria-expanded={abierto}
         style={{width:"100%",background:"none",border:"none",padding:"10px 12px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",textAlign:"left"}}>
-        <span style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4}}>
+        <span style={{fontSize:12,fontWeight:600,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4}}>
           Notas e historial{(nNotas>0||nCambios>0)&&<span style={{color:C.tealDark}}> · {nNotas} nota{nNotas!==1?"s":""} · {nCambios} cambio{nCambios!==1?"s":""}</span>}
         </span>
         <span style={{color:C.inkFaint,fontSize:12}}>{abierto?"▲":"▼"}</span>
@@ -878,7 +879,7 @@ export function FilaOC({ tributario, notaVista, onCrearSeguimiento, onActualizar
     <div style={{marginTop:10}}>
       {puedeReclamar&&(
         hrsDesdeReclamo!==null&&hrsDesdeReclamo<24
-          ? <div style={{background:C.okLight,borderRadius:8,padding:"8px 12px",fontSize:12,color:C.okText,fontWeight:600,marginBottom:10}}>
+          ? <div style={{background:C.okLight,borderRadius:8,padding:"8px 12px",fontSize:12,color:C.okText,fontWeight:500,marginBottom:10}}>
               <Ic n="✅"/> Reclamada hace {hrsDesdeReclamo}h · {ultimoReclamo.correo}
             </div>
           : <button onClick={()=>setReclamando(true)} style={{...btnP(C.danger),marginBottom:10}}>
@@ -894,7 +895,7 @@ export function FilaOC({ tributario, notaVista, onCrearSeguimiento, onActualizar
   const segAtrasado=alertasSeguimiento(oc).some(a=>a.vencida);
   const chipSeguimiento=segAbiertos.length>0?(()=>{ const tono=TONO_PRIORIDAD[prioridadMaxima(oc)]||TONO_PRIORIDAD.media; return (
     <span data-chip-seguimiento={prioridadMaxima(oc)} data-atrasado={segAtrasado?"1":undefined} title={`Seguimiento especial: ${segAbiertos.length} abierto(s) · prioridad máxima ${etiquetaPrioridad(prioridadMaxima(oc)).toLowerCase()}${segAtrasado?" · revisión vencida":""}`}
-      style={{background:tono.bg,border:`1px solid ${tono.color}44`,color:tono.color,fontWeight:800,padding:"2px 8px",borderRadius:999,whiteSpace:"nowrap"}}><Ic n="🚩"/> Seguimiento{segAbiertos.length>1?` ${segAbiertos.length}`:""}{segAtrasado?" · atrasado":""}</span>); })():null;
+      style={{background:tono.bg,border:`1px solid ${tono.color}44`,color:tono.color,fontWeight:700,padding:"2px 8px",borderRadius:999,whiteSpace:"nowrap"}}><Ic n="🚩"/> Seguimiento{segAbiertos.length>1?` ${segAbiertos.length}`:""}{segAtrasado?" · atrasado":""}</span>); })():null;
   // Vista general (19/10/2026): dirección de entrega y factura vigente, solo lectura y en una línea compacta.
   const dirEntrega=direccionEntregaOC(oc), facVista=facturaVisibleOC(oc);
   const lineaEntregaFactura=(oc.tipo_registro||"venta")!=="aporte_socio"?(
@@ -903,7 +904,7 @@ export function FilaOC({ tributario, notaVista, onCrearSeguimiento, onActualizar
         style={{flex:escritorio?"0 1 auto":"1 1 auto",minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:dirEntrega.fuente?C.inkMuted:C.inkFaint,fontStyle:dirEntrega.fuente?"normal":"italic"}}>
         <Ic n="🚚"/> {dirEntrega.texto}</span>
       <span data-fila-factura={facVista.estado} title={[facVista.texto,facVista.extra].filter(Boolean).join(" · ")+(facVista.extra?" (detalle en la ficha)":"")}
-        style={{flexShrink:0,whiteSpace:"nowrap",fontWeight:700,marginLeft:escritorio?6:"auto",paddingLeft:escritorio?8:0,borderLeft:escritorio?`1px solid ${C.border}`:"none",color:facVista.estado==="vigente"?C.ink:facVista.estado==="anulada"?C.warnText:C.inkFaint}}>
+        style={{flexShrink:0,whiteSpace:"nowrap",fontWeight:600,marginLeft:escritorio?6:"auto",paddingLeft:escritorio?8:0,borderLeft:escritorio?`1px solid ${C.border}`:"none",color:facVista.estado==="vigente"?C.ink:facVista.estado==="anulada"?C.warnText:C.inkFaint}}>
         <Ic n="🧾"/> {facVista.texto}{facVista.extra?<span style={{fontWeight:500,color:C.inkFaint}}> · {facVista.extra}</span>:null}</span>
     </div>
   ):null;
@@ -911,13 +912,13 @@ export function FilaOC({ tributario, notaVista, onCrearSeguimiento, onActualizar
 
   return (
     <div data-oc={oc.numero_oc} style={{background:expanded?C.tealLight:C.card,borderTop:`1px solid ${expanded?C.teal:C.border}`,borderRight:`1px solid ${expanded?C.teal:C.border}`,borderBottom:`1px solid ${expanded?C.teal:C.border}`,borderLeft:`4px solid ${estadoOC.color}`,borderRadius:12,marginBottom:8,overflow:expanded?"visible":"hidden"}}>
-      {notaVista&&<div data-nota-vista style={{fontSize:12,fontWeight:700,color:C.inkMuted,background:C.paper,padding:"4px 12px",borderBottom:`1px solid ${C.border}`}}>{notaVista}</div>}
+      {notaVista&&<div data-nota-vista style={{fontSize:12,fontWeight:600,color:C.inkMuted,background:C.paper,padding:"4px 12px",borderBottom:`1px solid ${C.border}`}}>{notaVista}</div>}
       <div onClick={handleToggle} role="button" tabIndex={0} aria-expanded={!!expanded} onKeyDown={e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); handleToggle(); } }} style={{padding:escritorio?"10px 14px":"12px 14px",cursor:"pointer"}}>
         {escritorio?(
           /* Escritorio: una fila compacta — código · cliente y asignaciones · estado y avance · monto */
           <div style={{display:"grid",gridTemplateColumns:"150px minmax(0,1fr) minmax(0,auto) 140px",gap:14,alignItems:"center"}}>
           <div style={{minWidth:0}}>
-            <div style={{fontFamily:MONO,fontWeight:800,fontSize:14,color:C.ink}}>{oc.numero_oc}</div>
+            <div style={{fontFamily:MONO,fontWeight:700,fontSize:14,color:C.ink}}>{oc.numero_oc}</div>
             {(()=>{
               const f=fmtFechaHora(fechaOC(oc).valor);
               return f ? <div style={{fontSize:12,color:C.inkFaint,marginTop:2}}>{f}</div> : null;
@@ -930,19 +931,19 @@ export function FilaOC({ tributario, notaVista, onCrearSeguimiento, onActualizar
               const nombre=esPorCompletar?(oc.entidad||null):oc.cliente;
               return nombre
                 ? [nombre,oc.comuna].filter(Boolean).join(" · ")
-                : <span style={{color:C.warnText,fontWeight:700}}><Ic n="⚠"/> Falta la entidad</span>;
+                : <span style={{color:C.warnText,fontWeight:600}}><Ic n="⚠"/> Falta la entidad</span>;
             })()}
           </span>
         {(oc.tipo_registro||"venta")!=="aporte_socio"&&(
           <div data-asignaciones-fila style={{display:"flex",gap:6,flexWrap:"wrap",fontSize:12}}>
             {faltaVendedor(oc)
-              ? <span data-aviso="sin-vendedor" style={{background:C.warnLight,color:C.warnText,fontWeight:800,padding:"2px 8px",borderRadius:999}}><Ic n="⚠"/> Falta vendedor</span>
+              ? <span data-aviso="sin-vendedor" style={{background:C.warnLight,color:C.warnText,fontWeight:700,padding:"2px 8px",borderRadius:999}}><Ic n="⚠"/> Falta vendedor</span>
               : oc.capitalizacion_bfk
-              ? <span data-chip-capitalizacion style={{background:C.tealLight,color:C.tealDark,fontWeight:800,padding:"2px 8px",borderRadius:999}}>BFK Ltda. · Capitalización</span>
-              : <span data-chip-vendedor style={{background:C.paper,border:`1px solid ${C.border}`,color:C.ink,fontWeight:700,padding:"2px 8px",borderRadius:999}}>V: {primerNombre(nombreVendedor(oc,vendedores))}</span>}
+              ? <span data-chip-capitalizacion style={{background:C.tealLight,color:C.tealDark,fontWeight:700,padding:"2px 8px",borderRadius:999}}>BFK Ltda. · Capitalización</span>
+              : <span data-chip-vendedor style={{background:C.paper,border:`1px solid ${C.border}`,color:C.ink,fontWeight:600,padding:"2px 8px",borderRadius:999}}>V: {primerNombre(nombreVendedor(oc,vendedores))}</span>}
             {faltaFinanciador(oc)
-              ? <span data-aviso="sin-financiador" style={{background:C.warnLight,color:C.warnText,fontWeight:800,padding:"2px 8px",borderRadius:999}}><Ic n="⚠"/> Falta financiador</span>
-              : <span data-chip-financiador style={{background:C.paper,border:`1px solid ${C.border}`,color:C.ink,fontWeight:700,padding:"2px 8px",borderRadius:999}}>F: {primerNombre(nombreFinanciador(oc,financiadores))}</span>}
+              ? <span data-aviso="sin-financiador" style={{background:C.warnLight,color:C.warnText,fontWeight:700,padding:"2px 8px",borderRadius:999}}><Ic n="⚠"/> Falta financiador</span>
+              : <span data-chip-financiador style={{background:C.paper,border:`1px solid ${C.border}`,color:C.ink,fontWeight:600,padding:"2px 8px",borderRadius:999}}>F: {primerNombre(nombreFinanciador(oc,financiadores))}</span>}
             {chipSeguimiento}
           </div>
         )}
@@ -950,20 +951,20 @@ export function FilaOC({ tributario, notaVista, onCrearSeguimiento, onActualizar
                 </div>
             <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4,minWidth:0}}>
           <span style={{display:"inline-flex",alignItems:"flex-start",gap:5,background:estadoOC.bg,color:estadoOC.color,
-            padding:"3px 9px",borderRadius:12,fontSize:12,fontWeight:700,lineHeight:1.35,minWidth:0,maxWidth:"100%"}}>
+            padding:"3px 9px",borderRadius:12,fontSize:12,fontWeight:600,lineHeight:1.35,minWidth:0,maxWidth:"100%"}}>
             <span style={{flexShrink:0}}>{estadoOC.icono}</span><span style={{minWidth:0}}>{estadoOC.texto}</span>
           </span>
           <span style={{fontSize:12,color:C.inkFaint,flexShrink:0,whiteSpace:"nowrap",lineHeight:1.35,padding:"3px 0",marginLeft:"auto"}}>
-            {estancada&&<span style={{color:C.warnText,fontWeight:700}}><Ic n="⏸"/> {diasEstancada}d · </span>}
+            {estancada&&<span style={{color:C.warnText,fontWeight:600}}><Ic n="⏸"/> {diasEstancada}d · </span>}
             {completadas}/5
           </span>
             </div>
           <div style={{flexShrink:0,textAlign:"right"}}>
-            <div style={{fontFamily:MONO,fontWeight:800,fontSize:14,color:C.ink}}>{fmt.money(oc.monto_total)}</div>
+            <div style={{fontFamily:MONO,fontWeight:700,fontSize:14,color:C.ink}}>{fmt.money(oc.monto_total)}</div>
             {(()=>{const mg=gananciaReal(oc);
               return oc.costo_total?(
                 <div style={{marginTop:2}}>
-                  <span style={{display:"block",fontFamily:MONO,fontSize:12,fontWeight:800,color:mg.color}}>+{fmt.money(mg.pesos)}</span>
+                  <span style={{display:"block",fontFamily:MONO,fontSize:12,fontWeight:700,color:mg.color}}>+{fmt.money(mg.pesos)}</span>
                   <span style={{display:"block",fontSize:12,color:mg.color,opacity:0.8}}>{mg.pct}%{mg.extra>0?" · con post-venta":" margen"}</span>
                 </div>
               ):null;})()}
@@ -973,18 +974,18 @@ export function FilaOC({ tributario, notaVista, onCrearSeguimiento, onActualizar
         {/* Celular — línea 1: código y fecha · monto y ganancia */}
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10}}>
           <div style={{minWidth:0}}>
-            <div style={{fontFamily:MONO,fontWeight:800,fontSize:14,color:C.ink}}>{oc.numero_oc}</div>
+            <div style={{fontFamily:MONO,fontWeight:700,fontSize:14,color:C.ink}}>{oc.numero_oc}</div>
             {(()=>{
               const f=fmtFechaHora(fechaOC(oc).valor);
               return f ? <div style={{fontSize:12,color:C.inkFaint,marginTop:2}}>{f}</div> : null;
             })()}
           </div>
           <div style={{flexShrink:0,textAlign:"right"}}>
-            <div style={{fontFamily:MONO,fontWeight:800,fontSize:14,color:C.ink}}>{fmt.money(oc.monto_total)}</div>
+            <div style={{fontFamily:MONO,fontWeight:700,fontSize:14,color:C.ink}}>{fmt.money(oc.monto_total)}</div>
             {(()=>{const mg=gananciaReal(oc);
               return oc.costo_total?(
                 <div style={{marginTop:2}}>
-                  <span style={{display:"block",fontFamily:MONO,fontSize:12,fontWeight:800,color:mg.color}}>+{fmt.money(mg.pesos)}</span>
+                  <span style={{display:"block",fontFamily:MONO,fontSize:12,fontWeight:700,color:mg.color}}>+{fmt.money(mg.pesos)}</span>
                   <span style={{display:"block",fontSize:12,color:mg.color,opacity:0.8}}>{mg.pct}%{mg.extra>0?" · con post-venta":" margen"}</span>
                 </div>
               ):null;})()}
@@ -998,7 +999,7 @@ export function FilaOC({ tributario, notaVista, onCrearSeguimiento, onActualizar
               const nombre=esPorCompletar?(oc.entidad||null):oc.cliente;
               return nombre
                 ? [nombre,oc.comuna].filter(Boolean).join(" · ")
-                : <span style={{color:C.warnText,fontWeight:700}}><Ic n="⚠"/> Falta la entidad</span>;
+                : <span style={{color:C.warnText,fontWeight:600}}><Ic n="⚠"/> Falta la entidad</span>;
             })()}
           </span>
         </div>
@@ -1007,24 +1008,24 @@ export function FilaOC({ tributario, notaVista, onCrearSeguimiento, onActualizar
         {/* Línea 3 — estado, asignaciones y avance en una sola fila */}
         <div style={{display:"flex",alignItems:"center",flexWrap:"wrap",columnGap:6,rowGap:5,marginTop:7}}>
           <span style={{display:"inline-flex",alignItems:"flex-start",gap:5,background:estadoOC.bg,color:estadoOC.color,
-            padding:"3px 9px",borderRadius:12,fontSize:12,fontWeight:700,lineHeight:1.35,minWidth:0,maxWidth:"100%"}}>
+            padding:"3px 9px",borderRadius:12,fontSize:12,fontWeight:600,lineHeight:1.35,minWidth:0,maxWidth:"100%"}}>
             <span style={{flexShrink:0}}>{estadoOC.icono}</span><span style={{minWidth:0}}>{estadoOC.texto}</span>
           </span>
         {(oc.tipo_registro||"venta")!=="aporte_socio"&&(
           <div data-asignaciones-fila style={{display:"flex",gap:6,flexWrap:"wrap",fontSize:12}}>
             {faltaVendedor(oc)
-              ? <span data-aviso="sin-vendedor" style={{background:C.warnLight,color:C.warnText,fontWeight:800,padding:"2px 8px",borderRadius:999}}><Ic n="⚠"/> Falta vendedor</span>
+              ? <span data-aviso="sin-vendedor" style={{background:C.warnLight,color:C.warnText,fontWeight:700,padding:"2px 8px",borderRadius:999}}><Ic n="⚠"/> Falta vendedor</span>
               : oc.capitalizacion_bfk
-              ? <span data-chip-capitalizacion style={{background:C.tealLight,color:C.tealDark,fontWeight:800,padding:"2px 8px",borderRadius:999}}>BFK Ltda. · Capitalización</span>
-              : <span data-chip-vendedor style={{background:C.paper,border:`1px solid ${C.border}`,color:C.ink,fontWeight:700,padding:"2px 8px",borderRadius:999}}>V: {primerNombre(nombreVendedor(oc,vendedores))}</span>}
+              ? <span data-chip-capitalizacion style={{background:C.tealLight,color:C.tealDark,fontWeight:700,padding:"2px 8px",borderRadius:999}}>BFK Ltda. · Capitalización</span>
+              : <span data-chip-vendedor style={{background:C.paper,border:`1px solid ${C.border}`,color:C.ink,fontWeight:600,padding:"2px 8px",borderRadius:999}}>V: {primerNombre(nombreVendedor(oc,vendedores))}</span>}
             {faltaFinanciador(oc)
-              ? <span data-aviso="sin-financiador" style={{background:C.warnLight,color:C.warnText,fontWeight:800,padding:"2px 8px",borderRadius:999}}><Ic n="⚠"/> Falta financiador</span>
-              : <span data-chip-financiador style={{background:C.paper,border:`1px solid ${C.border}`,color:C.ink,fontWeight:700,padding:"2px 8px",borderRadius:999}}>F: {primerNombre(nombreFinanciador(oc,financiadores))}</span>}
+              ? <span data-aviso="sin-financiador" style={{background:C.warnLight,color:C.warnText,fontWeight:700,padding:"2px 8px",borderRadius:999}}><Ic n="⚠"/> Falta financiador</span>
+              : <span data-chip-financiador style={{background:C.paper,border:`1px solid ${C.border}`,color:C.ink,fontWeight:600,padding:"2px 8px",borderRadius:999}}>F: {primerNombre(nombreFinanciador(oc,financiadores))}</span>}
             {chipSeguimiento}
           </div>
         )}
               <span style={{fontSize:12,color:C.inkFaint,flexShrink:0,whiteSpace:"nowrap",lineHeight:1.35,padding:"3px 0",marginLeft:"auto"}}>
-            {estancada&&<span style={{color:C.warnText,fontWeight:700}}><Ic n="⏸"/> {diasEstancada}d · </span>}
+            {estancada&&<span style={{color:C.warnText,fontWeight:600}}><Ic n="⏸"/> {diasEstancada}d · </span>}
             {completadas}/5
           </span>
         </div>
@@ -1079,18 +1080,18 @@ export function FilaOC({ tributario, notaVista, onCrearSeguimiento, onActualizar
           onReabrirPostventa:(ev)=>onGuardarPostventa({id:ev.id,ocId:oc.id,tipo:ev.tipo,fecha:ev.fecha,descripcion:ev.descripcion,estado:"abierto",solucion:ev.solucion||null,fecha_resolucion:null,costo_extra:ev.costo_extra||0,detalle_costo:ev.detalle_costo||null}),
           onCorreoFallida:()=>setCorreoFallida(true),onCorreoFecha:()=>setCorreoFecha(true),onCorregirCompra:onCorregirCompra?setCorrigiendo:null,
           onGuardarLink,onEliminarLink,onEditarLink};
-        const sub=(t)=><div style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,margin:"4px 0 6px"}}>{t}</div>;
-        const estadoChip=(ok,t)=><span style={{fontSize:12,fontWeight:700,padding:"2px 7px",borderRadius:999,background:ok?C.okLight:C.paper,color:ok?C.okText:C.inkFaint,border:`1px solid ${ok?C.okLight:C.border}`,whiteSpace:"nowrap"}}>{ok?"✓ ":""}{t}</span>;
+        const sub=(t)=><div style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,margin:"4px 0 6px"}}>{t}</div>;
+        const estadoChip=(ok,t)=><span style={{fontSize:12,fontWeight:600,padding:"2px 7px",borderRadius:999,background:ok?C.okLight:C.paper,color:ok?C.okText:C.inkFaint,border:`1px solid ${ok?C.okLight:C.border}`,whiteSpace:"nowrap"}}>{ok?"✓ ":""}{t}</span>;
         return (
         <HojaLateral abierta onCerrar={handleToggle} dato={oc.numero_oc} titulo={oc.numero_oc} subtitulo={[oc.cliente||oc.entidad,fmt.money(oc.monto_total)].filter(Boolean).join(" · ")}>
         <div data-ficha-oc={oc.numero_oc} style={{background:C.paper,minHeight:"100%"}}>
           {/* Cabecera fija: OC · cliente · monto · vendedor · estados principales + índice.
               En móvil solo queda el índice: el resumen ya está en la tarjeta principal. */}
-          <div data-ficha-cabecera style={{position:"sticky",top:0,zIndex:6,background:C.paper,padding:escritorio?"9px 14px 6px":"6px 14px 6px",borderBottom:`1px solid ${C.border}`,boxShadow:"0 2px 6px rgba(15,23,42,0.05)"}}>
+          <div data-ficha-cabecera style={{position:"sticky",top:0,zIndex:6,background:C.paper,padding:escritorio?"9px 14px 6px":"6px 14px 6px",borderBottom:`1px solid ${C.border}`}}>
             {escritorio&&<>
             {/* La identificación (OC · institución · monto) va una sola vez, en el encabezado de la hoja. */}
             <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}>
-              <span style={{background:estadoOC.bg,color:estadoOC.color,padding:"2px 8px",borderRadius:999,fontSize:12,fontWeight:800}}>{estadoOC.icono} {estadoOC.texto}</span>
+              <span style={{background:estadoOC.bg,color:estadoOC.color,padding:"2px 8px",borderRadius:999,fontSize:12,fontWeight:700}}>{estadoOC.icono} {estadoOC.texto}</span>
               {estadoChip(estaComprada(oc),"Compra")}{estadoChip(estaEntregada(oc),"Entrega")}{estadoChip(estaFacturada(oc),"Factura")}
               {estadoChip(estaCobrada(oc),"Cobro")}{estadoChip(financiamientoPagado(oc),"Financ.")}
               <span data-cabecera-asignaciones style={{marginLeft:"auto",fontSize:13,color:C.inkMuted,whiteSpace:"nowrap"}}>V: <b style={{color:faltaVendedor(oc)?C.warnText:C.ink}}>{primerNombre(nombreVendedor(oc,vendedores))}</b> · F: <b style={{color:faltaFinanciador(oc)?C.warnText:C.ink}}>{primerNombre(nombreFinanciador(oc,financiadores))}</b></span>
@@ -1114,20 +1115,11 @@ export function FilaOC({ tributario, notaVista, onCrearSeguimiento, onActualizar
 
           {sec("info",<>
             <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:10,marginBottom:10}}>
-              <div style={{fontSize:12,color:C.inkMuted,lineHeight:1.6,minWidth:0,flex:1}}>
-                {[oc.entidad,oc.contacto].filter(Boolean).join(" · ")}
-                {(oc.entidad||oc.contacto)&&<br/>}
-                {(()=>{
-                  const f=fechaOC(oc); const fc=fechaCompra(oc);
-                  const creador=perfiles?.find(p=>p.id===oc.creado_por)?.nombre;
-                  return <>
-                    {f.origen==="emision"&&<>Emitida {fmt.date(String(f.valor).slice(0,10))}</>}
-                    {fc&&<>{f.origen==="emision"?" · ":""}Comprada {fmt.date(String(fc).slice(0,10))}</>}
-                    {creador&&<> · Creada por {creador}</>}
-                  </>;
-                })()}
+              {/* Unidad, contacto y fechas están una sola vez, en las listas «Datos» y «Fechas» de más abajo. */}
+              <div style={{fontSize:12,color:C.inkFaint,lineHeight:1.5,minWidth:0,flex:1,alignSelf:"center"}}>
+                {(()=>{ const creador=perfiles?.find(p=>p.id===oc.creado_por)?.nombre; return creador?<>Creada por {creador}</>:null; })()}
               </div>
-              <div style={{display:"flex",flexDirection:escritorio?"row":"column",gap:6,flexShrink:0}}>
+              <div style={{display:"flex",flexDirection:"row",gap:6,flexShrink:0}}>
                 <button onClick={()=>setEditandoDatos(true)} style={{...btnG,flexShrink:0,fontSize:12,minHeight:36,padding:"6px 10px"}}><Ic n="✏️"/> Editar datos</button>
                 <button data-consulta="1" data-ficha-pdf onClick={async()=>{ try{ await generarFichaPDF(oc); }catch(e){ window.alert(`No se pudo generar la ficha: ${e.message}`); } }}
                   style={{...btnG,flexShrink:0,fontSize:12,minHeight:36,padding:"6px 10px"}}><Ic n="📄"/> Ficha PDF</button>
@@ -1135,13 +1127,13 @@ export function FilaOC({ tributario, notaVista, onCrearSeguimiento, onActualizar
             </div>
             {oc.direccion_entrega&&(
               <div style={{background:C.infoLight,border:`1px solid ${C.info}33`,borderRadius:8,padding:"9px 11px",marginBottom:10}}>
-                <div style={{fontSize:12,fontWeight:800,color:C.info,textTransform:"uppercase",letterSpacing:0.4,marginBottom:3}}>Dirección de despacho</div>
+                <div style={{fontSize:12,fontWeight:700,color:C.info,textTransform:"uppercase",letterSpacing:0.4,marginBottom:3}}>Dirección de despacho</div>
                 <div style={{fontSize:12,color:C.ink,lineHeight:1.45}}>{oc.direccion_entrega}</div>
               </div>
             )}
             {difsOC.length>0&&(
               <div data-diferencias-historicas={difsOC.length} style={{background:C.warnLight,border:`1px solid ${C.warn}55`,borderRadius:8,padding:"9px 11px",marginBottom:10}}>
-                <div style={{fontSize:12,fontWeight:800,color:C.warnText,textTransform:"uppercase",letterSpacing:0.4,marginBottom:3}}><Ic n="⚠"/> Corrección histórica pendiente de aprobación</div>
+                <div style={{fontSize:12,fontWeight:700,color:C.warnText,textTransform:"uppercase",letterSpacing:0.4,marginBottom:3}}><Ic n="⚠"/> Corrección histórica pendiente de aprobación</div>
                 {difsOC.map(d=>(
                   <div key={d.id} style={{fontSize:12,color:C.ink,lineHeight:1.45}}>
                     <b>{({costo_total:"Costo",monto_pagado_fin:"Pagado al financiador",estado_pago_financiamiento:"Estado de financiamiento",monto_facturado:"Facturado",monto_cobrado:"Cobrado",estado_compra:"Estado de compra",estado_factura_propia:"Estado de factura",estado_pago_cliente:"Estado de cobro"})[d.campo]||d.campo}:</b>{" "}
@@ -1164,8 +1156,8 @@ export function FilaOC({ tributario, notaVista, onCrearSeguimiento, onActualizar
                 ["Pagado",tipoFin==="externo"?fmt.money(oc.monto_pagado_fin):"No aplica"],
                 ["Pendiente",tipoFin==="externo"?fmt.money(Math.max(0,(Number(oc.costo_total)||0)-(Number(oc.monto_pagado_fin)||0))):"No aplica"]].map(([k,v])=>(
                 <div key={k} style={{background:C.paper,borderRadius:8,padding:"6px 9px"}}>
-                  <div style={{fontSize:12,color:C.inkFaint,fontWeight:700,textTransform:"uppercase"}}>{k}</div>
-                  <div style={{fontSize:13,fontWeight:800,color:C.ink}}>{v}</div>
+                  <div style={{fontSize:12,color:C.inkFaint,fontWeight:600,textTransform:"uppercase"}}>{k}</div>
+                  <div style={{fontSize:13,fontWeight:700,color:C.ink}}>{v}</div>
                 </div>))}
             </div>
             {tipoFin!=="externo"&&<div style={{fontSize:12,color:C.inkMuted,marginBottom:8}}>{TIPOS_FINANCIAMIENTO[tipoFin]?.detalle}</div>}
@@ -1208,11 +1200,11 @@ export function FilaOC({ tributario, notaVista, onCrearSeguimiento, onActualizar
           {/* Zona administrativa (solo administradores) */}
           {perfil?.rol==="admin"&&(
             <div data-solo-lectura={soloLectura?"1":undefined} onClickCapture={bloquearEscritura} style={{borderTop:`1px dashed ${C.border}`,paddingTop:10,marginTop:4}}>
-              <div style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Zona administrativa</div>
+              <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Zona administrativa</div>
               <button onClick={async()=>{ setSincronizandoMP(true); await onSincronizarFecha(oc); setSincronizandoMP(false); }}
                 disabled={sincronizandoMP}
                 style={{width:"100%",background:"none",border:`1px dashed ${C.info}`,color:C.info,
-                  borderRadius:8,padding:"8px 12px",fontSize:12,fontWeight:700,cursor:"pointer",marginBottom:8}}>
+                  borderRadius:8,padding:"8px 12px",fontSize:12,fontWeight:600,cursor:"pointer",marginBottom:8}}>
                 {sincronizandoMP?"Consultando…":"Actualizar fecha y datos desde Mercado Público"}
               </button>
               <button onClick={async()=>{
@@ -1220,12 +1212,12 @@ export function FilaOC({ tributario, notaVista, onCrearSeguimiento, onActualizar
                 const aviso=nMov?`\n\nTiene ${nMov} compra(s), factura(s) o pago(s) registrados: mientras esté archivada no se sumarán en el Panel, IVA ni estadísticas (el saldo del financiador no se modifica).`:"";
                 const motivo=window.prompt(`¿Archivar la OC ${oc.numero_oc}?\n\nSe ocultará de la operación normal sin borrar ningún dato (eventos, historial, pagos). Podrá consultarla y restaurarla desde Administración.${aviso}\n\nMotivo (opcional):`,"");
                 if(motivo!==null) await onArchivarOC(oc.id,motivo);
-              }} style={{width:"100%",background:"none",border:`1px dashed ${C.warn}`,color:C.warnText,borderRadius:8,padding:"8px 12px",fontSize:12,fontWeight:600,cursor:"pointer"}}>
+              }} style={{width:"100%",background:"none",border:`1px dashed ${C.warn}`,color:C.warnText,borderRadius:8,padding:"8px 12px",fontSize:12,fontWeight:500,cursor:"pointer"}}>
                 <Ic n="🗄"/> Archivar esta OC
               </button>
               {onEliminarOC&&(
                 <button type="button" data-eliminar-oc-abrir={oc.numero_oc} onClick={()=>onEliminarOC(oc)}
-                  style={{width:"100%",background:"none",border:`1px dashed ${C.danger}`,color:C.dangerText,borderRadius:8,padding:"8px 12px",fontSize:12,fontWeight:700,cursor:"pointer",marginTop:8}}>
+                  style={{width:"100%",background:"none",border:`1px dashed ${C.danger}`,color:C.dangerText,borderRadius:8,padding:"8px 12px",fontSize:12,fontWeight:600,cursor:"pointer",marginTop:8}}>
                   Eliminar definitivamente…
                 </button>
               )}
@@ -1435,8 +1427,8 @@ export function PanelCompras({ tributario, onCrearSeguimiento, onActualizarSegui
       {alertas.length>0&&(
         <div data-banner-vencidas style={{background:C.dangerLight,border:`1px solid ${C.danger}44`,borderRadius:8,marginBottom:10,overflow:"hidden"}}>
           <button type="button" aria-expanded={bannerAbierto} onClick={()=>setBannerAbierto(v=>!v)} style={{width:"100%",background:"none",border:"none",padding:"8px 12px",minHeight:40,cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,font:"inherit"}}>
-            <span style={{fontWeight:800,color:C.dangerText,fontSize:13}}><Ic n="⚠"/> {alertas.length} factura{alertas.length>1?"s":""} vencida{alertas.length>1?"s":""} sin cobrar</span>
-            <span style={{color:C.dangerText,fontSize:12,fontWeight:700,textDecoration:"underline"}}>{bannerAbierto?"Ocultar":"Ver y reclamar"}</span>
+            <span style={{fontWeight:700,color:C.dangerText,fontSize:13}}><Ic n="⚠"/> {alertas.length} factura{alertas.length>1?"s":""} vencida{alertas.length>1?"s":""} sin cobrar</span>
+            <span style={{color:C.dangerText,fontSize:12,fontWeight:600,textDecoration:"underline"}}>{bannerAbierto?"Ocultar":"Ver y reclamar"}</span>
           </button>
           {bannerAbierto&&(
             <div style={{padding:"0 12px 10px"}}>
@@ -1460,18 +1452,18 @@ export function PanelCompras({ tributario, onCrearSeguimiento, onActualizarSegui
                         setBannerAbierto(false);
                       }}
                       style={{background:"none",border:"none",padding:0,cursor:"pointer",
-                        fontFamily:MONO,fontWeight:700,fontSize:12,color:C.ink,textDecoration:"underline dotted"}}>
+                        fontFamily:MONO,fontWeight:600,fontSize:12,color:C.ink,textDecoration:"underline dotted"}}>
                       {o.numero_oc}
                     </button>
-                    <span style={{fontSize:12,color:C.dangerText,fontWeight:600}}>{dias}d vencida</span>
+                    <span style={{fontSize:12,color:C.dangerText,fontWeight:500}}>{dias}d vencida</span>
                     {reclamos.length>0&&<span style={{fontSize:12,color:C.inkFaint}}>· {reclamos.length} reclamo{reclamos.length>1?"s":""}</span>}
                   </div>
-                  <div style={{fontSize:12,fontWeight:700,color:colorNivel,marginTop:2}}>{accion.texto}</div>
+                  <div style={{fontSize:12,fontWeight:600,color:colorNivel,marginTop:2}}>{accion.texto}</div>
                 </div>
                 {accion.boton
                   ? <button onClick={()=>setReclamandoBanner(o)}
                       style={{flexShrink:0,background:accion.nivel==="critico"?C.danger:C.warn,border:"none",color:"#fff",
-                        borderRadius:8,padding:"6px 10px",fontSize:12,fontWeight:700,cursor:"pointer"}}>{accion.boton}</button>
+                        borderRadius:8,padding:"6px 10px",fontSize:12,fontWeight:600,cursor:"pointer"}}>{accion.boton}</button>
                   : <div style={{fontSize:16,flexShrink:0}}>{accion.nivel==="ok"?<Ic n="💚"/>:<Ic n="⏳"/>}</div>
                 }
               </div>
@@ -1497,14 +1489,14 @@ export function PanelCompras({ tributario, onCrearSeguimiento, onActualizarSegui
         const totalActivos=etapasActivas+rangoActivo+comunaActiva+critActivos;
         const limpiarTodo=()=>{ setDesde(""); setHasta(""); setFiltros({}); setComunaSel(""); setCrit({vendedor:"",financiador:"",proveedor:"",producto:"",valeVista:""}); };
         const asignacionGrid=(<div data-filtros-asignacion style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
-            <label style={{fontSize:12,fontWeight:700,color:C.inkFaint,minWidth:0}}>Vendedor
+            <label style={{fontSize:12,fontWeight:600,color:C.inkFaint,minWidth:0}}>Vendedor
               <select data-filtro="vendedor" style={{...selStyle,fontSize:12,padding:"8px 10px",marginTop:4,borderColor:crit.vendedor?C.info:undefined}} value={crit.vendedor} onChange={e=>setC("vendedor",e.target.value)}>
                 <option value="">Todos</option>
                 {(vendedores||[]).map(v=><option key={v.id} value={v.id}>{v.nombre}</option>)}
                 <option value="__capitalizacion__">BFK Ltda. · Capitalización ({ocs.filter(o=>o.capitalizacion_bfk).length})</option>
                 <option value="__sin__">Falta vendedor ({ocs.filter(faltaVendedor).length})</option>
               </select></label>
-            <label style={{fontSize:12,fontWeight:700,color:C.inkFaint,minWidth:0}}>Financiador
+            <label style={{fontSize:12,fontWeight:600,color:C.inkFaint,minWidth:0}}>Financiador
               <select data-filtro="financiador" style={{...selStyle,fontSize:12,padding:"8px 10px",marginTop:4,borderColor:crit.financiador?C.info:undefined}} value={crit.financiador} onChange={e=>setC("financiador",e.target.value)}>
                 <option value="">Todos</option>
                 {(financiadores||[]).map(f=><option key={f.id} value={f.id}>{f.nombre}</option>)}
@@ -1520,24 +1512,24 @@ export function PanelCompras({ tributario, onCrearSeguimiento, onActualizarSegui
             {escritorio&&asignacion}
             <BotonSecundario data-abrir-filtros aria-expanded={masFiltros} activo={totalActivos>0||masFiltros} onClick={()=>setMasFiltros(m=>!m)} style={{minHeight:40}}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
-              Filtros{totalActivos>0&&<span style={{background:C.info,color:"#fff",borderRadius:999,fontSize:12,fontWeight:800,padding:"0 7px",lineHeight:"18px"}}>{totalActivos}</span>}
+              Filtros{totalActivos>0&&<span style={{background:C.info,color:"#fff",borderRadius:999,fontSize:12,fontWeight:700,padding:"0 7px",lineHeight:"18px"}}>{totalActivos}</span>}
             </BotonSecundario>
           </div>
           {/* Vendedor y financiador siempre a la vista (decisión de la fase vendedor/financiador): en el celular, bajo la búsqueda */}
           {!escritorio&&asignacionGrid}
           {totalActivos>0&&!masFiltros&&(
-            <div data-filtros-activos style={{display:"flex",alignItems:"center",gap:8,fontSize:12,color:C.info,fontWeight:700,margin:"-2px 2px 10px"}}>
+            <div data-filtros-activos style={{display:"flex",alignItems:"center",gap:8,fontSize:12,color:C.info,fontWeight:600,margin:"-2px 2px 10px"}}>
               <span>{totalActivos} filtro{totalActivos>1?"s":""} activo{totalActivos>1?"s":""}</span>
-              <button onClick={limpiarTodo} style={{background:"none",border:"none",color:C.dangerText,fontSize:12,fontWeight:700,cursor:"pointer",padding:"4px 2px",minHeight:30}}>✕ Limpiar</button>
+              <button onClick={limpiarTodo} style={{background:"none",border:"none",color:C.dangerText,fontSize:12,fontWeight:600,cursor:"pointer",padding:"4px 2px",minHeight:30}}>✕ Limpiar</button>
             </div>
           )}
           {masFiltros&&(
             <div style={{background:C.paper,border:`1px solid ${C.border}`,borderRadius:12,padding:"13px 14px",marginBottom:12}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-                <span style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4}}>Filtros</span>
+                <span style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4}}>Filtros</span>
                 {totalActivos>0&&(
                   <button onClick={limpiarTodo}
-                    style={{background:"none",border:"none",color:C.dangerText,fontSize:12,fontWeight:700,cursor:"pointer",padding:0}}>
+                    style={{background:"none",border:"none",color:C.dangerText,fontSize:12,fontWeight:600,cursor:"pointer",padding:0}}>
                     ✕ Limpiar todo
                   </button>
                 )}
@@ -1545,30 +1537,30 @@ export function PanelCompras({ tributario, onCrearSeguimiento, onActualizarSegui
 
               {/* Fase 4C: quién vendió, quién financió, a quién se compró, qué producto y vale vista */}
               <div data-filtros-4c style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
-                <label style={{fontSize:12,fontWeight:700,color:C.inkFaint}}>Proveedor
+                <label style={{fontSize:12,fontWeight:600,color:C.inkFaint}}>Proveedor
                   <select data-filtro="proveedor" style={{...selStyle,fontSize:12,padding:"8px 10px",marginTop:4}} value={crit.proveedor} onChange={e=>setC("proveedor",e.target.value)}>
                     <option value="">Todos</option>
                     {proveedores.map(p=><option key={p} value={p}>{p}</option>)}
                   </select></label>
-                <label style={{fontSize:12,fontWeight:700,color:C.inkFaint}}>Vale vista / cheque
+                <label style={{fontSize:12,fontWeight:600,color:C.inkFaint}}>Vale vista / cheque
                   <select data-filtro="valeVista" style={{...selStyle,fontSize:12,padding:"8px 10px",marginTop:4}} value={crit.valeVista} onChange={e=>setC("valeVista",e.target.value)}>
                     <option value="">Todos</option>
                     <option value="pendiente">Sin cobrar en el banco</option>
                     <option value="cualquiera">Pagadas con vale vista o cheque</option>
                   </select></label>
-                <label style={{fontSize:12,fontWeight:700,color:C.inkFaint,gridColumn:"1 / -1"}}>Producto
+                <label style={{fontSize:12,fontWeight:600,color:C.inkFaint,gridColumn:"1 / -1"}}>Producto
                   <input data-filtro="producto" style={{...iStyle,fontSize:12,padding:"8px 10px",marginTop:4}} value={crit.producto} onChange={e=>setC("producto",e.target.value)} placeholder="ej: silla, notebook, toner…" /></label>
               </div>
 
               {comunas.length>0&&(<>
-                <div style={{fontSize:12,fontWeight:800,color:C.inkFaint,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Comuna</div>
+                <div style={{fontSize:12,fontWeight:700,color:C.inkFaint,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Comuna</div>
                 <select style={{...selStyle,fontSize:12,padding:"8px 10px",marginBottom:12}} value={comunaSel} onChange={e=>setComunaSel(e.target.value)}>
                   <option value="">Todas las comunas</option>
                   {comunas.map(c=><option key={c} value={c}>{c}</option>)}
                 </select>
               </>)}
 
-              <div style={{fontSize:12,fontWeight:800,color:C.inkFaint,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Período</div>
+              <div style={{fontSize:12,fontWeight:700,color:C.inkFaint,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Período</div>
               <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:12}}>
                 {[
                   {t:"Este mes",d:()=>{const h=new Date();return [`${h.getFullYear()}-${String(h.getMonth()+1).padStart(2,"0")}-01`,h.toISOString().slice(0,10)];}},
@@ -1579,14 +1571,14 @@ export function PanelCompras({ tributario, onCrearSeguimiento, onActualizarSegui
                   const [i,f]=b.d(); const activo=desde===i&&hasta===f;
                   return (
                     <button key={b.t} onClick={()=>{ if(activo){setDesde("");setHasta("");} else {setDesde(i);setHasta(f);} }}
-                      style={{fontSize:12,fontWeight:700,padding:"5px 10px",borderRadius:8,cursor:"pointer",
-                        border:`1.5px solid ${activo?C.info:C.border}`,
+                      style={{fontSize:12,fontWeight:600,padding:"5px 10px",borderRadius:8,cursor:"pointer",
+                        border:`1px solid ${activo?C.info:C.border}`,
                         background:activo?C.infoLight:C.card, color:activo?C.info:C.inkMuted}}>{b.t}</button>
                   );
                 })}
               </div>
 
-              <div style={{fontSize:12,fontWeight:800,color:C.inkFaint,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Fechas exactas</div>
+              <div style={{fontSize:12,fontWeight:700,color:C.inkFaint,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Fechas exactas</div>
               <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:12}}>
                 <input type="date" value={desde} onChange={e=>setDesde(e.target.value)}
                   style={{...iStyle,flex:1,fontSize:12,padding:"7px 9px"}} />
@@ -1595,19 +1587,19 @@ export function PanelCompras({ tributario, onCrearSeguimiento, onActualizarSegui
                   style={{...iStyle,flex:1,fontSize:12,padding:"7px 9px"}} />
               </div>
 
-              <div style={{fontSize:12,fontWeight:800,color:C.inkFaint,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Por etapa</div>
+              <div style={{fontSize:12,fontWeight:700,color:C.inkFaint,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Por etapa</div>
               <div style={{display:"flex",flexDirection:"column",gap:6}}>
                 {FILTROS.map(f=>(
                   <div key={f.key} style={{display:"flex",alignItems:"center",gap:8}}>
-                    <span style={{fontSize:12,fontWeight:700,color:C.inkMuted,width:52,flexShrink:0}}>{f.label}</span>
+                    <span style={{fontSize:12,fontWeight:600,color:C.inkMuted,width:52,flexShrink:0}}>{f.label}</span>
                     <button onClick={()=>{setVista("todas");toggle(f.key,"pend");}}
-                      style={{flex:1,fontSize:12,fontWeight:700,padding:"6px 8px",borderRadius:8,cursor:"pointer",
-                        border:`1.5px solid ${filtros[f.key]==="pend"?C.danger:C.border}`,
+                      style={{flex:1,fontSize:12,fontWeight:600,padding:"6px 8px",borderRadius:8,cursor:"pointer",
+                        border:`1px solid ${filtros[f.key]==="pend"?C.danger:C.border}`,
                         background:filtros[f.key]==="pend"?C.dangerLight:C.card,
                         color:filtros[f.key]==="pend"?C.danger:C.inkMuted}}>{f.pendLabel}</button>
                     <button onClick={()=>{setVista("todas");toggle(f.key,"ok");}}
-                      style={{flex:1,fontSize:12,fontWeight:700,padding:"6px 8px",borderRadius:8,cursor:"pointer",
-                        border:`1.5px solid ${filtros[f.key]==="ok"?C.ok:C.border}`,
+                      style={{flex:1,fontSize:12,fontWeight:600,padding:"6px 8px",borderRadius:8,cursor:"pointer",
+                        border:`1px solid ${filtros[f.key]==="ok"?C.ok:C.border}`,
                         background:filtros[f.key]==="ok"?C.okLight:C.card,
                         color:filtros[f.key]==="ok"?C.ok:C.inkMuted}}>{f.okLabel}</button>
                   </div>
@@ -1623,8 +1615,8 @@ export function PanelCompras({ tributario, onCrearSeguimiento, onActualizarSegui
         const col=urgente?C.dangerText:C.info, bg=urgente?C.dangerLight:C.infoLight, borde=urgente?C.danger:C.info;
         return (
           <div data-filtro-exacto={filtroExacto} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,background:bg,border:`1px solid ${borde}55`,borderRadius:12,padding:"8px 12px",marginBottom:10}}>
-            <span style={{fontSize:13,fontWeight:700,color:col}}>Mostrando solo: {FILTROS_PANEL[filtroExacto].etiqueta} (<span data-n-exacto>{filtered.length}</span>)</span>
-            <button onClick={()=>setFiltroExacto(null)} style={{background:"none",border:"none",color:col,fontSize:13,fontWeight:800,cursor:"pointer",textDecoration:"underline",padding:"4px 2px",minHeight:36}}>Ver todas</button>
+            <span style={{fontSize:13,fontWeight:600,color:col}}>Mostrando solo: {FILTROS_PANEL[filtroExacto].etiqueta} (<span data-n-exacto>{filtered.length}</span>)</span>
+            <button onClick={()=>setFiltroExacto(null)} style={{background:"none",border:"none",color:col,fontSize:13,fontWeight:700,cursor:"pointer",textDecoration:"underline",padding:"4px 2px",minHeight:36}}>Ver todas</button>
           </div>
         );
       })()}
@@ -1635,8 +1627,8 @@ export function PanelCompras({ tributario, onCrearSeguimiento, onActualizarSegui
           const activa=vista===v.key;
           return (
             <button key={v.key} onClick={()=>{setVista(v.key);setFiltros({});setFiltroExacto(null);}}
-              style={{flexShrink:0,fontSize:12,fontWeight:700,padding:"7px 12px",borderRadius:999,cursor:"pointer",
-                border:`1.5px solid ${activa?v.color:C.border}`,
+              style={{flexShrink:0,fontSize:12,fontWeight:600,padding:"7px 12px",borderRadius:999,cursor:"pointer",
+                border:`1px solid ${activa?v.color:C.border}`,
                 background:activa?v.bg:C.card, color:activa?v.color:C.inkMuted,whiteSpace:"nowrap"}}>
               {v.label}{v.n>0?` ${v.n}`:""}
             </button>
@@ -1649,16 +1641,16 @@ export function PanelCompras({ tributario, onCrearSeguimiento, onActualizarSegui
         const noCorr=ocs.filter(financiamientoNoCorresponde).length;
         return (
           <div data-resumen-financiamiento style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"10px 12px",marginBottom:12,fontSize:12}}>
-            <div style={{fontWeight:800,color:C.ink,marginBottom:4}}>Financiamiento pendiente por financiador</div>
+            <div style={{fontWeight:700,color:C.ink,marginBottom:4}}>Financiamiento pendiente por financiador</div>
             {grupos.length===0&&<div style={{color:C.inkFaint}}>No hay financiamiento pendiente con estos filtros.</div>}
             {grupos.map(g=>(
               <div key={g.id} data-fin-grupo={g.id} style={{padding:"6px 0",borderTop:`1px solid ${C.border}`}}>
                 <div style={{display:"flex",justifyContent:"space-between",gap:8,flexWrap:"wrap"}}>
-                  <b>{g.nombre} <span style={{fontWeight:600,color:C.inkMuted}}>· financiador {g.tipo==="propio"?"propio":"externo"} · {g.n} OC</span></b>
+                  <b>{g.nombre} <span style={{fontWeight:500,color:C.inkMuted}}>· financiador {g.tipo==="propio"?"propio":"externo"} · {g.n} OC</span></b>
                   <b data-fin-pendiente={g.id} style={{color:C.dangerText}}>{fmt.money(g.pendiente)}</b>
                 </div>
                 <div style={{color:C.inkMuted,marginTop:2}}>Costo de compras {fmt.money(g.costo)} − devoluciones asignadas a estas OC {fmt.money(g.devuelto)}</div>
-                {g.saldoGlobal!=null&&<div data-fin-saldo-global={g.id} style={{color:g.cuadra?C.okText:C.warnText,marginTop:2,fontWeight:600}}>
+                {g.saldoGlobal!=null&&<div data-fin-saldo-global={g.id} style={{color:g.cuadra?C.okText:C.warnText,marginTop:2,fontWeight:500}}>
                   Saldo global del financiador: {fmt.money(g.saldoGlobal)}{g.cuadra?" · coincide con sus OC pendientes":` · difiere de la suma de sus OC pendientes (${fmt.money(g.pendienteTodas)}): hay devoluciones o ajustes no asignados a una OC; el saldo global es la referencia`}
                 </div>}
               </div>
@@ -1671,7 +1663,7 @@ export function PanelCompras({ tributario, onCrearSeguimiento, onActualizarSegui
         const docs=documentosPendientes(filtered);
         return (
           <div data-resumen-valevista style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"10px 12px",marginBottom:12,fontSize:12}}>
-            <div style={{display:"flex",justifyContent:"space-between",gap:8,fontWeight:800,color:C.ink,marginBottom:4}}>
+            <div style={{display:"flex",justifyContent:"space-between",gap:8,fontWeight:700,color:C.ink,marginBottom:4}}>
               <span>Vales vista y cheques recibidos sin abonar en banco</span><span data-vv-total style={{color:C.warnText}}>{docs.length} · {fmt.money(docs.reduce((s,d)=>s+d.monto,0))}</span>
             </div>
             {docs.length===0&&<div style={{color:C.inkFaint}}>No hay documentos pendientes con estos filtros.</div>}
@@ -1679,7 +1671,7 @@ export function PanelCompras({ tributario, onCrearSeguimiento, onActualizarSegui
               <div key={d.ev.id} data-vv-doc={d.ev.id} style={{display:"flex",justifyContent:"space-between",gap:8,flexWrap:"wrap",padding:"5px 0",borderTop:`1px solid ${C.border}`}}>
                 <span style={{minWidth:0}}><b style={{fontFamily:MONO}}>{d.numero}</b> · {d.cliente||"—"}<br/>
                   <span style={{color:C.inkMuted}}>{d.medio}{d.institucion?` ${d.institucion}`:""} · recibido {d.fecha?fmt.date(d.fecha):"sin fecha"}</span></span>
-                <span style={{textAlign:"right"}}><b>{fmt.money(d.monto)}</b><br/><span data-vv-estado style={{color:C.warnText,fontWeight:700}}>{d.estado}</span></span>
+                <span style={{textAlign:"right"}}><b>{fmt.money(d.monto)}</b><br/><span data-vv-estado style={{color:C.warnText,fontWeight:600}}>{d.estado}</span></span>
               </div>
             ))}
             <div style={{color:C.inkFaint,marginTop:6,lineHeight:1.45}}>«Documento recibido» no es «Dinero abonado en banco»: no cuenta como caja ni se concilia hasta marcarse cobrado (desde la cartola o al editar el cobro). Al cobrarse todos sus documentos, la OC sale de este filtro.</div>
@@ -1699,7 +1691,7 @@ export function PanelCompras({ tributario, onCrearSeguimiento, onActualizarSegui
             return (
               <>
                 <span style={{display:"block"}}>{filtered.length} órdenes · {fmt.money(ven)}</span>
-                {gan>0&&<span style={{display:"block",color:C.okText,fontWeight:700}}>deja {fmt.money(gan)}</span>}
+                {gan>0&&<span style={{display:"block",color:C.okText,fontWeight:600}}>deja {fmt.money(gan)}</span>}
                 {externas.length>0&&<span data-ventas-externas style={{display:"block"}}>+ {externas.length} venta{externas.length>1?"s":""} externa{externas.length>1?"s":""} {fmt.money(venExt)} (no es venta de BFK)</span>}
               </>
             );
@@ -1720,11 +1712,11 @@ export function PanelCompras({ tributario, onCrearSeguimiento, onActualizarSegui
             }catch(e){ window.alert(`No se pudo exportar: ${e.message}`); }
             finally{ setExportandoVista(false); }
           }} disabled={exportandoVista||!filtered.length}
-          style={{flexShrink:0,fontSize:12,fontWeight:700,padding:"4px 9px",borderRadius:8,cursor:"pointer",border:`1px solid ${C.border}`,background:C.card,color:C.inkMuted}}>
+          style={{flexShrink:0,fontSize:12,fontWeight:600,padding:"4px 9px",borderRadius:8,cursor:"pointer",border:`1px solid ${C.border}`,background:C.card,color:C.inkMuted}}>
           <Ic n="📥"/> Excel
         </button>
         <button onClick={()=>setOrden(o=>o==="fecha"?"ganancia":"fecha")}
-          style={{flexShrink:0,fontSize:12,fontWeight:700,padding:"4px 9px",borderRadius:8,cursor:"pointer",
+          style={{flexShrink:0,fontSize:12,fontWeight:600,padding:"4px 9px",borderRadius:8,cursor:"pointer",
             border:`1px solid ${orden==="ganancia"?C.ok:C.border}`,
             background:orden==="ganancia"?C.okLight:C.card,
             color:orden==="ganancia"?C.ok:C.inkMuted}}>

@@ -39,7 +39,7 @@ export function BibliotecaTecnica({ token, vp, showToast }) {
       {err && <AvisoLinea tono="danger">{err}</AvisoLinea>}
       {(res || []).map((p) => (
         <button key={p.id} type="button" data-producto={p.id} onClick={() => setAbierto(p.id)} style={{ ...cardStyle, borderRadius: R.md, padding: "10px 12px", marginBottom: 6, width: "100%", textAlign: "left", cursor: "pointer" }}>
-          <div style={{ fontWeight: 800, fontSize: T.sm }}>{p.nombre}</div><div style={{ fontSize: T.small, color: C.inkMuted }}>{[p.marca, p.modelo].filter(Boolean).join(" · ") || "Sin marca ni modelo"}</div>
+          <div style={{ fontWeight: 700, fontSize: T.sm }}>{p.nombre}</div><div style={{ fontSize: T.small, color: C.inkMuted }}>{[p.marca, p.modelo].filter(Boolean).join(" · ") || "Sin marca ni modelo"}</div>
         </button>
       ))}
       {res && !res.length && <Vacio>Sin productos.</Vacio>}
@@ -146,7 +146,7 @@ export function EditorProducto({ token, vp, id, showToast, onCerrar, onCreado })
         <SubirArchivo token={token} ambito="producto" id={id} categorias={["ficha_tecnica", "foto", "manual", "certificado"]} habilitado={vp.documentosHabilitados} showToast={showToast} onSubido={cargar} />
         <ListaDocumentos token={token} documentos={docs} showToast={showToast} onAnular={async (d) => { const m = window.prompt("Motivo de la anulación"); if (!m) return; try { await anular(token, "documento", d.id, m); await cargar(); } catch (e) { showToast?.(mensajeVP(e), "error"); } }} />
         {docs.filter((d) => d.categoria === "ficha_tecnica" && /pdf/i.test(d.tipo_mime || d.nombre_archivo)).length > 0 && <div style={{ marginTop: 8 }}>
-          <div style={{ fontSize: T.small, fontWeight: 800, color: C.inkMuted, marginBottom: 4 }}>EXTRACCIÓN ASISTIDA (queda pendiente de revisión)</div>
+          <div style={{ fontSize: T.small, fontWeight: 700, color: C.inkMuted, marginBottom: 4 }}>EXTRACCIÓN ASISTIDA (queda pendiente de revisión)</div>
           {docs.filter((d) => d.categoria === "ficha_tecnica" && /pdf/i.test(d.tipo_mime || d.nombre_archivo)).map((d) => <button key={d.id} type="button" data-extraer={d.id} disabled={!!ocupado} onClick={() => extraer(d)} style={{ ...estiloBoton(), marginRight: 6 }}>{ocupado === "extraer" ? "Leyendo…" : `Proponer datos desde «${d.titulo}»`}</button>)}
         </div>}
         {ext.map((e) => (

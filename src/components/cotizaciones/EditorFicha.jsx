@@ -138,7 +138,7 @@ export function EditorFicha({ inicial, envios = [], items = [], destino = "", de
         )}
         {protegido && <AvisoLinea tono="info" icono="🔒" dato="item-protegido">Cotización adjudicada: el producto ofertado (marca y modelo), la cantidad, los precios y el despacho quedan protegidos. Puedes actualizar el enlace de compra, el proveedor y corregir la ficha técnica.</AvisoLinea>}
 
-        <div style={{ fontSize: T.small, fontWeight: 800, color: C.tealDark, textTransform: "uppercase", letterSpacing: 0.5, margin: "4px 0 8px" }}>Ficha técnica · va en la EETT</div>
+        <div style={{ fontSize: T.small, fontWeight: 700, color: C.tealDark, textTransform: "uppercase", letterSpacing: 0.5, margin: "4px 0 8px" }}>Ficha técnica · va en la EETT</div>
         <Field label={servicio ? "Nombre del servicio" : "Nombre exacto del producto"} required><textarea data-campo="nombre" rows={2} value={it.ficha.nombre || ""} onChange={(e) => setF("nombre", e.target.value)} style={{ ...iStyle, resize: "vertical" }} /></Field>
         {!servicio && <>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
@@ -181,7 +181,7 @@ export function EditorFicha({ inicial, envios = [], items = [], destino = "", de
 
         {modo === "item" && (
           <div data-datos-internos style={{ borderTop: `2px dashed ${C.border}`, paddingTop: 12, marginTop: 4 }}>
-            <div style={{ fontSize: T.small, fontWeight: 800, color: C.inkMuted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>🔒 Datos comerciales internos · nunca van en la EETT</div>
+            <div style={{ fontSize: T.small, fontWeight: 700, color: C.inkMuted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>🔒 Datos comerciales internos · nunca van en la EETT</div>
             <Field label="Enlace de compra del proveedor" hint={inicial.enlace_original && !mismoTexto(inicial.enlace_original, it.enlace) ? `Enlace original de referencia: ${inicial.enlace_original}` : "Se guarda para comprar después (no necesita leerse automáticamente)."}>
               <input data-campo="enlace" value={it.enlace || ""} onChange={(e) => { set("enlace", e.target.value); if (!it.proveedor) set("proveedor", proveedorDeEnlace(e.target.value)); }} style={iStyle} inputMode="url" placeholder="https://…" />
             </Field>
@@ -202,10 +202,10 @@ export function EditorFicha({ inicial, envios = [], items = [], destino = "", de
             <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: T.sm, marginBottom: 12, minHeight: 32 }}><input type="checkbox" disabled={protegido} checked={it.con_factura !== false} onChange={(e) => set("con_factura", e.target.checked)} /> Se compra con factura</label>
 
             {servicio ? <div data-despacho-no-aplica style={{ fontSize: T.small, color: C.inkMuted, marginBottom: 12 }}>Servicio: el despacho no aplica.</div> : <div data-despacho-ficha style={{ border: `1px solid ${C.border}`, borderRadius: R.md, padding: "10px 12px", marginBottom: 12, background: C.paper, opacity: protegido ? 0.7 : 1 }}>
-              <div style={{ fontSize: T.sm, fontWeight: 800, color: C.ink, marginBottom: 6 }}>Despacho</div>
+              <div style={{ fontSize: T.sm, fontWeight: 700, color: C.ink, marginBottom: 6 }}>Despacho</div>
               {mostrarDir && dirCliente && (
                 <div data-direccion-en-ficha style={{ border: `1px solid ${destinoValido ? C.ok : C.warn}`, background: destinoValido ? C.okLight : C.warnLight, borderRadius: R.sm, padding: "8px 10px", marginBottom: 10 }}>
-                  <div style={{ fontSize: T.small, fontWeight: 800, color: destinoValido ? C.okText : C.warnText, marginBottom: 6 }}>{destinoValido ? "✓ Dirección de entrega registrada (también en Datos)" : "Falta la dirección de entrega del cliente: complétala aquí para poder confirmar el despacho"}</div>
+                  <div style={{ fontSize: T.small, fontWeight: 700, color: destinoValido ? C.okText : C.warnText, marginBottom: 6 }}>{destinoValido ? "✓ Dirección de entrega registrada (también en Datos)" : "Falta la dirección de entrega del cliente: complétala aquí para poder confirmar el despacho"}</div>
                   <Field label="Dirección de entrega"><input data-campo="direccion-ficha" value={dirCliente.direccion_entrega || ""} onChange={(e) => onDireccion({ direccion_entrega: e.target.value })} style={iStyle} placeholder="Calle, número, oficina/bodega" /></Field>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                     <Field label="Comuna / ciudad"><input data-campo="comuna-ficha" value={dirCliente.comuna || ""} onChange={(e) => onDireccion({ comuna: e.target.value })} style={iStyle} /></Field>
@@ -236,10 +236,10 @@ export function EditorFicha({ inicial, envios = [], items = [], destino = "", de
               </div>
               <Field label="Cómo se verificó"><input data-campo="evidencia-despacho" value={desp.evidencia || ""} disabled={protegido} onChange={(e) => setD("evidencia", e.target.value)} placeholder={destinoValido ? `Simulación de compra a ${destino}…` : "Primero la dirección de entrega del cliente"} style={iStyle} /></Field>
               <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: T.sm, minHeight: 32 }}><input type="checkbox" disabled={protegido} checked={desp.con_factura !== false} onChange={(e) => setD("con_factura", e.target.checked)} /> Despacho incluido en la factura</label>
-              <div data-despacho-destino style={{ fontSize: T.small, marginTop: 4, color: destinoDistinto ? C.warnText : C.inkMuted, fontWeight: destinoDistinto ? 700 : 400 }}>
+              <div data-despacho-destino style={{ fontSize: T.small, marginTop: 4, color: destinoDistinto ? C.warnText : C.inkMuted, fontWeight: destinoDistinto ? 600 : 400 }}>
                 {!destinoValido ? "Sin dirección de entrega válida: el despacho queda «Por verificar» (se confirma contra la dirección real del cliente)." :
                   !envioConfirmado(desp) ? `Por verificar para: ${destino}. Nunca se asume despacho gratis.` :
-                  destinoDistinto ? <>Verificado para «{desp.destino || "otra dirección"}»; la entrega ahora es «{destino}». <button type="button" data-reverificar onClick={() => setReverificado(true)} disabled={protegido} style={{ border: "none", background: "none", color: C.tealDark, textDecoration: "underline", cursor: "pointer", padding: 0, fontWeight: 700 }}>Lo verifiqué para la dirección actual</button></> :
+                  destinoDistinto ? <>Verificado para «{desp.destino || "otra dirección"}»; la entrega ahora es «{destino}». <button type="button" data-reverificar onClick={() => setReverificado(true)} disabled={protegido} style={{ border: "none", background: "none", color: C.tealDark, textDecoration: "underline", cursor: "pointer", padding: 0, fontWeight: 600 }}>Lo verifiqué para la dirección actual</button></> :
                   `Verificado para: ${verificadoPara}`}
               </div>
               {compartidoCon.length > 0 && <div style={{ fontSize: T.small, color: C.inkMuted, marginTop: 4 }}>Compartido con: {compartidoCon.map((x) => x.ficha?.nombre || "producto").join(", ")}. El costo total se ingresa una sola vez y se reparte según el valor de cada producto.</div>}

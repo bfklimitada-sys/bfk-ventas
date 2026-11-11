@@ -25,7 +25,7 @@ export function PestanaEquipo({ token, proyecto: p, per, nombres, perfiles, vers
     return (
       <div data-integrante={nombres[f.usuario_id] || f.usuario_id} style={{ ...cardStyle, borderRadius: R.md, padding: "12px 14px", marginBottom: S.sm, opacity: f.activo ? 1 : 0.6 }}>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          <span style={{ fontWeight: 800, color: C.ink }}>{nombres[f.usuario_id] || "Usuario"}</span>
+          <span style={{ fontWeight: 700, color: C.ink }}>{nombres[f.usuario_id] || "Usuario"}</span>
           <Badge tono={f.rol_proyecto === "jefe" ? "info" : "neutro"}><span data-rol-integrante={f.rol_proyecto}>{rolDe(f.rol_proyecto)?.l}</span></Badge>
           {esResp && <Badge tono="ok">Responsable principal</Badge>}
           {verEco && <Badge tono="neutro"><span data-ve-economia>Datos económicos</span></Badge>}
@@ -50,7 +50,7 @@ export function PestanaEquipo({ token, proyecto: p, per, nombres, perfiles, vers
       nota="Jefe: edita datos, equipo, estados y contenido. Editor: actividades, hitos, entregables y documentos. Lector: solo consulta y descarga. Los datos económicos los ven el administrador, el responsable principal y quienes ellos autoricen.">
       {error && <ErrorForm>{error}</ErrorForm>}
       {activos.map((f) => <Integrante key={f.id} f={f} />)}
-      {inactivos.length > 0 && <div style={{ fontSize: T.small, fontWeight: 800, color: C.inkMuted, margin: "12px 0 6px" }}>Ya no integran el equipo</div>}
+      {inactivos.length > 0 && <div style={{ fontSize: T.small, fontWeight: 700, color: C.inkMuted, margin: "12px 0 6px" }}>Ya no integran el equipo</div>}
       {inactivos.map((f) => <Integrante key={f.id} f={f} />)}
       {agregar && <FormIntegrante token={token} proyecto={p} perfiles={perfiles} filas={filas} puedeEconomia={per.autorizarEconomia} onCerrar={() => setAgregar(false)}
         onGuardado={async () => { setAgregar(false); showToast("Integrante agregado"); await cargar(); await onCambio(); }} />}

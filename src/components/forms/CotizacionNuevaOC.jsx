@@ -7,7 +7,7 @@ import { ESTADOS_COTIZACION } from "../../lib/cotizaciones";
 
 const m = (x) => fmt.money(Math.round(Number(x) || 0));
 const caja = { background: C.paper, borderRadius: 12, padding: "10px 12px", marginBottom: 14, border: `1px solid ${C.border}` };
-const tit = (t, extra = null) => <div style={{ fontSize: 12, fontWeight: 800, color: C.inkMuted, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8, display: "flex", justifyContent: "space-between", gap: 8 }}><span>{t}</span>{extra}</div>;
+const tit = (t, extra = null) => <div style={{ fontSize: 12, fontWeight: 700, color: C.inkMuted, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8, display: "flex", justifyContent: "space-between", gap: 8 }}><span>{t}</span>{extra}</div>;
 const codigoDe = (c) => c?.id_externo || c?.nombre || String(c?.id || "").slice(0, 8);
 const fechaCorta = (f) => (f ? fmt.date(String(f).slice(0, 10)) : "");
 
@@ -18,19 +18,19 @@ function Tarjeta({ c, motivos = [], confianza, eleg, onUsar }) {
     <div data-tarjeta-cotizacion={c.id} style={{ background: C.card, border: `1px solid ${eleg.ok ? C.border : C.dangerLight}`, borderRadius: 10, padding: "10px 12px", marginBottom: 8 }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start", flexWrap: "wrap" }}>
         <div style={{ minWidth: 0, flex: "1 1 200px" }}>
-          <div style={{ fontFamily: MONO, fontWeight: 800, fontSize: 13, color: C.ink, wordBreak: "break-word" }}>{codigoDe(c)}</div>
+          <div style={{ fontFamily: MONO, fontWeight: 700, fontSize: 13, color: C.ink, wordBreak: "break-word" }}>{codigoDe(c)}</div>
           <div style={{ fontSize: 12, color: C.inkMuted, marginTop: 2, lineHeight: 1.45 }}>
             {c.nombre && c.nombre !== codigoDe(c) ? <>{c.nombre}<br /></> : null}
             {c.institucion || "Institución sin registrar"} · {est}{c.fecha ? ` · ${fechaCorta(c.fecha)}` : ""}{Number(c.total) ? ` · total ${m(c.total)}` : ""}
             {c.vendedor_nombre ? <> · vendedor {c.vendedor_nombre}</> : null}
           </div>
         </div>
-        {confianza && <span data-confianza={confianza} style={{ flexShrink: 0, fontSize: 11, fontWeight: 800, borderRadius: 999, padding: "2px 8px", background: confianza === "alta" ? C.okLight : confianza === "media" ? C.infoLight : C.paper, color: confianza === "alta" ? C.okText : confianza === "media" ? C.info : C.inkMuted }}>Coincidencia {confianza}</span>}
+        {confianza && <span data-confianza={confianza} style={{ flexShrink: 0, fontSize: 11, fontWeight: 700, borderRadius: 999, padding: "2px 8px", background: confianza === "alta" ? C.okLight : confianza === "media" ? C.infoLight : C.paper, color: confianza === "alta" ? C.okText : confianza === "media" ? C.info : C.inkMuted }}>Coincidencia {confianza}</span>}
       </div>
       {motivos.length > 0 && <div data-motivos style={{ fontSize: 12, color: C.inkMuted, marginTop: 6 }}>Coincide: {motivos.join(" · ")}</div>}
       {eleg.ok
         ? <button data-usar-cotizacion={c.id} onClick={() => onUsar(c)} style={{ ...btnP(C.teal), marginTop: 8, minHeight: 44 }}>Usar esta cotización</button>
-        : <div data-no-vinculable style={{ fontSize: 12, color: C.dangerText, fontWeight: 600, marginTop: 6 }}>No se puede vincular: {eleg.motivo}</div>}
+        : <div data-no-vinculable style={{ fontSize: 12, color: C.dangerText, fontWeight: 500, marginTop: 6 }}>No se puede vincular: {eleg.motivo}</div>}
     </div>
   );
 }
@@ -84,7 +84,7 @@ export function SelectorCotizacionOC({ ocMP, onCandidatas, onBuscarTexto, onCarg
     return (
       <div data-cotizacion-seleccionada={cot.id} style={{ ...caja, background: C.tealLight, borderColor: C.teal }}>
         {tit("Cotización BFK", bloqueado ? null : <button data-cambiar-cotizacion onClick={() => onSeleccion(null)} style={{ background: "none", border: "none", color: C.tealDark, textDecoration: "underline", cursor: "pointer", fontSize: 12, padding: 0, minHeight: 32, textTransform: "none", letterSpacing: 0 }}>Cambiar</button>)}
-        <div style={{ fontFamily: MONO, fontWeight: 800, fontSize: 13, color: C.ink }}>✓ {base.codigo}</div>
+        <div style={{ fontFamily: MONO, fontWeight: 700, fontSize: 13, color: C.ink }}>✓ {base.codigo}</div>
         <div style={{ fontSize: 12, color: C.inkMuted, marginTop: 2, lineHeight: 1.5 }}>
           {cot.nombre && cot.nombre !== base.codigo ? <>{cot.nombre}<br /></> : null}
           {cot.institucion || "—"} · {ESTADOS_COTIZACION[cot.estado]?.label || cot.estado} · {base.lineas.length} producto{base.lineas.length === 1 ? "" : "s"} · costo cotizado {m(base.costoTotal)}
@@ -92,7 +92,7 @@ export function SelectorCotizacionOC({ ocMP, onCandidatas, onBuscarTexto, onCarg
         <div data-efecto-vinculo style={{ fontSize: 12, color: C.ink, marginTop: 6, lineHeight: 1.5 }}>
           {eleg.yaVinculada && !eleg.adjudicar ? "Ya está vinculada a esta OC." : `Al guardar, la cotización quedará ${eleg.adjudicar ? "adjudicada y " : ""}vinculada a esta OC.`} Sus productos, cantidades y precios de venta no se modifican.
         </div>
-        {avisos.map((a, i) => <div key={i} data-aviso-cotizacion style={{ fontSize: 12, color: C.warnText, fontWeight: 600, marginTop: 6 }}><Ic n="⚠" /> {a}</div>)}
+        {avisos.map((a, i) => <div key={i} data-aviso-cotizacion style={{ fontSize: 12, color: C.warnText, fontWeight: 500, marginTop: 6 }}><Ic n="⚠" /> {a}</div>)}
       </div>
     );
   }
@@ -118,7 +118,7 @@ export function SelectorCotizacionOC({ ocMP, onCandidatas, onBuscarTexto, onCarg
       ) : <div data-sin-sugerencias style={{ fontSize: 12, color: C.inkMuted, marginBottom: 8 }}>No se encontraron cotizaciones que coincidan con el RUT, el monto, el nombre o los productos de la OC.</div>)}
 
       {fase !== "no_disponible" && <>
-        <div style={{ fontSize: 12, fontWeight: 700, color: C.ink, margin: "8px 0 6px" }}>¿No aparece? Búscala</div>
+        <div style={{ fontSize: 12, fontWeight: 600, color: C.ink, margin: "8px 0 6px" }}>¿No aparece? Búscala</div>
         <div style={{ display: "flex", gap: 6 }}>
           <input data-buscar-cotizacion style={{ ...iStyle, flex: 1, minWidth: 0 }} value={q} placeholder="Código, nombre o institución"
             onChange={(e) => { setQ(e.target.value); setErr(""); }} onKeyDown={(e) => e.key === "Enter" && buscarTexto()} />
@@ -129,7 +129,7 @@ export function SelectorCotizacionOC({ ocMP, onCandidatas, onBuscarTexto, onCarg
       </>}
 
       {cargando && <div data-cargando-cotizacion style={{ fontSize: 12, color: C.inkMuted, marginTop: 8 }}>Cargando la cotización…</div>}
-      {err && <div data-error-cotizacion style={{ background: C.dangerLight, color: C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 12, marginTop: 8, fontWeight: 600 }}>{err}</div>}
+      {err && <div data-error-cotizacion style={{ background: C.dangerLight, color: C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 12, marginTop: 8, fontWeight: 500 }}>{err}</div>}
       <button data-sin-cotizacion-oc onClick={() => onSinCotizacion(true)} style={{ background: "none", border: "none", color: C.tealDark, textDecoration: "underline", cursor: "pointer", fontSize: 12, padding: 0, marginTop: 10, minHeight: 32 }}>Continuar sin cotización</button>
     </div>
   );

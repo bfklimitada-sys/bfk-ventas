@@ -64,7 +64,7 @@ export function CorregirCompra({ oc, evento, perfil, onCorregir, onAnular }) {
         <div style={{ fontSize: 12, color: C.inkMuted, marginTop: 2 }}>Pagado al financiador en esta OC: {m(pagado)}. Los pagos y devoluciones (FIFO) no se modifican.</div>
       </div>
       <div style={caja}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: C.inkMuted, textTransform: "uppercase", marginBottom: 6 }}>Datos comerciales (no cambian dinero)</div>
+        <div style={{ fontSize: 12, fontWeight: 600, color: C.inkMuted, textTransform: "uppercase", marginBottom: 6 }}>Datos comerciales (no cambian dinero)</div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
           <Field label="Proveedor"><input data-corr="proveedor" style={iStyle} value={proveedor} onChange={(e) => setProveedor(e.target.value)} /></Field>
           <Field label="Entrega estimada"><input data-corr="fecha-entrega" type="date" style={iStyle} value={fechaEntrega} onChange={(e) => setFechaEntrega(e.target.value)} /></Field>
@@ -80,7 +80,7 @@ export function CorregirCompra({ oc, evento, perfil, onCorregir, onAnular }) {
         ))}
       </div>
       <div style={{ ...caja, borderColor: plan.financiero ? C.warn : C.border }} data-corr-financiero>
-        <div style={{ fontSize: 12, fontWeight: 700, color: C.inkMuted, textTransform: "uppercase", marginBottom: 6 }}>Datos financieros {esAdmin ? "(corrección autorizada: requiere motivo)" : "(solo administrador)"}</div>
+        <div style={{ fontSize: 12, fontWeight: 600, color: C.inkMuted, textTransform: "uppercase", marginBottom: 6 }}>Datos financieros {esAdmin ? "(corrección autorizada: requiere motivo)" : "(solo administrador)"}</div>
         {filas.map((f) => (
           <div key={f.id} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 12, padding: "4px 0", borderBottom: `1px solid ${C.border}` }}>
             <span style={{ flex: "1 1 160px", minWidth: 0 }}>{f.nombre}{!f.desp && <span style={{ color: C.inkMuted }}> · comprado {f.cantidadAntes}</span>}</span>
@@ -94,14 +94,14 @@ export function CorregirCompra({ oc, evento, perfil, onCorregir, onAnular }) {
           </div>
         ))}
         {plan.financiero && (
-          <div data-corr-impacto style={{ fontSize: 12, marginTop: 6, color: plan.delta > 0 ? C.dangerText : C.okText, fontWeight: 600 }}>
+          <div data-corr-impacto style={{ fontSize: 12, marginTop: 6, color: plan.delta > 0 ? C.dangerText : C.okText, fontWeight: 500 }}>
             Costo de esta compra: {m(evento.costo_compra)} → {m(plan.costoNuevo)} ({plan.delta > 0 ? "+" : "−"}{m(Math.abs(plan.delta))}). La deuda con el financiador se recalcula sobre la misma compra.
             {plan.costoNuevo < pagado && <div style={{ color: C.dangerText }}>El costo quedaría bajo lo ya pagado al financiador ({m(pagado)}): la base lo rechazará.</div>}
           </div>
         )}
       </div>
       <Field label={plan.financiero ? "Motivo de la corrección (obligatorio)" : "Motivo / observación (opcional)"}><input data-corr="motivo" style={iStyle} value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="ej: el proveedor cobró menos despacho" /></Field>
-      {errores.length > 0 && <div data-corr-errores style={{ background: C.dangerLight, color: C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 10, fontWeight: 600 }}>{errores.map((e, i) => <div key={i}>• {e}</div>)}</div>}
+      {errores.length > 0 && <div data-corr-errores style={{ background: C.dangerLight, color: C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 10, fontWeight: 500 }}>{errores.map((e, i) => <div key={i}>• {e}</div>)}</div>}
       <button data-corr-guardar onClick={guardar} disabled={guardando} style={btnP(guardando ? C.inkFaint : C.teal)}>{guardando ? "Guardando…" : plan.financiero ? "✓ Corregir esta compra" : "✓ Guardar datos comerciales"}</button>
       {esAdmin && <button data-corr-anular onClick={anular} disabled={guardando} style={{ ...btnP(C.dangerLight), color: C.dangerText, marginTop: 8 }}>Anular esta compra</button>}
     </div>

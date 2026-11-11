@@ -62,7 +62,7 @@ export function CompraVentaPrivada({ token, v, d, vp, showToast, onCerrar, onLis
   };
 
   const caja = { background: C.paper, borderRadius: R.md, padding: "10px 12px", marginBottom: 12, border: `1px solid ${C.border}` };
-  const tit = (t) => <div style={{ fontSize: T.small, fontWeight: 700, color: C.inkMuted, textTransform: "uppercase", marginBottom: 6 }}>{t}</div>;
+  const tit = (t) => <div style={{ fontSize: T.small, fontWeight: 600, color: C.inkMuted, textTransform: "uppercase", marginBottom: 6 }}>{t}</div>;
   const marcado = (c) => (c ? { borderColor: C.warn, background: C.warnLight } : {});
   const ref = (c, t) => (c ? <div data-cotizado style={{ fontSize: 11, color: C.warnText, marginTop: 2 }}>Cotizado: {t || "—"}</div> : null);
   const pie = <>
@@ -91,7 +91,7 @@ export function CompraVentaPrivada({ token, v, d, vp, showToast, onCerrar, onLis
       </div>
 
       {todoComprado ? (
-        <div data-todo-comprado style={{ background: C.okLight, color: C.okText, borderRadius: R.sm, padding: "10px 12px", fontSize: T.sm, marginBottom: 10, fontWeight: 600 }}>Todo lo vendido ya está comprado. Si hubo un costo adicional, usa el registro manual.</div>
+        <div data-todo-comprado style={{ background: C.okLight, color: C.okText, borderRadius: R.sm, padding: "10px 12px", fontSize: T.sm, marginBottom: 10, fontWeight: 500 }}>Todo lo vendido ya está comprado. Si hubo un costo adicional, usa el registro manual.</div>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
           <button type="button" data-opcion="A" onClick={() => elegir("A")} style={{ ...estiloBoton(opcion === "A" ? "pri" : undefined), minHeight: 56 }}>A · La compra es igual a lo cotizado</button>
@@ -110,12 +110,12 @@ export function CompraVentaPrivada({ token, v, d, vp, showToast, onCerrar, onLis
               <div key={f.rid} data-fila-compra={f.rid} style={{ fontSize: T.small, padding: "6px 0", borderBottom: `1px solid ${C.border}` }}>
                 <b>{f.producto}</b>{f.marca || f.modelo ? ` · ${[f.marca, f.modelo].filter(Boolean).join(" ")}` : ""} × {cantidadTxt(f.cantidad)}<br />
                 <span style={{ color: C.inkMuted }}>{f.proveedor || "Sin proveedor"} · {pesos(f.unitario)} c/u con IVA · subtotal {pesos(Math.round(f.unitario * f.cantidad))}{f.enlace ? ` · ${f.enlace.slice(0, 50)}${f.enlace.length > 50 ? "…" : ""}` : ""}</span>
-                {l?.sinPrecio && <div style={{ color: C.dangerText, fontWeight: 600 }}>La cotización no tiene precio de compra para esta línea: usa «Modificar datos de la compra».</div>}
+                {l?.sinPrecio && <div style={{ color: C.dangerText, fontWeight: 500 }}>La cotización no tiene precio de compra para esta línea: usa «Modificar datos de la compra».</div>}
               </div>
             );
             return (
               <div key={f.rid} data-fila-compra={f.rid} style={{ background: C.card, borderRadius: R.md, padding: "10px 10px 4px", marginBottom: 8, border: `1px solid ${C.border}` }}>
-                <div style={{ fontSize: T.small, fontWeight: 700, color: C.tealDark, marginBottom: 6 }}>{l?.nombre || "Producto"} <span style={{ color: C.inkMuted, fontWeight: 400 }}>· pendientes {cantidadTxt(lp?.pendiente ?? 0)}</span></div>
+                <div style={{ fontSize: T.small, fontWeight: 600, color: C.tealDark, marginBottom: 6 }}>{l?.nombre || "Producto"} <span style={{ color: C.inkMuted, fontWeight: 400 }}>· pendientes {cantidadTxt(lp?.pendiente ?? 0)}</span></div>
                 <Campo etiqueta="Producto adquirido"><Entrada data-campo-compra="producto" style={marcado(c.producto)} value={f.producto} onChange={(e) => setF(f.rid, "producto", e.target.value)} />{ref(c.producto, l?.nombre)}</Campo>
                 <Rejilla>
                   <Campo etiqueta="Cantidad a comprar"><Entrada data-campo-compra="cantidad" type="number" min="0" step="any" style={marcado(c.cantidad)} value={f.cantidad} onChange={(e) => setF(f.rid, "cantidad", n0(e.target.value))} /></Campo>
@@ -125,8 +125,8 @@ export function CompraVentaPrivada({ token, v, d, vp, showToast, onCerrar, onLis
                   <Campo etiqueta="Marca"><Entrada data-campo-compra="marca" style={marcado(c.marca)} value={f.marca} onChange={(e) => setF(f.rid, "marca", e.target.value)} />{ref(c.marca, l?.marca)}</Campo>
                   <Campo etiqueta="Modelo"><Entrada data-campo-compra="modelo" style={marcado(c.modelo)} value={f.modelo} onChange={(e) => setF(f.rid, "modelo", e.target.value)} />{ref(c.modelo, l?.modelo)}</Campo>
                 </Rejilla>
-                {(c.producto || c.marca || c.modelo) && <div data-aviso-especificaciones style={{ fontSize: T.small, color: C.warnText, fontWeight: 600, marginBottom: 6 }}>⚠ Cambió el producto, la marca o el modelo: comprueba que cumple las especificaciones ofertadas.</div>}
-                {c.unitario && Number(f.unitario) > (l?.unitario || 0) && <div data-aviso-costo style={{ fontSize: T.small, color: C.dangerText, fontWeight: 600, marginBottom: 6 }}>Costo mayor al cotizado: {signo(Math.round((Number(f.unitario) - l.unitario) * Number(f.cantidad || 0)))} en este producto.</div>}
+                {(c.producto || c.marca || c.modelo) && <div data-aviso-especificaciones style={{ fontSize: T.small, color: C.warnText, fontWeight: 500, marginBottom: 6 }}>⚠ Cambió el producto, la marca o el modelo: comprueba que cumple las especificaciones ofertadas.</div>}
+                {c.unitario && Number(f.unitario) > (l?.unitario || 0) && <div data-aviso-costo style={{ fontSize: T.small, color: C.dangerText, fontWeight: 500, marginBottom: 6 }}>Costo mayor al cotizado: {signo(Math.round((Number(f.unitario) - l.unitario) * Number(f.cantidad || 0)))} en este producto.</div>}
                 <button type="button" data-dividir onClick={() => dividir(f)} style={{ background: "none", border: "none", color: C.tealDark, textDecoration: "underline", cursor: "pointer", fontSize: T.small, padding: 0, minHeight: 30 }}>+ Comprar parte de esta línea con otro proveedor</button>
               </div>
             );
@@ -184,7 +184,7 @@ export function CompraVentaPrivada({ token, v, d, vp, showToast, onCerrar, onLis
             Utilidad estimada (cotización): <b data-utilidad-original>{pesos(comp.utilidadOriginal)}</b><br />
             {comp.parcial ? "Utilidad proyectada (compra parcial: lo pendiente a costo cotizado)" : "Utilidad actualizada según la compra real"}: <b data-utilidad-actualizada style={{ color: comp.utilidadActualizada < comp.utilidadOriginal ? C.dangerText : C.okText }}>{pesos(comp.utilidadActualizada)}</b>
             {comp.utilidadActualizada !== comp.utilidadOriginal && <> ({signo(comp.utilidadActualizada - comp.utilidadOriginal)} frente a lo cotizado)</>}
-            {comp.parcial && <div data-aviso-parcial style={{ color: C.warnText, fontWeight: 600, marginTop: 4 }}>Compra parcial: quedan pendientes {comp.pendientes.filter((l) => l.queda > 0).map((l) => `${cantidadTxt(l.queda)} de «${l.nombre}»`).join(", ")} ({pesos(comp.costoPendiente)} a costo cotizado). La utilidad no es definitiva hasta comprarlo.</div>}
+            {comp.parcial && <div data-aviso-parcial style={{ color: C.warnText, fontWeight: 500, marginTop: 4 }}>Compra parcial: quedan pendientes {comp.pendientes.filter((l) => l.queda > 0).map((l) => `${cantidadTxt(l.queda)} de «${l.nombre}»`).join(", ")} ({pesos(comp.costoPendiente)} a costo cotizado). La utilidad no es definitiva hasta comprarlo.</div>}
           </div>
         </div>
 
@@ -192,8 +192,8 @@ export function CompraVentaPrivada({ token, v, d, vp, showToast, onCerrar, onLis
           disponible={comp.totalReal} documentosHabilitados={vp.documentosHabilitados} />}
 
         <div style={{ marginBottom: 10 }}>
-          {val.requiere.vigencia && <label data-confirmar="vigencia" style={{ display: "flex", gap: 8, fontSize: T.sm, marginBottom: 6, fontWeight: 600 }}><input type="checkbox" checked={conf.vigencia} onChange={(e) => setConf((c) => ({ ...c, vigencia: e.target.checked }))} /> Confirmo que los precios, la disponibilidad, las condiciones y el despacho siguen vigentes.</label>}
-          {val.requiere.especificaciones && <label data-confirmar="especificaciones" style={{ display: "flex", gap: 8, fontSize: T.sm, marginBottom: 6, fontWeight: 600 }}><input type="checkbox" checked={conf.especificaciones} onChange={(e) => setConf((c) => ({ ...c, especificaciones: e.target.checked }))} /> Comprobé que el producto cumple las especificaciones ofertadas.</label>}
+          {val.requiere.vigencia && <label data-confirmar="vigencia" style={{ display: "flex", gap: 8, fontSize: T.sm, marginBottom: 6, fontWeight: 500 }}><input type="checkbox" checked={conf.vigencia} onChange={(e) => setConf((c) => ({ ...c, vigencia: e.target.checked }))} /> Confirmo que los precios, la disponibilidad, las condiciones y el despacho siguen vigentes.</label>}
+          {val.requiere.especificaciones && <label data-confirmar="especificaciones" style={{ display: "flex", gap: 8, fontSize: T.sm, marginBottom: 6, fontWeight: 500 }}><input type="checkbox" checked={conf.especificaciones} onChange={(e) => setConf((c) => ({ ...c, especificaciones: e.target.checked }))} /> Comprobé que el producto cumple las especificaciones ofertadas.</label>}
         </div>
         {errores.length > 0 && <div data-errores-compra><ErrorForm>{errores.map((e, i) => <div key={i}>• {e}</div>)}</ErrorForm></div>}
       </>}

@@ -9,7 +9,7 @@ import { cajaYFueraDelBanco, comisionesYApoyo, resultadoMes, resumenFinanciadore
 // gastos, impuestos, caja bancaria, registros fuera del banco y deuda con financiadores. No cambia ningún monto.
 const MES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 const Linea = ({ k, v, signo, fuerte, tono, nota, dato }) => (
-  <div data-informe={dato} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "4px 0", borderBottom: fuerte ? "none" : `1px solid ${C.border}`, fontWeight: fuerte ? 800 : 500 }}>
+  <div data-informe={dato} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "4px 0", borderBottom: fuerte ? "none" : `1px solid ${C.border}`, fontWeight: fuerte ? 700 : 500 }}>
     <span style={{ fontSize: 13, color: C.ink, minWidth: 0 }}>{signo && <span style={{ color: C.inkFaint, marginRight: 4 }}>{signo}</span>}{k}
       {nota && <span style={{ display: "block", fontSize: 12, color: C.inkFaint, fontWeight: 400 }}>{nota}</span>}</span>
     <span data-monto={dato} style={{ fontFamily: MONO, fontSize: 13, color: tono || C.ink, flexShrink: 0 }}>{fmt.money(v)}</span>
@@ -36,7 +36,7 @@ export function InformeFinanciero({ ocs, financiadores, gastos, pagosVendedor, i
       {/* 1. Margen comercial vs. resultado */}
       <Tarjeta padding="12px 14px">
         <div data-informe-resultado style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-          <span style={{ fontWeight: 800, fontSize: 13 }}>Resultado del mes</span>
+          <span style={{ fontWeight: 700, fontSize: 13 }}>Resultado del mes</span>
           <select data-periodo-resultado value={`${periodo.anio}-${periodo.mes}`} onChange={(e) => { const [a, m] = e.target.value.split("-").map(Number); setPeriodo({ anio: a, mes: m }); }}
             style={{ fontSize: 12, padding: "4px 6px", borderRadius: 8, border: `1px solid ${C.border}` }}>
             {Array.from({ length: 12 }, (_, k) => { const d = new Date(anioA, mesA - 1 - k, 1); return { a: d.getFullYear(), m: d.getMonth() + 1 }; })
@@ -55,10 +55,10 @@ export function InformeFinanciero({ ocs, financiadores, gastos, pagosVendedor, i
       <Tarjeta padding="12px 14px" onClick={onIrImpuestos} data-informe-f29>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
           <span style={{ minWidth: 0 }}>
-            <span style={{ display: "block", fontWeight: 800, fontSize: 13 }}>F29 por período (IVA + PPM)</span>
+            <span style={{ display: "block", fontWeight: 700, fontSize: 13 }}>F29 por período (IVA + PPM)</span>
             <span style={{ display: "block", fontSize: 12, color: C.inkFaint }}>{periodosF29.filter((p) => p.pend > 0).length ? `${periodosF29.filter((p) => p.pend > 0).length} período(s) con saldo · ` : ""}detalle en Impuestos</span>
           </span>
-          <span data-monto="f29_total" style={{ fontFamily: MONO, fontWeight: 800, fontSize: 14, color: f29.total > 0 ? C.dangerText : C.okText, flexShrink: 0 }}>{fmt.money(f29.total)} ›</span>
+          <span data-monto="f29_total" style={{ fontFamily: MONO, fontWeight: 700, fontSize: 14, color: f29.total > 0 ? C.dangerText : C.okText, flexShrink: 0 }}>{fmt.money(f29.total)} ›</span>
         </div>
       </Tarjeta>
 
@@ -71,7 +71,7 @@ export function InformeFinanciero({ ocs, financiadores, gastos, pagosVendedor, i
         <Linea dato="caja_vendedores" signo="−" k="Pagos a vendedores (comisión + apoyo en gestión)" v={-t("pago_vendedor")} />
         <Linea dato="caja_gastos" signo="−" k="Gastos (incluye impuestos pagados)" v={-t("gasto")} />
         <Linea dato="caja_total" fuerte k="= Caja registrada BFK" v={cajaInf.caja} />
-        <div style={{ fontWeight: 800, fontSize: 13, margin: "8px 0 4px" }}>Registrado fuera de BancoEstado (no suma a la caja)</div>
+        <div style={{ fontWeight: 700, fontSize: 13, margin: "8px 0 4px" }}>Registrado fuera de BancoEstado (no suma a la caja)</div>
         <Linea dato="fuera_cobros" k={`Cobros fuera del banco y retenciones (${fuera.cobrosFueraBanco.n})`} v={fuera.cobrosFueraBanco.total} />
         <Linea dato="fuera_valevista" k={`Vale vista / cheques por cobrar (${fuera.valeVistaPorCobrar.n})`} v={fuera.valeVistaPorCobrar.total} />
         <Linea dato="fuera_gastos" k={`Gastos sin cargo bancario (${fuera.gastosSinCargo.n})`} v={fuera.gastosSinCargo.total} />

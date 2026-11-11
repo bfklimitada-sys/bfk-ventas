@@ -34,7 +34,7 @@ export function MargenComercial({ ocs }) {
         <div data-margen-comercial style={{ display: "flex", alignItems: "flex-end", gap: 10, height: 110 }}>
           {barras.map((b) => (
             <div key={b.label} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", height: "100%" }}>
-              <span style={{ fontSize: 12, fontWeight: 800, fontFamily: MONO, color: b.v >= 0 ? C.ink : C.danger, marginBottom: 4, textAlign: "center" }}>{fmt.money(b.v)}</span>
+              <span style={{ fontSize: 12, fontWeight: 700, fontFamily: MONO, color: b.v >= 0 ? C.ink : C.danger, marginBottom: 4, textAlign: "center" }}>{fmt.money(b.v)}</span>
               <div style={{ width: "64%", minHeight: 4, height: `${Math.max(4, Math.min(100, Math.abs(b.v) / max * 100))}%`, background: b.v >= 0 ? C.teal : C.danger, borderRadius: "6px 6px 2px 2px" }} />
             </div>
           ))}
@@ -43,7 +43,7 @@ export function MargenComercial({ ocs }) {
           {barras.map((b) => (
             <div key={b.label} style={{ flex: 1, textAlign: "center" }}>
               <div style={{ fontSize: 12, color: C.inkFaint, lineHeight: 1.3 }}>{b.label}</div>
-              {b.pct > 0 && <div style={{ fontSize: 12, fontWeight: 700, color: C.inkMuted }}>{b.pct}%</div>}
+              {b.pct > 0 && <div style={{ fontSize: 12, fontWeight: 600, color: C.inkMuted }}>{b.pct}%</div>}
             </div>
           ))}
         </div>

@@ -13,24 +13,24 @@ export function ConflictoVersion({ version, campos, nota, onCombinar, onDescarta
   const [elecciones, setElecciones] = useState({});
   const visibles = campos.filter((c) => c.estado !== "igual");
   const nConf = campos.filter((c) => c.estado === "conflicto").length;
-  const boton = (extra = {}) => ({ border: `1px solid ${C.border}`, background: C.card, color: C.ink, borderRadius: 10, padding: "9px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: SANS, ...extra });
+  const boton = (extra = {}) => ({ border: `1px solid ${C.border}`, background: C.card, color: C.ink, borderRadius: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: SANS, ...extra });
   return (
     <div role="dialog" aria-modal="true" data-conflicto-version style={{ position: "fixed", inset: 0, zIndex: 1900, background: "rgba(8,14,28,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 12, fontFamily: SANS }}>
       <div style={{ background: C.card, borderRadius: 14, width: "100%", maxWidth: 640, maxHeight: "92vh", display: "flex", flexDirection: "column", boxShadow: "0 20px 50px rgba(0,0,0,0.35)" }}>
         <div style={{ padding: "16px 18px 10px", borderBottom: `1px solid ${C.border}` }}>
-          <div style={{ fontWeight: 800, fontSize: 16, color: C.ink }}>Hay una versión más nueva en BFK{version ? ` (versión ${version})` : ""}</div>
+          <div style={{ fontWeight: 700, fontSize: 16, color: C.ink }}>Hay una versión más nueva en BFK{version ? ` (versión ${version})` : ""}</div>
           <div style={{ fontSize: T.small, color: C.inkMuted, marginTop: 4, lineHeight: 1.45 }}>
             Tus cambios no se guardaron para no sobrescribir lo guardado después. Revisa campo por campo: lo combinado queda en la pantalla sin guardar y luego lo guardas.
             {nConf ? ` ${nConf} campo${nConf === 1 ? "" : "s"} cambió en ambos: por defecto se mantiene lo de BFK.` : ""}
           </div>
-          {nota && <div data-nota-conflicto style={{ fontSize: T.small, color: C.warnText, marginTop: 6, fontWeight: 700 }}>{nota}</div>}
+          {nota && <div data-nota-conflicto style={{ fontSize: T.small, color: C.warnText, marginTop: 6, fontWeight: 600 }}>{nota}</div>}
         </div>
         <div style={{ overflowY: "auto", padding: "8px 18px" }}>
           {!visibles.length && <div data-sin-diferencias style={{ fontSize: T.sm, color: C.inkMuted, padding: "10px 0" }}>Tus cambios coinciden con lo guardado en BFK: no hay nada que elegir.</div>}
           {visibles.map((c) => (
             <div key={c.k} data-campo-conflicto={c.k} data-estado-conflicto={c.estado} style={{ padding: "9px 0", borderBottom: `1px solid ${C.border}` }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}>
-                <b style={{ fontSize: T.sm, color: C.ink }}>{c.etiqueta}</b><span style={{ fontSize: T.small, fontWeight: 700, color: ESTADOS[c.estado].c }}>{ESTADOS[c.estado].t}</span>
+                <b style={{ fontSize: T.sm, color: C.ink }}>{c.etiqueta}</b><span style={{ fontSize: T.small, fontWeight: 600, color: ESTADOS[c.estado].c }}>{ESTADOS[c.estado].t}</span>
               </div>
               {c.estado === "conflicto" ? (
                 <div style={{ display: "grid", gap: 4, marginTop: 6 }}>

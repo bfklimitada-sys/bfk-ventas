@@ -28,7 +28,7 @@ export function TarjetaCorreo({ correo: c, oc, onMarcar, onAbrirOC, mostrarOC = 
         {!pendiente && <Badge tono="ok">✓ Gestionado</Badge>}
         <span style={{ marginLeft: "auto", fontSize: 12, color: C.inkFaint, whiteSpace: "nowrap" }}>{fmt.datetime(c.fecha)}</span>
       </div>
-      <div style={{ fontSize: 13, fontWeight: 700, color: C.ink, wordBreak: "break-word" }}>{c.asunto || "(sin asunto)"}</div>
+      <div style={{ fontSize: 13, fontWeight: 600, color: C.ink, wordBreak: "break-word" }}>{c.asunto || "(sin asunto)"}</div>
       <div style={{ fontSize: 12, color: C.inkMuted, marginTop: 2, wordBreak: "break-all" }}>
         {c.remitente_nombre ? `${c.remitente_nombre} · ` : ""}{c.remitente_correo || "—"}
       </div>
@@ -38,14 +38,14 @@ export function TarjetaCorreo({ correo: c, oc, onMarcar, onAbrirOC, mostrarOC = 
           ? <span style={{ fontSize: 12, color: C.inkFaint }}>Asociado a una OC archivada</span>
           : c.oc_id
           ? <button data-correo-abrir-oc onClick={() => onAbrirOC && onAbrirOC(c.oc_id)} title={c.evidencia || ""}
-              style={{ border: `1px solid ${C.tealDark}`, background: C.tealLight, color: C.tealDark, borderRadius: R.sm, padding: "6px 10px", fontSize: 12, fontWeight: 800, cursor: "pointer", minHeight: 36, fontFamily: MONO }}>
+              style={{ border: `1px solid ${C.tealDark}`, background: C.tealLight, color: C.tealDark, borderRadius: R.sm, padding: "6px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer", minHeight: 36, fontFamily: MONO }}>
               OC {oc?.numero_oc || "—"} ›
             </button>
           : <span style={{ fontSize: 12, color: C.inkFaint }}>{c.rut_detectado ? `General · cliente RUT ${c.rut_detectado}, sin OC única` : "General · sin OC asociada"}</span>)}
         {c.oc_id && <span style={{ fontSize: 12, color: C.inkFaint }}>{ASOCIACION_TEXTO[c.asociacion] || ""}</span>}
         <button data-correo-marcar onClick={marcar} disabled={ocupado}
           style={{ marginLeft: "auto", border: `1px solid ${C.border}`, background: C.card, color: pendiente ? C.okText : C.inkMuted, borderRadius: R.sm,
-            padding: "6px 12px", fontSize: 12, fontWeight: 800, cursor: ocupado ? "wait" : "pointer", minHeight: 36 }}>
+            padding: "6px 12px", fontSize: 12, fontWeight: 700, cursor: ocupado ? "wait" : "pointer", minHeight: 36 }}>
           {ocupado ? "Guardando…" : pendiente ? "✓ Marcar gestionado" : "Reabrir"}
         </button>
       </div>
@@ -67,8 +67,8 @@ export function CorreosPendientes({ correos, ocs, onMarcar, onAbrirOC }) {
   const n = { todos: base.length, oc: base.filter((c) => c.oc_id).length, general: base.filter((c) => !c.oc_id).length };
   const chip = (id, label) => (
     <button key={id} data-correos-filtro={id} onClick={() => setFiltro(id)}
-      style={{ fontSize: 12, fontWeight: 700, padding: "5px 10px", borderRadius: 8, cursor: "pointer", minHeight: 32,
-        border: `1.5px solid ${filtro === id ? C.teal : C.border}`, background: filtro === id ? C.paper : C.card, color: filtro === id ? C.tealDark : C.inkMuted }}>
+      style={{ fontSize: 12, fontWeight: 600, padding: "5px 10px", borderRadius: 8, cursor: "pointer", minHeight: 32,
+        border: `1px solid ${filtro === id ? C.teal : C.border}`, background: filtro === id ? C.paper : C.card, color: filtro === id ? C.tealDark : C.inkMuted }}>
       {label} {n[id]}
     </button>
   );
@@ -76,14 +76,14 @@ export function CorreosPendientes({ correos, ocs, onMarcar, onAbrirOC }) {
     <section data-correos-pendientes={pendientes.length} data-correos-accion={nAccion} style={{ marginBottom: 18 }}>
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
         <div>
-          <div style={{ fontWeight: 800, fontSize: 14, color: C.ink }}><Ic n="📩" /> Correos de BFK</div>
+          <div style={{ fontWeight: 700, fontSize: 14, color: C.ink }}><Ic n="📩" /> Correos de BFK</div>
           <div style={{ fontSize: 12, color: C.inkFaint, marginTop: 2 }}>
             {pendientes.length === 0 ? "Sin correos pendientes de gestión"
               : `${nAccion} requiere${nAccion === 1 ? "" : "n"} acción${pendientes.length > nAccion ? ` · ${pendientes.length - nAccion} informativo${pendientes.length - nAccion > 1 ? "s" : ""}` : ""} · los urgentes primero`}
           </div>
         </div>
         <button data-correos-ver-gestionados onClick={() => setVerGestionados((v) => !v)}
-          style={{ fontSize: 12, color: C.tealDark, background: "none", border: "none", cursor: "pointer", fontWeight: 700, minHeight: TOUCH, whiteSpace: "nowrap" }}>
+          style={{ fontSize: 12, color: C.tealDark, background: "none", border: "none", cursor: "pointer", fontWeight: 600, minHeight: TOUCH, whiteSpace: "nowrap" }}>
           {verGestionados ? "Ver pendientes" : "Ver gestionados"}
         </button>
       </div>

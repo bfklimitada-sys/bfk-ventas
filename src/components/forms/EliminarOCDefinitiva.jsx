@@ -62,18 +62,18 @@ export function EliminarOCDefinitiva({ token, oc, todas, onEliminada }) {
 
       {cargando && <div style={{ fontSize: 13, color: C.inkMuted, marginBottom: 12 }}>Revisando lo asociado a la OC…</div>}
       {!cargando && rev && (<>
-        <div style={{ fontSize: 12, fontWeight: 800, color: C.inkMuted, textTransform: "uppercase", letterSpacing: 0.3, marginBottom: 6 }}>Registros asociados</div>
+        <div style={{ fontSize: 12, fontWeight: 700, color: C.inkMuted, textTransform: "uppercase", letterSpacing: 0.3, marginBottom: 6 }}>Registros asociados</div>
         <div data-registros-asociados style={{ fontSize: 13, color: C.ink, marginBottom: 12 }}>
           {registros.length ? registros.map(([t, n]) => <span key={t} style={{ display: "inline-block", marginRight: 10 }}>{n} {NOMBRE_REGISTRO[t] || t}</span>) : "Ninguno."}
         </div>
         {movs.length > 0 && (
           <div data-movimientos style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 12, fontWeight: 800, color: C.inkMuted, textTransform: "uppercase", letterSpacing: 0.3, marginBottom: 6 }}>Movimientos financieros</div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.inkMuted, textTransform: "uppercase", letterSpacing: 0.3, marginBottom: 6 }}>Movimientos financieros</div>
             {movs.map((m) => (
               <div key={m.id} data-mov-financiero={m.id} data-equivalente={m.equivalente ? "1" : "0"} style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 13, padding: "6px 0", borderTop: `1px solid ${C.border}` }}>
                 <span>{NOMBRE_MOVIMIENTO[m.tipo] || m.tipo} · {fmt.date(m.fecha)}{m.tipo === "factura" && m.detalle ? ` · folio ${m.detalle}` : ""}</span>
                 <span style={{ textAlign: "right" }}><span style={{ fontFamily: MONO, whiteSpace: "nowrap" }}>{fmt.money(m.monto)}</span>
-                  {rev.original ? <span style={{ display: "block", fontSize: 12, fontWeight: 700, color: m.equivalente ? C.okText : C.dangerText }}>{m.equivalente ? "✓ igual en la original" : "✗ sin igual en la original"}</span> : null}</span>
+                  {rev.original ? <span style={{ display: "block", fontSize: 12, fontWeight: 600, color: m.equivalente ? C.okText : C.dangerText }}>{m.equivalente ? "✓ igual en la original" : "✗ sin igual en la original"}</span> : null}</span>
               </div>
             ))}
           </div>

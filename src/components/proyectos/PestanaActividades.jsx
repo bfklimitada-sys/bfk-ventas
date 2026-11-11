@@ -36,7 +36,7 @@ export function PestanaActividades({ token, proyecto: p, per, nombres, version, 
               <span style={{ fontFamily: MONO, fontSize: T.small, color: C.inkMuted, minWidth: 26, paddingTop: 2 }}>{a.edt}</span>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-                  <span style={{ fontWeight: 800, color: C.ink, fontSize: T.body }}>{a.nombre}</span>
+                  <span style={{ fontWeight: 700, color: C.ink, fontSize: T.body }}>{a.nombre}</span>
                   <Badge tono={est?.tono}><span data-estado-actividad={a.estado_calculado || a.estado}>{est?.l || a.estado}</span></Badge>
                   {a.atrasada && <Badge tono="danger">Atrasada</Badge>}
                   {!a.atrasada && a.por_vencer && <Badge tono="warn">Vence en 7 días</Badge>}
@@ -89,7 +89,7 @@ function AvanceRapido({ token, fila, onGuardado, showToast }) {
   return (
     <div data-avance-rapido={fila.edt} style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 6 }}>
       <input type="range" min="0" max="100" step="5" value={Number(v) || 0} onChange={(e) => setV(e.target.value)} aria-label={`Avance de ${fila.nombre}`} style={{ flex: 1, minWidth: 80, accentColor: C.teal }} />
-      <input data-avance-input inputMode="decimal" value={v} onChange={(e) => setV(e.target.value)} style={{ width: 64, minHeight: 34, padding: "4px 8px", border: `1.5px solid ${C.border}`, borderRadius: R.sm, fontFamily: MONO, fontSize: T.sm, textAlign: "right" }} />
+      <input data-avance-input inputMode="decimal" value={v} onChange={(e) => setV(e.target.value)} style={{ width: 64, minHeight: 34, padding: "4px 8px", border: `1px solid ${C.border}`, borderRadius: R.sm, fontFamily: MONO, fontSize: T.sm, textAlign: "right" }} />
       <span style={{ fontSize: T.small, color: C.inkMuted }}>%</span>
       {cambio && <button type="button" data-guardar-avance disabled={ocupado} onClick={guardar} style={{ ...estiloBoton("pri"), minHeight: 34 }}>{ocupado ? "…" : "Guardar"}</button>}
     </div>

@@ -55,8 +55,8 @@ function Kpi({ etiqueta: et, valor, nota, tono, dato }) {
   const col = { danger: C.dangerText, ok: C.okText, warn: C.warnText }[tono] || C.ink;
   return (
     <div data-kpi={dato} style={{ ...cardStyle, borderRadius: R.md, padding: "12px 14px", minWidth: 0 }}>
-      <div style={{ fontSize: T.small, fontWeight: 800, color: C.inkMuted }}>{et}</div>
-      <div data-kpi-valor style={{ fontFamily: MONO, fontWeight: 800, fontSize: 20, color: col, marginTop: 4, overflowWrap: "anywhere" }}>{valor}</div>
+      <div style={{ fontSize: T.small, fontWeight: 700, color: C.inkMuted }}>{et}</div>
+      <div data-kpi-valor style={{ fontFamily: MONO, fontWeight: 700, fontSize: 20, color: col, marginTop: 4, overflowWrap: "anywhere" }}>{valor}</div>
       {nota && <div style={{ fontSize: T.small, color: C.inkFaint, marginTop: 3, lineHeight: 1.4 }}>{nota}</div>}
     </div>
   );
@@ -96,7 +96,7 @@ function Resumen({ token, proyecto: p, per, nombres, clientes, onCambio, onEdita
       {razones.map((r) => <AvisoLinea key={r} tono="danger" dato="razon-atraso">{r}</AvisoLinea>)}
 
       <div style={{ ...cardStyle, padding: "14px 16px", marginBottom: S.md }}>
-        <div style={{ fontSize: T.small, fontWeight: 800, color: C.inkMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>Avance físico</div>
+        <div style={{ fontSize: T.small, fontWeight: 700, color: C.inkMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>Avance físico</div>
         <BarraAvance real={p.avance_real} planificado={p.avance_planificado} atrasado={p.atrasado} alto={10} dato="ficha" />
         <div style={{ fontSize: T.small, color: C.inkFaint, marginTop: 4, lineHeight: 1.45 }}>
           {p.n_actividades ? `Ponderado por el peso de ${p.n_actividades} ${p.n_actividades === 1 ? "actividad" : "actividades"} sin subtareas · ${p.n_actividades_completadas} ${p.n_actividades_completadas === 1 ? "completada" : "completadas"}. La línea negra marca lo planificado a hoy.` : "Sin actividades: el avance se calcula cuando se registran actividades con su peso."}
@@ -162,16 +162,16 @@ function Resumen({ token, proyecto: p, per, nombres, clientes, onCambio, onEdita
 function Dato({ k, v, nota }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "9px 0", borderBottom: `1px solid ${C.border}` }}>
-      <span style={{ minWidth: 0 }}><span style={{ display: "block", fontSize: T.sm, fontWeight: 700, color: C.inkMuted }}>{k}</span>
+      <span style={{ minWidth: 0 }}><span style={{ display: "block", fontSize: T.sm, fontWeight: 600, color: C.inkMuted }}>{k}</span>
         {nota && <span style={{ display: "block", fontSize: T.small, color: C.inkFaint }}>{nota}</span>}</span>
-      <span style={{ fontWeight: 800, fontSize: T.sm, color: C.ink, textAlign: "right", overflowWrap: "anywhere" }}>{v}</span>
+      <span style={{ fontWeight: 700, fontSize: T.sm, color: C.ink, textAlign: "right", overflowWrap: "anywhere" }}>{v}</span>
     </div>
   );
 }
 function Texto({ k, v }) {
   return (
     <div style={{ padding: "9px 0", borderBottom: `1px solid ${C.border}` }}>
-      <div style={{ fontSize: T.sm, fontWeight: 700, color: C.inkMuted, marginBottom: 4 }}>{k}</div>
+      <div style={{ fontSize: T.sm, fontWeight: 600, color: C.inkMuted, marginBottom: 4 }}>{k}</div>
       <div style={{ fontSize: T.sm, color: C.ink, whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{v}</div>
     </div>
   );

@@ -46,8 +46,8 @@ export function ClasificacionTributaria({ ambito, objetivo, historial, perfil, o
   return (
     <div data-clasificacion-tributaria={ambito}>
       <div data-trib-vigente style={{ background: esExentaClasificada(vig) ? C.infoLight : C.paper, border: `1px solid ${esExentaClasificada(vig) ? C.info + "55" : C.border}`, borderRadius: 10, padding: "10px 12px", marginBottom: 10 }}>
-        <div style={{ fontSize: 12, fontWeight: 800, color: C.inkMuted, textTransform: "uppercase", letterSpacing: 0.4 }}>Tratamiento vigente</div>
-        <div style={{ fontSize: 14, fontWeight: 800, color: C.ink, marginTop: 2 }}>{etiquetaTratamiento(vig)}</div>
+        <div style={{ fontSize: 12, fontWeight: 700, color: C.inkMuted, textTransform: "uppercase", letterSpacing: 0.4 }}>Tratamiento vigente</div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: C.ink, marginTop: 2 }}>{etiquetaTratamiento(vig)}</div>
         {!esClasificacionHistorica(vig) && (
           <div style={{ fontSize: 12, color: C.inkMuted, lineHeight: 1.5, marginTop: 4 }}>
             {vig.fundamento_iva && <>Fundamento: {vig.fundamento_iva}<br /></>}
@@ -55,7 +55,7 @@ export function ClasificacionTributaria({ ambito, objetivo, historial, perfil, o
             Aprobado el {fecha(vig.tratamiento_aprobado_en)}{hist.find((h) => h.id === vig.clasificacion_id)?.resuelto_por_nombre ? ` por ${hist.find((h) => h.id === vig.clasificacion_id).resuelto_por_nombre}` : ""}
           </div>
         )}
-        {esExentaClasificada(vig) && <div data-trib-aviso-fase style={{ fontSize: 12, color: C.info, marginTop: 6, fontWeight: 600 }}>
+        {esExentaClasificada(vig) && <div data-trib-aviso-fase style={{ fontSize: 12, color: C.info, marginTop: 6, fontWeight: 500 }}>
           <Ic n="⚖️" /> {ambito === "oc" ? "Esta OC se registra con factura exenta (DTE 34, IVA de venta $0), emitida en el SII; no admite factura afecta." : "La cotización se calcula como exenta: recargo sobre el costo bruto (el IVA de compras no se recupera) y sin IVA de venta. Los precios de una cotización ya adjudicada no cambian."}
         </div>}
         {aviso && <div style={{ fontSize: 12, color: C.inkMuted, marginTop: 6 }}>{aviso}</div>}
@@ -63,7 +63,7 @@ export function ClasificacionTributaria({ ambito, objetivo, historial, perfil, o
 
       {pend && (
         <div data-trib-pendiente style={{ background: C.warnLight, border: `1px solid ${C.warn}66`, borderRadius: 10, padding: "10px 12px", marginBottom: 10 }}>
-          <div style={{ fontSize: 12, fontWeight: 800, color: C.warnText }}>Solicitud pendiente: {TRATAMIENTOS[pend.tratamiento]?.etiqueta}</div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: C.warnText }}>Solicitud pendiente: {TRATAMIENTOS[pend.tratamiento]?.etiqueta}</div>
           <div style={{ fontSize: 12, color: C.ink, lineHeight: 1.5, marginTop: 4 }}>
             {pend.fundamento_legal && <>Fundamento: {pend.fundamento_legal}<br /></>}
             {pend.respaldo_descripcion && <>Respaldo: {pend.respaldo_descripcion}{pend.respaldo_documento ? ` · ${pend.respaldo_documento}` : ""}<br /></>}
@@ -123,11 +123,11 @@ export function ClasificacionTributaria({ ambito, objetivo, historial, perfil, o
           </div>
         </div>
       )}
-      {err && <div data-trib-error style={{ background: C.dangerLight, color: C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 10, fontWeight: 600 }}>{err}</div>}
+      {err && <div data-trib-error style={{ background: C.dangerLight, color: C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 10, fontWeight: 500 }}>{err}</div>}
 
       {hist.filter((h) => h.estado !== "pendiente").length > 0 && (
         <div data-trib-historial>
-          <div style={{ fontSize: 12, fontWeight: 800, color: C.inkMuted, textTransform: "uppercase", letterSpacing: 0.4, margin: "4px 0 6px" }}>Historial</div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: C.inkMuted, textTransform: "uppercase", letterSpacing: 0.4, margin: "4px 0 6px" }}>Historial</div>
           {hist.filter((h) => h.estado !== "pendiente").map((h) => (
             <div key={h.id} style={{ fontSize: 12, color: C.ink, padding: "5px 0", borderBottom: `1px solid ${C.border}`, lineHeight: 1.45 }}>
               <b>{TRATAMIENTOS[h.tratamiento]?.corta}</b> · {ESTADOS_SOLICITUD[h.estado]} · pedida por {h.solicitado_por_nombre || "—"} ({fecha(h.solicitado_en)})

@@ -8,7 +8,7 @@ export function AlertasCartola({ ocs, gastos, pagosVendedor, pagoFinSueltos, apo
   if (!lista.length) return null;
   return (
     <div data-alertas-cartola style={{ fontFamily: SANS, background: C.warnLight, border: `1px solid ${C.warn}`, borderRadius: 12, padding: "12px 14px", marginBottom: 14 }}>
-      <div style={{ fontWeight: 700, color: C.warnText, fontSize: 14 }}>Posibles duplicados con la cartola ({lista.length})</div>
+      <div style={{ fontWeight: 600, color: C.warnText, fontSize: 14 }}>Posibles duplicados con la cartola ({lista.length})</div>
       <div style={{ fontSize: 12, color: C.inkMuted, margin: "2px 0 8px" }}>Registros manuales que coinciden con un movimiento bancario ya registrado. Revíselos; si es la misma operación, anule o elimine el registro manual.</div>
       {lista.map((r) => (
         <div key={r.tabla + r.id} data-alerta={r.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 0", borderTop: `1px solid ${C.border}`, fontSize: 13 }}>

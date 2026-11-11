@@ -467,7 +467,7 @@ export function EditorCotizacionPrivada({ token, perfil, vp, id, showToast, onCe
           const pasos = [["Datos del cliente", !!vista.cliente_id, "datos"], ["Dirección", dirOk, "datos"], ["Productos", vista.items.length > 0, "productos"],
             ...(verInterno ? [["Verificación de despacho", despOk, "productos"]] : []), ["Precios", preciosOk, "precios"], ["EETT", eettLista, "eett"]];
           return <div data-pasos-cotizacion style={{ display: "flex", flexWrap: "wrap", gap: 4, margin: "8px 0 12px", fontSize: T.small }}>
-            {pasos.map(([t, ok, tab], i) => <button key={t} type="button" onClick={() => setPestana(tab)} style={{ border: `1px solid ${ok ? C.ok : C.border}`, background: ok ? C.okLight : C.card, color: ok ? C.okText : C.inkMuted, borderRadius: 999, padding: "3px 9px", cursor: "pointer", fontWeight: 700 }}>{ok ? "✓" : i + 1} {t}</button>)}
+            {pasos.map(([t, ok, tab], i) => <button key={t} type="button" onClick={() => setPestana(tab)} style={{ border: `1px solid ${ok ? C.ok : C.border}`, background: ok ? C.okLight : C.card, color: ok ? C.okText : C.inkMuted, borderRadius: 999, padding: "3px 9px", cursor: "pointer", fontWeight: 600 }}>{ok ? "✓" : i + 1} {t}</button>)}
           </div>;
         })()}
 
@@ -480,8 +480,8 @@ export function EditorCotizacionPrivada({ token, perfil, vp, id, showToast, onCe
             Razón social: <b style={{ color: C.ink }}>{cliente.razon_social}</b> · RUT: <b style={{ color: C.ink, fontFamily: MONO }}>{cliente.rut || "Sin RUT"}</b>{cliente.giro ? <> · Giro: {cliente.giro}</> : null}
           </div>}
           <Tarjeta padding="12px" data-bloque-direccion style={{ borderColor: dirOk ? C.ok : C.warn, background: dirOk ? C.card : C.warnLight }}>
-            <div style={{ fontSize: T.sm, fontWeight: 800, color: C.ink }}>Dirección de entrega del cliente</div>
-            <div style={{ fontSize: T.small, color: dirOk ? C.okText : C.warnText, fontWeight: 700, margin: "2px 0 8px" }}>{dirOk ? "✓ Registrada: los despachos se verifican contra esta dirección." : "Complétala antes de confirmar despachos (los productos se pueden ingresar igual; su despacho quedará «Por verificar»)."}</div>
+            <div style={{ fontSize: T.sm, fontWeight: 700, color: C.ink }}>Dirección de entrega del cliente</div>
+            <div style={{ fontSize: T.small, color: dirOk ? C.okText : C.warnText, fontWeight: 600, margin: "2px 0 8px" }}>{dirOk ? "✓ Registrada: los despachos se verifican contra esta dirección." : "Complétala antes de confirmar despachos (los productos se pueden ingresar igual; su despacho quedará «Por verificar»)."}</div>
             <Field label="Dirección de entrega"><input data-campo="direccion" disabled={ro} value={vista.direccion_entrega || ""} maxLength={300} onChange={(e) => setDireccion(e.target.value)} style={iStyle} placeholder="Calle, número, comuna" /></Field>
           </Tarjeta>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 8 }}>
@@ -537,14 +537,14 @@ export function EditorCotizacionPrivada({ token, perfil, vp, id, showToast, onCe
                 <div style={{ display: "flex", gap: 10 }}>
                   <ImagenFicha src={it.ficha.imagenes?.[0]} almacen={almacen} vacio={it.tipo === "servicio" ? "Servicio" : "Sin foto"} style={{ width: 56, height: 56, flexShrink: 0, borderRadius: R.sm, border: `1px solid ${C.border}` }} />
                   <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={{ fontSize: T.sm, fontWeight: 800, color: C.ink, lineHeight: 1.3, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{i + 1}. {it.ficha.nombre || "Sin nombre"}</div>
+                    <div style={{ fontSize: T.sm, fontWeight: 700, color: C.ink, lineHeight: 1.3, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{i + 1}. {it.ficha.nombre || "Sin nombre"}</div>
                     <div data-resumen-item style={{ fontSize: T.small, color: C.inkMuted, marginTop: 3, lineHeight: 1.5 }}>
                       {[it.ficha.marca, it.ficha.modelo].filter(Boolean).length > 0 && <div>{[it.ficha.marca, it.ficha.modelo].filter(Boolean).join(" · ")}</div>}
                       <div>{verInterno && <>Proveedor: <b style={{ color: C.ink }}>{it.proveedor || "—"}</b> · </>}Cantidad: <b style={{ color: C.ink }}>{cantidadTxt(l.cantidad)} {it.unidad}</b>{it.codigo ? <> · Código: <span style={{ fontFamily: MONO }}>{it.codigo}</span></> : null}</div>
                       {verInterno && (Number(it.precio_origen) > 0 || it.precio_origen === 0
                         ? <div>{it.tipo === "servicio" ? "Costo unitario" : "Precio unitario de compra"}: <b style={{ color: C.ink, fontFamily: MONO }}>{m(it.precio_origen)}</b>{it.precio_incluye_iva === false ? " + IVA" : ""}{it.costo_heredado ? " (costo registrado antes de esta versión)" : ""}</div>
-                        : <div style={{ color: C.warnText, fontWeight: 700 }}>Falta el precio de compra{editable ? " · toca Editar" : ""}</div>)}
-                      {verInterno && it.tipo !== "servicio" && <div data-despacho-item>Despacho: {env ? <><b style={{ color: C.ink, fontFamily: MONO }}>{m(l.envio_asignado)}</b>{nComp > 1 ? ` (parte de ${m(env.monto)} compartido con ${nComp - 1} ítem${nComp > 2 ? "s" : ""})` : ""} · <span style={{ color: envioConfirmado(env) ? C.okText : C.warnText, fontWeight: 700 }}>{ESTADOS_ENVIO[env.estado]?.label}</span></> : <span style={{ color: C.warnText, fontWeight: 700 }}>sin registrar</span>}</div>}
+                        : <div style={{ color: C.warnText, fontWeight: 600 }}>Falta el precio de compra{editable ? " · toca Editar" : ""}</div>)}
+                      {verInterno && it.tipo !== "servicio" && <div data-despacho-item>Despacho: {env ? <><b style={{ color: C.ink, fontFamily: MONO }}>{m(l.envio_asignado)}</b>{nComp > 1 ? ` (parte de ${m(env.monto)} compartido con ${nComp - 1} ítem${nComp > 2 ? "s" : ""})` : ""} · <span style={{ color: envioConfirmado(env) ? C.okText : C.warnText, fontWeight: 600 }}>{ESTADOS_ENVIO[env.estado]?.label}</span></> : <span style={{ color: C.warnText, fontWeight: 600 }}>sin registrar</span>}</div>}
                       {verInterno && <div>Costo de adquisición: <b style={{ color: C.ink, fontFamily: MONO }}>{m(l.costo_bruto)}</b></div>}
                     </div>
                     <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>
@@ -557,7 +557,7 @@ export function EditorCotizacionPrivada({ token, perfil, vp, id, showToast, onCe
                 </div>
                 <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap", alignItems: "center" }}>
                   {verInterno && (enlaceValido(it.enlace)
-                    ? <a data-abrir-publicacion href={it.enlace.trim()} target="_blank" rel="noopener noreferrer" style={{ border: `1px solid ${C.teal}`, color: C.tealDark, borderRadius: 10, padding: "6px 12px", fontWeight: 700, fontSize: T.small, textDecoration: "none", minHeight: 34, display: "inline-flex", alignItems: "center" }}>Abrir publicación ↗</a>
+                    ? <a data-abrir-publicacion href={it.enlace.trim()} target="_blank" rel="noopener noreferrer" style={{ border: `1px solid ${C.teal}`, color: C.tealDark, borderRadius: 10, padding: "6px 12px", fontWeight: 600, fontSize: T.small, textDecoration: "none", minHeight: 34, display: "inline-flex", alignItems: "center" }}>Abrir publicación ↗</a>
                     : <span data-sin-enlace style={{ fontSize: T.small, color: C.inkFaint }}>Sin enlace registrado{editable && <> · <button type="button" onClick={() => abrirEditar(it)} style={{ border: "none", background: "none", color: C.tealDark, textDecoration: "underline", cursor: "pointer", padding: 0, fontSize: T.small }}>Agregar enlace</button></>}</span>)}
                   <div style={{ flex: 1 }} />
                   {i > 0 && editable && <BotonSecundario aria-label="Subir" onClick={() => mover(i, -1)} style={{ minHeight: 34, padding: "4px 10px" }}>↑</BotonSecundario>}
@@ -578,13 +578,13 @@ export function EditorCotizacionPrivada({ token, perfil, vp, id, showToast, onCe
             const l = calc.lineas[i];
             return (
               <Tarjeta key={it.key} padding="14px" data-precio-item={i + 1} style={{ borderColor: verInterno && l.avisos.length ? C.warn : C.teal }}>
-                <div style={{ fontSize: T.sm, fontWeight: 800, color: C.ink, lineHeight: 1.3 }}>{i + 1}. {it.ficha.nombre || "Ítem"}</div>
-                <div style={{ fontSize: T.small, fontWeight: 800, color: C.tealDark, letterSpacing: 0.4, marginTop: 10 }}>{calc.exenta ? "PRECIO UNITARIO EXENTO DE VENTA" : "PRECIO UNITARIO NETO DE VENTA"}</div>
+                <div style={{ fontSize: T.sm, fontWeight: 700, color: C.ink, lineHeight: 1.3 }}>{i + 1}. {it.ficha.nombre || "Ítem"}</div>
+                <div style={{ fontSize: T.small, fontWeight: 700, color: C.tealDark, letterSpacing: 0.4, marginTop: 10 }}>{calc.exenta ? "PRECIO UNITARIO EXENTO DE VENTA" : "PRECIO UNITARIO NETO DE VENTA"}</div>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginTop: 2 }}>
                   {editable
                     ? <input data-campo={`precio-${i + 1}`} data-precio-unitario={i + 1} type="number" inputMode="decimal" min="0" value={it.precio_unitario ?? ""} onChange={(e) => setItem(it.key, "precio_unitario", e.target.value)} placeholder="0"
-                        style={{ ...iMono, fontSize: 26, fontWeight: 900, maxWidth: 240, minHeight: 50 }} />
-                    : <span data-unitario={i + 1} style={{ fontSize: 34, fontWeight: 900, color: C.ink, fontFamily: MONO, letterSpacing: -0.5 }}>{l.precio_unitario == null ? "—" : m(l.precio_unitario)}</span>}
+                        style={{ ...iMono, fontSize: 26, fontWeight: 700, maxWidth: 240, minHeight: 50 }} />
+                    : <span data-unitario={i + 1} style={{ fontSize: 34, fontWeight: 700, color: C.ink, fontFamily: MONO, letterSpacing: -0.5 }}>{l.precio_unitario == null ? "—" : m(l.precio_unitario)}</span>}
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
                   <label htmlFor={`vp-desc-${it.key}`} style={{ fontSize: T.sm, color: C.inkMuted }}>Descuento (%)</label>
@@ -594,7 +594,7 @@ export function EditorCotizacionPrivada({ token, perfil, vp, id, showToast, onCe
                   Cantidad: <b style={{ color: C.ink }}>{cantidadTxt(l.cantidad)} {it.unidad}</b> · {calc.exenta ? "Subtotal exento" : "Subtotal neto"}: <b data-subtotal={i + 1} style={{ color: C.ink, fontFamily: MONO }}>{m(l.neto)}</b>{l.descuento ? <> (descuento {m(l.descuento)})</> : null}
                 </div>
                 {verInterno && <div data-costo-item={i + 1} style={{ fontSize: T.sm, color: C.inkMuted, marginTop: 6, paddingTop: 8, borderTop: `1px solid ${C.border}`, lineHeight: 1.6 }}>
-                  {l.costo_unitario == null ? <span style={{ color: C.warnText, fontWeight: 700 }}>Sin costo: falta el precio de compra (el margen de esta línea no se calcula).</span>
+                  {l.costo_unitario == null ? <span style={{ color: C.warnText, fontWeight: 600 }}>Sin costo: falta el precio de compra (el margen de esta línea no se calcula).</span>
                     : <>Costo unitario (compra{it.tipo !== "servicio" ? " + despacho" : ""}, {calc.exenta ? "con IVA no recuperable" : "neto"}): <b data-costo-unitario={i + 1} style={{ color: C.ink, fontFamily: MONO }}>{m(l.costo_unitario)}</b> · Utilidad de la línea: <b style={{ color: l.utilidad >= 0 ? C.okText : C.dangerText, fontFamily: MONO }}>{m(l.utilidad)}</b></>}
                   <div data-recargo-producto={i + 1} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 6 }}>
                     <label htmlFor={`vp-recargo-${it.key}`} style={{ fontSize: T.sm, color: C.inkMuted, flex: "1 1 160px" }}>Recargo sobre costo (%)</label>
@@ -651,12 +651,12 @@ export function EditorCotizacionPrivada({ token, perfil, vp, id, showToast, onCe
             return (
               <Tarjeta key={it.key} padding="10px 12px" data-revision-eett={i + 1}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start" }}>
-                  <div style={{ fontSize: T.sm, fontWeight: 800, color: C.ink, minWidth: 0 }}>Ficha {i + 1}: {it.ficha.nombre || "Sin nombre"}</div>
+                  <div style={{ fontSize: T.sm, fontWeight: 700, color: C.ink, minWidth: 0 }}>Ficha {i + 1}: {it.ficha.nombre || "Sin nombre"}</div>
                   <Badge tono={p.bloqueos.length ? "danger" : p.aprobado ? "ok" : "warn"}>{p.bloqueos.length ? "Bloqueada" : p.aprobado ? "Lista" : "Revisar"}</Badge>
                 </div>
                 {p.avisos.map((a, j) => <div key={j} style={{ fontSize: T.small, color: a.nivel === "bloqueo" ? C.dangerText : C.warnText, marginTop: 4 }}>• {a.mensaje}</div>)}
                 {p.revisar.length > 0 && !p.bloqueos.length && (
-                  <label data-aprobar-ficha style={{ display: "flex", alignItems: "center", gap: 8, fontSize: T.sm, marginTop: 8, minHeight: 36, fontWeight: 700 }}>
+                  <label data-aprobar-ficha style={{ display: "flex", alignItems: "center", gap: 8, fontSize: T.sm, marginTop: 8, minHeight: 36, fontWeight: 600 }}>
                     <input type="checkbox" disabled={ro} checked={!!it.ficha_aprobada} onChange={(e) => cambiar((x) => { x.items[i].ficha_aprobada = e.target.checked; return x; })} />
                     Revisé estos avisos y apruebo la ficha tal como está
                   </label>
@@ -676,7 +676,7 @@ export function EditorCotizacionPrivada({ token, perfil, vp, id, showToast, onCe
             <Seccion titulo="EETT generadas" nota="Cada generación queda emitida y congelada con su folio y revisión; si la cotización cambia, la siguiente generación emite una revisión nueva.">
               {d.eett.map((e) => (
                 <div key={e.id} data-eett={`${e.folio}-R${e.revision}`} data-eett-generado={e.estado !== "borrador" ? "" : undefined} style={{ fontSize: T.small, color: C.inkMuted, padding: "6px 0", borderBottom: `1px solid ${C.border}`, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                  <span style={{ fontFamily: MONO, fontWeight: 800, color: C.ink }}>{etqEETT(e)}</span>
+                  <span style={{ fontFamily: MONO, fontWeight: 700, color: C.ink }}>{etqEETT(e)}</span>
                   <Badge tono={e.estado === "emitida" ? "ok" : e.estado === "borrador" ? "warn" : "neutro"}>{e.estado === "emitida" ? "Emitida" : e.estado === "borrador" ? "Borrador" : "Reemplazada"}</Badge>
                   <span style={{ flex: 1, minWidth: 140 }}>{e.estado === "borrador" ? "Sin emitir: se completa y emite con «Generar y descargar EETT» (conserva su folio y su contenido)."
                     : `Cotización R${d.revisiones.find((r) => r.id === e.cotizacion_revision_id)?.numero ?? "?"}${e.emitida_en ? ` · ${fechaHora(e.emitida_en)}` : ""}`}</span>
@@ -787,7 +787,7 @@ function CampoVendedor({ vp, c, valor, editable, puedeReasignar, onCambiar, onRe
     <Field label="Vendedor" hint={puedeReasignar ? hint : `${hint} Ya enviada: solo un administrador cambia un vendedor asignado.`}>
       <div style={{ display: "flex", gap: 6 }}>
         <select data-campo="vendedor" disabled={!puedeReasignar} value={v} onChange={(e) => setV(e.target.value)} style={{ ...selStyle, flex: 1 }}><option value="">{c ? nombreVendedor({}) : "Sin vendedor asignado"}</option>{op.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}</select>
-        {puedeReasignar && v !== valor && <button type="button" data-guardar-vendedor-cot disabled={ocupado} onClick={async () => { setOcupado(true); await onReasignar(v); setOcupado(false); }} style={{ minHeight: 40, padding: "0 12px", borderRadius: 8, border: "none", background: "#0B1120", color: "#fff", fontWeight: 800, cursor: "pointer" }}>{ocupado ? "…" : "Guardar"}</button>}
+        {puedeReasignar && v !== valor && <button type="button" data-guardar-vendedor-cot disabled={ocupado} onClick={async () => { setOcupado(true); await onReasignar(v); setOcupado(false); }} style={{ minHeight: 40, padding: "0 12px", borderRadius: 8, border: "none", background: "#0B1120", color: "#fff", fontWeight: 700, cursor: "pointer" }}>{ocupado ? "…" : "Guardar"}</button>}
       </div>
     </Field>
   );

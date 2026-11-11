@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { Field, Modal } from "../ui/Basicos";
 import { C, btnP, fmt, iMono, iStyle, selStyle } from "../../lib/theme";
 import { Ic } from "../ui/Iconos";
-import { Seccion, Tarjeta, Badge, Monto, Desplegable, AvisoLinea, BarraAcciones, BotonPrincipal } from "../ui/Sistema";
+import { Seccion, Tarjeta, Badge, Monto, Desplegable, BarraAcciones, BotonPrincipal, Enlace } from "../ui/Sistema";
 import { FormIvaMensual } from "../forms/FormIvaMensual";
 import { CATEGORIA_IMPUESTO, periodosIvaIncompletos } from "../../lib/ivaUnificado";
 import { apoyoEnGestion } from "../../lib/informes";
@@ -43,7 +43,7 @@ export function PanelGastos({ gastos, categorias, ivaMensual=[], pagosVendedor=[
           style={{width:"100%",background:"none",border:"none",padding:"12px 16px",minHeight:60,cursor:historial.length?"pointer":"default",
             display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,textAlign:"left"}}>
           <div style={{flex:1,minWidth:0}}>
-            <div style={{fontWeight:700,fontSize:16,color:historica?C.inkMuted:C.ink,lineHeight:1.25}}>{c.nombre}</div>
+            <div style={{fontWeight:600,fontSize:16,color:historica?C.inkMuted:C.ink,lineHeight:1.25}}>{c.nombre}</div>
             {u
               ?<div style={{fontSize:12,color:C.inkMuted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",marginTop:2}}>{u.subcategoria||u.detalle||"—"} · {fmt.monthYear(u.mes,u.anio)}</div>
               :<div style={{fontSize:12,color:C.inkMuted,marginTop:2}}>Sin pagos registrados</div>}
@@ -53,17 +53,17 @@ export function PanelGastos({ gastos, categorias, ivaMensual=[], pagosVendedor=[
         </button>
         {estaAbierta&&historial.length>0&&(
           <div style={{padding:"0 16px 12px"}}>
-            <div style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.5,marginBottom:4,paddingTop:10,borderTop:`1px solid ${C.border}`}}>Historial completo ({historial.length})</div>
+            <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.5,marginBottom:4,paddingTop:10,borderTop:`1px solid ${C.border}`}}>Historial completo ({historial.length})</div>
             {historial.map(g=>(
               <div key={g.id} style={{padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:8}}>
-                  <span style={{fontSize:13,fontWeight:700,color:C.ink}}>{fmt.monthYear(g.mes,g.anio)}</span>
+                  <span style={{fontSize:13,fontWeight:600,color:C.ink}}>{fmt.monthYear(g.mes,g.anio)}</span>
                   <Monto tam="sm" tono={historica?"suave":"neutro"}>{fmt.money(g.monto)}</Monto>
                 </div>
                 {(g.detalle||g.subcategoria)&&<div style={{fontSize:12,color:C.inkMuted,marginTop:1}}>{g.subcategoria||g.detalle}</div>}
                 {esIncompleto(g)&&onGuardarIva&&(
                   <button data-iva-incompleto onClick={()=>setIvaPeriodo({anio:Number(g.anio),mes:Number(g.mes)})}
-                    style={{background:"none",border:"none",color:C.warnText,fontSize:12,fontWeight:700,cursor:"pointer",textDecoration:"underline",padding:"4px 0 0"}}>
+                    style={{background:"none",border:"none",color:C.warnText,fontSize:12,fontWeight:600,cursor:"pointer",textDecoration:"underline",padding:"4px 0 0"}}>
                     ⚠ Falta débito/crédito: la comisión de este mes va sin IVA · Completar
                   </button>
                 )}
@@ -82,8 +82,9 @@ export function PanelGastos({ gastos, categorias, ivaMensual=[], pagosVendedor=[
     <div>
       <BarraAcciones>
         <BotonPrincipal onClick={()=>{setTipoForm("gasto");setShowForm(true);}}>+ Registrar gasto</BotonPrincipal>
+        {/* Acceso discreto (antes una franja azul de ancho completo): Impuestos es la pestaña vecina. */}
+        {onIrImpuestos&&<Enlace data-aviso-linea="ir-impuestos" onClick={onIrImpuestos} style={{marginLeft:"auto",fontWeight:500,color:C.inkMuted}}>El IVA y el F29 se registran en <span style={{color:C.tealDark,textDecoration:"underline"}}>Impuestos</span></Enlace>}
       </BarraAcciones>
-      {onIrImpuestos&&<AvisoLinea tono="info" icono="🧾" dato="ir-impuestos" onClick={onIrImpuestos} accion="Ir a Impuestos">El IVA y el F29 se registran en Impuestos.</AvisoLinea>}
 
       <Seccion titulo="Gastos por categoría" nota="Se muestra el último pago de cada categoría. Toca una para ver su historial.">
         {actuales.map(c=>tarjetaCategoria(c,false))}
@@ -92,11 +93,11 @@ export function PanelGastos({ gastos, categorias, ivaMensual=[], pagosVendedor=[
       <Desplegable dato="apoyo-gestion" titulo="Apoyo en gestión"
         resumen={`${apoyo.items.length} registro${apoyo.items.length===1?"":"s"}`} derecha={<Monto tam="sm">{fmt.money(apoyo.total)}</Monto>}>
           <div style={{fontSize:12,color:C.inkFaint,lineHeight:1.45,marginBottom:8}}>Incluye el gasto «Apoyo en gestión» y el extra por gestión que va dentro de un pago a vendedor. Cada monto aparece una vez: la salida bancaria es el gasto o el pago, nunca ambos.</div>
-          <div data-apoyo-total style={{display:"flex",justifyContent:"space-between",fontWeight:800,fontSize:13,marginBottom:6}}><span>Total</span><Monto>{fmt.money(apoyo.total)}</Monto></div>
+          <div data-apoyo-total style={{display:"flex",justifyContent:"space-between",fontWeight:700,fontSize:13,marginBottom:6}}><span>Total</span><Monto>{fmt.money(apoyo.total)}</Monto></div>
           {apoyo.items.map(it=>(
             <div key={it.origen+it.id} data-apoyo={it.origen} style={{display:"flex",justifyContent:"space-between",gap:8,fontSize:12,padding:"3px 0",borderTop:`1px solid ${C.border}`}}>
               <span style={{color:C.inkMuted,minWidth:0}}>{fmt.date(it.fecha)} · {it.origen==="gasto"?"Gasto":"Dentro del pago a "+((vendedores||[]).find(v=>v.id===it.vendedorId)?.nombre||"vendedor")} · período {fmt.monthYear(it.mes,it.anio)}</span>
-              <span style={{fontFamily:"inherit",fontWeight:700,flexShrink:0}}>{fmt.money(it.monto)}</span>
+              <span style={{fontFamily:"inherit",fontWeight:600,flexShrink:0}}>{fmt.money(it.monto)}</span>
             </div>
           ))}
           {!apoyo.items.length&&<div style={{fontSize:12,color:C.inkFaint}}>Sin registros</div>}
@@ -157,7 +158,7 @@ export function FormNuevoGasto({ categorias, onSave, onIva }) {
       <Field label="Fecha de pago" required><input style={iStyle} type="date" value={fecha} onChange={e=>setFecha(e.target.value)} /></Field>
       <Field label="Monto ($)" required><input style={iMono} type="number" value={monto} onChange={e=>setMonto(e.target.value)} /></Field>
       <Field label="Detalle"><input style={iStyle} value={detalle} onChange={e=>setDetalle(e.target.value)} /></Field>
-      {err&&<div style={{background:C.dangerLight,color:C.dangerText,borderRadius:8,padding:"8px 12px",fontSize:13,marginBottom:10,fontWeight:600}}>{err}</div>}
+      {err&&<div style={{background:C.dangerLight,color:C.dangerText,borderRadius:8,padding:"8px 12px",fontSize:13,marginBottom:10,fontWeight:500}}>{err}</div>}
       <button onClick={handleSave} disabled={saving} style={btnP(saving?C.inkFaint:C.warn)}>{saving?"Guardando…":"✓ Registrar gasto"}</button>
       </>}
     </div>

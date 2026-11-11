@@ -5,7 +5,7 @@ import { useState, useEffect } from "react";
 import { del } from "../../lib/supabase";
 import { C, MONO, SANS, fmt } from "../../lib/theme";
 import { Leyenda } from "./Basicos";
-import { Pestanas, PanelPestana } from "./Sistema";
+import { Pestanas, PanelPestana, Chips, Tarjeta, Monto } from "./Sistema";
 import { esPendiente } from "../../lib/correosBfk";
 import { Ic, I } from "./Iconos";
 
@@ -19,13 +19,13 @@ export function BloqueoEstado({ estado, onReintentar }) {
     <div data-testid="bloqueo-estado" data-fase={estado.fase} style={{background:C.warnLight,border:`1px solid ${C.warn}`,borderRadius:8,padding:"10px 14px",marginBottom:12,display:"flex",alignItems:"center",gap:10}}>
       <span style={{fontSize:20}}><Ic n="🔒"/></span>
       <div style={{flex:1,minWidth:0}}>
-        <div style={{fontSize:13,fontWeight:700,color:C.warnText}}>{titulo}</div>
+        <div style={{fontSize:13,fontWeight:600,color:C.warnText}}>{titulo}</div>
         {detalle&&<div style={{fontSize:12,color:C.inkMuted}}>{detalle}</div>}
       </div>
       {boton}
     </div>
   );
-  const btn=onReintentar&&<button type="button" onClick={onReintentar} style={{background:"none",border:`1px solid ${C.warn}`,color:C.warnText,borderRadius:8,padding:"6px 10px",fontSize:12,fontWeight:700,minHeight:36,cursor:"pointer"}}>Reintentar</button>;
+  const btn=onReintentar&&<button type="button" onClick={onReintentar} style={{background:"none",border:`1px solid ${C.warn}`,color:C.warnText,borderRadius:8,padding:"6px 10px",fontSize:12,fontWeight:600,minHeight:36,cursor:"pointer"}}>Reintentar</button>;
   if(estado.fase==="adquiriendo") return caja("Verificando disponibilidad de edición…","Solo lectura mientras se confirma.");
   if(estado.fase==="sin_confirmar") return caja("No se pudo confirmar tu sesión de edición","Sin conexión con el servidor. Solo lectura; se reintenta automáticamente.",btn);
   if(estado.fase==="perdida") return caja(`Perdiste la sesión de edición · en edición por ${estado.dueno}`,`Solo lectura · disponible en ~${segs} s. Se recuperará automáticamente si queda libre.`,btn);
@@ -37,10 +37,10 @@ export function HistorialCambiosOC({ ocId, historialCambios }) {
   if(!items.length) return null;
   return (
     <div style={{marginBottom:14}}>
-      <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",letterSpacing:1,marginBottom:8}}><Ic n="📋"/> Historial de cambios</div>
+      <div style={{fontSize:12,fontWeight:600,color:C.inkMuted,textTransform:"uppercase",letterSpacing:1,marginBottom:8}}><Ic n="📋"/> Historial de cambios</div>
       {items.map(h=>(
         <div key={h.id} style={{borderLeft:`2px solid ${C.border}`,paddingLeft:10,marginBottom:8}}>
-          <div style={{fontSize:12,fontWeight:600,color:C.ink}}>{h.accion}</div>
+          <div style={{fontSize:12,fontWeight:500,color:C.ink}}>{h.accion}</div>
           {h.campo&&<div style={{fontSize:12,color:C.inkMuted}}>{String(h.campo).startsWith("seguimiento:")?"seguimiento":h.campo}: <span style={{color:C.dangerText,textDecoration:"line-through"}}>{h.valor_anterior||"—"}</span> → <span style={{color:C.okText}}>{h.valor_nuevo||"—"}</span></div>}
           <div style={{fontSize:12,color:C.inkFaint}}>{h.usuario_nombre} · {fmt.datetime(h.creadoEn)}</div>
         </div>
@@ -63,9 +63,9 @@ export function ComentariosOC({ oc, perfil, onAgregar, onEliminar, plano }) {
   return (
     <div style={plano?{marginBottom:10}:{marginBottom:10,background:C.card,borderRadius:8,overflow:"hidden",border:`1px solid ${C.border}`}}>
       {plano
-        ? <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}}><Ic n="💬"/> Notas del equipo {comentarios.length>0&&<span style={{color:C.tealDark}}>({comentarios.length})</span>}</div>
+        ? <div style={{fontSize:12,fontWeight:600,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}}><Ic n="💬"/> Notas del equipo {comentarios.length>0&&<span style={{color:C.tealDark}}>({comentarios.length})</span>}</div>
         : <div onClick={()=>setAbierto(v=>!v)} style={{padding:"9px 12px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <span style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.5}}>
+            <span style={{fontSize:12,fontWeight:600,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.5}}>
               <Ic n="💬"/> Notas del equipo {comentarios.length>0&&<span style={{color:C.tealDark}}>({comentarios.length})</span>}
             </span>
             <span style={{color:C.inkFaint,fontSize:12}}>{abierto?"▲":"▼"}</span>
@@ -76,7 +76,7 @@ export function ComentariosOC({ oc, perfil, onAgregar, onEliminar, plano }) {
             <div key={c.id} style={{background:C.paper,borderRadius:8,padding:"8px 12px",marginBottom:6}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
                 <div style={{flex:1}}>
-                  <div style={{fontSize:12,color:C.tealDark,fontWeight:700,marginBottom:3}}>{c.usuario_nombre} · {fmt.datetime(c.creadoEn)}</div>
+                  <div style={{fontSize:12,color:C.tealDark,fontWeight:600,marginBottom:3}}>{c.usuario_nombre} · {fmt.datetime(c.creadoEn)}</div>
                   <div style={{fontSize:13,color:C.ink,lineHeight:1.5}}>{c.texto}</div>
                 </div>
                 {perfil?.rol==="admin"&&(
@@ -304,15 +304,6 @@ export function PanelNotificaciones({ notificaciones, ocs, onMarcarLeidas, onNav
   const [pestana, setPestana] = useState("alertas");
   const nCorreos = (correos || []).filter(esPendiente).length;
 
-  const Chip = ({ id, label, n, color }) => (
-    <button onClick={() => setFiltro(id)}
-      style={{fontSize:12,fontWeight:700,padding:"5px 10px",borderRadius:8,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap",
-        border:`1.5px solid ${filtro===id?color:C.border}`,
-        background:filtro===id?C.paper:C.card, color:filtro===id?color:C.inkMuted}}>
-      {label}{n !== undefined ? ` ${n}` : ""}
-    </button>
-  );
-
   return (
     <div style={{fontFamily:SANS}}>
       <Pestanas etiqueta="Alertas y correos" activa={pestana} onCambiar={setPestana} items={[
@@ -324,16 +315,13 @@ export function PanelNotificaciones({ notificaciones, ocs, onMarcarLeidas, onNav
         <CorreosPendientes correos={correos} ocs={ocs} onMarcar={onMarcarCorreo} onAbrirOC={(ocId) => onNavigate && onNavigate("compras", null, ocId)} />
       </PanelPestana>}
       <PanelPestana visible={pestana === "alertas"} titulo="Alertas de OC">
-      <div style={{fontSize:12,color:C.inkFaint,margin:"-6px 2px 10px"}}>
-        {alertas.length === 0 ? "Todo al día" : `${alertas.length} cosa${alertas.length>1?"s":""} que revisar · toca para ir a la OC`}
-      </div>
-
-      <div style={{display:"flex",gap:6,flexWrap:"nowrap",overflowX:"auto",scrollbarWidth:"none",marginBottom:12}}>
-        <Chip id="todas" label="Todas" n={alertas.length} color={C.teal} />
-        <Chip id="alto"  label={<I t={"🔴 Urgente"}/>}   n={conteo.alto}  color={C.danger} />
-        <Chip id="medio" label={<I t={"🟡 Atención"}/>}  n={conteo.medio} color={C.warn} />
-        <Chip id="bajo"  label="Informativas" n={conteo.bajo}  color={C.inkMuted} />
-      </div>
+      {/* Filtro por nivel: los mismos chips del resto de la app. El total ya está en la pestaña. */}
+      <Chips etiqueta="Nivel de alerta" dato="nivel-alerta" valor={filtro} onCambiar={setFiltro} items={[
+        { k: "todas", l: "Todas", n: alertas.length },
+        { k: "alto", l: "Urgente", n: conteo.alto, punto: C.danger },
+        { k: "medio", l: "Atención", n: conteo.medio, punto: C.warn },
+        { k: "bajo", l: "Informativas", n: conteo.bajo, punto: C.inkFaint },
+      ]} />
 
       {etapa && (
         <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10,fontSize:12,color:C.inkMuted}}>
@@ -349,26 +337,26 @@ export function PanelNotificaciones({ notificaciones, ocs, onMarcarLeidas, onNav
         </div>
       )}
 
+      {/* Una sola lista (mismo patrón que «Prioridades de hoy» en Inicio) en lugar de una tarjeta por alerta. */}
+      {visibles.length > 0 && <Tarjeta padding="4px">
       {visibles.map((a, i) => (
-        <button key={i} data-alerta-seguimiento={a.seguimientoId} data-alerta-canal={a.canal || "mp"} onClick={() => (a.destino ? onAbrirExtra && onAbrirExtra(a.destino) : onNavigate && onNavigate(a.tab, a.filtro, a.ocId))}
-          style={{width:"100%",textAlign:"left",background:C.card,border:`1px solid ${C.border}`,
-            borderLeft:`4px solid ${colorNivel(a.nivel)}`,borderRadius:12,padding:"11px 13px",
-            marginBottom:7,cursor:"pointer",display:"flex",gap:10,alignItems:"flex-start"}}>
-          <span style={{fontSize:16,flexShrink:0,lineHeight:1.2}}>{typeof a.icono === "string" ? <Ic n={a.icono}/> : a.icono}</span>
+        <button key={i} data-alerta-seguimiento={a.seguimientoId} data-alerta-canal={a.canal || "mp"} data-alerta-nivel={a.nivel} onClick={() => (a.destino ? onAbrirExtra && onAbrirExtra(a.destino) : onNavigate && onNavigate(a.tab, a.filtro, a.ocId))}
+          style={{width:"100%",textAlign:"left",background:"none",border:"none",borderBottom:i<visibles.length-1?`1px solid ${C.border}`:"none",
+            padding:"10px 10px",cursor:"pointer",display:"flex",gap:10,alignItems:"flex-start"}}>
+          <span aria-hidden="true" style={{width:4,alignSelf:"stretch",borderRadius:4,background:colorNivel(a.nivel),flexShrink:0}} />
+          <span style={{fontSize:16,flexShrink:0,lineHeight:1.2,color:C.inkMuted}}>{typeof a.icono === "string" ? <Ic n={a.icono}/> : a.icono}</span>
           <span style={{flex:1,minWidth:0}}>
-            <span style={{display:"block",fontSize:13,fontWeight:700,color:C.ink}}>{a.titulo}</span>
+            <span style={{display:"block",fontSize:14,fontWeight:600,color:C.ink,lineHeight:1.3}}>{a.titulo}</span>
             <span style={{display:"block",fontSize:12,color:C.inkMuted,marginTop:2}}>{a.detalle}</span>
-            <span style={{display:"block",fontSize:12,color:C.inkFaint,marginTop:3,fontFamily:MONO}}>
-              {a.canal === "vp" ? "Venta privada · " : ""}{a.oc}{a.cliente ? ` · ${a.cliente}` : ""}
+            <span style={{display:"block",fontSize:12,color:C.inkFaint,marginTop:2}}>
+              {a.canal === "vp" ? "Venta privada · " : ""}<span style={{fontFamily:MONO}}>{a.oc}</span>{a.cliente ? ` · ${a.cliente}` : ""}
             </span>
           </span>
-          {a.monto > 0 && (
-            <span style={{fontSize:12,fontWeight:800,fontFamily:MONO,color:colorNivel(a.nivel),flexShrink:0}}>
-              {fmt.money(a.monto)}
-            </span>
-          )}
+          {a.monto > 0 && <Monto tam="sm" tono={a.nivel === "alto" ? "danger" : a.nivel === "medio" ? "warn" : "suave"} style={{flexShrink:0}}>{fmt.money(a.monto)}</Monto>}
+          <span style={{color:C.inkFaint,flexShrink:0,alignSelf:"center",display:"flex"}}><Ic n="chevR"/></span>
         </button>
       ))}
+      </Tarjeta>}
 
       <Leyenda titulo="¿Cómo se ordenan las alertas?" items={LEYENDA_ALERTAS} />
       </PanelPestana>
@@ -376,16 +364,14 @@ export function PanelNotificaciones({ notificaciones, ocs, onMarcarLeidas, onNav
         <PanelPestana visible={pestana === "parati"} titulo="Para ti">
         <div>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-            <span style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.4}}>
-              Para ti ({noLeidas.length})
-            </span>
-            <button onClick={onMarcarLeidas} style={{fontSize:12,color:C.tealDark,background:"none",border:"none",cursor:"pointer",fontWeight:600}}>
+            <span style={{fontSize:12,color:C.inkFaint}}>Avisos de otros usuarios sobre tus OC</span>
+            <button onClick={onMarcarLeidas} style={{fontSize:12,color:C.tealDark,background:"none",border:"none",cursor:"pointer",fontWeight:500}}>
               Marcar leídas
             </button>
           </div>
           {noLeidas.map(n => (
             <div key={n.id} style={{background:C.tealLight,borderRadius:12,padding:"10px 12px",marginBottom:6,borderLeft:`3px solid ${C.teal}`}}>
-              <div style={{fontSize:13,color:C.ink,fontWeight:600}}>{n.mensaje}</div>
+              <div style={{fontSize:13,color:C.ink,fontWeight:500}}>{n.mensaje}</div>
               <div style={{fontSize:12,color:C.inkFaint,marginTop:3}}>{fmt.datetime(n.creadoEn)}</div>
             </div>
           ))}

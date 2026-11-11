@@ -28,17 +28,17 @@ export function AvisoSesion({ email, onCerrarSesion }) {
   return (
     <div role="dialog" aria-modal="true" data-aviso-sesion="ventana" style={{ position: "fixed", inset: 0, zIndex: 2000, background: "rgba(8,14,28,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16, fontFamily: SANS }}>
       <div style={{ background: C.card, borderRadius: 14, padding: "22px 20px", width: "100%", maxWidth: 400, boxShadow: "0 20px 50px rgba(0,0,0,0.35)" }}>
-        <div style={{ fontWeight: 800, fontSize: 17, color: C.ink, marginBottom: 8 }}>{vencida ? "Tu sesión venció" : "Vuelve a ingresar"}</div>
+        <div style={{ fontWeight: 700, fontSize: 17, color: C.ink, marginBottom: 8 }}>{vencida ? "Tu sesión venció" : "Vuelve a ingresar"}</div>
         <div style={{ fontSize: 13, color: C.inkMuted, lineHeight: 1.5, marginBottom: 14 }}>{texto}</div>
-        {err && <div data-error-reingreso style={{ background: C.dangerLight, color: C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 12, fontWeight: 600 }}>{err}</div>}
+        {err && <div data-error-reingreso style={{ background: C.dangerLight, color: C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 12, fontWeight: 500 }}>{err}</div>}
         <div style={{ fontSize: 12, color: C.inkMuted, marginBottom: 4 }}>Cuenta</div>
-        <div data-cuenta-sesion style={{ fontWeight: 700, fontSize: 14, color: C.ink, marginBottom: 12, wordBreak: "break-all" }}>{email}</div>
+        <div data-cuenta-sesion style={{ fontWeight: 600, fontSize: 14, color: C.ink, marginBottom: 12, wordBreak: "break-all" }}>{email}</div>
         <label style={{ display: "block", fontSize: 12, color: C.inkMuted, marginBottom: 4 }} htmlFor="bfk-reingreso-clave">Contraseña</label>
         <input id="bfk-reingreso-clave" data-clave-reingreso type="password" autoComplete="current-password" value={pass} onChange={(e) => { setPass(e.target.value); setErr(""); }} onKeyDown={(e) => e.key === "Enter" && entrar()} style={{ ...iStyle, marginBottom: 14 }} />
         <button type="button" data-confirmar-reingreso onClick={entrar} disabled={ocupado} style={btnP(ocupado ? C.inkFaint : C.night)}>{ocupado ? "Ingresando…" : "Ingresar y seguir donde estaba"}</button>
         <div style={{ display: "flex", justifyContent: "space-between", marginTop: 12, gap: 8 }}>
-          {!vencida ? <button type="button" onClick={() => setVer(false)} style={{ background: "none", border: "none", color: C.tealDark, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Ahora no</button> : <span />}
-          <button type="button" data-cerrar-sesion-aviso onClick={onCerrarSesion} style={{ background: "none", border: "none", color: C.inkMuted, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Cerrar sesión (los cambios quedan en este dispositivo)</button>
+          {!vencida ? <button type="button" onClick={() => setVer(false)} style={{ background: "none", border: "none", color: C.tealDark, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Ahora no</button> : <span />}
+          <button type="button" data-cerrar-sesion-aviso onClick={onCerrarSesion} style={{ background: "none", border: "none", color: C.inkMuted, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Cerrar sesión (los cambios quedan en este dispositivo)</button>
         </div>
       </div>
     </div>

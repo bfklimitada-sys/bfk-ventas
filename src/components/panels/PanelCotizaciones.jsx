@@ -99,17 +99,17 @@ export function PanelCotizaciones({ token, perfil, entidadesCatalogo, showToast,
     <div data-panel-cotizaciones>
       {modo === "error" && <AvisoLinea tono="danger" dato="error-conexion" accion="Reintentar" onClick={() => setIntento((n) => n + 1)}>{detalleError}</AvisoLinea>}
       {modo === "prueba" && <AvisoLinea tono="info" dato="modo-prueba" icono="⚠">Modo prueba: el módulo aún no está instalado en la base de datos. Lo que guardes queda solo en este dispositivo.</AvisoLinea>}
-      <Indicadores columnas={conVendedores && sinVend !== null ? 3 : 2}>
-        <Indicador dato="cotizaciones-abiertas" etiqueta="Cotizaciones en preparación" valor={String(abiertas)} tono={abiertas ? "info" : "neutro"} onClick={() => { setPestana("cotizaciones"); filtrar("estado", ""); }} />
-        {conVendedores && sinVend !== null && <Indicador dato="presentadas-sin-vendedor" etiqueta="Presentadas sin vendedor" valor={String(sinVend)} tono={sinVend ? "warn" : "ok"} nota={sinVend ? "Por regularizar" : "Al día"} onClick={verRegularizar} />}
-        <Indicador dato="biblioteca" etiqueta="Fichas en la biblioteca" valor={String(nBib)} tono="neutro" onClick={() => setPestana("biblioteca")} />
+      {/* Conteos en una línea. El de la biblioteca ya está en su pestaña (antes se repetía en una tarjeta). */}
+      <Indicadores linea>
+        <Indicador linea dato="cotizaciones-abiertas" etiqueta="En preparación" valor={String(abiertas)} onClick={() => { setPestana("cotizaciones"); filtrar("estado", ""); }} />
+        {conVendedores && sinVend !== null && <Indicador linea dato="presentadas-sin-vendedor" etiqueta="Presentadas sin vendedor" valor={String(sinVend)} tono={sinVend ? "warn" : "ok"} nota={sinVend ? "por regularizar" : null} onClick={verRegularizar} />}
       </Indicadores>
       <Pestanas etiqueta="Cotizaciones" activa={pestana} onCambiar={setPestana} items={[{ key: "cotizaciones", label: "Cotizaciones", n: lista.total || null }, { key: "biblioteca", label: "Biblioteca", n: nBib || null }]} />
 
       <PanelPestana visible={pestana === "cotizaciones"} titulo="Cotizaciones">
         {!abierta && borradores.length > 0 && (
           <Tarjeta padding="10px 12px" data-borradores-locales style={{ borderColor: C.warn, marginBottom: 10 }}>
-            <div style={{ fontSize: T.sm, fontWeight: 800, color: C.warnText }}>↺ Cambios no guardados recuperados en este dispositivo</div>
+            <div style={{ fontSize: T.sm, fontWeight: 700, color: C.warnText }}>↺ Cambios no guardados recuperados en este dispositivo</div>
             <div style={{ fontSize: T.small, color: C.inkMuted, marginBottom: 6 }}>Son copias locales de recuperación: aún no están guardadas en BFK.</div>
             {borradores.map((b) => (
               <div key={b.idLocal} data-borrador-local={b.idLocal} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", padding: "6px 0", borderTop: `1px solid ${C.border}` }}>
@@ -132,7 +132,7 @@ export function PanelCotizaciones({ token, perfil, entidadesCatalogo, showToast,
           {conVendedores && <input data-filtro-vendedor aria-label="Filtrar por vendedor" value={filtros.sinVendedor ? "" : filtros.vendedor} disabled={filtros.sinVendedor} onChange={(e) => filtrar("vendedor", e.target.value)} placeholder={filtros.sinVendedor ? "Filtrar por vendedor (no aplica)" : "Filtrar por vendedor"} style={{ ...iStyle, flex: "1 1 160px", width: "auto", opacity: filtros.sinVendedor ? 0.55 : 1 }} />}
           {conVendedores && (
             <label data-filtro-sin-vendedor style={{ display: "inline-flex", alignItems: "center", gap: 8, flex: "1 1 200px", minHeight: 40, padding: "0 12px", borderRadius: R.md, cursor: "pointer", userSelect: "none",
-              border: `1px solid ${filtros.sinVendedor ? C.warn : C.border}`, background: filtros.sinVendedor ? C.warnLight : C.card, color: filtros.sinVendedor ? C.warnText : C.ink, fontSize: T.sm, fontWeight: 700 }}>
+              border: `1px solid ${filtros.sinVendedor ? C.warn : C.border}`, background: filtros.sinVendedor ? C.warnLight : C.card, color: filtros.sinVendedor ? C.warnText : C.ink, fontSize: T.sm, fontWeight: 600 }}>
               <input type="checkbox" checked={filtros.sinVendedor} onChange={(e) => filtrar("sinVendedor", e.target.checked)} style={{ width: 18, height: 18, margin: 0 }} />
               Sin vendedor asignado
             </label>
@@ -150,7 +150,7 @@ export function PanelCotizaciones({ token, perfil, entidadesCatalogo, showToast,
         {lista.filas.map((c) => (
           <Tarjeta key={c.id} onClick={() => abrir(c.id)} padding="12px 14px" data-cotizacion={c.id_externo || c.id}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
-              <span style={{ fontSize: T.body, fontWeight: 800, color: C.ink }}>{c.id_externo || <span style={{ color: C.inkMuted }}>Sin código Mercado Público{!c.nombre ? ` · ID ${String(c.id || "").slice(0, 8).toUpperCase()}` : ""}</span>}</span>
+              <span style={{ fontSize: T.body, fontWeight: 700, color: C.ink }}>{c.id_externo || <span style={{ color: C.inkMuted }}>Sin código Mercado Público{!c.nombre ? ` · ID ${String(c.id || "").slice(0, 8).toUpperCase()}` : ""}</span>}</span>
               <span style={{ display: "inline-flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
                 {conVendedores && !c.vendedor_id && <span data-sin-vendedor><Badge tono="warn">Sin vendedor</Badge></span>}
                 <Badge tono={ESTADOS_COTIZACION[c.estado]?.tono}>{ESTADOS_COTIZACION[c.estado]?.label || c.estado}</Badge>
@@ -177,7 +177,7 @@ export function PanelCotizaciones({ token, perfil, entidadesCatalogo, showToast,
             <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
               <ImagenFicha src={p.imagenes?.[0]} almacen={almacen} style={{ width: 56, height: 56, flexShrink: 0, border: `1px solid ${C.border}`, borderRadius: R.sm }} />
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: T.sm, fontWeight: 800, color: C.ink, lineHeight: 1.3, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{p.nombre}</div>
+                <div style={{ fontSize: T.sm, fontWeight: 700, color: C.ink, lineHeight: 1.3, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{p.nombre}</div>
                 <div style={{ fontSize: T.small, color: C.inkMuted }}>{[p.marca, p.modelo].filter(Boolean).join(" · ") || "Sin marca/modelo"} · {(p.especificaciones || []).length} especificaciones</div>
                 <div style={{ fontSize: T.small, color: C.inkFaint }}>{p.ultima_revision ? `Revisado ${fmt.date(String(p.ultima_revision).slice(0, 10))}` : ""}</div>
               </div>

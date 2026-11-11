@@ -67,7 +67,7 @@ export function ImportarEntidades({ session, onTerminado, onCancelar }) {
 
   return (
     <div style={{ background:C.tealLight, borderRadius:12, padding:"12px 14px" }} data-importador-entidades>
-      <div style={{ fontSize:13, fontWeight:700, color:C.tealDark, marginBottom:8 }}>Importar entidades</div>
+      <div style={{ fontSize:13, fontWeight:600, color:C.tealDark, marginBottom:8 }}>Importar entidades</div>
       <div style={{ fontSize:12, color:C.inkMuted, marginBottom:10 }}>
         Formatos: {TEXTO_FORMATOS}. Primera fila = encabezados: <b>rut</b> y <b>nombre</b> (o <b>entidad</b> / razón social) obligatorios; <b>comuna</b>, <b>contacto</b> y <b>correo</b> opcionales.
         Las celdas vacías no borran datos existentes. Máximo {LIMITE_OPERACIONES} cambios por importación.
@@ -78,13 +78,13 @@ export function ImportarEntidades({ session, onTerminado, onCancelar }) {
       {(estado === "vista" || estado === "enviando" || estado === "listo") && (
         <>
           {info && <div style={{ fontSize:12, color:C.inkMuted, marginBottom:6 }}>Archivo {info.formato.toUpperCase()} · {info.detalle}{info.filasVacias ? ` · ${info.filasVacias} filas vacías ignoradas` : ""}{info.ignoradas?.length ? ` · columnas ignoradas: ${info.ignoradas.join(", ")}` : ""}</div>}
-          <div style={{ ...caja, fontWeight:700, color:C.ink }} data-resumen>
+          <div style={{ ...caja, fontWeight:600, color:C.ink }} data-resumen>
             {r.nuevas} nuevas | {r.actualizaciones} actualizaciones | {r.sinCambios} sin cambios | {r.ambiguas} ambiguas | {errores.length} errores{r.omitidas ? ` · ${r.omitidas} omitidas` : ""}
           </div>
 
           {errores.length > 0 && (
             <div style={{ ...caja, borderColor:C.danger }} data-errores>
-              <div style={{ fontWeight:700, color:C.dangerText, marginBottom:4 }}>Errores ({errores.length}) — no se importará nada</div>
+              <div style={{ fontWeight:600, color:C.dangerText, marginBottom:4 }}>Errores ({errores.length}) — no se importará nada</div>
               <ul style={lista}>{errores.slice(0, 200).map((e, i) => <li key={i}>Fila {e.fila}{e.rut ? ` (RUT ${e.rut})` : ""}: {e.causa}</li>)}</ul>
               {errores.length > 200 && <div>… y {errores.length - 200} más</div>}
             </div>
@@ -92,7 +92,7 @@ export function ImportarEntidades({ session, onTerminado, onCancelar }) {
 
           {ambiguas.length > 0 && (
             <div style={{ ...caja, borderColor:C.warn }} data-ambiguas>
-              <div style={{ fontWeight:700, color:C.warnText, marginBottom:4 }}>RUT con más de una entidad existente (duplicados históricos)</div>
+              <div style={{ fontWeight:600, color:C.warnText, marginBottom:4 }}>RUT con más de una entidad existente (duplicados históricos)</div>
               {ambiguas.map(a => (
                 <label key={a.fila} style={{ display:"flex", gap:6, alignItems:"center", padding:"3px 0" }}>
                   <input type="checkbox" checked={omitidas.has(a.fila)} onChange={() => toggleOmitir(a.fila)} />
@@ -104,21 +104,21 @@ export function ImportarEntidades({ session, onTerminado, onCancelar }) {
 
           {!errores.length && (nuevas.length > 0 || actualizaciones.length > 0) && (
             <div style={caja} data-cambios>
-              {nuevas.length > 0 && <><div style={{ fontWeight:700 }}>Nuevas</div>
+              {nuevas.length > 0 && <><div style={{ fontWeight:600 }}>Nuevas</div>
                 <ul style={lista}>{nuevas.slice(0, 100).map(n => <li key={n.fila}>Fila {n.fila}: {n.rutAlmacenado} — {n.nombre_entidad}</li>)}</ul>
                 {nuevas.length > 100 && <div>… y {nuevas.length - 100} más</div>}</>}
-              {actualizaciones.length > 0 && <><div style={{ fontWeight:700, marginTop:6 }}>Actualizaciones (solo los campos indicados)</div>
+              {actualizaciones.length > 0 && <><div style={{ fontWeight:600, marginTop:6 }}>Actualizaciones (solo los campos indicados)</div>
                 <ul style={lista}>{actualizaciones.slice(0, 100).map(a => <li key={a.fila}>Fila {a.fila}: {a.existente.rut} — {Object.entries(a.cambios).map(([k, v]) => `${k}: «${v}»`).join(", ")}</li>)}</ul>
                 {actualizaciones.length > 100 && <div>… y {actualizaciones.length - 100} más</div>}</>}
             </div>
           )}
 
-          {bloqueos.map((b, i) => <div key={i} style={{ fontSize:12, color:C.dangerText, fontWeight:600, marginBottom:6 }}>{b}</div>)}
-          {sinCambiosQueAplicar && <div style={{ fontSize:12, color:C.okText, fontWeight:600, marginBottom:6 }} data-sin-cambios>El catálogo ya está al día con este archivo: no hay cambios que aplicar.</div>}
+          {bloqueos.map((b, i) => <div key={i} style={{ fontSize:12, color:C.dangerText, fontWeight:500, marginBottom:6 }}>{b}</div>)}
+          {sinCambiosQueAplicar && <div style={{ fontSize:12, color:C.okText, fontWeight:500, marginBottom:6 }} data-sin-cambios>El catálogo ya está al día con este archivo: no hay cambios que aplicar.</div>}
         </>
       )}
 
-      {mensaje && <div style={{ fontSize:12, color: mensaje.tipo === "ok" ? C.okText : C.dangerText, marginBottom:8, fontWeight:600 }} data-mensaje>{mensaje.texto}</div>}
+      {mensaje && <div style={{ fontSize:12, color: mensaje.tipo === "ok" ? C.okText : C.dangerText, marginBottom:8, fontWeight:500 }} data-mensaje>{mensaje.texto}</div>}
       <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
         {estado !== "listo" && <button onClick={confirmar} disabled={!puedeConfirmar} style={{ ...btnP(C.teal), opacity: puedeConfirmar ? 1 : 0.45, cursor: puedeConfirmar ? "pointer" : "not-allowed" }}>
           {estado === "enviando" ? "Importando…" : `✓ Confirmar importación${operaciones.length ? ` (${operaciones.length})` : ""}`}</button>}

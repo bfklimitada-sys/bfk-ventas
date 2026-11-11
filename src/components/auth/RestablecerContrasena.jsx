@@ -69,13 +69,13 @@ export function RestablecerContrasena({ retorno, onSalir }) {
   };
 
   const volver=(aviso="")=>onSalir({ email, aviso, usuarioId:usuarioId.current, cambiada:fase==="listo" });
-  const enlace={background:"none",border:"none",color:C.tealDark,fontSize:12,fontWeight:700,cursor:"pointer"};
-  const caja=(bg,color)=>({background:bg,color,borderRadius:8,padding:"9px 12px",fontSize:13,marginBottom:14,textAlign:"center",fontWeight:600});
+  const enlace={background:"none",border:"none",color:C.tealDark,fontSize:12,fontWeight:600,cursor:"pointer"};
+  const caja=(bg,color)=>({background:bg,color,borderRadius:8,padding:"9px 12px",fontSize:13,marginBottom:14,textAlign:"center",fontWeight:500});
   const enter=(fn)=>(e)=>{ if(e.key==="Enter") fn(); };
 
   return (
     <MarcoAuth>
-      <div style={{fontWeight:800,fontSize:16,color:C.ink,marginBottom:16,textAlign:"center"}}>
+      <div style={{fontWeight:700,fontSize:16,color:C.ink,marginBottom:16,textAlign:"center"}}>
         {fase==="listo"?"Contraseña actualizada":fase==="invalido"?"Enlace no válido":"Nueva contraseña"}
       </div>
       {err&&<div role="alert" style={caja(C.dangerLight,C.dangerText)}>{err}</div>}

@@ -13,7 +13,7 @@ export function CuentaPorAutorizar({ estado, correo, mensaje, onReintentar, onSa
   return (
     <MarcoAuth>
       <div data-cuenta-por-autorizar={estado} role="status" aria-live="polite">
-        <div style={{fontWeight:800,fontSize:17,color:C.ink,marginBottom:10,textAlign:"center"}}>{titulo}</div>
+        <div style={{fontWeight:700,fontSize:17,color:C.ink,marginBottom:10,textAlign:"center"}}>{titulo}</div>
         {correo&&<div style={{fontSize:13,color:C.inkMuted,textAlign:"center",marginBottom:14,wordBreak:"break-all"}} data-correo-sesion>{correo}</div>}
         {estado==="sin_perfil"&&(
           <div style={{background:C.warnLight,color:C.ink,borderRadius:10,padding:"12px 14px",fontSize:13,lineHeight:1.5,marginBottom:16}}>
@@ -27,7 +27,7 @@ export function CuentaPorAutorizar({ estado, correo, mensaje, onReintentar, onSa
           </div>
         )}
         {estado==="error"&&(
-          <div style={{background:C.dangerLight,color:C.dangerText,borderRadius:10,padding:"12px 14px",fontSize:13,lineHeight:1.5,marginBottom:16,fontWeight:600}}>
+          <div style={{background:C.dangerLight,color:C.dangerText,borderRadius:10,padding:"12px 14px",fontSize:13,lineHeight:1.5,marginBottom:16,fontWeight:500}}>
             {mensaje||"No se pudo comprobar el acceso."} Por seguridad no se muestra la información hasta confirmarlo.
           </div>
         )}
@@ -36,7 +36,7 @@ export function CuentaPorAutorizar({ estado, correo, mensaje, onReintentar, onSa
             {comprobando?"Comprobando…":estado==="error"?"Reintentar":"Volver a comprobar"}
           </button>
         )}
-        <button data-cerrar-sesion onClick={onSalir} style={{width:"100%",background:"none",border:`1px solid ${C.border}`,borderRadius:12,padding:"12px",minHeight:44,fontSize:14,fontWeight:700,color:C.ink,cursor:"pointer"}}>
+        <button data-cerrar-sesion onClick={onSalir} style={{width:"100%",background:"none",border:`1px solid ${C.border}`,borderRadius:12,padding:"12px",minHeight:44,fontSize:14,fontWeight:600,color:C.ink,cursor:"pointer"}}>
           Cerrar sesión
         </button>
       </div>

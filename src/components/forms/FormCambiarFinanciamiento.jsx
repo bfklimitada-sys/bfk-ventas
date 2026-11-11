@@ -49,7 +49,7 @@ export function FormCambiarFinanciamiento({ oc, financiadores, onSave, onCancel 
         {pagado > 0 && <> <b style={{ color: C.warnText }}>Esta OC tiene {fmt.money(pagado)} pagados al financiador:</b> el cambio no se permite hasta corregir esos pagos.</>}
         {tipo === "venta_propia" && !oc.vendedor_id && <> <b style={{ color: C.warnText }}>La venta propia requiere un vendedor asignado.</b></>}
       </div>
-      {err && <div style={{ background: C.dangerLight, color: C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 10, fontWeight: 600 }}>{err}</div>}
+      {err && <div style={{ background: C.dangerLight, color: C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 10, fontWeight: 500 }}>{err}</div>}
       <div style={{ display: "flex", gap: 8 }}>
         <button onClick={guardar} disabled={saving || (tipo === actual && (tipo === "venta_propia" || finId === oc.financiador_id))}
           style={{ ...btnP(saving ? C.inkFaint : C.purple), flex: 1 }}>{saving ? "Guardando…" : "✓ Cambiar financiamiento"}</button>

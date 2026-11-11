@@ -38,7 +38,7 @@ export function RegistrarCompraOC(props) {
 
   const normal = (aviso) => (
     <div data-compra-normal>
-      {aviso && <div style={{ background: C.warnLight, color: C.warnText, borderRadius: 8, padding: "8px 12px", fontSize: 12, marginBottom: 10, fontWeight: 600 }}>{aviso}</div>}
+      {aviso && <div style={{ background: C.warnLight, color: C.warnText, borderRadius: 8, padding: "8px 12px", fontSize: 12, marginBottom: 10, fontWeight: 500 }}>{aviso}</div>}
       <FormIngresarCompra {...props} ocExistente={oc} />
     </div>
   );
@@ -101,7 +101,7 @@ export function CompraDesdeCotizacion({ oc, cot, financiadores, perfil, onCompra
   };
 
   const caja = { background: C.paper, borderRadius: 12, padding: "10px 12px", marginBottom: 12, border: `1px solid ${C.border}` };
-  const tit = (t) => <div style={{ fontSize: 12, fontWeight: 700, color: C.inkMuted, textTransform: "uppercase", marginBottom: 6 }}>{t}</div>;
+  const tit = (t) => <div style={{ fontSize: 12, fontWeight: 600, color: C.inkMuted, textTransform: "uppercase", marginBottom: 6 }}>{t}</div>;
   const marcado = (c) => (c ? { borderColor: C.warn, background: C.warnLight } : {});
   const ref = (c, t) => (c ? <div data-cotizado style={{ fontSize: 11, color: C.warnText, marginTop: 2 }}>Cotizado: {t || "—"}</div> : null);
 
@@ -125,7 +125,7 @@ export function CompraDesdeCotizacion({ oc, cot, financiadores, perfil, onCompra
       {modoNuevaOC ? (
         <div data-compra-nueva-oc style={{ fontSize: 12, color: C.inkMuted, marginBottom: 12, lineHeight: 1.5 }}>Los datos vienen de la cotización. Ajusta solo lo que cambió en la compra real (precio, proveedor, enlace, cantidad o despacho): lo modificado se destaca y se compara con lo cotizado. Para comprar solo una parte, baja la cantidad; el resto queda pendiente para «Registrar otra compra».</div>
       ) : todoComprado ? (
-        <div data-todo-comprado style={{ background: C.okLight, color: C.okText, borderRadius: 8, padding: "10px 12px", fontSize: 13, marginBottom: 10, fontWeight: 600 }}>Todo lo cotizado ya está comprado. Si hubo una compra adicional, usa el formulario normal.</div>
+        <div data-todo-comprado style={{ background: C.okLight, color: C.okText, borderRadius: 8, padding: "10px 12px", fontSize: 13, marginBottom: 10, fontWeight: 500 }}>Todo lo cotizado ya está comprado. Si hubo una compra adicional, usa el formulario normal.</div>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
           <button data-opcion="A" onClick={() => elegir("A")} style={{ ...btnP(opcion === "A" ? C.teal : C.inkFaint), minHeight: 56 }}>A · La compra es igual a lo cotizado</button>
@@ -148,7 +148,7 @@ export function CompraDesdeCotizacion({ oc, cot, financiadores, perfil, onCompra
             );
             return (
               <div key={f.rid} data-fila-compra={f.rid} style={{ background: C.card, borderRadius: 10, padding: "10px 10px 4px", marginBottom: 8, border: `1px solid ${C.border}` }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: C.tealDark, marginBottom: 6 }}>{l?.nombre || "Producto"} <span style={{ color: C.inkMuted, fontWeight: 400 }}>· pendientes {lp?.pendiente ?? 0}</span></div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: C.tealDark, marginBottom: 6 }}>{l?.nombre || "Producto"} <span style={{ color: C.inkMuted, fontWeight: 400 }}>· pendientes {lp?.pendiente ?? 0}</span></div>
                 <Field label="Producto adquirido"><input data-campo-compra="producto" style={{ ...iStyle, ...marcado(c.producto) }} value={f.producto} onChange={(e) => setF(f.rid, "producto", e.target.value)} />{ref(c.producto, l?.nombre)}</Field>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                   <Field label="Marca"><input data-campo-compra="marca" style={{ ...iStyle, ...marcado(c.marca) }} value={f.marca} onChange={(e) => setF(f.rid, "marca", e.target.value)} />{ref(c.marca, l?.marca)}</Field>
@@ -163,8 +163,8 @@ export function CompraDesdeCotizacion({ oc, cot, financiadores, perfil, onCompra
                   <Field label="Enlace"><input data-campo-compra="enlace" style={{ ...iStyle, ...marcado(c.enlace) }} value={f.enlace} onChange={(e) => setF(f.rid, "enlace", e.target.value)} placeholder="https://…" />{ref(c.enlace, l?.enlace)}</Field>
                 </div>
                 <Field label="Dirección de entrega efectiva"><input data-campo-compra="direccion" style={{ ...iStyle, ...marcado(c.direccion) }} value={f.direccion} onChange={(e) => setF(f.rid, "direccion", e.target.value)} />{ref(c.direccion, base.direccion)}</Field>
-                {(c.producto || c.marca || c.modelo) && <div data-aviso-especificaciones style={{ fontSize: 12, color: C.warnText, fontWeight: 600, marginBottom: 6 }}>⚠ Cambió el producto, la marca o el modelo: comprueba que cumple las especificaciones ofertadas.</div>}
-                {c.unitario && Number(f.unitario) > (l?.unitario || 0) && <div data-aviso-costo style={{ fontSize: 12, color: C.dangerText, fontWeight: 600, marginBottom: 6 }}>Costo mayor al cotizado: {signo((Number(f.unitario) - l.unitario) * Number(f.cantidad || 0))} en este producto.</div>}
+                {(c.producto || c.marca || c.modelo) && <div data-aviso-especificaciones style={{ fontSize: 12, color: C.warnText, fontWeight: 500, marginBottom: 6 }}>⚠ Cambió el producto, la marca o el modelo: comprueba que cumple las especificaciones ofertadas.</div>}
+                {c.unitario && Number(f.unitario) > (l?.unitario || 0) && <div data-aviso-costo style={{ fontSize: 12, color: C.dangerText, fontWeight: 500, marginBottom: 6 }}>Costo mayor al cotizado: {signo((Number(f.unitario) - l.unitario) * Number(f.cantidad || 0))} en este producto.</div>}
                 <button data-dividir onClick={() => dividir(f)} style={{ background: "none", border: "none", color: C.tealDark, textDecoration: "underline", cursor: "pointer", fontSize: 12, padding: 0, minHeight: 30 }}>+ Comprar parte de esta línea con otro proveedor</button>
               </div>
             );
@@ -233,18 +233,18 @@ export function CompraDesdeCotizacion({ oc, cot, financiadores, perfil, onCompra
             Utilidad estimada original (todo a costo cotizado): <b data-utilidad-original>{m(comp.utilidadOriginal)}</b><br />
             {comp.parcial ? "Utilidad proyectada (compra parcial: lo pendiente a costo cotizado)" : "Utilidad actualizada según la compra real"}: <b data-utilidad-actualizada style={{ color: comp.utilidadActualizada < comp.utilidadOriginal ? C.dangerText : C.okText }}>{m(comp.utilidadActualizada)}</b>
             {comp.utilidadActualizada !== comp.utilidadOriginal && <> ({signo(comp.utilidadActualizada - comp.utilidadOriginal)} frente a lo cotizado)</>}
-            {comp.parcial && <div data-aviso-parcial style={{ color: C.warnText, fontWeight: 600, marginTop: 4 }}>Compra parcial: la rentabilidad no es definitiva hasta comprar lo pendiente ({m(comp.costoPendiente)} a costo cotizado).</div>}
+            {comp.parcial && <div data-aviso-parcial style={{ color: C.warnText, fontWeight: 500, marginTop: 4 }}>Compra parcial: la rentabilidad no es definitiva hasta comprar lo pendiente ({m(comp.costoPendiente)} a costo cotizado).</div>}
           </div>
         </div>
 
         <div style={{ marginBottom: 10 }}>
-          {val.requiere.vigencia && <label data-confirmar="vigencia" style={{ display: "flex", gap: 8, fontSize: 13, marginBottom: 6, fontWeight: 600 }}><input type="checkbox" checked={conf.vigencia} onChange={(e) => setConf((c) => ({ ...c, vigencia: e.target.checked }))} /> Confirmo que los precios, la disponibilidad, las condiciones y el despacho siguen vigentes.</label>}
-          {val.requiere.especificaciones && <label data-confirmar="especificaciones" style={{ display: "flex", gap: 8, fontSize: 13, marginBottom: 6, fontWeight: 600 }}><input type="checkbox" checked={conf.especificaciones} onChange={(e) => setConf((c) => ({ ...c, especificaciones: e.target.checked }))} /> Comprobé que el producto cumple las especificaciones ofertadas.</label>}
-          {modoNuevaOC && <label data-confirmar="compra-efectiva" style={{ display: "flex", gap: 8, fontSize: 13, marginBottom: 6, fontWeight: 700, background: C.warnLight, borderRadius: 8, padding: "8px 10px" }}><input type="checkbox" checked={conf.compraEfectiva} onChange={(e) => setConf((c) => ({ ...c, compraEfectiva: e.target.checked }))} /> Confirmo que la compra se realizó efectivamente con estos precios, proveedores y despacho. Se registrará el costo real{oc.es_venta_propia || financiadores.find((f) => f.id === financiadorId)?.tipo === "propio" ? " (sin deuda con un financiador)" : " y la deuda con el financiador"}.</label>}
-          {val.requiere.direccion && <label data-confirmar="direccion" style={{ display: "flex", gap: 8, fontSize: 13, marginBottom: 6, fontWeight: 600 }}><input type="checkbox" checked={conf.direccion} onChange={(e) => setConf((c) => ({ ...c, direccion: e.target.checked }))} /> Verifiqué nuevamente el despacho para la nueva dirección.</label>}
+          {val.requiere.vigencia && <label data-confirmar="vigencia" style={{ display: "flex", gap: 8, fontSize: 13, marginBottom: 6, fontWeight: 500 }}><input type="checkbox" checked={conf.vigencia} onChange={(e) => setConf((c) => ({ ...c, vigencia: e.target.checked }))} /> Confirmo que los precios, la disponibilidad, las condiciones y el despacho siguen vigentes.</label>}
+          {val.requiere.especificaciones && <label data-confirmar="especificaciones" style={{ display: "flex", gap: 8, fontSize: 13, marginBottom: 6, fontWeight: 500 }}><input type="checkbox" checked={conf.especificaciones} onChange={(e) => setConf((c) => ({ ...c, especificaciones: e.target.checked }))} /> Comprobé que el producto cumple las especificaciones ofertadas.</label>}
+          {modoNuevaOC && <label data-confirmar="compra-efectiva" style={{ display: "flex", gap: 8, fontSize: 13, marginBottom: 6, fontWeight: 600, background: C.warnLight, borderRadius: 8, padding: "8px 10px" }}><input type="checkbox" checked={conf.compraEfectiva} onChange={(e) => setConf((c) => ({ ...c, compraEfectiva: e.target.checked }))} /> Confirmo que la compra se realizó efectivamente con estos precios, proveedores y despacho. Se registrará el costo real{oc.es_venta_propia || financiadores.find((f) => f.id === financiadorId)?.tipo === "propio" ? " (sin deuda con un financiador)" : " y la deuda con el financiador"}.</label>}
+          {val.requiere.direccion && <label data-confirmar="direccion" style={{ display: "flex", gap: 8, fontSize: 13, marginBottom: 6, fontWeight: 500 }}><input type="checkbox" checked={conf.direccion} onChange={(e) => setConf((c) => ({ ...c, direccion: e.target.checked }))} /> Verifiqué nuevamente el despacho para la nueva dirección.</label>}
         </div>
-        {avisoBloqueo && <div data-bloqueo-compra style={{ background: C.dangerLight, color: C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 10, fontWeight: 600 }}>{avisoBloqueo}</div>}
-        {errores.length > 0 && <div data-errores-compra style={{ background: C.dangerLight, color: C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 10, fontWeight: 600 }}>{errores.map((e, i) => <div key={i}>• {e}</div>)}</div>}
+        {avisoBloqueo && <div data-bloqueo-compra style={{ background: C.dangerLight, color: C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 10, fontWeight: 500 }}>{avisoBloqueo}</div>}
+        {errores.length > 0 && <div data-errores-compra style={{ background: C.dangerLight, color: C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 10, fontWeight: 500 }}>{errores.map((e, i) => <div key={i}>• {e}</div>)}</div>}
         <button data-registrar-compra-cotizacion {...(modoNuevaOC ? { "data-crear-oc-y-compra": true } : {})} onClick={registrar} disabled={guardando} style={btnP(guardando ? C.inkFaint : C.ok)}>{guardando ? (modoNuevaOC ? "Guardando OC y compra…" : "Registrando…") : `✓ ${modoNuevaOC ? "Crear OC y registrar compra" : "Registrar compra"} (${grupos.length} pedido${grupos.length === 1 ? "" : "s"} · ${m(comp.totalReal)})`}</button>
       </>}
     </div>

@@ -20,7 +20,7 @@ export function AvisoVersionNueva() {
         : <>Hay una versión nueva de BFK Datos. <b>Guarda lo que estés editando</b> y luego actualiza para seguir generando PDF.</>}
       <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
         {!bloqueada && <button data-actualizar-version onClick={() => { if (!recargarPorVersionNueva()) setBloqueada(true); }}
-          style={{ background: C.teal, color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontWeight: 700, minHeight: 40, cursor: "pointer" }}>Actualizar BFK Datos</button>}
+          style={{ background: C.teal, color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontWeight: 600, minHeight: 40, cursor: "pointer" }}>Actualizar BFK Datos</button>}
         <button data-cerrar-aviso-version onClick={() => setVisible(false)} style={{ background: "transparent", color: "#fff", border: "1px solid #ffffff55", borderRadius: 8, padding: "8px 14px", minHeight: 40, cursor: "pointer" }}>Ahora no</button>
       </div>
     </div>

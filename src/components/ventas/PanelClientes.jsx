@@ -38,12 +38,12 @@ export function PanelClientes({ token, perfil, vp, onRecargar, showToast, onAbri
           return (
             <button key={c.id} type="button" data-cliente={c.rut} onClick={() => setAbierto(c.id)} style={{ ...cardStyle, borderRadius: R.md, padding: "11px 14px", marginBottom: 8, width: "100%", textAlign: "left", cursor: "pointer", display: "flex", gap: 10, alignItems: "center" }}>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 800, fontSize: T.body, color: C.ink }}>{c.razon_social}</div>
+                <div style={{ fontWeight: 700, fontSize: T.body, color: C.ink }}>{c.razon_social}</div>
                 <div style={{ fontSize: T.small, color: C.inkMuted }}><span style={{ fontFamily: MONO }}>{c.rut || "Sin RUT"}</span> · {c.tipo_persona === "persona" ? "Persona" : "Empresa"}{c.contacto_nombre ? ` · ${c.contacto_nombre}` : ""}</div>
               </div>
               <div style={{ textAlign: "right", flexShrink: 0 }}>
                 <div style={{ fontSize: T.small, color: C.inkMuted }}>{r.nCotizaciones} cot. · {r.ventas.length} ventas</div>
-                {r.saldo > 0 && <div style={{ fontFamily: MONO, fontWeight: 800, fontSize: T.sm, color: r.vencido > 0 ? C.dangerText : C.warnText }}>Saldo {pesos(r.saldo)}</div>}
+                {r.saldo > 0 && <div style={{ fontFamily: MONO, fontWeight: 700, fontSize: T.sm, color: r.vencido > 0 ? C.dangerText : C.warnText }}>Saldo {pesos(r.saldo)}</div>}
               </div>
             </button>
           );
@@ -83,10 +83,10 @@ function FichaCliente({ cli, vp, perfil, onCerrar, onEditar, onAbrir }) {
           {!r.cotizaciones.length && <Vacio>Sin cotizaciones.</Vacio>}
           {r.cotizaciones.map((c) => (
             <button key={c.id} type="button" data-cli-cot={c.folio} onClick={() => onAbrir?.("vp_cotizaciones", c.id)} style={{ ...cardStyle, borderRadius: R.md, padding: "9px 12px", marginBottom: 6, width: "100%", textAlign: "left", cursor: "pointer", display: "flex", gap: 8, alignItems: "center" }}>
-              <span style={{ fontFamily: MONO, fontWeight: 800, flex: 1 }}>{folioRevision(c.folio, c.revision_actual)}</span>
+              <span style={{ fontFamily: MONO, fontWeight: 700, flex: 1 }}>{folioRevision(c.folio, c.revision_actual)}</span>
               <span style={{ fontSize: T.small, color: C.inkMuted }}>{fechaTxt(c.fecha_emision)}</span>
               <BadgeVP mapa={ESTADOS_COTIZACION} k={c.estado_efectivo} />
-              <span style={{ fontFamily: MONO, fontWeight: 700, fontSize: T.sm }}>{pesos(c.total)}</span>
+              <span style={{ fontFamily: MONO, fontWeight: 600, fontSize: T.sm }}>{pesos(c.total)}</span>
             </button>
           ))}
         </Seccion>
@@ -94,7 +94,7 @@ function FichaCliente({ cli, vp, perfil, onCerrar, onEditar, onAbrir }) {
           {!r.ventas.length && <Vacio>Sin ventas vigentes.</Vacio>}
           {r.ventas.map((v) => (
             <button key={v.id} type="button" data-cli-venta={v.folio} onClick={() => onAbrir?.("vp_ordenes", v.id)} style={{ ...cardStyle, borderRadius: R.md, padding: "9px 12px", marginBottom: 6, width: "100%", textAlign: "left", cursor: "pointer", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-              <span style={{ fontFamily: MONO, fontWeight: 800, flex: 1 }}>{v.folio}</span>
+              <span style={{ fontFamily: MONO, fontWeight: 700, flex: 1 }}>{v.folio}</span>
               <BadgeVP mapa={ESTADOS_PAGO} k={v.estado_pago} />
               <span style={{ fontSize: T.small, color: C.inkMuted }}>Total {pesos(v.total)} · saldo <b style={{ fontFamily: MONO, color: Number(v.monto_vencido) > 0 ? C.dangerText : C.ink }}>{pesos(v.saldo)}</b></span>
             </button>

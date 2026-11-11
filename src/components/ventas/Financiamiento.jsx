@@ -61,7 +61,7 @@ export function EditorAportes({ filas, setFilas, financiadores, disponible, docu
       <div data-resumen-aportes style={{ fontSize: T.small, color: C.inkMuted, lineHeight: 1.6 }}>
         Por financiar: <b style={{ color: C.ink }}>{pesos(disponible)}</b> · en este registro: <b data-financiado-registro style={{ color: C.ink }}>{pesos(total)}</b> ·
         quedará sin informar: <b data-quedara-sin-informar style={{ color: total > disponible ? C.dangerText : C.ink }}>{pesos(Math.max(0, disponible - total))}</b>
-        {total > disponible && <div style={{ color: C.dangerText, fontWeight: 700 }}>Lo financiado supera lo que falta financiar.</div>}
+        {total > disponible && <div style={{ color: C.dangerText, fontWeight: 600 }}>Lo financiado supera lo que falta financiar.</div>}
       </div>
     </div>
   );
@@ -74,7 +74,7 @@ export function BloqueFinanciamientoCompra({ activo, setActivo, filas, setFilas,
   useEffect(() => { setFilas((fs) => (fs.length === 1 && fs[0]._auto && Number(fs[0].monto) !== disponible ? [{ ...fs[0], monto: String(disponible) }] : fs)); }, [disponible]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <div data-financiamiento-compra style={{ background: C.paper, borderRadius: R.md, padding: "10px 12px", marginBottom: 12, border: `1px solid ${C.border}` }}>
-      <div style={{ fontSize: T.small, fontWeight: 700, color: C.inkMuted, textTransform: "uppercase", marginBottom: 6 }}>Financiamiento de esta compra · máximo <span data-maximo-financiar>{pesos(disponible)}</span></div>
+      <div style={{ fontSize: T.small, fontWeight: 600, color: C.inkMuted, textTransform: "uppercase", marginBottom: 6 }}>Financiamiento de esta compra · máximo <span data-maximo-financiar>{pesos(disponible)}</span></div>
       <div style={{ fontSize: T.small, color: C.inkMuted, marginBottom: 8, lineHeight: 1.5 }}>Quién puso el dinero (puede ser más de uno). No cambia el costo ni la utilidad. Si lo dejas para después, la compra queda como «Financiamiento sin informar».</div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: activo ? 10 : 0 }}>
         <button type="button" data-financiamiento-ahora onClick={() => { setActivo(true); if (!filas.length) setFilas([filaAporte({ monto: String(disponible), _auto: true })]); }} style={{ ...estiloBoton(activo ? "pri" : undefined), minHeight: 44 }}>Indicar quién financia</button>

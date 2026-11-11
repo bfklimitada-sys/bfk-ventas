@@ -34,11 +34,11 @@ export function PreparadorCorreo({ datos, validar, onConfirmar, textoBoton, colo
     catch (e) { confirmado.current = false; setErr(e.message || "No se pudo registrar el envío."); }
     finally { setConfirmando(false); }
   };
-  const boton = (extra = {}) => ({ border: `1px solid ${C.border}`, background: C.card, color: C.ink, borderRadius: 8, padding: "8px 10px", fontSize: 13, fontWeight: 700, cursor: "pointer", minHeight: 40, ...extra });
+  const boton = (extra = {}) => ({ border: `1px solid ${C.border}`, background: C.card, color: C.ink, borderRadius: 8, padding: "8px 10px", fontSize: 13, fontWeight: 600, cursor: "pointer", minHeight: 40, ...extra });
   const todo = `Para: ${datos.correo}${datos.cc ? `\nCC: ${datos.cc}` : ""}\nAsunto: ${datos.asunto}\n\n${datos.cuerpo}`;
   return (
     <div data-preparador-correo={fase}>
-      {err && <div style={{ background: C.dangerLight, color: C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 10, fontWeight: 600 }}>{err}</div>}
+      {err && <div style={{ background: C.dangerLight, color: C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 10, fontWeight: 500 }}>{err}</div>}
       {fase === "editar" && <>
         <button data-abrir-correo onClick={() => preparar()} style={btnP(color)}>{telefono ? "📧 Abrir en la app de correo" : "📧 Abrir en Gmail"} · {textoBoton}</button>
         <div style={{ fontSize: 12, color: C.inkMuted, marginTop: 6, lineHeight: 1.45 }}>
@@ -50,9 +50,9 @@ export function PreparadorCorreo({ datos, validar, onConfirmar, textoBoton, colo
           {fase === "confirmado" ? <b>✓ Envío confirmado por el usuario</b> : <><b>Correo preparado — aún no registrado como enviado.</b> Revísalo y envíalo desde {telefono ? "tu app de correo" : <>Gmail ({CUENTA_REMITENTE})</>}; luego confirma aquí.</>}
         </div>
       )}
-      {aviso && fase === "preparado" && <div data-correo-bloqueado style={{ background: C.dangerLight, color: C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 10, fontWeight: 600 }}>{aviso}</div>}
+      {aviso && fase === "preparado" && <div data-correo-bloqueado style={{ background: C.dangerLight, color: C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 10, fontWeight: 500 }}>{aviso}</div>}
       {fase === "preparado" && <>
-        <div style={{ fontSize: 12, fontWeight: 700, color: C.inkMuted, textTransform: "uppercase", margin: "4px 0 6px" }}>Si el correo no se abrió, copia los datos</div>
+        <div style={{ fontSize: 12, fontWeight: 600, color: C.inkMuted, textTransform: "uppercase", margin: "4px 0 6px" }}>Si el correo no se abrió, copia los datos</div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
           <button data-copiar-correo="para" onClick={() => copiar("para", datos.correo)} style={boton()}>{copiado === "para" ? "✓ Copiado" : "Copiar destinatario"}</button>
           {datos.cc && <button data-copiar-correo="cc" onClick={() => copiar("cc", datos.cc)} style={boton()}>{copiado === "cc" ? "✓ Copiado" : "Copiar CC"}</button>}
@@ -87,15 +87,15 @@ export function FormEntregaFallida({ oc, onEnviar, entidadesCatalogo }) {
 
   return (
     <div>
-      <div style={{background:C.warnLight,borderRadius:8,padding:"10px 12px",fontSize:13,color:C.warnText,fontWeight:700,marginBottom:14}}>OC {oc.numero_oc} · Correo de entrega fallida</div>
+      <div style={{background:C.warnLight,borderRadius:8,padding:"10px 12px",fontSize:13,color:C.warnText,fontWeight:600,marginBottom:14}}>OC {oc.numero_oc} · Correo de entrega fallida</div>
       <Field label="Correo del destinatario" required hint={sug.correo?textoSugerencia(sug):matchCatalogo?"Autocompletado desde el catálogo de entidades":""}><input style={iStyle} type="email" value={correo} onChange={e=>setCorreo(e.target.value)} placeholder="contacto@entidad.cl" /></Field>
       <ElegirContacto oc={oc} valor={correo} onElegir={c=>setCorreo(c.correo)} />
       <Field label="Lugar de entrega" required hint="ej: bodega de farmacología, bodega central"><input style={iStyle} value={lugar} onChange={e=>setLugar(e.target.value)} /></Field>
       <Field label="Motivo de la entrega fallida" required hint="ej: usted no estaba en el lugar, bodega estaba cerrada"><input style={iStyle} value={motivo} onChange={e=>setMotivo(e.target.value)} /></Field>
       <div style={{background:C.paper,borderRadius:8,padding:"10px 12px",marginBottom:14}}>
-        <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:4}}>Asunto</div>
+        <div style={{fontSize:12,fontWeight:600,color:C.inkMuted,textTransform:"uppercase",marginBottom:4}}>Asunto</div>
         <div style={{fontSize:13,color:C.ink,marginBottom:8}}>{asunto}</div>
-        <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:4}}>Vista previa</div>
+        <div style={{fontSize:12,fontWeight:600,color:C.inkMuted,textTransform:"uppercase",marginBottom:4}}>Vista previa</div>
         <div style={{fontSize:12,color:C.ink,whiteSpace:"pre-wrap"}}>{cuerpo}</div>
       </div>
       <PreparadorCorreo datos={{correo:correo.trim(),asunto,cuerpo}} validar={validar} onConfirmar={confirmar} textoBoton="aviso de entrega fallida" color={C.warn} />
@@ -120,14 +120,14 @@ export function FormFechaEntrega({ oc, onEnviar, entidadesCatalogo }) {
 
   return (
     <div>
-      <div style={{background:C.transitLight,borderRadius:8,padding:"10px 12px",fontSize:13,color:C.transit,fontWeight:700,marginBottom:14}}>OC {oc.numero_oc} · Correo de fecha de entrega</div>
+      <div style={{background:C.transitLight,borderRadius:8,padding:"10px 12px",fontSize:13,color:C.transit,fontWeight:600,marginBottom:14}}>OC {oc.numero_oc} · Correo de fecha de entrega</div>
       <Field label="Correo del destinatario" required hint={sug.correo?textoSugerencia(sug):matchCatalogo?"Autocompletado desde el catálogo de entidades":""}><input style={iStyle} type="email" value={correo} onChange={e=>setCorreo(e.target.value)} placeholder="contacto@entidad.cl" /></Field>
       <ElegirContacto oc={oc} valor={correo} onElegir={c=>setCorreo(c.correo)} />
       <Field label="Fecha estimada de entrega" required hint={fechaEstimadaDefault?"Autocompletado con la fecha estimada registrada":""}><input style={iStyle} type="date" value={fechaEntrega} onChange={e=>setFechaEntrega(e.target.value)} /></Field>
       <div style={{background:C.paper,borderRadius:8,padding:"10px 12px",marginBottom:14}}>
-        <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:4}}>Asunto</div>
+        <div style={{fontSize:12,fontWeight:600,color:C.inkMuted,textTransform:"uppercase",marginBottom:4}}>Asunto</div>
         <div style={{fontSize:13,color:C.ink,marginBottom:8}}>{asunto}</div>
-        <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:4}}>Vista previa</div>
+        <div style={{fontSize:12,fontWeight:600,color:C.inkMuted,textTransform:"uppercase",marginBottom:4}}>Vista previa</div>
         <div style={{fontSize:12,color:C.ink,whiteSpace:"pre-wrap"}}>{cuerpo}</div>
       </div>
       <PreparadorCorreo datos={{correo:correo.trim(),asunto,cuerpo}} validar={validar} onConfirmar={confirmar} textoBoton="fecha estimada de entrega" color={C.transit} />
@@ -156,19 +156,19 @@ export function FormReclamarFactura({ oc, evF, dias, contactos, onEnviar, onGuar
 
   return (
     <div>
-      <div style={{background:C.dangerLight,borderRadius:8,padding:"10px 12px",fontSize:13,color:C.dangerText,fontWeight:700,marginBottom:14}}>
+      <div style={{background:C.dangerLight,borderRadius:8,padding:"10px 12px",fontSize:13,color:C.dangerText,fontWeight:600,marginBottom:14}}>
         Factura {evF?.numero_factura} · {dias} días desde emisión
       </div>
-      {oc.ultimo_reclamo_fecha&&<div style={{background:C.warnLight,borderRadius:8,padding:"8px 12px",fontSize:12,color:C.warnText,fontWeight:600,marginBottom:14}}>Ya se reclamó esta factura el {fmt.datetime(oc.ultimo_reclamo_fecha)}</div>}
+      {oc.ultimo_reclamo_fecha&&<div style={{background:C.warnLight,borderRadius:8,padding:"8px 12px",fontSize:12,color:C.warnText,fontWeight:500,marginBottom:14}}>Ya se reclamó esta factura el {fmt.datetime(oc.ultimo_reclamo_fecha)}</div>}
       <Field label="RUT del cliente" hint="Para guardar el correo y reutilizarlo después"><input style={iStyle} value={rut} onChange={e=>setRut(e.target.value)} placeholder="ej: 12.345.678-9" /></Field>
       <Field label="Nombre del cliente" required><input style={iStyle} value={nombreCliente} onChange={e=>setNombreCliente(e.target.value)} /></Field>
       <Field label="Correo del cliente" required hint={sug.correo?textoSugerencia(sug):contactoExistente?"Correo guardado encontrado para este RUT":"Se guardará para futuras facturas"}><input style={iStyle} type="email" value={correo} onChange={e=>setCorreo(e.target.value)} placeholder="contacto@entidad.cl" /></Field>
       <ElegirContacto oc={oc} valor={correo} onElegir={c=>setCorreo(c.correo)} />
       <Field label="Con copia (CC)" hint="Opcional — separa varios correos con coma"><input style={iStyle} value={cc} onChange={e=>setCc(e.target.value)} placeholder="jefatura@bfk.cl, contador@bfk.cl" /></Field>
       <div style={{background:C.paper,borderRadius:8,padding:"10px 12px",marginBottom:14}}>
-        <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:4}}>Asunto</div>
+        <div style={{fontSize:12,fontWeight:600,color:C.inkMuted,textTransform:"uppercase",marginBottom:4}}>Asunto</div>
         <div style={{fontSize:13,color:C.ink,marginBottom:8}}>{asunto}</div>
-        <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:4}}>Mensaje</div>
+        <div style={{fontSize:12,fontWeight:600,color:C.inkMuted,textTransform:"uppercase",marginBottom:4}}>Mensaje</div>
         <div style={{fontSize:12,color:C.ink,whiteSpace:"pre-wrap"}}>{cuerpo}</div>
       </div>
       <PreparadorCorreo datos={{ correo: correo.trim(), cc: ccLimpio, asunto, cuerpo }} validar={validar} onConfirmar={confirmar} textoBoton="consulta de pago" color={C.danger} />

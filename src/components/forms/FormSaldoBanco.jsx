@@ -24,7 +24,7 @@ export function FormSaldoBanco({ actual, onSave }) {
   return (
     <div style={{ fontFamily: SANS }}>
       <div style={{ background: C.tealLight, borderRadius: 12, padding: "12px 14px", marginBottom: 16 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: C.tealDark, marginBottom: 5 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: C.tealDark, marginBottom: 5 }}>
           Cómo funciona
         </div>
         <div style={{ fontSize: 12, color: C.inkMuted, lineHeight: 1.55 }}>
@@ -56,7 +56,7 @@ export function FormSaldoBanco({ actual, onSave }) {
           placeholder="ej: revisado con la cartola del día" />
       </Field>
 
-      {err && <div style={{ background: C.dangerLight, color:C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 10, fontWeight: 600 }}>{err}</div>}
+      {err && <div style={{ background: C.dangerLight, color:C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 10, fontWeight: 500 }}>{err}</div>}
 
       <button onClick={guardar} disabled={saving} style={btnP(saving ? C.inkFaint : C.teal)}>
         {saving ? "Guardando…" : "✓ Fijar este saldo"}

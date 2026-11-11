@@ -3,7 +3,7 @@ import { Field, Modal } from "../ui/Basicos";
 import { del } from "../../lib/supabase";
 import { C, MONO, btnG, btnP, fmt, iMono, iStyle, selStyle } from "../../lib/theme";
 import { Ic } from "../ui/Iconos";
-import { Seccion, Tarjeta, Badge, Monto, AvisoLinea, BarraAcciones, BotonPrincipal } from "../ui/Sistema";
+import { Seccion, Tarjeta, Badge, Monto, AvisoLinea, BarraAcciones, BotonPrincipal, Enlace } from "../ui/Sistema";
 import { evaluarPagoVendedor, pagoParecido } from "../../lib/pagosVendedor";
 import { calcularPagoVendedor, mesesConFactura, registroIvaDe, ivaNetoPeriodo, ivaAPagarPeriodo, totalTransferido, extraGestion, comisionProvisoria, estadoComisionMes, motivoProvisoria, ESTADOS_COMISION } from "../../lib/calculos";
 import { estaFacturada, filtrarPanel } from "../../lib/ocs";
@@ -41,21 +41,22 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, gastos=[], pagosV
   return (
     <div>
       <BarraAcciones>
-        <BotonPrincipal onClick={()=>{setPagoInicial(null);setPagando(true);}} color={C.tealDark}>+ Pago a vendedor</BotonPrincipal>
+        <BotonPrincipal onClick={()=>{setPagoInicial(null);setPagando(true);}}>+ Pago a vendedor</BotonPrincipal>
+        {/* IVA mensual: vive en Finanzas › Impuestos. Sin problemas es solo un acceso discreto; la franja queda para el aviso real. */}
+        {onIrImpuestos&&!ivaIncompletos.length&&<Enlace data-aviso-linea="ir-impuestos" onClick={onIrImpuestos} style={{marginLeft:"auto",fontWeight:500,color:C.inkMuted}}>El IVA y el F29 se registran en <span style={{color:C.tealDark,textDecoration:"underline"}}>Impuestos</span></Enlace>}
       </BarraAcciones>
-      {/* IVA mensual: vive en Finanzas › Impuestos (mismo formulario y cálculo); aquí solo el acceso. */}
-      {onIrImpuestos&&(
-        <AvisoLinea tono={ivaIncompletos.length?"warn":"info"} icono={ivaIncompletos.length?"⚠":"🧾"} dato="ir-impuestos" onClick={onIrImpuestos} accion="Ir a Impuestos">
-          {ivaIncompletos.length?`IVA incompleto en ${ivaIncompletos.length} mes${ivaIncompletos.length>1?"es":""}: la comisión se calcula sin IVA.`:"El IVA neto y el F29 de cada mes se registran en Impuestos."}
+      {onIrImpuestos&&ivaIncompletos.length>0&&(
+        <AvisoLinea tono="warn" icono="⚠" dato="ir-impuestos" onClick={onIrImpuestos} accion="Ir a Impuestos">
+          {`IVA incompleto en ${ivaIncompletos.length} mes${ivaIncompletos.length>1?"es":""}: la comisión se calcula sin IVA.`}
         </AvisoLinea>
       )}
       <Seccion id="ven-comisiones" titulo="Comisiones por vendedor">
       {sinVendedor.length>0&&(
-        <div data-aviso="ocs-sin-vendedor" style={{display:"flex",alignItems:"center",gap:10,background:C.warnLight,border:`1px solid ${C.warn}55`,borderRadius:12,padding:"10px 12px",marginBottom:10}}>
-          <span style={{flex:1,minWidth:0,fontSize:13,color:C.warnText,fontWeight:700,lineHeight:1.4}}>
+        <div data-aviso="ocs-sin-vendedor" style={{display:"flex",alignItems:"center",gap:10,background:C.warnLight,border:`1px solid ${C.warnText}33`,borderRadius:8,padding:"4px 6px 4px 12px",marginBottom:10,minHeight:40}}>
+          <span style={{flex:1,minWidth:0,fontSize:13,color:C.warnText,fontWeight:600,lineHeight:1.4}}>
             <Ic n="⚠"/> {sinVendedor.length} OC sin vendedor{sinVendedorFacturadas?` (${sinVendedorFacturadas} con factura emitida)`:""}: no entran en ninguna comisión.
           </span>
-          {onVerOCs&&<button onClick={()=>onVerOCs("sin_vendedor")} style={{flexShrink:0,background:"none",border:"none",color:C.warnText,fontWeight:800,fontSize:13,cursor:"pointer",minHeight:44,padding:"0 6px"}}>Ver OCs →</button>}
+          {onVerOCs&&<button onClick={()=>onVerOCs("sin_vendedor")} style={{flexShrink:0,background:"none",border:"none",color:C.warnText,fontWeight:700,fontSize:12,cursor:"pointer",minHeight:36,padding:"0 6px",textDecoration:"underline"}}>Ver OCs</button>}
         </div>
       )}
       {vendedores.map(v=>{
@@ -73,7 +74,7 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, gastos=[], pagosV
               style={{width:"100%",background:"none",border:"none",padding:"14px 16px",textAlign:"left",cursor:"pointer",minHeight:64,
                 display:"flex",alignItems:"center",gap:10}}>
               <div style={{flex:1,minWidth:0}}>
-                <div style={{fontWeight:800,fontSize:16,color:C.ink,lineHeight:1.25}}>{v.nombre}</div>
+                <div style={{fontWeight:700,fontSize:16,color:C.ink,lineHeight:1.25}}>{v.nombre}</div>
                 <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:6}}>
                   {deudaTotal>0
                     ? <Badge tono="warn">{mesesPend} mes{mesesPend!==1?"es":""} pendiente{mesesPend!==1?"s":""} de pago</Badge>
@@ -105,12 +106,12 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, gastos=[], pagosV
 
             {estaAbierto&&meses>0&&(
               <div style={{padding:"0 14px 14px"}}>
-                <div style={{fontSize:12,fontWeight:800,color:C.inkMuted,textTransform:"uppercase",marginBottom:2,paddingTop:6,borderTop:`1px solid ${C.border}`}}>Comisión mes a mes · {meses} mes{meses>1?"es":""} con ventas</div>
+                <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",marginBottom:2,paddingTop:6,borderTop:`1px solid ${C.border}`}}>Comisión mes a mes · {meses} mes{meses>1?"es":""} con ventas</div>
                 <div style={{fontSize:12,color:C.inkFaint,marginBottom:6}}>Solo se listan los meses con al menos una venta facturada — el resto no tuvo actividad.</div>
                 {datos.map(d=>(
                   <div key={d.label} style={{padding:"9px 0",borderBottom:`1px solid ${C.border}`}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:3}}>
-                      <span style={{fontSize:13,fontWeight:700,color:C.ink}}>{d.label}</span>
+                      <span style={{fontSize:13,fontWeight:600,color:C.ink}}>{d.label}</span>
                       <span style={{display:"flex",gap:4,flexWrap:"wrap",justifyContent:"flex-end"}}>
                         {/* Cierre financiero: sin IVA o sin total del F29 el cálculo no es definitivo (misma regla que el Panel) */}
                         {d.provisoria&&d.estadoComision!=="en_curso"&&<span data-comision-provisoria><Badge tono="warn">Provisoria · {motivoProvisoria(d)}</Badge></span>}
@@ -127,7 +128,7 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, gastos=[], pagosV
                             ? <div style={{color:C.inkFaint}}>Sin descuento de IVA (regla especial de ese mes)</div>
                             : d.ivaRegistrado
                               ? <div>IVA neto del período (débito {fmt.money(d.ivaVentas)} − crédito {fmt.money(d.ivaCompras)}): <b style={{color:d.impIva>0?C.dangerText:C.okText}}>{d.impIva>0?"−":d.impIva<0?"+":""}{fmt.money(Math.abs(d.impIva))}</b>{d.impIva<0&&<span style={{color:C.inkFaint}}> (crédito mayor que débito: suma)</span>}</div>
-                              : <div style={{color:C.warnText}}><Ic n="⚠"/> IVA de este mes sin registrar todavía — se está calculando sin IVA neto; cambiará cuando lo cargues{" "}{onIrImpuestos&&<button data-ir-iva-periodo={`${d.anio}-${d.mes}`} onClick={()=>onIrImpuestos({anio:d.anio,mes:d.mes})} style={{background:"none",border:"none",color:C.info,fontSize:13,fontWeight:700,cursor:"pointer",textDecoration:"underline",padding:0}}>Registrar IVA de {fmt.monthYear(d.mes,d.anio)}</button>}</div>
+                              : <div style={{color:C.warnText}}><Ic n="⚠"/> IVA de este mes sin registrar todavía — se está calculando sin IVA neto; cambiará cuando lo cargues{" "}{onIrImpuestos&&<button data-ir-iva-periodo={`${d.anio}-${d.mes}`} onClick={()=>onIrImpuestos({anio:d.anio,mes:d.mes})} style={{background:"none",border:"none",color:C.info,fontSize:13,fontWeight:600,cursor:"pointer",textDecoration:"underline",padding:0}}>Registrar IVA de {fmt.monthYear(d.mes,d.anio)}</button>}</div>
                           }
                           {!d.sinIva&&d.retenciones>0&&<div>Retenciones del F29 (PPM y otras): <b style={{color:C.dangerText}}>−{fmt.money(d.retenciones)}</b> <span style={{color:C.inkFaint}}>· total F29 descontado {fmt.money(d.descuentoF29)}</span></div>}
                           {d.periodo&&!d.detalle.some(l=>!l.ventaPropia) ? (
@@ -147,14 +148,14 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, gastos=[], pagosV
                             <div>Mitad de (utilidad − IVA neto{d.retenciones>0?" − retenciones":""}): <b style={{color:C.ink}}>{conSigno(Math.round((d.sumaUtilidad-(d.sinIva?0:d.descuentoF29))/2))}</b>{(d.sumaUtilidad-(d.sinIva?0:d.descuentoF29))<0&&<span style={{color:C.inkFaint}}> (negativo: cuenta como $0)</span>}</div>
                           )}
                           {d.pagoVentasPropias>0&&<div>+ Ventas propias (100% de esa utilidad, sin repartir): <b style={{color:C.ink}}>+{fmt.money(d.pagoVentasPropias)}</b></div>}
-                          <div style={{fontWeight:800,color:C.ink,marginTop:2}}>= Comisión del mes: {fmt.money(d.pagoCalculado)}</div>
+                          <div style={{fontWeight:700,color:C.ink,marginTop:2}}>= Comisión del mes: {fmt.money(d.pagoCalculado)}</div>
                         </>
                       )}
                     </div>
                     {/* Fase 4C: las OCs que forman el cálculo del mes (cada una entra solo por su factura vigente) */}
                     {(()=>{ const k=`${v.id}|${d.anio}|${d.mes}`; const ab=detalleMes===k; return (<>
                       <button data-ver-ocs-comision={k} onClick={()=>setDetalleMes(ab?null:k)}
-                        style={{background:"none",border:"none",color:C.info,fontWeight:700,fontSize:13,cursor:"pointer",padding:"4px 0",minHeight:36}}>
+                        style={{background:"none",border:"none",color:C.info,fontWeight:600,fontSize:13,cursor:"pointer",padding:"4px 0",minHeight:36}}>
                         {ab?"▾":"▸"} {d.detalle.length} OC{d.detalle.length!==1?"s":""} en este cálculo
                       </button>
                       {ab&&(
@@ -162,8 +163,8 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, gastos=[], pagosV
                           {d.detalle.map(l=>(
                             <div key={l.ocId} style={{padding:"5px 0",borderBottom:`1px dashed ${C.border}`,fontSize:12,lineHeight:1.5}}>
                               <div style={{display:"flex",justifyContent:"space-between",gap:8}}>
-                                <button onClick={()=>onAbrirOC&&onAbrirOC(l.ocId)} style={{background:"none",border:"none",padding:0,cursor:onAbrirOC?"pointer":"default",fontFamily:MONO,fontWeight:700,color:C.ink,textDecoration:onAbrirOC?"underline dotted":"none"}}>{l.numero_oc}</button>
-                                <span style={{fontFamily:MONO,fontWeight:700,color:l.utilidad>=0?C.okText:C.dangerText}}>{l.utilidad>=0?"+":"−"}{fmt.money(Math.abs(l.utilidad))}</span>
+                                <button onClick={()=>onAbrirOC&&onAbrirOC(l.ocId)} style={{background:"none",border:"none",padding:0,cursor:onAbrirOC?"pointer":"default",fontFamily:MONO,fontWeight:600,color:C.ink,textDecoration:onAbrirOC?"underline dotted":"none"}}>{l.numero_oc}</button>
+                                <span style={{fontFamily:MONO,fontWeight:600,color:l.utilidad>=0?C.okText:C.dangerText}}>{l.utilidad>=0?"+":"−"}{fmt.money(Math.abs(l.utilidad))}</span>
                               </div>
                               <div style={{color:C.inkMuted}}>
                                 Factura vigente N° {l.factura} · {l.fechaFactura?fmt.date(String(l.fechaFactura).slice(0,10)):"—"} · {fmt.money(l.montoFacturas)}
@@ -184,8 +185,8 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, gastos=[], pagosV
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
                       <span style={{fontSize:12,color:C.inkMuted}}>Comisión pagada: {fmt.money(d.pagado)}</span>
                       {d.deuda>0&&(d.estadoComision==="pendiente"
-                        ?<span style={{fontSize:12,fontWeight:700,color:C.dangerText}}>Falta pagarle: {fmt.money(d.deuda)}</span>
-                        :<span style={{fontSize:12,fontWeight:700,color:C.warnText}}>{d.estadoComision==="en_curso"?"En curso (acumulado)":"Por liquidar"}: {fmt.money(d.deuda)}</span>)}
+                        ?<span style={{fontSize:12,fontWeight:600,color:C.dangerText}}>Falta pagarle: {fmt.money(d.deuda)}</span>
+                        :<span style={{fontSize:12,fontWeight:600,color:C.warnText}}>{d.estadoComision==="en_curso"?"En curso (acumulado)":"Por liquidar"}: {fmt.money(d.deuda)}</span>)}
                     </div>
                     {d.extraGestion>0&&<div data-extra-gestion style={{fontSize:12,color:C.inkMuted}}>Extra por gestión (aparte de la comisión): <b style={{color:C.ink}}>{fmt.money(d.extraGestion)}</b> · total transferido {fmt.money(d.transferido)}</div>}
                     {d.porRegularizar>0&&d.pagos.some(p=>p.monto_transferido!=null)&&(
@@ -202,7 +203,7 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, gastos=[], pagosV
                               {p.monto_transferido!=null&&<> (comisión {fmt.money(Number(p.monto_pagado)||0)}{extraGestion(p)>0?` + gestión ${fmt.money(extraGestion(p))}`:""})</>}
                               {p.referencia_bancaria?` · ref. ${p.referencia_bancaria}`:""}
                             </span>
-                            {esAdmin&&onAnularPago&&<button data-anular-pago={p.id} onClick={()=>setAnulando(p)} style={{flexShrink:0,background:"none",border:"none",color:C.dangerText,fontWeight:700,fontSize:12,cursor:"pointer",minHeight:32}}>Anular</button>}
+                            {esAdmin&&onAnularPago&&<button data-anular-pago={p.id} onClick={()=>setAnulando(p)} style={{flexShrink:0,background:"none",border:"none",color:C.dangerText,fontWeight:600,fontSize:12,cursor:"pointer",minHeight:32}}>Anular</button>}
                           </div>
                         ))}
                       </div>
@@ -284,7 +285,7 @@ export function FormPagoVendedorSimple({ vendedores, ocs, ivaMensual, pagosVende
   };
   const Linea=({k,v,fuerte,tono,dato})=>(
     <div style={{display:"flex",justifyContent:"space-between",gap:8,padding:"3px 0"}}>
-      <span>{k}</span><span data-desglose={dato} style={{fontFamily:MONO,fontWeight:fuerte?800:600,color:tono||C.ink}}>{fmt.money(v)}</span>
+      <span>{k}</span><span data-desglose={dato} style={{fontFamily:MONO,fontWeight:fuerte?700:500,color:tono||C.ink}}>{fmt.money(v)}</span>
     </div>
   );
   return (
@@ -298,8 +299,8 @@ export function FormPagoVendedorSimple({ vendedores, ocs, ivaMensual, pagosVende
         <Linea k={`Comisión calculada · ${labelMes}`} v={ev.comision} dato="comision" />
         <Linea k="Comisión ya pagada" v={ev.pagadoAntes} dato="pagada" />
         <Linea k="Saldo pendiente" v={ev.pendienteAntes} fuerte dato="pendiente" />
-        {ev.enCurso&&<div data-aviso-en-curso style={{color:C.warnText,fontWeight:700,marginTop:4}}><Ic n="⚠"/> {labelMes} es el mes en curso: su comisión todavía no es exigible y seguirá cambiando con las ventas del mes.</div>}
-        {ev.provisoria&&<div data-aviso-provisoria style={{color:C.warnText,fontWeight:700,marginTop:4}}><Ic n="⚠"/> Comisión provisoria: {ev.sinIvaRegistrado?`el IVA de ${labelMes} no está registrado`:`falta el total del F29 (IVA + PPM) de ${labelMes}`}. Puede cambiar al registrarlo; si baja, la diferencia quedará como saldo por regularizar (el pago no se reclasifica solo).</div>}
+        {ev.enCurso&&<div data-aviso-en-curso style={{color:C.warnText,fontWeight:600,marginTop:4}}><Ic n="⚠"/> {labelMes} es el mes en curso: su comisión todavía no es exigible y seguirá cambiando con las ventas del mes.</div>}
+        {ev.provisoria&&<div data-aviso-provisoria style={{color:C.warnText,fontWeight:600,marginTop:4}}><Ic n="⚠"/> Comisión provisoria: {ev.sinIvaRegistrado?`el IVA de ${labelMes} no está registrado`:`falta el total del F29 (IVA + PPM) de ${labelMes}`}. Puede cambiar al registrarlo; si baja, la diferencia quedará como saldo por regularizar (el pago no se reclasifica solo).</div>}
       </div>
       <Field label="Monto total transferido ($)" required hint="Lo que salió realmente de la cuenta. Puede ser menor, igual o mayor que el saldo pendiente.">
         <input data-monto-transferido style={iMono} type="number" inputMode="numeric" min="0" value={monto} disabled={revisar} onChange={e=>setMonto(e.target.value)} />
@@ -312,24 +313,24 @@ export function FormPagoVendedorSimple({ vendedores, ocs, ivaMensual, pagosVende
       <Field label="Fecha efectiva de la transferencia" required><input style={iStyle} type="date" value={fecha} disabled={revisar} onChange={e=>setFecha(e.target.value)} /></Field>
       <Field label="Referencia o comprobante bancario"><input style={iStyle} value={referencia} disabled={revisar} onChange={e=>setReferencia(e.target.value)} placeholder="Opcional" /></Field>
       <Field label="Observación"><input style={iStyle} value={observacion} disabled={revisar} onChange={e=>setObservacion(e.target.value)} placeholder="Opcional" /></Field>
-      {err&&<div style={{background:C.dangerLight,color:C.dangerText,borderRadius:8,padding:"8px 12px",fontSize:13,marginBottom:10,fontWeight:600}}>{err}</div>}
+      {err&&<div style={{background:C.dangerLight,color:C.dangerText,borderRadius:8,padding:"8px 12px",fontSize:13,marginBottom:10,fontWeight:500}}>{err}</div>}
       {!revisar?(
         <button data-revisar-pago onClick={pedirRevision} style={btnP(C.teal)}>Revisar pago</button>
       ):(
-        <div data-vista-previa style={{border:`1.5px solid ${C.teal}`,borderRadius:12,padding:"12px 14px"}}>
-          <div style={{fontSize:13,fontWeight:800,color:C.ink,marginBottom:6}}>Vista previa · una sola transferencia</div>
+        <div data-vista-previa style={{border:`1px solid ${C.teal}`,borderRadius:12,padding:"12px 14px"}}>
+          <div style={{fontSize:13,fontWeight:700,color:C.ink,marginBottom:6}}>Vista previa · una sola transferencia</div>
           <div style={{fontSize:13,color:C.inkMuted,lineHeight:1.6,marginBottom:8}}>
             {vend?.nombre} · {labelMes} · {fecha?`${fecha.slice(8,10)}-${fecha.slice(5,7)}-${fecha.slice(0,4)}`:""}{referencia.trim()?` · ref. ${referencia.trim()}`:""}<br/>
             Total transferido <b style={{color:C.ink}}>{fmt.money(ev.total)}</b> = comisión <b style={{color:C.ink}}>{fmt.money(ev.pagoComision)}</b> + extra por gestión <b style={{color:C.ink}}>{fmt.money(ev.extraGestion)}</b><br/>
             Comisión de {labelMes}: pendiente {fmt.money(ev.pendienteAntes)} → {fmt.money(ev.pendiente)}{ev.completo&&ev.ocIds.length?` · ${ev.ocIds.length} OC quedan con comisión pagada`:""}
           </div>
           {noDefinitiva&&(
-            <label data-confirmar-provisoria style={{display:"flex",gap:8,alignItems:"flex-start",background:C.warnLight,border:`1px solid ${C.warn}55`,borderRadius:8,padding:"8px 10px",fontSize:12,color:C.warnText,fontWeight:700,marginBottom:8,lineHeight:1.45,cursor:"pointer"}}>
+            <label data-confirmar-provisoria style={{display:"flex",gap:8,alignItems:"flex-start",background:C.warnLight,border:`1px solid ${C.warn}55`,borderRadius:8,padding:"8px 10px",fontSize:12,color:C.warnText,fontWeight:600,marginBottom:8,lineHeight:1.45,cursor:"pointer"}}>
               <input type="checkbox" checked={confirmaProvisoria} onChange={e=>setConfirmaProvisoria(e.target.checked)} style={{marginTop:1,width:18,height:18,flexShrink:0}} />
               <span>Pago sobre una comisión {ev.enCurso?"del MES EN CURSO":"PROVISORIA"} ({motivoNoDefinitiva}). Confirmo que esta transferencia ya se realizó. La comisión puede cambiar al registrar el IVA y el F29; si baja, la diferencia quedará como saldo por regularizar.</span>
             </label>
           )}
-          {parecido&&<div data-aviso-duplicado style={{fontSize:12,color:C.dangerText,fontWeight:700,marginBottom:8}}><Ic n="⚠"/> Ya hay un pago de {fmt.money(totalTransferido(parecido))} a {vend?.nombre} para {labelMes} con esta misma fecha. Confirma solo si es una transferencia distinta.</div>}
+          {parecido&&<div data-aviso-duplicado style={{fontSize:12,color:C.dangerText,fontWeight:600,marginBottom:8}}><Ic n="⚠"/> Ya hay un pago de {fmt.money(totalTransferido(parecido))} a {vend?.nombre} para {labelMes} con esta misma fecha. Confirma solo si es una transferencia distinta.</div>}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
             <button onClick={()=>{setRevisar(false);setConfirmaProvisoria(false);}} disabled={saving} style={btnG}>Corregir</button>
             <button data-confirmar-pago onClick={handleSave} disabled={saving||(noDefinitiva&&!confirmaProvisoria)} style={btnP(saving||(noDefinitiva&&!confirmaProvisoria)?C.inkFaint:C.teal)}>{saving?"Guardando…":"✓ Confirmar pago"}</button>
@@ -351,7 +352,7 @@ export function FormAnularPago({ pago, vendedor, onAnular }) {
         El pago queda guardado como anulado y deja de contar en la comisión y en la caja.
       </div>
       <Field label="Motivo de la anulación" required><input data-motivo-anulacion style={iStyle} value={motivo} onChange={e=>setMotivo(e.target.value)} /></Field>
-      {err&&<div style={{background:C.dangerLight,color:C.dangerText,borderRadius:8,padding:"8px 12px",fontSize:13,marginBottom:10,fontWeight:600}}>{err}</div>}
+      {err&&<div style={{background:C.dangerLight,color:C.dangerText,borderRadius:8,padding:"8px 12px",fontSize:13,marginBottom:10,fontWeight:500}}>{err}</div>}
       <button data-confirmar-anulacion disabled={saving} onClick={async()=>{ if(!motivo.trim()){setErr("Indica el motivo");return;} setSaving(true); try{await onAnular(motivo.trim());}catch(e){setErr(e.message);}finally{setSaving(false);} }} style={btnP(saving?C.inkFaint:C.danger)}>{saving?"Anulando…":"Anular pago"}</button>
     </div>
   );

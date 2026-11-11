@@ -9,7 +9,7 @@ import { ImportarEntidades } from "../forms/ImportarEntidades";
 import { ContactosCatalogo } from "../ficha/ContactosInstitucion";
 import { AutorizacionCuentas } from "./AutorizacionCuentas";
 
-export function PanelUsuarios({ perfilPropio, onRecargar, perfiles, ocs, ocsArchivadas, onRestaurarOC, onChangeRol, session, showToast, entidadesCatalogo, onEntidadesImportadas, usoMP, sincronizando, validandoTodo, exportando, onCorregirFechas, onValidarTodo, onExportarTodo, difsHistoricas, onEliminarOC, eliminacionesVersion }) {
+export function PanelUsuarios({ perfilPropio, onRecargar, perfiles, ocs, ocsArchivadas, onRestaurarOC, onChangeRol, session, showToast, entidadesCatalogo, onEntidadesImportadas, usoMP, sincronizando, validandoTodo, exportando, onCorregirFechas, onValidarTodo, onExportarTodo, difsHistoricas, onEliminarOC, eliminacionesVersion, configVP }) {
   const [verDifs,setVerDifs]=useState(false);
   const [pestana,setPestana]=useState("usuarios");
   const [showImport,setShowImport]=useState(false);
@@ -52,9 +52,12 @@ export function PanelUsuarios({ perfilPropio, onRecargar, perfiles, ocs, ocsArch
         {key:"usuarios",label:"Usuarios"},
         {key:"datos",label:"Datos y respaldo"},
         {key:"mp",label:"Mercado Público"},
+        ...(configVP?[{key:"vp",label:"Ventas privadas"}]:[]),
         {key:"archivadas",label:"OCs archivadas",n:(ocsArchivadas||[]).length||null},
         {key:"correcciones",label:"Correcciones",n:(difsHistoricas||[]).length||null,tono:(difsHistoricas||[]).length?"warn":null},
       ]} />
+      {/* Configuración de Ventas privadas: en su propia pestaña (antes aparecía debajo de todas). */}
+      {configVP&&<PanelPestana visible={pestana==="vp"} titulo="Ventas privadas">{configVP}</PanelPestana>}
       <PanelPestana visible={pestana==="usuarios"} titulo="Usuarios y permisos">
       {/* ── 1. Usuarios y permisos ── */}
       <AutorizacionCuentas session={session} showToast={showToast} onAutorizada={onRecargar} visible={pestana==="usuarios"} />
@@ -79,7 +82,7 @@ export function PanelUsuarios({ perfilPropio, onRecargar, perfiles, ocs, ocsArch
               <div style={{minWidth:0}}>
                 <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
                   <span style={{width:8,height:8,borderRadius:"50%",background:activo?C.ok:C.inkFaint,display:"inline-block",flexShrink:0}} />
-                  <span style={{fontWeight:700,fontSize:16,color:C.ink}}>{p.nombre}</span>
+                  <span style={{fontWeight:600,fontSize:16,color:C.ink}}>{p.nombre}</span>
                   <Badge tono={p.rol==="admin"?"info":"neutro"}>{p.rol==="admin"?"Administrador":"Usuario"}</Badge>{esYo&&<Badge tono="ok">Tú</Badge>}
                 </div>
                 <div style={{fontSize:12,color:C.inkMuted,marginTop:4}}>{ultima?`Última actividad: ${fmt.datetime(ultima)}`:"Sin actividad registrada"}</div>
@@ -104,7 +107,7 @@ export function PanelUsuarios({ perfilPropio, onRecargar, perfiles, ocs, ocsArch
         <PanelDatos session={session} showToast={showToast} />
 
         <Tarjeta>
-          <div style={{fontSize:14,fontWeight:700,color:C.ink,marginBottom:2}}><Ic n="🏢"/> Catálogo de entidades</div>
+          <div style={{fontSize:14,fontWeight:600,color:C.ink,marginBottom:2}}><Ic n="🏢"/> Catálogo de entidades</div>
           <div style={{fontSize:12,color:C.inkMuted,marginBottom:10}}>
             {(entidadesCatalogo||[]).length} entidades guardadas · Se autocompletan al escribir el RUT en cualquier OC
           </div>
@@ -116,7 +119,7 @@ export function PanelUsuarios({ perfilPropio, onRecargar, perfiles, ocs, ocsArch
         </Tarjeta>
 
         <Tarjeta>
-          <div style={{fontSize:14,fontWeight:700,color:C.ink,marginBottom:2}}><Ic n="👥"/> Contactos institucionales</div>
+          <div style={{fontSize:14,fontWeight:600,color:C.ink,marginBottom:2}}><Ic n="👥"/> Contactos institucionales</div>
           <div style={{fontSize:12,color:C.inkMuted,marginBottom:10}}>Varios contactos por institución (por RUT). Corrige correos, resuelve los pendientes y revisa el historial.</div>
           <ContactosCatalogo entidades={entidadesCatalogo} />
         </Tarjeta>
@@ -163,7 +166,7 @@ export function PanelUsuarios({ perfilPropio, onRecargar, perfiles, ocs, ocsArch
               <div data-correcciones-pendientes={l.length} style={{fontSize:12,color:C.inkMuted,lineHeight:1.5,marginBottom:8}}>
                 <b style={{color:C.ink}}>{l.length}</b> diferencias en <b style={{color:C.ink}}>{ocsCon.size}</b> OCs y <b style={{color:C.ink}}>{l.filter(d=>d.entidad==="financiador").length}</b> financiadores · <b style={{color:C.okText}}>{seg}</b> seguras de corregir · <b style={{color:C.warnText}}>{l.length-seg}</b> requieren decisión
               </div>
-              <button type="button" onClick={()=>setVerDifs(v=>!v)} style={{background:"none",border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 10px",fontSize:12,fontWeight:700,color:C.tealDark,cursor:"pointer"}}>{verDifs?"Ocultar detalle":"Ver detalle"}</button>
+              <button type="button" onClick={()=>setVerDifs(v=>!v)} style={{background:"none",border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 10px",fontSize:12,fontWeight:600,color:C.tealDark,cursor:"pointer"}}>{verDifs?"Ocultar detalle":"Ver detalle"}</button>
               {verDifs&&<div style={{marginTop:8,maxHeight:420,overflowY:"auto"}}>
                 {l.slice().sort((a,b)=>(a.clasificacion===b.clasificacion?0:a.clasificacion==="decision"?-1:1)||String(a.etiqueta).localeCompare(String(b.etiqueta))).map(d=>(
                   <div key={d.id} style={{borderTop:`1px solid ${C.border}`,padding:"7px 0",fontSize:12,lineHeight:1.45}}>
@@ -198,7 +201,7 @@ export function PanelUsuarios({ perfilPropio, onRecargar, perfiles, ocs, ocsArch
               <div key={o.id} data-oc-archivada={o.numero_oc} style={{borderTop:`1px solid ${C.border}`,padding:"10px 0"}}>
                 <button type="button" onClick={()=>setArchAbierta(abierta?null:o.id)} style={{background:"none",border:"none",padding:0,width:"100%",textAlign:"left",cursor:"pointer",font:"inherit",color:"inherit"}}>
                   <div style={{display:"flex",justifyContent:"space-between",gap:8,alignItems:"baseline"}}>
-                    <span style={{fontWeight:700,color:C.ink,fontSize:14}}>{o.numero_oc}</span>
+                    <span style={{fontWeight:600,color:C.ink,fontSize:14}}>{o.numero_oc}</span>
                     <span style={{fontSize:13,color:C.ink}}>{fmt.money(o.monto_total)}</span>
                   </div>
                   <div style={{fontSize:12,color:C.inkMuted}}>{o.cliente||"—"}</div>

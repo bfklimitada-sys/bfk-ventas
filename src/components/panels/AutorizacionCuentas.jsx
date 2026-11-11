@@ -61,7 +61,7 @@ export function AutorizacionCuentas({ session, showToast, onAutorizada, visible 
           </div></Tarjeta>
         )}
         {estado === "error" && (
-          <Tarjeta><div style={{ fontSize: 13, color: C.dangerText, fontWeight: 600 }}>{error || "No se pudieron leer las cuentas por autorizar"}</div>
+          <Tarjeta><div style={{ fontSize: 13, color: C.dangerText, fontWeight: 500 }}>{error || "No se pudieron leer las cuentas por autorizar"}</div>
             <BotonAdmin onClick={cargar} style={{ marginTop: 10 }}>Reintentar</BotonAdmin></Tarjeta>
         )}
         {estado === "ok" && cuentas.length === 0 && (
@@ -72,7 +72,7 @@ export function AutorizacionCuentas({ session, showToast, onAutorizada, visible 
             <div data-cuenta-pendiente={c.correo} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, flexWrap: "wrap" }}>
               <div style={{ minWidth: 0, flex: "1 1 200px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                  <span style={{ fontWeight: 700, fontSize: 15, color: C.ink, wordBreak: "break-all" }}>{c.correo || "(sin correo)"}</span>
+                  <span style={{ fontWeight: 600, fontSize: 15, color: C.ink, wordBreak: "break-all" }}>{c.correo || "(sin correo)"}</span>
                   {c.aislada ? <Badge tono="neutro">Aislada · {c.aislada}</Badge> : <Badge tono="warn">Por autorizar</Badge>}
                   {!c.confirmada && <Badge tono="neutro">Correo sin confirmar</Badge>}
                 </div>
@@ -87,9 +87,9 @@ export function AutorizacionCuentas({ session, showToast, onAutorizada, visible 
             {c.aislada && <div style={{ fontSize: 12, color: C.inkMuted, marginTop: 8 }}>Cuenta técnica aislada: la base no permite darle acceso a BFK.</div>}
             {abierta === c.id && (
               <div data-form-autorizar style={{ marginTop: 12, borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
-                <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: C.inkMuted, marginBottom: 4 }}>Nombre en BFK</label>
+                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: C.inkMuted, marginBottom: 4 }}>Nombre en BFK</label>
                 <input data-autorizar-nombre style={iStyle} value={nombre} onChange={(e) => { setNombre(e.target.value); setErrForm(""); }} placeholder="Nombre y apellido" />
-                <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: C.inkMuted, margin: "10px 0 4px" }}>Rol</label>
+                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: C.inkMuted, margin: "10px 0 4px" }}>Rol</label>
                 <select data-autorizar-rol style={iStyle} value={rol} onChange={(e) => { setRol(e.target.value); setConfirmado(false); }}>
                   <option value="usuario">Usuario</option>
                   <option value="admin">Administrador</option>
@@ -100,10 +100,10 @@ export function AutorizacionCuentas({ session, showToast, onAutorizada, visible 
                     ? <>Confirmo que <b>{c.correo}</b> debe ser <b>administrador</b>: tendrá acceso completo a la información de BFK y podrá autorizar otras cuentas.</>
                     : <>Confirmo que <b>{c.correo}</b> debe tener acceso a la información de BFK.</>}</span>
                 </label>
-                {errForm && <div data-autorizar-error style={{ background: C.dangerLight, color: C.dangerText, borderRadius: 8, padding: "8px 10px", fontSize: 13, marginTop: 10, fontWeight: 600 }}>{errForm}</div>}
+                {errForm && <div data-autorizar-error style={{ background: C.dangerLight, color: C.dangerText, borderRadius: 8, padding: "8px 10px", fontSize: 13, marginTop: 10, fontWeight: 500 }}>{errForm}</div>}
                 <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
                   <button data-autorizar-confirmar onClick={() => autorizar(c)} disabled={guardando} style={{ ...btnP(guardando ? C.inkFaint : C.night), flex: "1 1 160px", width: "auto" }}>{guardando ? "Autorizando…" : "Autorizar cuenta"}</button>
-                  <button onClick={() => setAbierta(null)} disabled={guardando} style={{ flex: "0 1 120px", background: "none", border: `1px solid ${C.border}`, borderRadius: 12, minHeight: 44, fontWeight: 700, color: C.ink, cursor: "pointer" }}>Cancelar</button>
+                  <button onClick={() => setAbierta(null)} disabled={guardando} style={{ flex: "0 1 120px", background: "none", border: `1px solid ${C.border}`, borderRadius: 12, minHeight: 44, fontWeight: 600, color: C.ink, cursor: "pointer" }}>Cancelar</button>
                 </div>
               </div>
             )}
@@ -111,7 +111,7 @@ export function AutorizacionCuentas({ session, showToast, onAutorizada, visible 
         ))}
         {estado === "ok" && registro.length > 0 && (
           <Tarjeta>
-            <div style={{ fontSize: 13, fontWeight: 700, color: C.ink, marginBottom: 6 }}>Autorizaciones registradas</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: C.ink, marginBottom: 6 }}>Autorizaciones registradas</div>
             <div data-registro-autorizaciones>
               {registro.slice(0, 10).map((a) => (
                 <div key={a.id} style={{ fontSize: 12, color: C.inkMuted, padding: "4px 0", borderTop: `1px solid ${C.border}` }}>

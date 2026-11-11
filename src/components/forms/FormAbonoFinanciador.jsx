@@ -87,11 +87,11 @@ export function FormAbonoFinanciador({ ocs, financiadores: todosFin, onSave, fin
         <div style={{ background: C.paper, borderRadius: 8, padding: "10px 12px", marginBottom: 14 }}>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.inkMuted }}>
             <span>{pendientes.length} OC{pendientes.length !== 1 ? "s" : ""} por devolver</span>
-            <span style={{ fontFamily: MONO, fontWeight: 800, color:C.dangerText }}>{fmt.money(totalAdeudado)}</span>
+            <span style={{ fontFamily: MONO, fontWeight: 700, color:C.dangerText }}>{fmt.money(totalAdeudado)}</span>
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.inkMuted, marginTop: 4 }}>
             <span>Saldo del financiador (calculado por la base)</span>
-            <span style={{ fontFamily: MONO, fontWeight: 800, color: saldoFin < 0 ? C.okText : C.ink }}>{saldoFin < 0 ? `${fmt.money(-saldoFin)} a favor de BFK` : fmt.money(saldoFin)}</span>
+            <span style={{ fontFamily: MONO, fontWeight: 700, color: saldoFin < 0 ? C.okText : C.ink }}>{saldoFin < 0 ? `${fmt.money(-saldoFin)} a favor de BFK` : fmt.money(saldoFin)}</span>
           </div>
         </div>
       )}
@@ -112,7 +112,7 @@ export function FormAbonoFinanciador({ ocs, financiadores: todosFin, onSave, fin
       {/* Vista previa del reparto */}
       {reparto.length > 0 && (
         <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 12, fontWeight: 800, color: C.inkMuted, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: C.inkMuted, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>
             Cubre {reparto.length} OC{reparto.length !== 1 ? "s" : ""}
           </div>
           <div style={{ maxHeight: 230, overflowY: "auto", border: `1px solid ${C.border}`, borderRadius: 12 }}>
@@ -123,12 +123,12 @@ export function FormAbonoFinanciador({ ocs, financiadores: todosFin, onSave, fin
                 background: r.completa ? C.card : C.warnLight,
               }}>
                 <span style={{ minWidth: 0 }}>
-                  <span style={{ display: "block", fontFamily: MONO, fontSize: 12, fontWeight: 700, color: C.ink }}>{r.oc.numero_oc}</span>
+                  <span style={{ display: "block", fontFamily: MONO, fontSize: 12, fontWeight: 600, color: C.ink }}>{r.oc.numero_oc}</span>
                   <span style={{ display: "block", fontSize: 12, color: r.completa ? C.inkFaint : C.warn }}>
                     {r.completa ? "Queda saldada" : `Parcial · quedan ${fmt.money(r.debe - r.asignado)}`}
                   </span>
                 </span>
-                <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: 13, color: r.completa ? C.ok : C.warn, flexShrink: 0 }}>
+                <span style={{ fontFamily: MONO, fontWeight: 700, fontSize: 13, color: r.completa ? C.ok : C.warn, flexShrink: 0 }}>
                   {fmt.money(r.asignado)}
                 </span>
               </div>
@@ -136,14 +136,14 @@ export function FormAbonoFinanciador({ ocs, financiadores: todosFin, onSave, fin
           </div>
 
           {sobrante > 0 && (
-            <div style={{ background: C.infoLight, borderRadius: 8, padding: "9px 12px", marginTop: 8, fontSize: 12, color: C.info, fontWeight: 600 }}>
+            <div style={{ background: C.infoLight, borderRadius: 8, padding: "9px 12px", marginTop: 8, fontSize: 12, color: C.info, fontWeight: 500 }}>
               Sobran {fmt.money(sobrante)} — el abono supera lo adeudado por las OCs. Se registrará como pago sin OC asociada{(Number(monto) || 0) > saldoFin ? ` y el saldo del financiador quedará ${fmt.money((Number(monto) || 0) - saldoFin)} a favor de BFK` : ""}.
             </div>
           )}
         </div>
       )}
 
-      {err && <div style={{ background: C.dangerLight, color:C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 10, fontWeight: 600 }}>{err}</div>}
+      {err && <div style={{ background: C.dangerLight, color:C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 10, fontWeight: 500 }}>{err}</div>}
 
       <button onClick={guardar} disabled={saving} style={btnP(saving ? C.inkFaint : C.purple)}>
         {saving ? "Registrando…" : `✓ Abonar ${fmt.money(Number(monto) || 0)}`}

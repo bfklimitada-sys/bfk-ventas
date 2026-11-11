@@ -1,7 +1,7 @@
 // Ventas privadas — piezas de presentación compartidas (las reglas están en lib/ventasPrivadas.js y en la base).
 import { useEffect, useMemo, useRef, useState } from "react";
 import { C, MONO, R, S, T, cardStyle, iStyle } from "../../lib/theme";
-import { Badge } from "../ui/Sistema";
+import { Badge, estiloChip } from "../ui/Sistema";
 import { Ic } from "../ui/Iconos";
 import { Campo, Entrada, Selector, Vacio, estiloBoton } from "../proyectos/Comunes";
 import { calcularTotales, pesos, pct, cantidadTxt, etiquetaEstado, tonoEstado, CATEGORIAS_DOCUMENTO, fechaTxt } from "../../lib/ventasPrivadas";
@@ -12,7 +12,7 @@ export { Vacio, estiloBoton };
 export function NoInstalado() {
   return (
     <div data-vp-no-instalado style={{ ...cardStyle, padding: "18px 20px" }}>
-      <div style={{ fontWeight: 800, fontSize: T.title, color: C.ink, marginBottom: 6 }}>Ventas privadas aún no está activado</div>
+      <div style={{ fontWeight: 700, fontSize: T.title, color: C.ink, marginBottom: 6 }}>Ventas privadas aún no está activado</div>
       <div style={{ fontSize: T.sm, color: C.inkMuted, lineHeight: 1.5 }}>El módulo se activa al instalar su migración en la base de datos. Mientras tanto no se guarda nada y Mercado Público funciona igual que siempre.</div>
     </div>
   );
@@ -24,35 +24,46 @@ export const BadgeVP = ({ mapa, k, dato }) => <Badge tono={tonoEstado(mapa, k)}>
 export const CANALES = [{ k: "todos", l: "Todos los canales" }, { k: "mp", l: "Mercado Público" }, { k: "vp", l: "Ventas privadas" }];
 export function CanalFiltro({ valor, onCambiar, dato = "canal" }) {
   return (
-    <div role="radiogroup" aria-label="Canal de venta" data-canal-filtro={dato} style={{ display: "flex", gap: 6, overflowX: "auto", scrollbarWidth: "none", margin: "0 0 12px", paddingBottom: 2 }}>
+    <div role="radiogroup" aria-label="Canal de venta" data-canal-filtro={dato} className="bfk-sin-barra" style={{ display: "flex", gap: 6, overflowX: "auto", margin: "0 0 12px", paddingBottom: 2 }}>
       {CANALES.map((c) => {
         const act = valor === c.k;
-        return (
-          <button key={c.k} type="button" role="radio" aria-checked={act} data-canal={c.k} onClick={() => onCambiar(c.k)}
-            style={{ flexShrink: 0, minHeight: 36, padding: "6px 12px", borderRadius: R.pill, border: `1.5px solid ${act ? C.teal : C.border}`, background: act ? C.tealLight : C.card,
-              color: act ? C.tealDark : C.inkMuted, fontWeight: act ? 800 : 600, fontSize: T.sm, cursor: "pointer", whiteSpace: "nowrap" }}>{c.l}</button>
-        );
+        return <button key={c.k} type="button" data-compact role="radio" aria-checked={act} data-canal={c.k} onClick={() => onCambiar(c.k)} style={estiloChip(act)}>{c.l}</button>;
       })}
     </div>
   );
 }
 
-export function Kpi({ et, v, n, tono, dato, onClick }) {
+export function Kpi({ et, v, n, tono, dato, onClick, plano, linea }) {
   const col = { ok: C.okText, warn: C.warnText, danger: C.dangerText, marca: C.tealDark }[tono] || C.ink;
+  // linea: conteo en una sola línea (etiqueta · valor), igual que Indicador linea del sistema.
+  if (linea) {
+    const st = { display: "inline-flex", alignItems: "baseline", gap: 8, border: `1px solid ${C.border}`, borderRadius: R.sm, background: C.card, padding: "7px 12px", minHeight: 36, font: "inherit", color: "inherit", boxSizing: "border-box" };
+    const c = (<><span style={{ fontSize: T.sm, color: C.inkMuted }}>{et}</span><span data-kpi-valor={dato} style={{ fontFamily: MONO, fontWeight: 600, fontSize: T.body, color: col }}>{v}</span>{n && <span style={{ fontSize: T.small, color: C.inkFaint }}>{n}</span>}</>);
+    return onClick ? <button type="button" data-compact data-kpi={dato} onClick={onClick} style={{ ...st, cursor: "pointer" }}>{c}</button> : <div data-kpi={dato} style={st}>{c}</div>;
+  }
+  // plano: dato dentro de una franja (sin tarjeta propia); la nota queda como texto de ayuda al pasar el cursor.
+  if (plano) {
+    const st = { background: "none", border: "none", padding: "2px 0", textAlign: "left", font: "inherit", color: "inherit", minWidth: 0, minHeight: 0 };
+    const c = (<>
+      <span style={{ display: "block", fontSize: T.small, color: C.inkMuted, lineHeight: 1.3 }}>{et}</span>
+      <span data-kpi-valor={dato} style={{ display: "block", fontFamily: MONO, fontWeight: 600, fontSize: 15, color: col, letterSpacing: -0.3, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{v}</span>
+    </>);
+    return onClick ? <button type="button" data-compact data-kpi={dato} title={n || undefined} onClick={onClick} style={{ ...st, cursor: "pointer" }}>{c}</button> : <div data-kpi={dato} title={n || undefined} style={st}>{c}</div>;
+  }
   const cuerpo = (<>
-    <span style={{ display: "block", fontSize: T.small, fontWeight: 700, color: C.inkMuted }}>{et}</span>
-    <span data-kpi-valor={dato} style={{ display: "block", fontFamily: MONO, fontWeight: 800, fontSize: 18, color: col, marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{v}</span>
+    <span style={{ display: "block", fontSize: T.small, fontWeight: 600, color: C.inkMuted, lineHeight: 1.3 }}>{et}</span>
+    <span data-kpi-valor={dato} style={{ display: "block", fontFamily: MONO, fontWeight: 700, fontSize: 18, color: col, letterSpacing: -0.5, marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{v}</span>
     {n && <span style={{ display: "block", fontSize: T.small, color: C.inkFaint, marginTop: 3, lineHeight: 1.35 }}>{n}</span>}
   </>);
   const base = { ...cardStyle, borderRadius: R.md, padding: "12px 14px", textAlign: "left", font: "inherit", color: "inherit", minWidth: 0 };
   return onClick ? <button type="button" data-kpi={dato} onClick={onClick} style={{ ...base, cursor: "pointer", width: "100%" }}>{cuerpo}</button> : <div data-kpi={dato} style={base}>{cuerpo}</div>;
 }
-export const RejillaKpi = ({ children }) => <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", gap: S.sm, marginBottom: S.lg }}>{children}</div>;
+export const RejillaKpi = ({ children, linea }) => linea ? <div style={{ display: "flex", flexWrap: "wrap", gap: S.sm, marginBottom: S.md }}>{children}</div> : <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", gap: S.sm, marginBottom: S.lg }}>{children}</div>;
 
 export const Fila = ({ k, v, fuerte, tono, dato }) => (
-  <div data-fila-vp={dato} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "6px 0", borderBottom: `1px solid ${C.border}` }}>
-    <span style={{ fontSize: T.sm, color: fuerte ? C.ink : C.inkMuted, fontWeight: fuerte ? 800 : 600 }}>{k}</span>
-    <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: fuerte ? 15 : 13.5, color: { ok: C.okText, warn: C.warnText, danger: C.dangerText }[tono] || C.ink, textAlign: "right" }}>{v}</span>
+  <div data-fila-vp={dato} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, padding: "7px 0", borderBottom: `1px solid ${C.border}` }}>
+    <span style={{ fontSize: T.sm, color: fuerte ? C.ink : C.inkMuted, fontWeight: fuerte ? 700 : 500 }}>{k}</span>
+    <span style={{ fontFamily: MONO, fontWeight: 700, fontSize: fuerte ? 16 : 14, color: { ok: C.okText, warn: C.warnText, danger: C.dangerText }[tono] || C.ink, textAlign: "right" }}>{v}</span>
   </div>
 );
 
@@ -64,8 +75,8 @@ export function SelectorCliente({ clientes, valor, onCambiar, onNuevo, deshabili
   }, [clientes, q]);
   const sel = (clientes || []).find((c) => c.id === valor);
   if (sel) return (
-    <div data-cliente-elegido style={{ background: C.tealLight, border: `1.5px solid ${C.teal}`, borderRadius: R.sm, padding: "9px 12px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-      <div style={{ minWidth: 0 }}><div style={{ fontWeight: 800, fontSize: T.sm, color: C.ink }}>{sel.razon_social}</div><div style={{ fontSize: T.small, color: C.inkMuted, fontFamily: MONO }}>{sel.rut || "Sin RUT"}</div></div>
+    <div data-cliente-elegido style={{ background: C.tealLight, border: `1px solid ${C.teal}`, borderRadius: R.sm, padding: "9px 12px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+      <div style={{ minWidth: 0 }}><div style={{ fontWeight: 700, fontSize: T.sm, color: C.ink }}>{sel.razon_social}</div><div style={{ fontSize: T.small, color: C.inkMuted, fontFamily: MONO }}>{sel.rut || "Sin RUT"}</div></div>
       {!deshabilitado && <button type="button" onClick={() => onCambiar(null)} style={{ ...estiloBoton(), minHeight: 34 }}>Cambiar</button>}
     </div>
   );
@@ -79,7 +90,7 @@ export function SelectorCliente({ clientes, valor, onCambiar, onNuevo, deshabili
         {lista.map((c) => (
           <button key={c.id} type="button" data-opcion-cliente={c.rut || c.id} onClick={() => onCambiar(c.id)}
             style={{ width: "100%", textAlign: "left", background: "none", border: "none", borderBottom: `1px solid ${C.border}`, padding: "8px 10px", cursor: "pointer", minHeight: 40 }}>
-            <span style={{ display: "block", fontSize: T.sm, fontWeight: 700, color: C.ink }}>{c.razon_social}</span>
+            <span style={{ display: "block", fontSize: T.sm, fontWeight: 600, color: C.ink }}>{c.razon_social}</span>
             <span style={{ fontSize: T.small, color: C.inkMuted, fontFamily: MONO }}>{c.rut || "Sin RUT"}{c.es_venta_privada ? "" : " · cliente de Proyectos Industriales"}</span>
           </button>
         ))}
@@ -105,7 +116,7 @@ export function EditorLineas({ token, items, onCambiar, verCostos, soloLectura }
         return (
           <div key={it._k || it.id || i} data-linea={i + 1} style={{ ...cardStyle, borderRadius: R.md, padding: "10px 12px", marginBottom: 8 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-              <span style={{ fontFamily: MONO, fontWeight: 800, color: C.tealDark, minWidth: 26 }}>{i + 1}</span>
+              <span style={{ fontFamily: MONO, fontWeight: 700, color: C.tealDark, minWidth: 26 }}>{i + 1}</span>
               <select aria-label="Tipo" disabled={soloLectura} value={it.tipo} onChange={(e) => set(i, "tipo", e.target.value)} style={{ ...inp, width: 120 }}>
                 <option value="producto">Producto</option><option value="servicio">Servicio</option>
               </select>
@@ -118,18 +129,18 @@ export function EditorLineas({ token, items, onCambiar, verCostos, soloLectura }
               </>}
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(110px,1fr))", gap: 8 }}>
-              <label style={{ gridColumn: "1 / -1" }}><span style={{ fontSize: 12, fontWeight: 700, color: C.inkMuted }}>Descripción</span>
+              <label style={{ gridColumn: "1 / -1" }}><span style={{ fontSize: 12, fontWeight: 600, color: C.inkMuted }}>Descripción</span>
                 <div style={{ display: "flex", gap: 6 }}>
                   <textarea data-campo="descripcion" disabled={soloLectura} rows={2} value={it.descripcion} onChange={(e) => set(i, "descripcion", e.target.value)} style={{ ...inp, minHeight: 52, resize: "vertical", fontFamily: "inherit", flex: 1 }} />
                   {!soloLectura && token && <button type="button" data-elegir-producto onClick={() => setBuscando(i)} title="Elegir de la biblioteca de productos" style={{ ...estiloBoton(), minHeight: 52 }}><Ic n="📋" /></button>}
                 </div>
               </label>
-              <label><span style={{ fontSize: 12, fontWeight: 700, color: C.inkMuted }}>Código</span><input disabled={soloLectura} value={it.codigo || ""} onChange={(e) => set(i, "codigo", e.target.value)} style={inp} /></label>
-              <label><span style={{ fontSize: 12, fontWeight: 700, color: C.inkMuted }}>Unidad</span><input data-campo="unidad" disabled={soloLectura} value={it.unidad} onChange={(e) => set(i, "unidad", e.target.value)} style={inp} maxLength={20} /></label>
-              <label><span style={{ fontSize: 12, fontWeight: 700, color: C.inkMuted }}>Cantidad</span><input data-campo="cantidad" disabled={soloLectura} inputMode="decimal" value={it.cantidad} onChange={(e) => set(i, "cantidad", e.target.value)} style={{ ...inp, fontFamily: MONO }} /></label>
-              <label><span style={{ fontSize: 12, fontWeight: 700, color: C.inkMuted }}>Precio unit. neto</span><input data-campo="precio" disabled={soloLectura} inputMode="decimal" value={it.precio_unitario} onChange={(e) => set(i, "precio_unitario", e.target.value)} style={{ ...inp, fontFamily: MONO }} /></label>
-              <label><span style={{ fontSize: 12, fontWeight: 700, color: C.inkMuted }}>Descuento %</span><input data-campo="descuento" disabled={soloLectura} inputMode="decimal" value={it.descuento_pct} onChange={(e) => set(i, "descuento_pct", e.target.value)} style={{ ...inp, fontFamily: MONO }} /></label>
-              {verCostos && <label><span style={{ fontSize: 12, fontWeight: 700, color: C.warnText }}>Costo unit. (interno)</span><input data-campo="costo" disabled={soloLectura} inputMode="decimal" value={it.costo_unitario ?? ""} onChange={(e) => set(i, "costo_unitario", e.target.value)} style={{ ...inp, fontFamily: MONO, borderColor: "#F5D38A" }} /></label>}
+              <label><span style={{ fontSize: 12, fontWeight: 600, color: C.inkMuted }}>Código</span><input disabled={soloLectura} value={it.codigo || ""} onChange={(e) => set(i, "codigo", e.target.value)} style={inp} /></label>
+              <label><span style={{ fontSize: 12, fontWeight: 600, color: C.inkMuted }}>Unidad</span><input data-campo="unidad" disabled={soloLectura} value={it.unidad} onChange={(e) => set(i, "unidad", e.target.value)} style={inp} maxLength={20} /></label>
+              <label><span style={{ fontSize: 12, fontWeight: 600, color: C.inkMuted }}>Cantidad</span><input data-campo="cantidad" disabled={soloLectura} inputMode="decimal" value={it.cantidad} onChange={(e) => set(i, "cantidad", e.target.value)} style={{ ...inp, fontFamily: MONO }} /></label>
+              <label><span style={{ fontSize: 12, fontWeight: 600, color: C.inkMuted }}>Precio unit. neto</span><input data-campo="precio" disabled={soloLectura} inputMode="decimal" value={it.precio_unitario} onChange={(e) => set(i, "precio_unitario", e.target.value)} style={{ ...inp, fontFamily: MONO }} /></label>
+              <label><span style={{ fontSize: 12, fontWeight: 600, color: C.inkMuted }}>Descuento %</span><input data-campo="descuento" disabled={soloLectura} inputMode="decimal" value={it.descuento_pct} onChange={(e) => set(i, "descuento_pct", e.target.value)} style={{ ...inp, fontFamily: MONO }} /></label>
+              {verCostos && <label><span style={{ fontSize: 12, fontWeight: 600, color: C.warnText }}>Costo unit. (interno)</span><input data-campo="costo" disabled={soloLectura} inputMode="decimal" value={it.costo_unitario ?? ""} onChange={(e) => set(i, "costo_unitario", e.target.value)} style={{ ...inp, fontFamily: MONO, borderColor: "#F5D38A" }} /></label>}
             </div>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 14, flexWrap: "wrap", marginTop: 8, fontSize: T.small, color: C.inkMuted }}>
               {l.descuento > 0 && <span>Descuento <b style={{ fontFamily: MONO }}>{pesos(l.descuento)}</b></span>}
@@ -163,7 +174,7 @@ function BuscadorProducto({ token, onElegir, onCerrar }) {
         <div style={{ overflowY: "auto", marginTop: 8 }}>
           {(res || []).map((p) => (
             <button key={p.id} type="button" data-producto-opcion={p.id} onClick={() => onElegir(p)} style={{ width: "100%", textAlign: "left", background: "none", border: "none", borderBottom: `1px solid ${C.border}`, padding: "8px 6px", cursor: "pointer" }}>
-              <span style={{ display: "block", fontWeight: 700, fontSize: T.sm }}>{p.nombre}</span>
+              <span style={{ display: "block", fontWeight: 600, fontSize: T.sm }}>{p.nombre}</span>
               <span style={{ fontSize: T.small, color: C.inkMuted }}>{[p.marca, p.modelo].filter(Boolean).join(" · ") || "Sin marca ni modelo"}</span>
             </button>
           ))}
@@ -183,7 +194,7 @@ export function ResumenTotales({ tot, verCostos, dato = "totales" }) {
       <Fila k="Total" v={pesos(tot.total)} fuerte dato="total" />
       {verCostos && (
         <div data-margen-interno style={{ marginTop: 10, background: C.warnLight, borderRadius: R.sm, padding: "8px 10px" }}>
-          <div style={{ fontSize: T.small, fontWeight: 800, color: C.warnText, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 2, display: "flex", alignItems: "center", gap: 6 }}><Ic n="🔒" /> Interno · no aparece en el PDF</div>
+          <div style={{ fontSize: T.small, fontWeight: 700, color: C.warnText, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 2, display: "flex", alignItems: "center", gap: 6 }}><Ic n="🔒" /> Interno · no aparece en el PDF</div>
           <Fila k="Costo estimado" v={pesos(tot.costo)} dato="costo" />
           <Fila k="Utilidad estimada" v={pesos(tot.utilidad)} tono={tot.utilidad < 0 ? "danger" : "ok"} dato="utilidad" />
           <Fila k="Margen sobre venta neta" v={pct(tot.margen)} dato="margen" />
@@ -220,7 +231,7 @@ export function ListaDocumentos({ token, documentos, onAnular, showToast }) {
     <div key={d.id} data-documento={d.categoria} style={{ ...cardStyle, borderRadius: R.md, padding: "9px 12px", marginBottom: 6, display: "flex", alignItems: "center", gap: 10, opacity: d.estado === "vigente" ? 1 : 0.55 }}>
       <Ic n="📄" />
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontWeight: 700, fontSize: T.sm, color: C.ink, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{d.titulo}</div>
+        <div style={{ fontWeight: 600, fontSize: T.sm, color: C.ink, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{d.titulo}</div>
         <div style={{ fontSize: T.small, color: C.inkMuted }}>{CATEGORIAS_DOCUMENTO[d.categoria] || d.categoria} · {d.nombre_archivo} · {fechaTxt(String(d.subido_en).slice(0, 10))}{d.estado !== "vigente" ? ` · anulado: ${d.anulacion_motivo || ""}` : ""}</div>
       </div>
       <button type="button" data-descargar-documento onClick={() => bajar(d)} disabled={bajando === d.id} style={estiloBoton()}>{bajando === d.id ? "…" : <Ic n="📥" />}</button>

@@ -23,7 +23,7 @@ export function VendedorCotizacionOC({ oc, cotizaciones, vendedores, onTransferi
     La cotización adjudicada {cod} tiene como vendedor responsable a <b>{r.cot.vendedor_nombre}</b> y esta OC aún no tiene vendedor.
     <div style={{ marginTop: 6 }}>
       <button data-transferir-vendedor disabled={ocupado} onClick={async () => { setOcupado(true); setError(""); try { await onTransferir(r.cot.id); } catch (e) { setError(mensajeVendedor(e)); } setOcupado(false); }}
-        style={{ border: `1.5px solid ${C.info}`, background: C.card, color: C.ink, borderRadius: 8, padding: "6px 12px", minHeight: 36, fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
+        style={{ border: `1px solid ${C.info}`, background: C.card, color: C.ink, borderRadius: 8, padding: "6px 12px", minHeight: 36, fontWeight: 600, fontSize: 12, cursor: "pointer" }}>
         {ocupado ? "Asignando…" : `Asignar a ${r.cot.vendedor_nombre} como vendedor de la OC`}</button>
     </div>
     {error && <div role="alert" style={{ color: C.dangerText, marginTop: 6 }}>{error}</div>}

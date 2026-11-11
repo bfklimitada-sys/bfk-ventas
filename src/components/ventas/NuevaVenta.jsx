@@ -114,9 +114,9 @@ export function NuevaVentaPrivada({ token, perfil, vp, showToast, onCerrar, onCr
         {!aceptadas.length && <Vacio dato="sin-aceptadas">No hay cotizaciones aceptadas pendientes de convertir. Registra la aceptación en la cotización o crea una venta directa.</Vacio>}
         {aceptadas.map((c) => (
           <button key={c.id} type="button" data-elegir-cotizacion={c.folio} onClick={() => setCotSel(c)} style={{ ...cardStyle, borderRadius: R.md, padding: "10px 12px", marginBottom: 6, width: "100%", textAlign: "left", cursor: "pointer", display: "flex", gap: 8, alignItems: "center" }}>
-            <span style={{ fontFamily: MONO, fontWeight: 800, flex: 1 }}>{folioRevision(c.folio, c.revision_aceptada)}</span>
+            <span style={{ fontFamily: MONO, fontWeight: 700, flex: 1 }}>{folioRevision(c.folio, c.revision_aceptada)}</span>
             <span style={{ fontSize: T.small, color: C.inkMuted }}>{c.cliente_nombre} · aceptada {fechaTxt(c.aceptada_en)}</span>
-            <span style={{ fontFamily: MONO, fontWeight: 700 }}>{pesos(c.total_aceptado)}</span>
+            <span style={{ fontFamily: MONO, fontWeight: 600 }}>{pesos(c.total_aceptado)}</span>
           </button>
         ))}
       </>}

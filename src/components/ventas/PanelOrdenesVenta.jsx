@@ -52,14 +52,14 @@ export function PanelOrdenesVenta({ token, perfil, vp, onRecargar, showToast, on
           {vp.finInstalado && <Selector aria-label="Vendedor" data-filtro-vendedor value={vendedor} onChange={(e) => setVendedor(e.target.value)} style={{ flex: "0 1 220px", width: "auto" }}
             opciones={[{ v: "*", l: "Todos los vendedores" }, ...vendedoresLista.map((g) => ({ v: g.clave, l: g.nombre }))]} />}
         </div>
-        <Pestanas etiqueta="Filtro de ventas" activa={filtro} onCambiar={setFiltro} compacta items={FILTROS.map((f) => ({ ...f, n: f.key ? n(f.key) || null : null, tono: f.key === "vencidas" ? "danger" : null }))} />
+        <Pestanas etiqueta="Filtro de ventas" activa={filtro} onCambiar={setFiltro} variante="chips" items={FILTROS.map((f) => ({ ...f, n: f.key ? n(f.key) || null : null, tono: f.key === "vencidas" ? "danger" : null }))} />
         {!filas.length && <Vacio dato="sin-ventas">{vp.ventas.length ? "Ninguna venta coincide." : "Aún no hay ventas privadas. Crea una desde una cotización aceptada o con «+ Nuevo»."}</Vacio>}
         {filas.map((v) => (
           <button key={v.id} type="button" data-venta={v.folio} onClick={() => abrir(v.id)} style={{ ...cardStyle, borderRadius: R.md, padding: "11px 14px", marginBottom: 8, width: "100%", textAlign: "left", cursor: "pointer", opacity: v.estado === "anulada" ? 0.6 : 1 }}>
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-              <span style={{ fontFamily: MONO, fontWeight: 800, color: C.ink }}>{v.folio}</span>
+              <span style={{ fontFamily: MONO, fontWeight: 700, color: C.ink }}>{v.folio}</span>
               <span style={{ fontSize: T.small, color: C.inkMuted, flex: 1, minWidth: 140 }}>{v.cliente_nombre} · {v.origen === "directa" ? "venta directa" : folioRevision(v.cotizacion_folio, v.cotizacion_revision)}{v.oc_cliente_numeros ? ` · OC ${v.oc_cliente_numeros}` : ""}{vp.finInstalado ? <> · <span data-vendedor-venta={claveVendedor(v) || "sin"}>vendedor {nombreVendedor(v)}</span></> : null}</span>
-              <span style={{ fontFamily: MONO, fontWeight: 800 }}>{pesos(v.total)}</span>
+              <span style={{ fontFamily: MONO, fontWeight: 700 }}>{pesos(v.total)}</span>
             </div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
               {v.estado === "anulada" ? <Badge tono="danger">Anulada</Badge> : <>
@@ -173,7 +173,7 @@ function Detalle({ token, d, v, esResp, esAdmin, vigente, vp, showToast, refresc
         const ent = entregado(it.id); const cu = costos.get(it.id); const k = compras.get(it.id);
         return (
           <div key={it.id} data-item-venta={it.orden} style={{ ...cardStyle, borderRadius: R.md, padding: "9px 12px", marginBottom: 6 }}>
-            <div style={{ display: "flex", gap: 8 }}><b style={{ fontFamily: MONO, color: C.tealDark }}>{it.orden}</b><span style={{ flex: 1, fontSize: T.sm, fontWeight: 700 }}>{it.descripcion}</span><b style={{ fontFamily: MONO }}>{pesos(it.subtotal_neto)}</b></div>
+            <div style={{ display: "flex", gap: 8 }}><b style={{ fontFamily: MONO, color: C.tealDark }}>{it.orden}</b><span style={{ flex: 1, fontSize: T.sm, fontWeight: 600 }}>{it.descripcion}</span><b style={{ fontFamily: MONO }}>{pesos(it.subtotal_neto)}</b></div>
             <div style={{ fontSize: T.small, color: C.inkMuted, marginTop: 3 }}>
               {cantidadTxt(it.cantidad)} {it.unidad} × {pesos(it.precio_unitario)}{Number(it.descuento_pct) ? ` − ${String(it.descuento_pct).replace(".", ",")} %` : ""} · entregado <b data-entregado={it.orden}>{cantidadTxt(ent)}</b> de {cantidadTxt(it.cantidad)}
               {verCostos && cu != null && <span style={{ color: C.warnText }}> · costo est. {pesos(redondear(cu * Number(it.cantidad)))}</span>}
@@ -181,7 +181,7 @@ function Detalle({ token, d, v, esResp, esAdmin, vigente, vp, showToast, refresc
             </div>
             {verCostos && (k?.proveedor || k?.enlace) && <div data-compra-item={it.orden} style={{ fontSize: T.small, color: C.inkMuted, marginTop: 3 }}>
               Proveedor: <b style={{ color: C.ink }}>{k.proveedor || "—"}</b>{k.precio_compra != null ? <> · compra {pesos(k.precio_compra)}{k.precio_incluye_iva === false ? " + IVA" : ""}</> : null}
-              {/^https?:\/\/\S+$/i.test(String(k.enlace || "").trim()) && <> · <a data-ir-a-comprar href={k.enlace.trim()} target="_blank" rel="noopener noreferrer" style={{ color: C.tealDark, fontWeight: 700 }}>Ir a comprar ↗</a></>}
+              {/^https?:\/\/\S+$/i.test(String(k.enlace || "").trim()) && <> · <a data-ir-a-comprar href={k.enlace.trim()} target="_blank" rel="noopener noreferrer" style={{ color: C.tealDark, fontWeight: 600 }}>Ir a comprar ↗</a></>}
             </div>}
           </div>
         );
@@ -307,7 +307,7 @@ function FormCompra({ token, v, d, vp, showToast, onCerrar, onListo }) {
         <Entrada placeholder="Buscar por descripción" value={q} onChange={(e) => setQ(e.target.value)} />
         <div style={{ maxHeight: 220, overflowY: "auto", marginTop: 6 }}>
           {(gastos || []).map((g) => (
-            <button key={g.id} type="button" data-gasto={g.id} onClick={() => setGasto(g)} style={{ width: "100%", textAlign: "left", border: `1.5px solid ${gasto?.id === g.id ? C.teal : C.border}`, background: gasto?.id === g.id ? C.tealLight : C.card, borderRadius: R.sm, padding: "7px 10px", marginBottom: 4, cursor: "pointer" }}>
+            <button key={g.id} type="button" data-gasto={g.id} onClick={() => setGasto(g)} style={{ width: "100%", textAlign: "left", border: `1px solid ${gasto?.id === g.id ? C.teal : C.border}`, background: gasto?.id === g.id ? C.tealLight : C.card, borderRadius: R.sm, padding: "7px 10px", marginBottom: 4, cursor: "pointer" }}>
               <b style={{ fontFamily: MONO }}>{pesos(g.monto)}</b> · {fechaTxt(g.fecha)} · {g.descripcion || "Sin descripción"}
             </button>
           ))}
@@ -398,7 +398,7 @@ function FormEntrega({ token, v, vp, pendientes, showToast, onCerrar, onListo })
         <Campo etiqueta="N° guía / comprobante"><Entrada value={f.guia_numero} onChange={(e) => setF((x) => ({ ...x, guia_numero: e.target.value }))} /></Campo>
         <Campo etiqueta="Recibido por"><Entrada value={f.recibido_por} onChange={(e) => setF((x) => ({ ...x, recibido_por: e.target.value }))} /></Campo>
       </Rejilla>
-      <div style={{ fontSize: T.small, fontWeight: 800, color: C.inkMuted, textTransform: "uppercase", margin: "4px 0 6px" }}>Cantidades de esta entrega (parcial o total)</div>
+      <div style={{ fontSize: T.small, fontWeight: 700, color: C.inkMuted, textTransform: "uppercase", margin: "4px 0 6px" }}>Cantidades de esta entrega (parcial o total)</div>
       {conPend.map((p) => (
         <div key={p.id} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
           <span style={{ flex: 1, fontSize: T.sm }}>{p.orden}. {p.descripcion.slice(0, 60)} <span style={{ color: C.inkFaint }}>(pendiente {cantidadTxt(p.pendiente)} {p.unidad})</span></span>

@@ -20,9 +20,9 @@ export const TONO_PRIORIDAD = {
 };
 const fecha = (d) => (d ? fmt.date(String(d).slice(0, 10)) : "—");
 const chip = (t, tono, extra = {}) => (
-  <span style={{ fontSize: 12, fontWeight: 800, padding: "2px 8px", borderRadius: 999, background: tono.bg, color: tono.color, border: `1px solid ${tono.color}33`, whiteSpace: "nowrap", ...extra }}>{t}</span>
+  <span style={{ fontSize: 12, fontWeight: 700, padding: "2px 8px", borderRadius: 999, background: tono.bg, color: tono.color, border: `1px solid ${tono.color}33`, whiteSpace: "nowrap", ...extra }}>{t}</span>
 );
-const btnS = (color = C.tealDark) => ({ background: C.card, border: `1px solid ${color}55`, color, borderRadius: 8, padding: "7px 10px", minHeight: 36, fontSize: 13, fontWeight: 700, cursor: "pointer" });
+const btnS = (color = C.tealDark) => ({ background: C.card, border: `1px solid ${color}55`, color, borderRadius: 8, padding: "7px 10px", minHeight: 36, fontSize: 13, fontWeight: 600, cursor: "pointer" });
 const hoyISO = () => { const d = new Date(); const z = (n) => String(n).padStart(2, "0"); return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`; };
 const VACIO = { categoria: "", descripcion: "", prioridad: "media", responsable_id: "", fecha_revision: "", sobrecosto_estimado: "", estado: "pendiente",
   factura_id: "", motivo: "", fecha_solicitud: "", solicitante: "" };
@@ -113,7 +113,7 @@ function Formulario({ oc, perfiles, inicial, onGuardar, onCancelar }) {
       {!esSub && <Field label="Sobrecosto estimado (opcional)" hint="Solo informativo: no se suma a costos, compras, utilidad ni deudas.">
         <input data-seg="sobrecosto" type="number" min="0" step="1" inputMode="numeric" style={iStyle} value={f.sobrecosto_estimado} onChange={(e) => set("sobrecosto_estimado", e.target.value)} placeholder="$" />
       </Field>}
-      {errores.length > 0 && <div data-seg-errores style={{ background: C.dangerLight, color: C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 10, fontWeight: 600 }}>{errores.map((e, i) => <div key={i}>• {e}</div>)}</div>}
+      {errores.length > 0 && <div data-seg-errores style={{ background: C.dangerLight, color: C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 10, fontWeight: 500 }}>{errores.map((e, i) => <div key={i}>• {e}</div>)}</div>}
       <div style={{ display: "flex", gap: 8 }}>
         <button data-seg-guardar onClick={guardar} disabled={guardando} style={{ ...btnP(guardando ? C.inkFaint : C.teal), flex: 1 }}>{guardando ? "Guardando…" : esSub ? "✓ Registrar subsanación" : "✓ Registrar seguimiento"}</button>
         <button onClick={onCancelar} disabled={guardando} style={{ ...btnS(C.inkMuted), flex: "0 0 auto" }}>Cancelar</button>
@@ -149,7 +149,7 @@ function Bitacora({ s }) {
           <span style={{ color: C.inkFaint }}> · {h.usuario_nombre || "—"} · {fmt.datetime(h.creadoEn)}</span>
         </div>
       ))}
-      {items.length > 3 && <button data-consulta onClick={() => setTodo((v) => !v)} style={{ background: "none", border: "none", padding: 0, color: C.tealDark, fontSize: 12, fontWeight: 700, cursor: "pointer", textDecoration: "underline" }}>{todo ? "Ver menos" : `Ver los ${items.length} registros`}</button>}
+      {items.length > 3 && <button data-consulta onClick={() => setTodo((v) => !v)} style={{ background: "none", border: "none", padding: 0, color: C.tealDark, fontSize: 12, fontWeight: 600, cursor: "pointer", textDecoration: "underline" }}>{todo ? "Ver menos" : `Ver los ${items.length} registros`}</button>}
     </div>
   );
 }
@@ -183,7 +183,7 @@ function Item({ oc, s, perfiles, perfil, soloLectura, onActualizar, onEliminar }
       <div style={{ display: "flex", flexWrap: "wrap", gap: 5, alignItems: "center", marginBottom: 5 }}>
         {chip(`Prioridad ${etiquetaPrioridad(s.prioridad).toLowerCase()}`, tono)}
         {chip(etiquetaEstado(s.estado), s.estado === "en_gestion" ? { color: C.info, bg: C.infoLight } : { color: C.inkMuted, bg: C.paper })}
-        {sub ? chip("Subsanación de factura", { color: C.purple, bg: C.purpleLight }) : <span style={{ fontSize: 12, fontWeight: 700, color: C.inkMuted }}>{etiquetaCategoria(s.categoria)}</span>}
+        {sub ? chip("Subsanación de factura", { color: C.purple, bg: C.purpleLight }) : <span style={{ fontSize: 12, fontWeight: 600, color: C.inkMuted }}>{etiquetaCategoria(s.categoria)}</span>}
         {vencida && <span data-seg-atrasado>{chip("⏰ Seguimiento atrasado", { color: C.dangerText, bg: C.dangerLight })}</span>}
       </div>
       {sub ? <DatosSubsanacion oc={oc} sub={sub} /> : <div style={{ fontSize: 14, color: C.ink, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{s.descripcion}</div>}
@@ -218,7 +218,7 @@ function Item({ oc, s, perfiles, perfil, soloLectura, onActualizar, onEliminar }
             {ocupado ? "Guardando…" : modo === "resolver" ? "✓ Marcar como resuelto" : "✓ Guardar avance"}</button>
         </div>
       )}
-      {error && <div data-seg-error style={{ background: C.dangerLight, color: C.dangerText, borderRadius: 8, padding: "6px 10px", fontSize: 13, marginTop: 6, fontWeight: 600 }}>{error}</div>}
+      {error && <div data-seg-error style={{ background: C.dangerLight, color: C.dangerText, borderRadius: 8, padding: "6px 10px", fontSize: 13, marginTop: 6, fontWeight: 500 }}>{error}</div>}
     </div>
   );
 }
@@ -246,13 +246,13 @@ export function SeguimientoEspecial({ oc, perfil, perfiles, soloLectura, onCrear
       ))}
       {resueltos.length > 0 && (
         <div data-seg-resueltos style={{ marginTop: 6 }}>
-          <button data-consulta data-seg-ver-resueltos onClick={() => setVerResueltos((v) => !v)} style={{ background: "none", border: "none", padding: "4px 0", color: C.tealDark, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+          <button data-consulta data-seg-ver-resueltos onClick={() => setVerResueltos((v) => !v)} style={{ background: "none", border: "none", padding: "4px 0", color: C.tealDark, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
             {verResueltos ? "▾" : "▸"} Historial: {resueltos.length} seguimiento{resueltos.length > 1 ? "s" : ""} resuelto{resueltos.length > 1 ? "s" : ""}</button>
           {verResueltos && resueltos.map((s) => (
             <div key={s.id} id={`seg-${s.id}`} data-seg-resuelto={s.id} style={{ background: C.paper, border: `1px solid ${C.border}`, borderRadius: 10, padding: "8px 11px", marginTop: 6, fontSize: 13 }}>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 5, alignItems: "center", marginBottom: 3 }}>
                 {chip("✓ Resuelto", { color: C.okText, bg: C.okLight })}
-                <span style={{ fontSize: 12, fontWeight: 700, color: C.inkMuted }}>{leerSubsanacion(s) ? "Subsanación de factura" : etiquetaCategoria(s.categoria)} · prioridad {etiquetaPrioridad(s.prioridad).toLowerCase()}</span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: C.inkMuted }}>{leerSubsanacion(s) ? "Subsanación de factura" : etiquetaCategoria(s.categoria)} · prioridad {etiquetaPrioridad(s.prioridad).toLowerCase()}</span>
               </div>
               {leerSubsanacion(s) ? <DatosSubsanacion oc={oc} sub={leerSubsanacion(s)} /> : <div style={{ color: C.ink, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{s.descripcion}</div>}
               <div data-seg-solucion style={{ marginTop: 4, color: C.okText, overflowWrap: "anywhere" }}><b>Solución:</b> {s.solucion}</div>

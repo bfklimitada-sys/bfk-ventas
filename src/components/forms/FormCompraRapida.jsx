@@ -72,14 +72,14 @@ export function FormCompraRapida({ ocs, financiadores, perfil, onSave, ocPresele
           display: "flex", justifyContent: "space-between", alignItems: "center"
         }}>
           <div>
-            <div style={{ fontSize: 12, color: C.inkMuted, fontWeight: 700, textTransform: "uppercase" }}>Utilidad</div>
-            <div style={{ fontFamily: MONO, fontWeight: 800, fontSize: 16, color: colorMargen }}>{fmt.money(utilidad)}</div>
+            <div style={{ fontSize: 12, color: C.inkMuted, fontWeight: 600, textTransform: "uppercase" }}>Utilidad</div>
+            <div style={{ fontFamily: MONO, fontWeight: 700, fontSize: 16, color: colorMargen }}>{fmt.money(utilidad)}</div>
           </div>
-          <div style={{ fontFamily: MONO, fontWeight: 800, fontSize: 20, color: colorMargen }}>{margenPct}%</div>
+          <div style={{ fontFamily: MONO, fontWeight: 700, fontSize: 20, color: colorMargen }}>{margenPct}%</div>
         </div>
       )}
       {oc && c > venta && venta > 0 && (
-        <div style={{ background: C.dangerLight, color:C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 12, marginBottom: 12, fontWeight: 600 }}>
+        <div style={{ background: C.dangerLight, color:C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 12, marginBottom: 12, fontWeight: 500 }}>
           <Ic n="⚠"/> El costo es mayor que la venta — revisa el monto
         </div>
       )}
@@ -106,7 +106,7 @@ export function FormCompraRapida({ ocs, financiadores, perfil, onSave, ocPresele
           placeholder="ej: MercadoLibre, Sodimac…" />
       </Field>
 
-      {err && <div style={{ background: C.dangerLight, color:C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 10, fontWeight: 600 }}>{err}</div>}
+      {err && <div style={{ background: C.dangerLight, color:C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 10, fontWeight: 500 }}>{err}</div>}
 
       <button onClick={guardar} disabled={saving} style={btnP(saving ? C.inkFaint : C.teal)}>
         {saving ? "Guardando…" : "✓ Registrar compra"}

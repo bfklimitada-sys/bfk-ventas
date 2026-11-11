@@ -43,7 +43,7 @@ export function useTopeFijo() {
   return tope;
 }
 
-const titulo = { fontSize: 12, fontWeight: 800, color: C.inkMuted, textTransform: "uppercase", letterSpacing: 0.4 };
+const titulo = { fontSize: 12, fontWeight: 700, color: C.inkMuted, textTransform: "uppercase", letterSpacing: 0.4 };
 
 // ── Sección plegable ───────────────────────────────────────────
 export function SeccionFicha({ id, icono, titulo: t, resumen, abierta, onToggle, children, aviso }) {
@@ -52,9 +52,9 @@ export function SeccionFicha({ id, icono, titulo: t, resumen, abierta, onToggle,
       <button type="button" data-consulta="1" aria-expanded={abierta} onClick={onToggle}
         style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", minHeight: 48, background: "none", border: "none", cursor: "pointer", textAlign: "left" }}>
         <span style={{ fontSize: 16, flexShrink: 0 }}>{icono}</span>
-        <span style={{ fontWeight: 800, fontSize: 14, color: C.ink, flexShrink: 1, minWidth: 0 }}>{t}</span>
+        <span style={{ fontWeight: 700, fontSize: 14, color: C.ink, flexShrink: 1, minWidth: 0 }}>{t}</span>
         <span style={{ flex: 1, minWidth: 0, fontSize: 12, color: C.inkMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textAlign: "right" }}>{resumen}</span>
-        <span style={{ color: C.inkFaint, fontSize: 12, flexShrink: 0 }}>{abierta ? "▲" : "▼"}</span>
+        <span aria-hidden="true" style={{ color: C.inkFaint, flexShrink: 0, display: "flex", transform: abierta ? "rotate(180deg)" : "none", transition: "transform .15s" }}><Ic n="chevD" /></span>
       </button>
       {abierta && <div style={{ padding: "0 14px 14px", borderTop: `1px solid ${C.border}` }}><div style={{ paddingTop: 12 }}>{children}</div></div>}
     </section>
@@ -68,7 +68,7 @@ export function IndiceFicha({ items, onIr, envolver = false }) {
     <nav data-consulta="1" data-indice-ficha aria-label="Secciones de la OC" style={{ display: "flex", gap: 6, flexWrap: envolver ? "wrap" : "nowrap", overflowX: envolver ? "visible" : "auto", padding: "8px 0 2px", WebkitOverflowScrolling: "touch" }}>
       {items.map((it) => (
         <button key={it.id} type="button" data-consulta="1" onClick={() => onIr(it.id)}
-          style={{ flexShrink: 0, border: `1px solid ${it.aviso ? C.warn : C.border}`, background: C.card, borderRadius: 999, padding: "6px 12px", fontSize: 12, fontWeight: 700, color: it.aviso ? C.warnText : C.inkMuted, minHeight: 34, cursor: "pointer", whiteSpace: "nowrap" }}>
+          style={{ flexShrink: 0, border: `1px solid ${it.aviso ? C.warn : C.border}`, background: C.card, borderRadius: 999, padding: "6px 12px", fontSize: 12, fontWeight: 600, color: it.aviso ? C.warnText : C.inkMuted, minHeight: 34, cursor: "pointer", whiteSpace: "nowrap" }}>
           <Ic n={it.icono} /> {it.titulo}
         </button>
       ))}
@@ -90,11 +90,12 @@ export function ResumenFinanciero({ oc }) {
     { k: "Pendiente", v: fmt.money(pendiente), c: pendiente > 0 ? C.dangerText : C.inkMuted },
   ];
   return (
-    <div data-resumen-financiero style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(104px, 1fr))", gap: 6 }}>
+    <div data-resumen-financiero style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(104px, 1fr))", gap: "10px 4px", background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "10px 6px" }}>
+      {/* Un solo contenedor con seis datos (antes seis recuadros con borde propio). */}
       {tiles.map((t) => (
-        <div key={t.k} data-tile={t.k} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "7px 9px", minWidth: 0 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: C.inkFaint, textTransform: "uppercase", letterSpacing: 0.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.k}</div>
-          <div style={{ fontFamily: MONO, fontWeight: 800, fontSize: 14, color: t.c, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.v}</div>
+        <div key={t.k} data-tile={t.k} style={{ padding: "0 8px", minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
+          <div style={{ fontSize: 12, color: C.inkMuted, lineHeight: 1.25 }}>{t.k}</div>
+          <div style={{ fontFamily: MONO, fontWeight: 700, fontSize: 14, color: t.c, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginTop: 1 }}>{t.v}</div>
           {t.s && <div style={{ fontSize: 12, color: t.c, opacity: 0.85 }}>{t.s}</div>}
         </div>
       ))}
@@ -117,13 +118,13 @@ function FilaDocumento({ oc, d, primero, perfil, bloqueado, onEditar, onEliminar
       <div style={{ background: anulada ? C.paper : C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "9px 11px", opacity: anulada ? 0.8 : 1 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, flexWrap: "wrap" }}>
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontWeight: 800, fontSize: 14, color: C.ink, textDecoration: anulada ? "line-through" : "none" }}>
+            <div style={{ fontWeight: 700, fontSize: 14, color: C.ink, textDecoration: anulada ? "line-through" : "none" }}>
               <Ic n={nc ? "📋" : esNotaDebito(d) ? "📄" : "🧾"} /> {nombreDocumento(d)}
             </div>
             <div style={{ fontSize: 12, color: C.inkMuted }}>{d.fecha ? fmt.date(String(d.fecha).slice(0, 10)) : "Sin fecha"}{d.rut_receptor ? ` · RUT ${d.rut_receptor}` : ""}</div>
           </div>
           <div style={{ textAlign: "right" }}>
-            <div style={{ fontFamily: MONO, fontWeight: 800, fontSize: 14, color: anulada ? C.inkFaint : C.ink }}>{fmt.money(d.monto)}</div>
+            <div style={{ fontFamily: MONO, fontWeight: 700, fontSize: 14, color: anulada ? C.inkFaint : C.ink }}>{fmt.money(d.monto)}</div>
             {(nc || anulada) && <div style={{ fontSize: 12, color: ef < 0 ? C.dangerText : C.inkFaint }}>{ef < 0 ? `efecto ${fmt.money(ef)}` : est === "nc_texto" ? "" : anulada ? "no cuenta" : est === "nc_anula" ? "anula la factura" : ""}</div>}
           </div>
         </div>
@@ -135,7 +136,7 @@ function FilaDocumento({ oc, d, primero, perfil, bloqueado, onEditar, onEliminar
           {/* Subsanación solicitada por el cliente (Seguimiento especial): distinta de «Pendiente SII». */}
           {nSubsanacion > 0 && <button type="button" data-consulta="1" data-subsanacion-abierta={d.numero_factura} onClick={() => onVerSubsanacion && onVerSubsanacion(d.id)}
             title="Ver la subsanación en Seguimiento especial"
-            style={{ fontSize: 12, fontWeight: 800, padding: "2px 8px", borderRadius: 999, border: `1px solid ${C.purple}55`, background: C.purpleLight, color: C.purple, cursor: "pointer" }}>
+            style={{ fontSize: 12, fontWeight: 700, padding: "2px 8px", borderRadius: 999, border: `1px solid ${C.purple}55`, background: C.purpleLight, color: C.purple, cursor: "pointer" }}>
             Subsanación solicitada{nSubsanacion > 1 ? ` (${nSubsanacion})` : ""}</button>}
         </div>
         {(d.ref_folio || codigoRef(d)) && (
@@ -151,15 +152,15 @@ function FilaDocumento({ oc, d, primero, perfil, bloqueado, onEditar, onEliminar
         {/* La subsanación es un seguimiento: no modifica la factura, por eso se ofrece aun con la facturación bloqueada. */}
         {onSubsanar && esFactura(d) && !nc && String(d.numero_factura || "").trim() && (
           <button type="button" data-registrar-subsanacion={d.numero_factura} onClick={() => onSubsanar(d.id)}
-            style={{ fontSize: 12, background: C.card, color: C.purple, border: `1px solid ${C.purple}55`, borderRadius: 8, padding: "4px 10px", cursor: "pointer", fontWeight: 700, marginTop: 8 }}>Registrar subsanación</button>
+            style={{ fontSize: 12, background: C.card, color: C.purple, border: `1px solid ${C.purple}55`, borderRadius: 8, padding: "4px 10px", cursor: "pointer", fontWeight: 600, marginTop: 8 }}>Registrar subsanación</button>
         )}
         {!bloqueado && (
           <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
             {!nc && <button onClick={() => onEditar && onEditar({ tipo: esNotaDebito(d) ? "Nota de débito" : "Factura", e: d, tabla: "eventos_factura" })}
-              style={{ fontSize: 12, background: C.tealLight, color: C.tealDark, border: "none", borderRadius: 8, padding: "4px 10px", cursor: "pointer", fontWeight: 600 }}><Ic n="✏️" /> Editar</button>}
+              style={{ fontSize: 12, background: C.tealLight, color: C.tealDark, border: "none", borderRadius: 8, padding: "4px 10px", cursor: "pointer", fontWeight: 500 }}><Ic n="✏️" /> Editar</button>}
             {perfil?.rol === "admin" && (
               <button onClick={async () => { if (window.confirm(`¿Eliminar ${nombreDocumento(d)}?\nLo facturado se recalcula según los documentos que queden.`)) await onEliminar(oc.id, d.id); }}
-                style={{ fontSize: 12, background: C.dangerLight, color: C.dangerText, border: "none", borderRadius: 8, padding: "4px 10px", cursor: "pointer", fontWeight: 600 }}><Ic n="🗑" /> Eliminar</button>
+                style={{ fontSize: 12, background: C.dangerLight, color: C.dangerText, border: "none", borderRadius: 8, padding: "4px 10px", cursor: "pointer", fontWeight: 500 }}><Ic n="🗑" /> Eliminar</button>
             )}
           </div>
         )}
@@ -182,7 +183,7 @@ export function FacturacionSII({ oc, perfil, bloqueado, onEmitir, onRegistrarNC,
   return (
     <div data-facturacion-sii>
       {bloqueado && (
-        <div style={{ background: C.warnLight, borderRadius: 8, padding: "8px 10px", marginBottom: 8, fontSize: 12, color: C.warnText, fontWeight: 600 }}>
+        <div style={{ background: C.warnLight, borderRadius: 8, padding: "8px 10px", marginBottom: 8, fontSize: 12, color: C.warnText, fontWeight: 500 }}>
           <Ic n="⚠" /> Corrección histórica pendiente de aprobación: no se registran ni corrigen documentos en esta OC hasta resolverla.
         </div>
       )}
@@ -201,7 +202,7 @@ export function FacturacionSII({ oc, perfil, bloqueado, onEmitir, onRegistrarNC,
       <div data-monto-tributario style={{ background: C.infoLight, border: `1px solid ${C.info}33`, borderRadius: 12, padding: "10px 12px", marginTop: 4 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
           <span style={{ ...titulo, color: C.info }}>Monto tributario vigente</span>
-          <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: 16, color: C.ink }}>{fmt.money(monto)}</span>
+          <span style={{ fontFamily: MONO, fontWeight: 700, fontSize: 16, color: C.ink }}>{fmt.money(monto)}</span>
         </div>
         <div style={{ fontSize: 12, color: C.inkMuted, marginTop: 4, lineHeight: 1.5 }}>
           Facturas vigentes {fmt.money(totalVig)}{vig.length ? ` (${vig.map((f) => f.numero_factura).join(", ")})` : ""}
@@ -224,8 +225,8 @@ export function FacturacionSII({ oc, perfil, bloqueado, onEmitir, onRegistrarNC,
           Verificar en el SII: RUT emisor <b style={{ color: C.ink }}>77.322.317-3</b> · folio{" "}
           <b data-consulta="1" onClick={() => { if (navigator.clipboard) navigator.clipboard.writeText(String(fv.numero_factura)).catch(() => {}); setCopiado(true); setTimeout(() => setCopiado(false), 1500); }}
             style={{ color: C.ink, cursor: "pointer", textDecoration: "underline dotted" }}>{fv.numero_factura}</b>
-          {copiado && <span style={{ color: C.okText, fontWeight: 700 }}> ✓ copiado</span>}
-          {" · "}<a data-consulta="1" href="https://palena.sii.cl/dte/mn_verif_doc.html" target="_blank" rel="noopener noreferrer" style={{ color: C.info, fontWeight: 700 }}>verificador del SII ↗</a>
+          {copiado && <span style={{ color: C.okText, fontWeight: 600 }}> ✓ copiado</span>}
+          {" · "}<a data-consulta="1" href="https://palena.sii.cl/dte/mn_verif_doc.html" target="_blank" rel="noopener noreferrer" style={{ color: C.info, fontWeight: 600 }}>verificador del SII ↗</a>
         </div>
       )}
     </div>
@@ -270,16 +271,16 @@ export function FormNotaCredito({ oc, onSave }) {
           {orden.map((x) => <option key={x.id} value={x.id}>{nombreDocumento(x)} · {fmt.money(x.monto)}{vigentes.has(x.id) ? "" : " (anulada)"}</option>)}
         </select>
       </Field>
-      <div style={{ fontSize: 12, fontWeight: 700, color: C.inkMuted, marginBottom: 6 }}>Código de referencia SII</div>
+      <div style={{ fontSize: 12, fontWeight: 600, color: C.inkMuted, marginBottom: 6 }}>Código de referencia SII</div>
       {opcion(2, "Corrige texto", "Corrige giro, razón social u otro texto. No anula la factura ni cambia montos.")}
       {opcion(1, "Anula documento", "Anula la factura completa; deja de contar como facturado.")}
       {opcion(3, "Corrige montos", "Rebaja parte del monto de la factura (NC parcial).")}
       {codigo === 3 && <Field label="Monto de la NC ($)" required><input style={iMono} type="number" inputMode="numeric" value={monto} onChange={(e) => setMonto(e.target.value)} /></Field>}
       <Field label="Motivo (razón de referencia)" required={codigo !== 2}><input style={iStyle} value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder={codigo === 2 ? "Ej.: Corrección giro de factura" : ""} /></Field>
-      <div style={{ background: C.infoLight, borderRadius: 8, padding: "9px 11px", fontSize: 13, color: C.info, fontWeight: 700, marginBottom: 12 }}>
+      <div style={{ background: C.infoLight, borderRadius: 8, padding: "9px 11px", fontSize: 13, color: C.info, fontWeight: 600, marginBottom: 12 }}>
         Monto de la NC: {fmt.money(montoFinal)} · {codigo === 2 ? "sin efecto monetario; la factura sigue vigente" : codigo === 1 ? "la factura queda anulada" : `lo facturado baja ${fmt.money(montoFinal)}`}
       </div>
-      {err && <div style={{ background: C.dangerLight, color: C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 10, fontWeight: 600 }}>{err}</div>}
+      {err && <div style={{ background: C.dangerLight, color: C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 10, fontWeight: 500 }}>{err}</div>}
       <button onClick={guardar} disabled={saving} style={btnP(saving ? C.inkFaint : C.info)}>{saving ? "Guardando…" : "✓ Registrar nota de crédito"}</button>
     </div>
   );
@@ -296,8 +297,8 @@ export function CobranzaFicha({ oc }) {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6, marginBottom: 8 }}>
         {[["Facturado vigente", facturado, C.info], ["Cobrado", cobrado, C.okText], ["Por cobrar", porCobrar, porCobrar > 0 ? C.dangerText : C.inkMuted]].map(([k, v, c]) => (
           <div key={k} style={{ background: C.paper, borderRadius: 8, padding: "7px 9px" }}>
-            <div style={{ fontSize: 12, color: C.inkFaint, fontWeight: 700, textTransform: "uppercase" }}>{k}</div>
-            <div style={{ fontFamily: MONO, fontWeight: 800, fontSize: 14, color: c }}>{fmt.money(v)}</div>
+            <div style={{ fontSize: 12, color: C.inkFaint, fontWeight: 600, textTransform: "uppercase" }}>{k}</div>
+            <div style={{ fontFamily: MONO, fontWeight: 700, fontSize: 14, color: c }}>{fmt.money(v)}</div>
           </div>
         ))}
       </div>
@@ -310,7 +311,7 @@ export function CobranzaFicha({ oc }) {
             return (
               <div key={f.id} style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 13, padding: "6px 0", borderBottom: `1px solid ${C.border}` }}>
                 <span>{nombreDocumento(f)} · {f.fecha ? fmt.date(String(f.fecha).slice(0, 10)) : "sin fecha"}</span>
-                <span style={{ color: v?.vencida ? C.dangerText : v?.porVencer ? C.warnText : C.inkMuted, fontWeight: 700, whiteSpace: "nowrap" }}>
+                <span style={{ color: v?.vencida ? C.dangerText : v?.porVencer ? C.warnText : C.inkMuted, fontWeight: 600, whiteSpace: "nowrap" }}>
                   {dias == null ? "—" : v.vencida ? `vencida hace ${dias - plazo}d` : `vence en ${v.diasRestantes}d`}
                 </span>
               </div>

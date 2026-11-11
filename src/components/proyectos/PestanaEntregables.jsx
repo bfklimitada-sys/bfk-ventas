@@ -35,7 +35,7 @@ export function PestanaEntregables({ token, proyecto: p, per, nombres, version, 
         {hitos.map((h) => (
           <div key={h.id} data-hito={h.nombre} style={{ ...cardStyle, borderRadius: R.md, padding: "12px 14px", marginBottom: S.sm, borderLeft: `4px solid ${vencidoH(h) ? C.danger : h.estado === "cumplido" ? C.ok : C.border}`, opacity: h.estado === "anulado" ? 0.65 : 1 }}>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-              <span style={{ fontWeight: 800, color: C.ink }}>{h.nombre}</span>
+              <span style={{ fontWeight: 700, color: C.ink }}>{h.nombre}</span>
               <Badge tono={estadoHitoDe(h.estado)?.tono}><span data-estado-hito={h.estado}>{etiqueta(estadoHitoDe, h.estado)}</span></Badge>
               <Badge tono="neutro">{etiqueta(tipoHitoDe, h.tipo)}</Badge>
               {vencidoH(h) && <Badge tono="danger">Vencido</Badge>}
@@ -61,8 +61,8 @@ export function PestanaEntregables({ token, proyecto: p, per, nombres, version, 
         {ents.map((e) => (
           <div key={e.id} data-entregable={e.codigo || e.nombre} style={{ ...cardStyle, borderRadius: R.md, padding: "12px 14px", marginBottom: S.sm, borderLeft: `4px solid ${vencidoE(e) ? C.danger : ["emitido", "aprobado"].includes(e.estado) ? C.ok : C.border}`, opacity: e.estado === "anulado" ? 0.65 : 1 }}>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-              {e.codigo && <span style={{ fontFamily: MONO, fontSize: T.small, color: C.tealDark, fontWeight: 800 }}>{e.codigo}</span>}
-              <span style={{ fontWeight: 800, color: C.ink }}>{e.nombre}</span>
+              {e.codigo && <span style={{ fontFamily: MONO, fontSize: T.small, color: C.tealDark, fontWeight: 700 }}>{e.codigo}</span>}
+              <span style={{ fontWeight: 700, color: C.ink }}>{e.nombre}</span>
               <Badge tono={estadoEntregableDe(e.estado)?.tono}><span data-estado-entregable={e.estado}>{etiqueta(estadoEntregableDe, e.estado)}</span></Badge>
               <Badge tono="neutro">Rev. {e.revision}</Badge>
               {vencidoE(e) && <Badge tono="danger">Vencido</Badge>}

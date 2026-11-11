@@ -31,10 +31,10 @@ export function PestanaDocumentos({ token, proyecto: p, per, nombres, modulo, ve
   const anteriores = docs.filter((d) => d.estado !== "vigente");
   const Fila = ({ d, grupo }) => (
     <div data-documento={d.titulo} data-documento-version={d.numero_version} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-      <span style={{ width: 36, height: 36, borderRadius: R.sm, background: C.infoLight, color: C.info, fontSize: 10, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{extension(d.nombre_archivo) || "DOC"}</span>
+      <span style={{ width: 36, height: 36, borderRadius: R.sm, background: C.infoLight, color: C.info, fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{extension(d.nombre_archivo) || "DOC"}</span>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-          <span style={{ fontWeight: 800, color: C.ink, overflowWrap: "anywhere" }}>{d.titulo}</span>
+          <span style={{ fontWeight: 700, color: C.ink, overflowWrap: "anywhere" }}>{d.titulo}</span>
           <Badge tono={d.estado === "vigente" ? "ok" : d.estado === "anulado" ? "danger" : "neutro"}><span data-estado-documento={d.estado}>v{d.numero_version} {d.estado === "vigente" ? "vigente" : d.estado === "anulado" ? "anulado" : "reemplazada"}</span></Badge>
         </div>
         <div style={{ fontSize: T.small, color: C.inkMuted, marginTop: 2, overflowWrap: "anywhere" }}>

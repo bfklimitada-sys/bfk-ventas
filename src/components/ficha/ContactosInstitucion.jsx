@@ -44,7 +44,7 @@ function FormContacto({ inicial, ocId, permitirSoloOC, onGuardar, onCancelar }) 
       </label>}
       {error && <div role="alert" style={{ color: C.dangerText, fontSize: 13, marginBottom: 8 }}>{error}</div>}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
-        <button data-guardar-contacto onClick={guardar} disabled={guardando} style={{ ...chico, background: C.teal, color: "#fff", border: "none", fontWeight: 700 }}>{guardando ? "Guardando…" : "Guardar contacto"}</button>
+        <button data-guardar-contacto onClick={guardar} disabled={guardando} style={{ ...chico, background: C.teal, color: "#fff", border: "none", fontWeight: 600 }}>{guardando ? "Guardando…" : "Guardar contacto"}</button>
         <button onClick={onCancelar} style={chico}>Cancelar</button>
       </div>
       <div style={{ fontSize: 12, color: C.inkFaint, marginBottom: 8 }}>{esAdmin || !inicial ? "Lo que guardes aquí queda confirmado: una sincronización con Mercado Público no lo sobrescribe." : "Tu corrección queda como propuesta hasta que el administrador la apruebe."}</div>
@@ -80,9 +80,9 @@ function TarjetaContacto({ c, ocId, nOCs, numerosOC, todos }) {
   const accion = async (fn) => { setOcupado(true); setError(""); try { await fn(); } catch (e) { setError(mensajeErrorContacto(e)); } setOcupado(false); };
   const tono = c.estado === "pendiente" ? C.warn : c.estado === "obsoleto" ? C.border : c.confirmado_manual ? C.ok : C.border;
   return (
-    <div data-contacto={c.correo || c.nombre} data-estado={c.estado} style={{ border: `1.5px solid ${tono}`, borderRadius: 10, padding: "10px 12px", background: c.estado === "obsoleto" ? C.paper : C.card, opacity: c.estado === "obsoleto" ? 0.85 : 1, minWidth: 0 }}>
+    <div data-contacto={c.correo || c.nombre} data-estado={c.estado} style={{ border: `1px solid ${tono}`, borderRadius: 10, padding: "10px 12px", background: c.estado === "obsoleto" ? C.paper : C.card, opacity: c.estado === "obsoleto" ? 0.85 : 1, minWidth: 0 }}>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", marginBottom: 4 }}>
-        <span style={{ fontWeight: 800, fontSize: 14, color: C.ink, wordBreak: "break-word" }}>{c.nombre || "Sin nombre"}</span>
+        <span style={{ fontWeight: 700, fontSize: 14, color: C.ink, wordBreak: "break-word" }}>{c.nombre || "Sin nombre"}</span>
         {c.es_principal && <Badge tono="info">Principal</Badge>}
         {c.estado === "vigente" && (c.confirmado_manual ? <Badge tono="ok">Confirmado</Badge> : <Badge>{ORIGENES[c.origen] || c.origen}</Badge>)}
         {c.estado === "pendiente" && <Badge tono="warn">Pendiente de verificación</Badge>}
@@ -176,7 +176,7 @@ export function ContactosOC({ oc }) {
   if (!ctx?.disponible) return null;
   return (
     <div data-contactos-oc style={{ marginTop: 12 }}>
-      <div style={{ fontSize: 12, fontWeight: 800, color: C.inkMuted, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 4 }}>Contactos de la institución</div>
+      <div style={{ fontSize: 12, fontWeight: 700, color: C.inkMuted, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 4 }}>Contactos de la institución</div>
       {(oc.contacto || oc.correo_cliente) && <div data-contacto-historico-oc style={{ fontSize: 12, color: C.inkMuted, marginBottom: 6, wordBreak: "break-word" }}>
         En esta OC vino: <b style={{ color: C.ink }}>{[oc.contacto, oc.correo_cliente].filter(Boolean).join(" · ")}</b> (se conserva tal cual).
       </div>}
@@ -233,7 +233,7 @@ export function ContactosCatalogo({ entidades }) {
         {resultados.map(e => <button key={e.id} onClick={() => { setRut(e.rut); setQ(""); }} style={{ ...chico, textAlign: "left" }}>{e.nombre_entidad} · {e.rut}</button>)}
       </div>}
       {rut && <div style={{ marginTop: 4 }}>
-        <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 6 }}>{nombre(claveInstitucion(rut)) || "Institución"} · {rut}</div>
+        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 6 }}>{nombre(claveInstitucion(rut)) || "Institución"} · {rut}</div>
         <ContactosLista rut={rut} nombreInstitucion={nombre(claveInstitucion(rut))} />
       </div>}
     </div>

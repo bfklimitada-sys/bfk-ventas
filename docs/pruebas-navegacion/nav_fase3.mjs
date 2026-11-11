@@ -34,7 +34,7 @@ const FUNCIONES={
   agenda:["Octubre","Ver alertas"],
   notif:["Urgente","Atención","Informativas"],
   financiamiento:["Abonar a un financiador","Ver cartola","Registrar"],
-  vendedores:["+ Pago a vendedor","Ir a Impuestos"],
+  vendedores:["+ Pago a vendedor","El IVA y el F29 se registran en"],
   gastos:["+ Registrar gasto"],
   usuarios:["Hacer admin","Exportar Excel completo","Subir Excel editado","Importar entidades","Validar todas mis OC contra Mercado Público","Corregir fechas de todas contra Mercado Público","OCs archivadas"],
 };

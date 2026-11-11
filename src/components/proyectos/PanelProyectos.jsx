@@ -60,7 +60,7 @@ export function PanelProyectos({ token, perfil, showToast }) {
   if (modulo === null) return <Vacio>Cargando Proyectos Industriales…</Vacio>;
   if (!modulo.instalado) return (
     <div data-pi-no-instalado style={{ ...cardStyle, padding: "18px 20px" }}>
-      <div style={{ fontWeight: 800, fontSize: T.title, color: C.ink, marginBottom: 6 }}>Proyectos Industriales aún no está activado</div>
+      <div style={{ fontWeight: 700, fontSize: T.title, color: C.ink, marginBottom: 6 }}>Proyectos Industriales aún no está activado</div>
       <div style={{ fontSize: T.sm, color: C.inkMuted, lineHeight: 1.5 }}>El módulo se activa al instalar su migración en la base de datos. Mientras tanto no se guarda nada y Mercado Público funciona igual que siempre.</div>
     </div>
   );
@@ -96,8 +96,8 @@ export function PanelProyectos({ token, perfil, showToast }) {
 
       <Seccion titulo={`Proyectos · ${visibles.length}`}>
         <input data-buscar-proyectos value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Buscar por código, nombre, cliente, mandante o ubicación"
-          style={{ width: "100%", minHeight: 44, padding: "10px 12px", borderRadius: R.sm, border: `1.5px solid ${C.border}`, fontSize: T.body, marginBottom: S.sm, boxSizing: "border-box" }} />
-        <Pestanas etiqueta="Filtro de proyectos" activa={filtro} onCambiar={setFiltro} compacta
+          style={{ width: "100%", minHeight: 42, padding: "10px 12px", marginBottom: S.sm }} />
+        <Pestanas etiqueta="Filtro de proyectos" activa={filtro} onCambiar={setFiltro} variante="chips"
           items={FILTROS.filter((x) => x.v !== "propuestas" || ind.propuestas > 0 || filtro === "propuestas").map((x) => ({ key: x.v, label: x.l, n: x.v === "propuestas" ? ind.propuestas : x.v === "atraso" ? ind.conAtraso : null, tono: x.v === "atraso" ? "danger" : null }))} />
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: S.sm, marginBottom: S.md }}>
           <Selector data-filtro-estado value={estado} onChange={(e) => setEstado(e.target.value)} vacio="Todos los estados" opciones={ESTADOS} />
@@ -137,8 +137,8 @@ function Kpi({ et, v, n, tono, onClick, dato }) {
   const Tag = onClick ? "button" : "div";
   return (
     <Tag type={onClick ? "button" : undefined} data-kpi-pi={dato} onClick={onClick} style={{ ...cardStyle, borderRadius: R.md, padding: "12px 14px", minWidth: 0, textAlign: "left", font: "inherit", cursor: onClick ? "pointer" : "default", width: "100%", boxSizing: "border-box" }}>
-      <span style={{ display: "block", fontSize: T.small, fontWeight: 800, color: C.inkMuted }}>{et}</span>
-      <span data-kpi-valor style={{ display: "block", fontFamily: MONO, fontWeight: 800, fontSize: 20, color: col, marginTop: 4, overflowWrap: "anywhere" }}>{v}</span>
+      <span style={{ display: "block", fontSize: T.small, fontWeight: 700, color: C.inkMuted }}>{et}</span>
+      <span data-kpi-valor style={{ display: "block", fontFamily: MONO, fontWeight: 700, fontSize: 18, letterSpacing: -0.5, color: col, marginTop: 4, overflowWrap: "anywhere" }}>{v}</span>
       {n && <span style={{ display: "block", fontSize: T.small, color: C.inkFaint, marginTop: 3, lineHeight: 1.4 }}>{n}</span>}
     </Tag>
   );
@@ -153,8 +153,8 @@ function TarjetaProyecto({ p, onAbrir }) {
       style={{ ...cardStyle, width: "100%", boxSizing: "border-box", textAlign: "left", font: "inherit", color: "inherit", cursor: "pointer", display: "block", padding: "12px 16px", marginBottom: S.sm, borderLeft: `4px solid ${p.atrasado ? C.danger : activo ? C.teal : p.estado === "propuesta" ? C.info : C.border}` }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start" }}>
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontFamily: MONO, fontSize: T.small, fontWeight: 800, color: C.tealDark }}>{p.codigo}</div>
-          <div style={{ fontWeight: 800, fontSize: T.title, color: C.ink, overflowWrap: "anywhere" }}>{p.nombre}</div>
+          <div style={{ fontFamily: MONO, fontSize: T.small, fontWeight: 700, color: C.tealDark }}>{p.codigo}</div>
+          <div style={{ fontWeight: 700, fontSize: T.title, color: C.ink, overflowWrap: "anywhere" }}>{p.nombre}</div>
           <div style={{ fontSize: T.small, color: C.inkMuted, marginTop: 1, overflowWrap: "anywhere" }}>
             {[p.cliente_nombre, p.mandante_nombre ? `mandante ${p.mandante_nombre}` : null, etiqueta(tipoDe, p.tipo), p.ubicacion].filter(Boolean).join(" · ")}
           </div>
@@ -168,9 +168,9 @@ function TarjetaProyecto({ p, onAbrir }) {
       <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: T.small, color: C.inkMuted, marginTop: 4 }}>
         <span>👤 {p.responsable_nombre || "—"}</span>
         <span>{formatoFecha(p.fecha_inicio_prevista)} → {formatoFecha(p.fecha_termino_prevista)}</span>
-        {plazo && <span style={{ color: activo && Number(p.dias_restantes) <= 15 ? C.dangerText : C.inkMuted, fontWeight: activo && Number(p.dias_restantes) <= 15 ? 800 : 400 }}>{plazo}</span>}
+        {plazo && <span style={{ color: activo && Number(p.dias_restantes) <= 15 ? C.dangerText : C.inkMuted, fontWeight: activo && Number(p.dias_restantes) <= 15 ? 700 : 400 }}>{plazo}</span>}
         <span data-presupuesto-tarjeta style={{ fontFamily: MONO }}>{p.ve_economia ? (p.presupuesto_inicial === null || p.presupuesto_inicial === undefined ? "sin presupuesto" : `${formatoMonto(p.presupuesto_inicial, p.moneda)} neto`) : "Datos económicos reservados"}</span>
-        {vencidos.length > 0 && <span style={{ color: C.dangerText, fontWeight: 800 }}>⚠ {vencidos.join(" · ")} vencidos</span>}
+        {vencidos.length > 0 && <span style={{ color: C.dangerText, fontWeight: 700 }}>⚠ {vencidos.join(" · ")} vencidos</span>}
       </div>
     </button>
   );

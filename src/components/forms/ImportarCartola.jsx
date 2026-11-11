@@ -295,7 +295,7 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, ga
     return (
       <div style={{ fontFamily: SANS }}>
         <div style={{ background: C.tealLight, borderRadius: 12, padding: "12px 14px", marginBottom: 16 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: C.tealDark, marginBottom: 5 }}>Cómo obtener la cartola</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: C.tealDark, marginBottom: 5 }}>Cómo obtener la cartola</div>
           <div style={{ fontSize: 12, color: C.inkMuted, lineHeight: 1.55 }}>
             En BancoEstado Empresas descarga la Cartola en Línea o las Históricas de Chequera Electrónica. Se leen ambos formatos;
             puedes subir varias a la vez (un archivo repetido no duplica nada).
@@ -306,7 +306,7 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, ga
           <input data-cartola-archivos type="file" accept=".xlsx,.xls" multiple disabled={leyendo}
             onChange={e => procesar(Array.from(e.target.files || []))} style={{ display: "none" }} />
         </label>
-        {err && <div style={{ background: C.dangerLight, color: C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 13, marginTop: 12, fontWeight: 600 }}>{err}</div>}
+        {err && <div style={{ background: C.dangerLight, color: C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 13, marginTop: 12, fontWeight: 500 }}>{err}</div>}
         <div style={{ fontSize: 12, color: C.inkFaint, marginTop: 14, lineHeight: 1.5 }}>
           Primero es solo consulta: cada movimiento muestra si ya está registrado en BFK. Nada se registra sin tu confirmación,
           y lo anterior al {fmt.date(cierre)} no se puede registrar desde aquí.
@@ -320,28 +320,28 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, ga
       {/* Archivos leídos y validaciones */}
       <div style={{ background: C.paper, borderRadius: 12, padding: "10px 13px", marginBottom: 10 }}>
         {cartolas.map((c, k) => (
-          <div key={k} data-archivo={c.soloRevision ? "solo-revision" : c.errores.length ? "rechazado" : "ok"} style={{ fontSize: 12, color: c.soloRevision ? C.warnText : c.errores.length ? C.dangerText : C.inkMuted, marginBottom: 3, fontWeight: c.soloRevision ? 700 : 400 }}>
+          <div key={k} data-archivo={c.soloRevision ? "solo-revision" : c.errores.length ? "rechazado" : "ok"} style={{ fontSize: 12, color: c.soloRevision ? C.warnText : c.errores.length ? C.dangerText : C.inkMuted, marginBottom: 3, fontWeight: c.soloRevision ? 600 : 400 }}>
             {c.soloRevision ? <><Ic n="⚠" /> {c.nombre}: no cuadra · Solo revisión (no se usa para conciliar ni registrar)</>
               : c.errores.length ? <><Ic n="⚠" /> {c.nombre}: no se pudo leer — {c.errores.slice(0, 2).join(" · ")}</>
               : <>{c.formato === "linea" ? "En línea" : `Histórica N° ${c.numero || "—"}`} · {fmt.date(c.desde)} a {fmt.date(c.hasta)} · {c.movs.length} mov. · saldo {fmt.money(c.saldoInicial)} → {fmt.money(c.saldoFinal)}</>}
           </div>
         ))}
         {movs.length > 0 && (
-          <div data-cartola-resumen style={{ fontSize: 13, color: C.ink, fontWeight: 700, marginTop: 6 }}>
+          <div data-cartola-resumen style={{ fontSize: 13, color: C.ink, fontWeight: 600, marginTop: 6 }}>
             {movs.length} movimientos únicos · {fmt.date(movs[0].fecha)} a {fmt.date(movs[movs.length - 1].fecha)} · saldo al cierre <span style={{ fontFamily: MONO }}>{fmt.money(movs[movs.length - 1].saldo)}</span>
-            {union.duplicadosQuitados > 0 && <span data-duplicados style={{ display: "block", fontWeight: 600, color: C.inkMuted }}>{union.duplicadosQuitados} línea(s) repetida(s) entre archivos no se cuentan dos veces{union.archivosRepetidos ? ` (${union.archivosRepetidos} archivo(s) repetido(s))` : ""}.</span>}
+            {union.duplicadosQuitados > 0 && <span data-duplicados style={{ display: "block", fontWeight: 500, color: C.inkMuted }}>{union.duplicadosQuitados} línea(s) repetida(s) entre archivos no se cuentan dos veces{union.archivosRepetidos ? ` (${union.archivosRepetidos} archivo(s) repetido(s))` : ""}.</span>}
           </div>
         )}
       </div>
       {union.faltantes.length > 0 && (
-        <div data-cartolas-faltantes style={{ background: C.dangerLight, border: `1px solid ${C.danger}`, borderRadius: 8, padding: "9px 12px", marginBottom: 10, fontSize: 12, color: C.dangerText, fontWeight: 600, lineHeight: 1.45 }}>
+        <div data-cartolas-faltantes style={{ background: C.dangerLight, border: `1px solid ${C.danger}`, borderRadius: 8, padding: "9px 12px", marginBottom: 10, fontSize: 12, color: C.dangerText, fontWeight: 500, lineHeight: 1.45 }}>
           Falta(n) cartola(s): {union.faltantes.map((g) => `entre el ${fmt.date(g.despuesDe)} y el ${fmt.date(g.antesDe)} (el saldo pasa de ${fmt.money(g.saldoEsperado)} a ${fmt.money(g.saldoEncontrado)})`).join("; ")}. Los movimientos de ese tramo no se ven.
         </div>
       )}
 
       {union.soloRevision.length > 0 && (
         <div data-aviso-solo-revision style={{ background: C.warnLight, border: `1px solid ${C.warn}`, borderRadius: 10, padding: "10px 12px", marginBottom: 10, fontSize: 13, color: C.ink, lineHeight: 1.5 }}>
-          <div style={{ fontWeight: 800, color: C.warnText }}>{union.soloRevision.length === 1 ? "Una cartola no cuadra" : `${union.soloRevision.length} cartolas no cuadran`}: quedaron en «Solo revisión»</div>
+          <div style={{ fontWeight: 700, color: C.warnText }}>{union.soloRevision.length === 1 ? "Una cartola no cuadra" : `${union.soloRevision.length} cartolas no cuadran`}: quedaron en «Solo revisión»</div>
           Puedes ver sus movimientos, pero con ellas no se registra, no se concilia ni se guardan saldos.
           {movs.length > 0 ? " La conciliación de abajo usa solo los archivos que sí cuadran." : " Descarga la cartola de nuevo más tarde y vuelve a cargarla: se revisará completa otra vez."}
         </div>
@@ -372,10 +372,10 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, ga
       </div>
       <div style={{ fontSize: 12, color: C.inkFaint, marginBottom: 10, lineHeight: 1.5 }}>
         Nada se registra solo. «Es este registro» y «No corresponde» solo guardan tu decisión: no crean ni cambian cobros, gastos ni pagos.
-        {decisiones === null && <span data-decisiones-no-disponibles style={{ display: "block", color: C.warnText, fontWeight: 600 }}>Para guardar estas decisiones falta instalar la actualización de la base (pendiente de autorización). Mientras tanto puedes consultar y registrar lo «Sin registrar».</span>}
+        {decisiones === null && <span data-decisiones-no-disponibles style={{ display: "block", color: C.warnText, fontWeight: 500 }}>Para guardar estas decisiones falta instalar la actualización de la base (pendiente de autorización). Mientras tanto puedes consultar y registrar lo «Sin registrar».</span>}
       </div>
 
-      {err && <div data-error style={{ background: C.dangerLight, color: C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 13, margin: "0 0 10px", fontWeight: 600 }}>{err}</div>}
+      {err && <div data-error style={{ background: C.dangerLight, color: C.dangerText, borderRadius: 8, padding: "8px 12px", fontSize: 13, margin: "0 0 10px", fontWeight: 500 }}>{err}</div>}
 
       {resultadoLote && (
         <div data-resultado-lote role="status" style={{ background: resultadoLote.fallas.length ? C.warnLight : C.okLight, border: `1px solid ${resultadoLote.fallas.length ? C.warn : C.ok}`, borderRadius: 10, padding: "10px 12px", marginBottom: 10, fontSize: 13, color: C.ink, lineHeight: 1.5 }}>
@@ -417,14 +417,14 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, ga
           )}
           {lote.length > 0 && revisandoLote && (() => { const r = resumenLote(lote); return (
             <div data-resumen-lote style={{ background: C.paper, border: `1px solid ${C.border}`, borderRadius: 10, padding: "10px 12px", marginTop: 4 }}>
-              <div style={{ fontSize: 13, fontWeight: 800, color: C.ink, marginBottom: 4 }}>Resumen antes de confirmar</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: C.ink, marginBottom: 4 }}>Resumen antes de confirmar</div>
               <div data-totales-lote style={{ fontSize: 12, color: C.inkMuted, marginBottom: 6 }}>
                 {r.n} movimiento{r.n === 1 ? "" : "s"} · {r.abonos} abono{r.abonos === 1 ? "" : "s"} por <b style={{ fontFamily: MONO, color: C.okText }}>{fmt.money(r.totalAbonos)}</b> · {r.cargos} cargo{r.cargos === 1 ? "" : "s"} por <b style={{ fontFamily: MONO, color: C.dangerText }}>{fmt.money(r.totalCargos)}</b> · {r.registros} registro{r.registros === 1 ? "" : "s"} de BFK
               </div>
               {lote.map((sg) => (
                 <div key={sg.marca} data-fila-lote={sg.marca} style={{ borderTop: `1px solid ${C.border}`, padding: "6px 0", fontSize: 12, lineHeight: 1.45 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-                    <span style={{ color: C.ink, fontWeight: 700, minWidth: 0, overflowWrap: "anywhere" }}>{fmt.date(sg.fecha)} · {sg.descripcion}</span>
+                    <span style={{ color: C.ink, fontWeight: 600, minWidth: 0, overflowWrap: "anywhere" }}>{fmt.date(sg.fecha)} · {sg.descripcion}</span>
                     <span style={{ fontFamily: MONO, whiteSpace: "nowrap", color: sg.dir === "entra" ? C.okText : C.dangerText }}>{sg.dir === "entra" ? "+" : "−"}{fmt.money(sg.monto)}</span>
                   </div>
                   <div style={{ color: C.inkMuted }}>Registro BFK: {sg.registros.map((x) => textoRegistro(x, categorias)).join(" + ")}</div>
@@ -509,7 +509,7 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, ga
         <Seccion dato="registrado-sin-banco" titulo="Registrado en BFK, pendiente de verificar en banco" ayuda="Registros posteriores al cierre sin un movimiento en esta cartola. No se tratan como duplicados.">
           {vista.registradosSinBanco.map((s) => (
             <div key={s.r.tabla + s.r.id} data-registrado-sin-banco={s.r.id} data-pista={s.tipoPista} style={{ background: C.card, border: `1px solid ${C.border}`, borderLeft: `4px solid ${C.info}`, borderRadius: 12, padding: "9px 12px", marginBottom: 6 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>{s.texto}</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: C.ink }}>{s.texto}</div>
               <Linea k="Qué pasa" v={s.pista} />
               <Linea k="Acción" v={s.accion} />
             </div>
@@ -580,8 +580,8 @@ function SoloRevision({ c }) {
   return (
     <section data-solo-revision={c.nombre} style={{ background: C.card, border: `1px solid ${C.warn}`, borderRadius: 12, padding: "10px 12px", marginBottom: 10 }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap", alignItems: "baseline" }}>
-        <span style={{ fontSize: 13, fontWeight: 800, color: C.ink }}>Solo revisión · {c.formato === "linea" ? "Cartola en línea" : "Cartola histórica"} · {fmt.date(c.desde)} a {fmt.date(c.hasta)}</span>
-        <span style={{ fontSize: 11, fontWeight: 800, color: C.warnText, background: C.warnLight, borderRadius: 999, padding: "2px 8px" }}>SOLO REVISIÓN</span>
+        <span style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>Solo revisión · {c.formato === "linea" ? "Cartola en línea" : "Cartola histórica"} · {fmt.date(c.desde)} a {fmt.date(c.hasta)}</span>
+        <span style={{ fontSize: 11, fontWeight: 700, color: C.warnText, background: C.warnLight, borderRadius: 999, padding: "2px 8px" }}>SOLO REVISIÓN</span>
       </div>
       <div style={{ fontSize: 12, color: C.inkFaint, marginTop: 2 }}>{c.nombre}</div>
       <ul data-diagnostico style={{ margin: "8px 0 0", paddingLeft: 18, fontSize: 12.5, color: C.ink, lineHeight: 1.5 }}>
@@ -596,10 +596,10 @@ function SoloRevision({ c }) {
             const salto = c.diagnostico.find((d) => d.tipo === "salto" && d.fila === m.fila);
             return (
               <div key={i} data-mov-revision={`${m.fecha}|${m.cargo}|${m.abono}|${m.saldo}`} style={{ borderTop: `1px solid ${C.border}`, padding: "6px 0", fontSize: 12 }}>
-                {salto && <div data-salto style={{ color: C.warnText, fontWeight: 700, marginBottom: 2 }}>⚠ Aquí el saldo {salto.diferencia < 0 ? "baja" : "sube"} {fmt.money(Math.abs(salto.diferencia))} sin un movimiento que lo explique</div>}
+                {salto && <div data-salto style={{ color: C.warnText, fontWeight: 600, marginBottom: 2 }}>⚠ Aquí el saldo {salto.diferencia < 0 ? "baja" : "sube"} {fmt.money(Math.abs(salto.diferencia))} sin un movimiento que lo explique</div>}
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
                   <span style={{ color: C.inkMuted, minWidth: 0, overflowWrap: "anywhere" }}>{fmt.date(m.fecha)}{m.operacion ? ` · op. ${m.operacion}` : ""} · {m.descripcion}</span>
-                  <span style={{ fontFamily: MONO, fontWeight: 800, color: m.abono ? C.okText : C.dangerText, flexShrink: 0 }}>{m.abono ? "+" : "−"}{fmt.money(m.abono || m.cargo)}</span>
+                  <span style={{ fontFamily: MONO, fontWeight: 700, color: m.abono ? C.okText : C.dangerText, flexShrink: 0 }}>{m.abono ? "+" : "−"}{fmt.money(m.abono || m.cargo)}</span>
                 </div>
                 <div style={{ color: C.inkFaint, fontFamily: MONO, textAlign: "right" }}>saldo {fmt.money(m.saldo)}</div>
               </div>
@@ -622,9 +622,9 @@ const mensajeDecision = (e) => {
 function Contador({ dato, etiqueta, n, tono }) {
   const t = TONO[tono] || TONO.neutro;
   return (
-    <div data-contador={dato} style={{ padding: "8px 10px", borderRadius: 10, border: `1.5px solid ${n ? t.borde : C.border}`, background: n ? t.fondo : C.card }}>
-      <div style={{ fontSize: 12, fontWeight: 700, color: n ? t.texto : C.inkMuted }}>{etiqueta}</div>
-      <div data-cuenta={dato} style={{ fontFamily: MONO, fontWeight: 800, fontSize: 18, color: n ? t.texto : C.inkMuted }}>{n}</div>
+    <div data-contador={dato} style={{ padding: "8px 10px", borderRadius: 10, border: `1px solid ${n ? t.borde : C.border}`, background: n ? t.fondo : C.card }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: n ? t.texto : C.inkMuted }}>{etiqueta}</div>
+      <div data-cuenta={dato} style={{ fontFamily: MONO, fontWeight: 700, fontSize: 18, color: n ? t.texto : C.inkMuted }}>{n}</div>
     </div>
   );
 }
@@ -633,7 +633,7 @@ function Seccion({ dato, titulo, ayuda, vacio, children }) {
   const hijos = (Array.isArray(children) ? children.flat() : [children]).filter(Boolean);
   return (
     <section data-grupo-seccion={dato} style={{ marginBottom: 14 }}>
-      <div style={{ fontSize: 14, fontWeight: 800, color: C.ink }}>{titulo}</div>
+      <div style={{ fontSize: 14, fontWeight: 700, color: C.ink }}>{titulo}</div>
       {ayuda && <div style={{ fontSize: 12, color: C.inkFaint, marginBottom: 6 }}>{ayuda}</div>}
       {hijos.length ? hijos : vacio ? <div style={{ fontSize: 12, color: C.inkFaint, padding: "6px 0" }}>{vacio}</div> : null}
     </section>
@@ -654,9 +654,9 @@ function Movimiento({ it, abierto, children }) {
     <div data-mov={m.clave} data-estado={x.estado} data-grupo={grupo} data-tipo-revision={it.tipo || ""} style={{ background: C.card, border: `1px solid ${abierto ? C.tealDark : C.border}`, borderLeft: `4px solid ${t.borde}`, borderRadius: 12, padding: "9px 12px", marginBottom: 6 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
         <span style={{ fontSize: 12, color: C.inkMuted, minWidth: 0, overflowWrap: "anywhere" }}>{fmt.date(m.fecha)}{m.operacion ? ` · op. ${m.operacion}` : ""} · {m.descripcion}</span>
-        <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: 13, color: x.dir === "entra" ? C.okText : C.dangerText, flexShrink: 0 }}>{x.dir === "entra" ? "+" : "−"}{fmt.money(x.monto)}</span>
+        <span style={{ fontFamily: MONO, fontWeight: 700, fontSize: 13, color: x.dir === "entra" ? C.okText : C.dangerText, flexShrink: 0 }}>{x.dir === "entra" ? "+" : "−"}{fmt.money(x.monto)}</span>
       </div>
-      <div data-titulo-mov style={{ fontSize: 13, fontWeight: 700, color: t.texto, marginTop: 3 }}>{it.titulo}</div>
+      <div data-titulo-mov style={{ fontSize: 13, fontWeight: 600, color: t.texto, marginTop: 3 }}>{it.titulo}</div>
       <Linea dato="posible" k="Posible OC o categoría" v={it.posible} />
       <Linea dato="registro" k="Registro BFK" v={it.registros?.join(" · ")} />
       <Linea dato="motivo" k="Evidencia" v={it.motivo} />
@@ -665,7 +665,7 @@ function Movimiento({ it, abierto, children }) {
       {it.sucursal && x.dir === "entra" && /DEPOSITO/i.test(m.descripcion) && <Linea dato="sucursal" k="Sucursal" v={it.sucursal} />}
       {it.nota && it.nota !== it.registros?.join(" · ") && <Linea dato="nota" k="Detalle" v={it.nota} />}
       <Linea dato="accion" k="Acción" v={it.accion} />
-      {it.aviso && <div data-aviso-gemelo style={{ fontSize: 12, color: C.warnText, marginTop: 4, fontWeight: 600 }}>{it.aviso}</div>}
+      {it.aviso && <div data-aviso-gemelo style={{ fontSize: 12, color: C.warnText, marginTop: 4, fontWeight: 500 }}>{it.aviso}</div>}
       {children}
     </div>
   );
@@ -691,7 +691,7 @@ function PrepararRegistro({ x, ocs, financiadores, vendedores, categorias, borra
     <div data-preparacion style={{ marginTop: 8, borderTop: `1px solid ${C.border}`, paddingTop: 8 }}>
       {x.dir === "entra" ? (
         opciones.length === 0
-          ? <div style={{ fontSize: 12, color: C.warnText, fontWeight: 600 }}>No hay facturas pendientes compatibles (con factura anterior al abono). Queda pendiente: regístralo desde la OC cuando se identifique.</div>
+          ? <div style={{ fontSize: 12, color: C.warnText, fontWeight: 500 }}>No hay facturas pendientes compatibles (con factura anterior al abono). Queda pendiente: regístralo desde la OC cuando se identifique.</div>
           : <select data-opcion-abono value={borrador.opcionId} onChange={(e) => setBorrador({ opcionId: e.target.value })} style={caja()}>
               <option value="">— Elige a qué corresponde (nada viene elegido) —</option>
               {opciones.map((o) => <option key={o.id} value={o.id}>{({ exacto: "Factura", varias: "Varias facturas", parcial: "Abono parcial", vale_vista: "Vale vista" })[o.tipo]} · {o.etiqueta}</option>)}
@@ -733,7 +733,7 @@ function PrepararRegistro({ x, ocs, financiadores, vendedores, categorias, borra
       </>)}
       {resumen && (
         <div data-confirmacion style={{ background: C.warnLight, border: `1px solid ${C.warn}`, borderRadius: 8, padding: "9px 11px", marginTop: 8, fontSize: 12, color: C.ink, lineHeight: 1.45 }}>
-          <div style={{ fontWeight: 700, marginBottom: 4 }}>Se registrará en BFK:</div>
+          <div style={{ fontWeight: 600, marginBottom: 4 }}>Se registrará en BFK:</div>
           <div>{resumen}</div>
           <div style={{ color: C.inkMuted, marginTop: 3 }}>Fecha {fmt.date(m.fecha)}{m.operacion ? ` · operación ${m.operacion}` : ""} · movimiento bancario (no fuera del banco).</div>
           <label style={{ display: "flex", gap: 8, marginTop: 7, alignItems: "flex-start", cursor: "pointer" }}>
@@ -772,7 +772,7 @@ function registrosPorId(d, ids) {
 function DuplicadoManual({ dup, guardando, onVincular, onDistinto }) {
   return (
     <div data-duplicado-manual style={{ marginTop: 8, padding: "10px 12px", borderRadius: 12, background: C.warnLight, border: `1px solid ${C.warn}`, fontSize: 13 }}>
-      <div style={{ fontWeight: 700, color: C.warnText, marginBottom: 6 }}>Ya existe un registro manual que podría ser este mismo movimiento</div>
+      <div style={{ fontWeight: 600, color: C.warnText, marginBottom: 6 }}>Ya existe un registro manual que podría ser este mismo movimiento</div>
       {(dup.registros.length ? dup.registros : dup.ids.map((id) => ({ id, tipo: "Registro", detalle: "" }))).map((r) => (
         <div key={r.id} data-registro-manual={r.id} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "3px 0" }}>
           <span>{r.tipo} · {r.fecha ? fmt.date(r.fecha) : ""} {r.detalle ? `· ${r.detalle}` : ""}</span>
