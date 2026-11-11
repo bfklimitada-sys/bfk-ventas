@@ -140,6 +140,9 @@ export function contenidoEETTVP(datos) {
     cotizacion: { folio: txt(datos.cotizacion?.folio), revision: Number(datos.cotizacion?.revision) || 0 },
     cliente: { razon_social: txt(datos.cliente?.razon_social), rut: txt(datos.cliente?.rut) },
     plazo_entrega: txt(datos.plazo_entrega), responsable: txt(datos.responsable), elaborado_por: txt(datos.elaborado_por),
+    // Vendedor elegido en la cotización (11/11/2026): se imprime en «Vendedor». Sin vendedor asignado no se agrega y el PDF
+    // muestra al responsable, como antes; las EETT ya emitidas no lo tienen y se siguen imprimiendo igual.
+    ...(txt(datos.vendedor) ? { vendedor: txt(datos.vendedor) } : {}),
     ...(datos.oc_cliente && txt(datos.oc_cliente.numero) ? { oc_cliente: { numero: txt(datos.oc_cliente.numero), fecha: txt(datos.oc_cliente.fecha) } } : {}),
     ...globales, items,
   };
@@ -200,7 +203,7 @@ function datosPdfFormatoMP(eett, { imagenes = {}, logo } = {}) {
   if (finales.length) extras[extras.length - 1] = [...extras[extras.length - 1], ...finales];
   const opciones = {
     logo, proceso, introduccion, extras,
-    elaboracion: { vendedor: txt(c.responsable), elaborado_por: txt(c.elaborado_por), fecha, cotizacion: cotTxt, version: eett.revision },
+    elaboracion: { vendedor: txt(c.vendedor) || txt(c.responsable), elaborado_por: txt(c.elaborado_por), fecha, cotizacion: cotTxt, version: eett.revision },
   };
   return { cot, items: items.map((x) => ({ ficha: x.ficha })), opciones };
 }
@@ -303,7 +306,7 @@ export function datosPdfEETTVP(eett, { empresa: empresaActual = {}, imagenes = {
   const opciones = {
     logo, proceso, introduccion, extras, contacto: contactoDe(empresa), empresa: txt(empresa.razon_social) || undefined,
     marcaAgua: eett.estado === "borrador" ? "BORRADOR - NO EMITIDO (vista previa)" : undefined,
-    elaboracion: { vendedor: txt(c.responsable), fecha, cotizacion: cotTxt, version: eett.revision },
+    elaboracion: { vendedor: txt(c.vendedor) || txt(c.responsable), fecha, cotizacion: cotTxt, version: eett.revision },
   };
   return { cot, items, opciones };
 }

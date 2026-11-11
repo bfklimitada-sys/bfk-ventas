@@ -3,7 +3,7 @@
 // Las reglas las aplica la base (BORRADOR-2026-11-11-vp-financiamiento-vendedor.sql); el cálculo que se muestra es el de
 // lib/vpFinanciamiento.js (misma definición que vp_fin_resumen). Los aportes y devoluciones NO cambian el costo de compra, la
 // utilidad, las comisiones ni los cobros del cliente: cobrar una venta no devuelve nada a quien la financió.
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { C, MONO, R, T, cardStyle } from "../../lib/theme";
 import { Seccion, AvisoLinea, Badge } from "../ui/Sistema";
 import { Ventana, Campo, Rejilla, Entrada, Selector, ErrorForm, PedirMotivo } from "../proyectos/Comunes";
@@ -33,7 +33,7 @@ export async function subirComprobantes(token, ventaId, filas, setFilas, prefijo
 // disponible: lo que aún se puede financiar con este registro. totalCompra: total pagado (para el resumen).
 export function EditorAportes({ filas, setFilas, financiadores, disponible, documentosHabilitados, dato = "aportes" }) {
   const opciones = useMemo(() => opcionesAportante(financiadores), [financiadores]);
-  const set = (k, campo, val) => setFilas((fs) => fs.map((f) => (f._k === k ? { ...f, [campo]: val } : f)));
+  const set = (k, campo, val) => setFilas((fs) => fs.map((f) => (f._k === k ? { ...f, [campo]: val, ...(campo === "monto" ? { _auto: false } : {}) } : f)));
   const total = filas.reduce((s, f) => s + (aPesos(f.monto) > 0 ? aPesos(f.monto) : 0), 0);
   const resto = Math.max(0, disponible - total);
   return (
@@ -69,12 +69,15 @@ export function EditorAportes({ filas, setFilas, financiadores, disponible, docu
 
 // Bloque «Financiamiento» de «Registrar compra»: opcional. Si no se informa, la compra queda «Financiamiento sin informar».
 export function BloqueFinanciamientoCompra({ activo, setActivo, filas, setFilas, financiadores, disponible, documentosHabilitados }) {
+  // El máximo a financiar es el total a pagar de la compra (productos + despacho). Si cambia (p. ej. opción B con otro precio de
+  // compra), el aporte precargado lo sigue mientras nadie haya editado su monto.
+  useEffect(() => { setFilas((fs) => (fs.length === 1 && fs[0]._auto && Number(fs[0].monto) !== disponible ? [{ ...fs[0], monto: String(disponible) }] : fs)); }, [disponible]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <div data-financiamiento-compra style={{ background: C.paper, borderRadius: R.md, padding: "10px 12px", marginBottom: 12, border: `1px solid ${C.border}` }}>
-      <div style={{ fontSize: T.small, fontWeight: 700, color: C.inkMuted, textTransform: "uppercase", marginBottom: 6 }}>Financiamiento de esta compra</div>
+      <div style={{ fontSize: T.small, fontWeight: 700, color: C.inkMuted, textTransform: "uppercase", marginBottom: 6 }}>Financiamiento de esta compra · máximo <span data-maximo-financiar>{pesos(disponible)}</span></div>
       <div style={{ fontSize: T.small, color: C.inkMuted, marginBottom: 8, lineHeight: 1.5 }}>Quién puso el dinero (puede ser más de uno). No cambia el costo ni la utilidad. Si lo dejas para después, la compra queda como «Financiamiento sin informar».</div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: activo ? 10 : 0 }}>
-        <button type="button" data-financiamiento-ahora onClick={() => { setActivo(true); if (!filas.length) setFilas([filaAporte({ monto: String(disponible) })]); }} style={{ ...estiloBoton(activo ? "pri" : undefined), minHeight: 44 }}>Indicar quién financia</button>
+        <button type="button" data-financiamiento-ahora onClick={() => { setActivo(true); if (!filas.length) setFilas([filaAporte({ monto: String(disponible), _auto: true })]); }} style={{ ...estiloBoton(activo ? "pri" : undefined), minHeight: 44 }}>Indicar quién financia</button>
         <button type="button" data-financiamiento-despues onClick={() => setActivo(false)} style={{ ...estiloBoton(!activo ? "pri" : undefined), minHeight: 44 }}>Informar después</button>
       </div>
       {activo && <EditorAportes filas={filas} setFilas={setFilas} financiadores={financiadores} disponible={disponible} documentosHabilitados={documentosHabilitados} dato="compra" />}

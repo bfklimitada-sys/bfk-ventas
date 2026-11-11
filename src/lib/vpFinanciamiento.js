@@ -38,6 +38,14 @@ export function gruposVendedor(ventas = []) {
   const orden = (g) => (g.clave === VENDEDOR_BFK ? 0 : g.clave === SIN_VENDEDOR ? 2 : 1);
   return [...m.values()].sort((a, b) => orden(a) - orden(b) || a.nombre.localeCompare(b.nombre, "es"));
 }
+// Nombre del vendedor para documentos (EETT): BFK → nombre corto de la empresa (configuración de Ventas privadas); un vendedor →
+// su nombre del catálogo; sin vendedor → "" (el documento muestra al responsable, como antes).
+export function vendedorDocumento(clave, { vendedores = [], empresa = {}, actual = null } = {}) {
+  if (clave === VENDEDOR_BFK) return String(empresa?.nombre_corto || "").trim() || "BFK";
+  if (!clave) return "";
+  if (actual?.vendedor_tipo === "vendedor" && actual.vendedor_id === clave && actual.vendedor_nombre) return actual.vendedor_nombre;
+  return (vendedores || []).find((v) => v.id === clave)?.nombre || "";
+}
 export const filtrarPorVendedor = (filas, clave) => (clave == null || clave === "*" ? filas : (filas || []).filter((v) => claveVendedor(v) === clave));
 // Indicadores por vendedor con la MISMA definición de indicadoresVP (ventas vigentes del período; cotizaciones no cuentan).
 // La suma de los grupos es exactamente el total de Ventas privadas: ninguna venta se cuenta dos veces.
@@ -57,7 +65,8 @@ export function opcionesAportante(financiadores = []) {
   const personas = (financiadores || []).filter((f) => f.tipo !== "propio" && f.activo !== false).sort((a, b) => String(a.nombre).localeCompare(String(b.nombre), "es"));
   return [{ v: APORTANTE_BFK, l: "BFK · fondos propios" }, ...personas.map((f) => ({ v: f.id, l: `${f.nombre} · personal` })), { v: OTRA_PERSONA, l: "Otra persona…" }];
 }
-export const filaAporte = (extra = {}) => ({ _k: nuevaClave(), clave: nuevaClave(), aportante: "", nombre: "", monto: "", fecha: hoyISO(), medio: "transferencia", comprobante: "", observacion: "", ...extra });
+// _auto: el monto se precargó con lo que falta financiar y sigue al total de la compra mientras nadie lo edite.
+export const filaAporte = (extra = {}) => ({ _k: nuevaClave(), clave: nuevaClave(), aportante: "", nombre: "", monto: "", fecha: hoyISO(), medio: "transferencia", comprobante: "", observacion: "", _auto: false, ...extra });
 
 // Valida las filas antes de enviar. disponible: lo que aún se puede financiar (total de compras − ya financiado, más el total
 // de esta compra si se registra junto con ella). Devuelve { errores, total }.

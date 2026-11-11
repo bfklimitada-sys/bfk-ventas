@@ -35,6 +35,15 @@ de prueba), financiada parcialmente por Kevin y parcialmente por BFK.
   financiada no se anula si lo financiado quedaría por encima de lo pagado. Historial sensible en `vp_historial`.
 * Permisos: como compras y costos (solo administrador y responsable de la venta leen y registran). Escritura solo por funciones.
 
+## EETT y máximo a financiar (11/11/2026, segunda entrega)
+
+* «Vendedor responsable» de las EETT privadas NUEVAS (vista previa y PDF emitido) muestra el vendedor de la cotización: BFK →
+  nombre corto de la empresa («BFK Ltda.»), vendedor personal → su nombre; sin vendedor asignado, el responsable (como antes). El
+  contenido de la EETT guarda `vendedor` y conserva `responsable`. Las EETT ya emitidas no tienen `vendedor` y se generan idénticas
+  byte a byte a main; Mercado Público usa el mismo generador sin cambios (`eett_vendedor_compat.test.mjs`).
+* «Registrar compra»: el máximo a financiar es el total a pagar con despacho y se actualiza si cambia (opción B); el aporte
+  precargado lo sigue mientras no se edite a mano (`e2e_eett_vendedor.mjs`, escritorio y celular).
+
 ## Recuperación
 
 `BORRADOR-2026-11-11-vp-financiamiento-vendedor-deshacer.sql` quita funciones, disparadores y vistas nuevas. **No borra datos**:

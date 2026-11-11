@@ -30,12 +30,14 @@ corre "regresión: compra desde la cotización (cálculo)" node "$V/compra_vp.te
 corre "regresión: reglas" node "$V/reglas.test.mjs"
 corre "regresión: reglas como Mercado Público" node "$V/reglas_como_mp.test.mjs"
 corre "regresión: EETT de Mercado Público sin cambios" node "$V/eett_mp_sin_cambios.test.mjs"
+corre "EETT: vendedor en las nuevas; emitidas y Mercado Público idénticas a origin/main" node "$D/eett_vendedor_compat.test.mjs"
 # 3. Navegador (escritorio y celular)
 DIST="${TMPDIR:-/tmp}/dist-vpfin"; npx vite build --outDir "$DIST" --emptyOutDir > /dev/null 2>&1 || { echo "FALLA: build"; exit 1; }
 npx vite preview --outDir "$DIST" --host 127.0.0.1 --port "$PUERTO_APP" --strictPort > /dev/null 2>&1 & PV=$!
 for i in $(seq 1 30); do curl -fsS "http://127.0.0.1:$PUERTO_APP/" > /dev/null 2>&1 && break; sleep 0.5; done
 U="http://127.0.0.1:$PUERTO_APP/"
 entorno; corre "financiamiento y vendedor: navegador (escritorio y celular)" node "$D/e2e_financiamiento.mjs" "$U" ${CAP:+"$CAP"}
+for MODO in escritorio celular; do entorno; corre "EETT con vendedor y máximo a financiar en opción B ($MODO)" node "$D/e2e_eett_vendedor.mjs" "$U" "$MODO"; done
 entorno; corre "regresión: compra desde la cotización (navegador)" node "$V/e2e_compra_vp.mjs" "$U"
 entorno; corre "regresión: Ventas privadas (navegador)" node "$V/e2e_ventas_privadas.mjs" "$U"
 entorno; corre "regresión: cotización como Mercado Público (navegador)" node "$V/e2e_cotizacion_como_mp.mjs" "$U"

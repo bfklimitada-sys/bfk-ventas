@@ -31,7 +31,7 @@ import { ImagenFicha } from "../cotizaciones/ImagenFicha";
 import { VistaPreviaEETT } from "../cotizaciones/VistaPreviaEETT";
 import { ConflictoVersion } from "../ui/ConflictoVersion";
 import { combinarVersiones, aplicarCombinacion, normalizarProductos, resumenProductos, textoValor } from "../../lib/conflictoVersion";
-import { claveVendedor, nombreVendedor, opcionesVendedor } from "../../lib/vpFinanciamiento";
+import { claveVendedor, nombreVendedor, opcionesVendedor, vendedorDocumento } from "../../lib/vpFinanciamiento";
 import { asignarVendedor } from "../../lib/ventasPrivadasDatos";
 import { leerCotizacion, guardarCotizacion, cambiarEstadoCotizacion, nuevaRevision, duplicarCotizacion, historialCotizacion, anular, esquemaFichaVP, leerEETT, listarEETT, guardarEETT, emitirEETT, ocClienteDeVenta } from "../../lib/ventasPrivadasDatos";
 import { accionesCotizacion, ESTADOS_COTIZACION, fechaTxt, hoyISO, sumarDias, folioRevision, mensajeVP, documentoDesdeEditor, cantidadTxt } from "../../lib/ventasPrivadas";
@@ -330,7 +330,8 @@ export function EditorCotizacionPrivada({ token, perfil, vp, id, showToast, onCe
       const rv = c ? d.revisiones.find((r) => r.id === revVista) : null;
       const contenido = contenidoEETTVP({ cotizacion: { folio: c?.folio || "", revision: rv?.numero ?? 0 },
         cliente: { razon_social: cliente?.razon_social || c?.cliente_nombre || "", rut: cliente?.rut || c?.cliente_rut || "" },
-        plazo_entrega: vista.plazo_entrega, fecha: hoyISO(), responsable: c?.responsable_nombre || perfil?.nombre || "", elaborado_por: perfil?.nombre || "", items: lineasEETT(vista.items) });
+        plazo_entrega: vista.plazo_entrega, fecha: hoyISO(), responsable: c?.responsable_nombre || perfil?.nombre || "", elaborado_por: perfil?.nombre || "", items: lineasEETT(vista.items),
+        vendedor: vendedorDocumento(vista.vendedor ?? (c ? claveVendedor(c) : ""), { vendedores: vp.vendedores, empresa: vp.empresa, actual: c }) });
       const imagenes = Object.fromEntries(await Promise.all(vista.items.map(async (it) => [it.key, await almacen.resolverImagenes(it.ficha?.imagenes || [], 2)])));
       // Vista previa: no se emite ni se registra nada (el folio de la EETT se muestra si la cotización ya tiene uno).
       setPrevia({ ...(await generarPdfEETTVP({ folio: folioEETT, revision: null, estado: "previa", contenido }, { logo: await logoBFK(logoUrl), imagenes })), tipo: "eett" });
@@ -350,7 +351,9 @@ export function EditorCotizacionPrivada({ token, perfil, vp, id, showToast, onCe
     const previa = borr || eett.find((e) => e.estado === "emitida") || null;
     const [previo, ult, oc] = await Promise.all([previa ? leerEETT(t, previa.id) : null, ultima ? leerEETT(t, ultima.id) : null, x.cab.venta_id ? ocClienteDeVenta(t, x.cab.venta_id) : null]);
     const contenido = contenidoEETTVP({ cotizacion: { folio: x.cab.folio, revision: rv?.numero ?? x.cab.revision_actual }, cliente: { razon_social: x.cab.cliente_nombre, rut: x.cab.cliente_rut },
-      plazo_entrega: rv?.plazo_entrega, fecha: hoyISO(), responsable: x.cab.responsable_nombre || "", elaborado_por: perfil?.nombre || "", oc_cliente: oc, items: lineas, previo: previo?.contenido });
+      plazo_entrega: rv?.plazo_entrega, fecha: hoyISO(), responsable: x.cab.responsable_nombre || "", elaborado_por: perfil?.nombre || "", oc_cliente: oc, items: lineas, previo: previo?.contenido,
+      // Vendedor guardado en la cotización (lo que se emite es lo guardado en la base).
+      vendedor: vendedorDocumento(claveVendedor(x.cab), { vendedores: vp.vendedores, empresa: vp.empresa, actual: x.cab }) });
     if (ult && mismoContenidoEETT(ult.contenido, contenido)) return { eett: ult, reutilizada: true };
     const g = await guardarEETT(t, { ...(borr ? { id: borr.id, version: borr.version } : {}), cotizacion_id: x.cab.id, contenido });
     await emitirEETT(t, g.id, g.version);
