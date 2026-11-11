@@ -23,7 +23,9 @@ export const archivos = new Map();
 export const registro = [];
 // rpc/cz_guardar_producto: la biblioteca compartida de fichas (misma que usa Mercado Público) se guarda en la base desechable.
 const esVP = (obj, search) => obj.startsWith("vp_") || obj.startsWith("rpc/vp_") || ["perfiles", "pi_clientes", "productos_catalogo", "rpc/cz_guardar_producto"].includes(obj)
-  || (obj === "gastos_indirectos" && /select=id%2Cfecha%2Cmonto%2Cdescripcion|select=id,fecha,monto,descripcion/.test(search));
+  || (obj === "gastos_indirectos" && /select=id%2Cfecha%2Cmonto%2Cdescripcion|select=id,fecha,monto,descripcion/.test(search))
+  // Catálogos que Ventas privadas lee para vendedor y financiamiento (11/11/2026); Mercado Público los lee con otra consulta.
+  || (["vendedores", "financiadores"].includes(obj) && /order=nombre\.asc/.test(search));
 
 // ── Servicio de sesión simulado (10/11/2026), con las reglas de Supabase Auth: tokens de acceso JWT reales con vencimiento, refresh
 // token de UN solo uso (rotación: uno ya usado se rechaza), ingreso con contraseña y fallas provocadas (rechazo, sin conexión, 5xx).

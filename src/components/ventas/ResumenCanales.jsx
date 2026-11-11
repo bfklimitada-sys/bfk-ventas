@@ -11,6 +11,7 @@ import { Kpi, RejillaKpi, Fila, NoInstalado } from "./Comunes";
 import { indicadoresVP, alertasVP, pesos, pct, hoyISO } from "../../lib/ventasPrivadas";
 import { esVenta, fechaOC, cobradoDelCliente, ingresoPendienteOC } from "../../lib/ocs";
 import { gananciaReal } from "../../lib/calculos";
+import { indicadoresPorVendedor, totalesFinanciamiento } from "../../lib/vpFinanciamiento";
 
 export const PERIODOS = [{ v: "mes", l: "Este mes" }, { v: "mes_anterior", l: "Mes anterior" }, { v: "anio", l: "Año en curso" }, { v: "todo", l: "Todo el historial" }];
 export function rangoPeriodo(p, hoy = new Date()) {
@@ -35,6 +36,8 @@ export function ResumenVentasPrivadas({ vp, periodo, onIr, compacto }) {
   const r = rangoPeriodo(periodo);
   const k = useMemo(() => indicadoresVP(vp, r), [vp, periodo]); // eslint-disable-line react-hooks/exhaustive-deps
   const alertas = useMemo(() => alertasVP(vp), [vp]);
+  const porVend = useMemo(() => (vp?.finInstalado && !compacto ? indicadoresPorVendedor(vp, r) : []), [vp, periodo, compacto]); // eslint-disable-line react-hooks/exhaustive-deps
+  const fin = useMemo(() => (vp?.finInstalado ? totalesFinanciamiento(vp.finResumen || [], vp.finAportantes || []) : null), [vp]);
   if (!vp?.instalado) return compacto ? null : <NoInstalado />;
   return (
     <div data-resumen-vp>
@@ -47,9 +50,40 @@ export function ResumenVentasPrivadas({ vp, periodo, onIr, compacto }) {
         {!compacto && <Kpi dato="vp-utilidad" et="Utilidad estimada (costos registrados)" v={k.costosVisibles ? pesos(k.utilidadEstimada) : "—"} tono={k.utilidadEstimada < 0 ? "danger" : "marca"}
           n={k.costosVisibles ? `Margen ${pct(k.margenEstimado)} sobre venta neta${k.ventasSinCostoVisible ? ` · ${k.ventasSinCostoVisible} venta(s) sin costos visibles para ti` : ""}` : "Sin costos visibles para tu usuario"} />}
         {!compacto && k.ventasConCostoReal > 0 && <Kpi dato="vp-utilidad-real" et="Utilidad real (con compras registradas)" v={pesos(k.utilidadReal)} tono={k.utilidadReal < 0 ? "danger" : "ok"} n={`${k.ventasConCostoReal} venta(s) · margen ${pct(k.margenReal)}`} />}
+        {!compacto && fin && fin.totalCompras > 0 && <Kpi dato="vp-fin-pendiente" et="Financiamiento: pendiente de devolver" v={pesos(fin.pendienteDevolucion)} tono={fin.pendienteDevolucion > 0 ? "warn" : "ok"}
+          n={`${fin.sinInformar ? `${pesos(fin.sinInformar)} sin informar · ` : ""}BFK ${pesos(fin.financiadoBfk)} (no es deuda)`} onClick={onIr && (() => onIr("financiamiento"))} />}
       </RejillaKpi>
+      {porVend.length > 0 && <PorVendedor filas={porVend} />}
       {alertas.length > 0 && <AvisoLinea tono={alertas.some((a) => a.nivel === "alto") ? "danger" : "warn"} icono="⚠" dato="alertas-vp" accion="Ver alertas" onClick={onIr && (() => onIr("notif"))}>
         {alertas.length} alerta{alertas.length > 1 ? "s" : ""} de ventas privadas (cotizaciones por vencer, entregas o pagos vencidos)</AvisoLinea>}
+    </div>
+  );
+}
+
+// Ventas privadas por vendedor (11/11/2026): misma definición que los totales (ventas vigentes del período; cotizaciones no
+// convertidas no cuentan). Cada venta está en un solo grupo: la suma de las filas es el total. BFK = la empresa: sin comisión personal.
+function PorVendedor({ filas }) {
+  const tot = filas.reduce((s, f) => ({ n: s.n + f.nVentas, v: s.v + f.vendido, neto: s.neto + f.vendidoNeto }), { n: 0, v: 0, neto: 0 });
+  const met = (et, v, extra = {}) => <div>{et}<br /><b {...extra} style={{ fontFamily: MONO, color: C.ink, fontSize: T.sm, ...(extra.style || {}) }}>{v}</b></div>;
+  return (
+    <div data-vp-por-vendedor style={{ marginBottom: S.md }}>
+      <div style={{ fontSize: T.small, fontWeight: 800, color: C.inkMuted, padding: "4px 0 6px" }}>POR VENDEDOR</div>
+      {filas.map((f) => (
+        <div key={f.clave || "sin"} data-vendedor-fila={f.clave || "sin"} style={{ ...cardStyle, borderRadius: R.md, padding: "9px 12px", marginBottom: 6 }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}><b style={{ flex: 1, fontSize: T.sm }}>{f.nombre}</b>
+            <span style={{ fontSize: T.small, color: C.inkFaint }}>{f.nVentas} venta{f.nVentas === 1 ? "" : "s"}{f.clave === "bfk" ? " · empresa, sin comisión personal" : ""}</span></div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(105px,1fr))", gap: 6, marginTop: 6, fontSize: T.small, color: C.inkMuted }}>
+            {met("Total (con IVA)", pesos(f.vendido), { "data-vendedor-total": "" })}
+            {met("Neto", pesos(f.vendidoNeto))}
+            {met("Utilidad estimada", f.costosVisibles ? pesos(f.utilidadEstimada) : "—", { "data-vendedor-utilidad-estimada": "" })}
+            {met("Utilidad real", f.ventasConCostoReal ? `${pesos(f.utilidadReal)}${f.ventasConCostoReal < f.nVentas ? ` (${f.ventasConCostoReal} de ${f.nVentas})` : ""}` : "—", { "data-vendedor-utilidad": "" })}
+          </div>
+        </div>
+      ))}
+      <div data-vendedor-fila="total" style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap", padding: "6px 12px", fontSize: T.sm, fontWeight: 800 }}>
+        <span>Total Ventas privadas · {tot.n} venta{tot.n === 1 ? "" : "s"}</span><span style={{ fontFamily: MONO }}><span data-vendedor-total-general>{pesos(tot.v)}</span> · neto {pesos(tot.neto)}</span>
+      </div>
+      <div style={{ fontSize: T.small, color: C.inkFaint, padding: "0 2px", lineHeight: 1.5 }}>Utilidad sobre venta neta, como en el resto de Ventas privadas: estimada con los costos de la cotización y real con las compras registradas (solo ventas con costos visibles para ti). Ventas privadas no genera comisiones automáticamente.</div>
     </div>
   );
 }

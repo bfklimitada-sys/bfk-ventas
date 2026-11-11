@@ -54,7 +54,7 @@ function FormAporte({ aporte, socios, onSave, onEliminar }) {
   );
 }
 
-export function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onAjustar, aportes, onGuardarAporte, onEliminarAporte, onAbonar, pagoFinSueltos, difsHistoricas }) {
+export function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onAjustar, aportes, onGuardarAporte, onEliminarAporte, onAbonar, pagoFinSueltos, difsHistoricas, extraVP = null }) {
   const [nuevoAporte,setNuevoAporte]=useState(false);
   const [editAporte,setEditAporte]=useState(null);
   const [selFin,setSelFin]=useState(null);
@@ -234,6 +234,8 @@ export function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onA
         </>);
       })()}
       </Seccion>
+      {/* Ventas privadas (11/11/2026): sección aparte; no cambia la deuda ni la cartola de Mercado Público. */}
+      {extraVP}
 
       </PanelPestana>
       <PanelPestana visible={pestana==="aportes"} titulo="Aportes de socios">

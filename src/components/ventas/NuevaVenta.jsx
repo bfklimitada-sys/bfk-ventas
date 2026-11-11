@@ -8,7 +8,8 @@ import { AvisoLinea, Pestanas } from "../ui/Sistema";
 import { Ventana, Campo, Rejilla, Subtitulo, Entrada, Area, Selector, ErrorForm } from "../proyectos/Comunes";
 import { estiloBoton, Fila, SelectorCliente, EditorLineas, ResumenTotales, lineaVacia, Vacio } from "./Comunes";
 import { FormCliente } from "./PanelClientes";
-import { crearVentaDesdeCotizacion, crearVentaDirecta, registrarOcCliente, subirDocumento } from "../../lib/ventasPrivadasDatos";
+import { crearVentaDesdeCotizacion, crearVentaDirecta, crearVentaDirectaConVendedor, registrarOcCliente, subirDocumento } from "../../lib/ventasPrivadasDatos";
+import { opcionesVendedor, nombreVendedor } from "../../lib/vpFinanciamiento";
 import { aPesos, lineaParaGuardar, calcularTotales, validarLineas, pesos, fechaTxt, hoyISO, mensajeVP, nuevaClave, folioRevision } from "../../lib/ventasPrivadas";
 
 function CamposOC({ oc, setOc, habilitado }) {
@@ -60,6 +61,7 @@ export function CrearVentaDesdeCotizacion({ token, cot, vp, showToast, onCerrar,
       <div style={{ ...cardStyle, borderRadius: R.md, padding: "8px 14px", marginBottom: 10 }}>
         <Fila k="Cotización aceptada" v={folioRevision(cot.folio, cot.revision_aceptada)} />
         <Fila k="Cliente" v={cot.cliente_nombre} />
+        {vp.finInstalado && <Fila k="Vendedor (se conserva de la cotización)" v={<span data-vendedor-conversion>{nombreVendedor(cot)}</span>} />}
         <Fila k="Total aceptado" v={pesos(cot.total_aceptado)} fuerte />
       </div>
       <AvisoLinea tono="info" icono="ℹ">Se transfieren cliente, ítems, cantidades, precios, condiciones y costos estimados de la revisión aceptada, sin volver a ingresarlos.</AvisoLinea>
@@ -80,6 +82,7 @@ export function NuevaVentaPrivada({ token, perfil, vp, showToast, onCerrar, onCr
   const [clienteId, setClienteId] = useState(null); const [items, setItems] = useState([lineaVacia()]);
   const [cab, setCab] = useState({ fecha: hoyISO(), afecta_iva: true, plazo_entrega: "", fecha_entrega_comprometida: "", direccion_entrega: "", condiciones_pago: "", plazo_pago_dias: "", observaciones: "", contacto_nombre: "" });
   const [oc, setOc] = useState(ocVacia()); const [ocupado, setOcupado] = useState(false); const [err, setErr] = useState(""); const [nuevoCliente, setNuevoCliente] = useState(false);
+  const [vendedor, setVendedor] = useState(() => (perfil?.vendedor_id && (vp.vendedores || []).some((x) => x.id === perfil.vendedor_id && x.activo !== false) ? perfil.vendedor_id : ""));
   const tot = calcularTotales(items, cab);
   const set = (k) => (e) => setCab((x) => ({ ...x, [k]: e.target.value }));
   const elegirCliente = (cid) => {
@@ -94,7 +97,7 @@ export function NuevaVentaPrivada({ token, perfil, vp, showToast, onCerrar, onCr
     setOcupado(true); setErr("");
     let venta;
     try {
-      venta = await crearVentaDirecta(token, { clave: clave.current, cliente_id: clienteId, fecha: cab.fecha, afecta_iva: cab.afecta_iva !== false, plazo_entrega: cab.plazo_entrega,
+      venta = await (vp.finInstalado ? crearVentaDirectaConVendedor : crearVentaDirecta)(token, { clave: clave.current, cliente_id: clienteId, ...(vp.finInstalado ? { vendedor } : {}), fecha: cab.fecha, afecta_iva: cab.afecta_iva !== false, plazo_entrega: cab.plazo_entrega,
         fecha_entrega_comprometida: cab.fecha_entrega_comprometida || null, direccion_entrega: cab.direccion_entrega, condiciones_pago: cab.condiciones_pago,
         plazo_pago_dias: cab.plazo_pago_dias === "" ? null : Number(cab.plazo_pago_dias), observaciones: cab.observaciones, contacto_nombre: cab.contacto_nombre,
         items: items.map((it) => lineaParaGuardar(it, true)) });
@@ -125,6 +128,7 @@ export function NuevaVentaPrivada({ token, perfil, vp, showToast, onCerrar, onCr
           <Campo etiqueta="Fecha de la venta"><Entrada type="date" max={hoyISO()} value={cab.fecha} onChange={set("fecha")} /></Campo>
           <Campo etiqueta="Entrega comprometida"><Entrada type="date" value={cab.fecha_entrega_comprometida} onChange={set("fecha_entrega_comprometida")} /></Campo>
           <Campo etiqueta="IVA"><Selector value={cab.afecta_iva === false ? "no" : "si"} onChange={(e) => setCab((x) => ({ ...x, afecta_iva: e.target.value === "si" }))} opciones={[{ v: "si", l: "Afecta (19 %)" }, { v: "no", l: "Exenta" }]} /></Campo>
+          {vp.finInstalado && <Campo etiqueta="Vendedor" ayuda="BFK: la venta es de la empresa (sin comisión personal). Tú quedas como responsable."><Selector data-venta-vendedor value={vendedor} onChange={(e) => setVendedor(e.target.value)} vacio="Sin vendedor asignado" opciones={opcionesVendedor(vp.vendedores)} /></Campo>}
           <Campo etiqueta="Contacto"><Entrada value={cab.contacto_nombre} onChange={set("contacto_nombre")} /></Campo>
           <Campo etiqueta="Condiciones de pago"><Entrada value={cab.condiciones_pago} onChange={set("condiciones_pago")} /></Campo>
           <Campo etiqueta="Plazo de pago (días)"><Entrada inputMode="numeric" value={cab.plazo_pago_dias} onChange={set("plazo_pago_dias")} /></Campo>

@@ -8,13 +8,15 @@ import { C, MONO, R, T } from "../../lib/theme";
 import { Ventana, Campo, Rejilla, Entrada, Selector, ErrorForm } from "../proyectos/Comunes";
 import { estiloBoton } from "./Comunes";
 import { pesos, hoyISO, cantidadTxt, mensajeVP } from "../../lib/ventasPrivadas";
-import { registrarComprasCotizacion } from "../../lib/ventasPrivadasDatos";
+import { registrarComprasCotizacion, registrarCompraFinanciada } from "../../lib/ventasPrivadasDatos";
+import { BloqueFinanciamientoCompra, subirComprobantes } from "./Financiamiento";
+import { validarAportes, aportesParaGuardar } from "../../lib/vpFinanciamiento";
 import { baseVenta, compradoEnVenta, estadoLineas, filasIniciales, filaDesde, cambiosFila, armarPedidos, compararVP, validarCompraVP, filasParaGuardar, nuevoPedido } from "../../lib/compraVentaPrivada";
 
 const signo = (x) => (x > 0 ? `+${pesos(x)}` : x < 0 ? `−${pesos(-x)}` : pesos(0));
 const n0 = (v) => (v === "" ? "" : Number(v));
 
-export function CompraVentaPrivada({ token, v, d, showToast, onCerrar, onListo, onManual }) {
+export function CompraVentaPrivada({ token, v, d, vp, showToast, onCerrar, onListo, onManual }) {
   const base = useMemo(() => baseVenta(v, d), [v, d]);
   const comprado = useMemo(() => compradoEnVenta(d), [d]);
   const lineas = useMemo(() => estadoLineas(base, comprado), [base, comprado]);
@@ -24,6 +26,8 @@ export function CompraVentaPrivada({ token, v, d, showToast, onCerrar, onListo, 
   const [conf, setConf] = useState({ vigencia: false, especificaciones: false, direccion: false });
   const [fecha, setFecha] = useState(hoyISO()); const [errores, setErrores] = useState([]); const [ocupado, setOcupado] = useState(false);
   const pedido = useRef(nuevoPedido()); const enCurso = useRef(false);
+  // Financiamiento (11/11/2026): opcional; solo si la base lo tiene instalado. Sin informar → «Financiamiento sin informar».
+  const conFin = !!(vp?.finInstalado && d.finInstalado); const [finActivo, setFinActivo] = useState(false); const [finFilas, setFinFilas] = useState([]);
   const B = opcion === "B";
 
   const grupos = useMemo(() => armarPedidos({ filas, base, comprado, despachosReales: B ? despReal : {}, extras: B ? extras : {} }), [filas, base, comprado, despReal, extras, B]);
@@ -41,11 +45,15 @@ export function CompraVentaPrivada({ token, v, d, showToast, onCerrar, onListo, 
     if (enCurso.current) return;
     const faltan = [...val.errores];
     if (!fecha || fecha > hoyISO()) faltan.push("Indica la fecha de la compra (no futura).");
+    if (conFin && finActivo) faltan.push(...validarAportes(finFilas, { disponible: comp.totalReal }).errores);
     if (faltan.length) { setErrores(faltan); return; }
     enCurso.current = true; setOcupado(true); setErrores([]);
     try {
-      const r = await registrarComprasCotizacion(token, { venta_id: v.id, fecha, filas: filasParaGuardar({ grupos, base, pedido: pedido.current, docs: B ? docs : {} }) });
-      showToast?.(r?.ya_existia ? "La compra ya estaba registrada (no se duplicó)" : "Compra registrada como costo real");
+      const compra = { venta_id: v.id, fecha, filas: filasParaGuardar({ grupos, base, pedido: pedido.current, docs: B ? docs : {} }) };
+      const r = conFin
+        ? await registrarCompraFinanciada(token, compra, finActivo ? aportesParaGuardar(await subirComprobantes(token, v.id, finFilas, setFinFilas)) : [])
+        : await registrarComprasCotizacion(token, compra);
+      showToast?.(r?.ya_existia ? "La compra ya estaba registrada (no se duplicó)" : conFin && finActivo && finFilas.length ? "Compra y financiamiento registrados" : "Compra registrada como costo real");
       onListo();
     } catch (e) {
       setErrores([e.status === 0 ? `Se perdió la conexión: ${mensajeVP(e)} Puedes reintentar: la misma compra no se registra dos veces.` : `No se registró la compra: ${mensajeVP(e)}`]);
@@ -179,6 +187,9 @@ export function CompraVentaPrivada({ token, v, d, showToast, onCerrar, onListo, 
             {comp.parcial && <div data-aviso-parcial style={{ color: C.warnText, fontWeight: 600, marginTop: 4 }}>Compra parcial: quedan pendientes {comp.pendientes.filter((l) => l.queda > 0).map((l) => `${cantidadTxt(l.queda)} de «${l.nombre}»`).join(", ")} ({pesos(comp.costoPendiente)} a costo cotizado). La utilidad no es definitiva hasta comprarlo.</div>}
           </div>
         </div>
+
+        {conFin && <BloqueFinanciamientoCompra activo={finActivo} setActivo={setFinActivo} filas={finFilas} setFilas={setFinFilas} financiadores={vp.financiadores || []}
+          disponible={comp.totalReal} documentosHabilitados={vp.documentosHabilitados} />}
 
         <div style={{ marginBottom: 10 }}>
           {val.requiere.vigencia && <label data-confirmar="vigencia" style={{ display: "flex", gap: 8, fontSize: T.sm, marginBottom: 6, fontWeight: 600 }}><input type="checkbox" checked={conf.vigencia} onChange={(e) => setConf((c) => ({ ...c, vigencia: e.target.checked }))} /> Confirmo que los precios, la disponibilidad, las condiciones y el despacho siguen vigentes.</label>}

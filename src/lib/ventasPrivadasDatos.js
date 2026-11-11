@@ -42,13 +42,54 @@ export async function cargarVentasPrivadas(t) {
       leer(t, "vp_margen_ventas?select=*"),
     ]);
     const cfg = Object.fromEntries((config || []).map((c) => [c.clave, c.valor]));
+    const fin = await cargarFinanciamientoVendedor(t, cotizaciones || [], ventas || []);
     return { instalado: true, empresa: cfg.empresa || {}, documentosHabilitados: cfg.documentos_habilitados === true, config: config || [],
-      clientes: clientes || [], cotizaciones: cotizaciones || [], ventas: ventas || [], margenes: margenes || [] };
+      clientes: clientes || [], cotizaciones: fin.cotizaciones, ventas: fin.ventas, margenes: margenes || [],
+      finInstalado: fin.instalado, vendedores: fin.vendedores, financiadores: fin.financiadores, finResumen: fin.resumen, finAportantes: fin.aportantes };
   } catch (e) {
     if (e.noInstalado) return { instalado: false, clientes: [], cotizaciones: [], ventas: [], margenes: [] };
     throw e;
   }
 }
+
+// ── Financiamiento de compras y vendedor (11/11/2026) ─────────────────────────────────────────────────
+// Si la migración del 11/11 no está instalada, todo sigue como en 1d47499 (finInstalado:false: la interfaz no muestra ni envía
+// vendedor ni financiamiento). Las vistas de financiamiento solo entregan filas al administrador y al responsable (RLS).
+const esColumnaFaltante = (e) => e?.noInstalado || e?.status === 400 || ["42703", "PGRST204", "PGRST100"].includes(e?.code);
+async function cargarFinanciamientoVendedor(t, cotizaciones, ventas) {
+  const [vendedores, financiadores] = await Promise.all([
+    // Catálogos de Mercado Público, solo lectura (select=* para no depender de columnas opcionales como «activo»).
+    leer(t, "vendedores?select=*&order=nombre.asc").then((l) => (l || []).map((v) => ({ id: v.id, nombre: v.nombre, activo: v.activo }))).catch(() => []),
+    leer(t, "financiadores?select=*&order=nombre.asc").then((l) => (l || []).map((f) => ({ id: f.id, nombre: f.nombre, tipo: f.tipo, activo: f.activo, saldo_deuda: f.saldo_deuda }))).catch(() => []),
+  ]);
+  try {
+    const [vc, vv, resumen, aportantes] = await Promise.all([
+      leer(t, "vp_cotizaciones?select=id,vendedor_tipo,vendedor_id,vendedor_nombre&limit=5000"),
+      leer(t, "vp_ventas?select=id,vendedor_tipo,vendedor_id,vendedor_nombre&limit=5000"),
+      leer(t, "vp_fin_resumen?select=*&limit=5000"),
+      leer(t, "vp_fin_aportantes?select=*"),
+    ]);
+    const mc = new Map((vc || []).map((x) => [x.id, x])); const mv = new Map((vv || []).map((x) => [x.id, x]));
+    const fr = new Map((resumen || []).map((x) => [x.venta_id, x]));
+    const sel = (x) => (x ? { vendedor_tipo: x.vendedor_tipo, vendedor_id: x.vendedor_id, vendedor_nombre: x.vendedor_nombre } : {});
+    return { instalado: true, vendedores: vendedores || [], financiadores: financiadores || [], resumen: resumen || [], aportantes: aportantes || [],
+      cotizaciones: cotizaciones.map((c) => ({ ...c, ...sel(mc.get(c.id)) })),
+      ventas: ventas.map((v) => ({ ...v, ...sel(mv.get(v.id)), financiamiento: fr.get(v.id) || null })) };
+  } catch (e) {
+    if (esColumnaFaltante(e)) return { instalado: false, vendedores: vendedores || [], financiadores: financiadores || [], resumen: [], aportantes: [], cotizaciones, ventas };
+    throw e;
+  }
+}
+export const guardarCotizacionConVendedor = (t, p) => rpc(t, "vp_guardar_cotizacion_v2", { p }, LIMITE_GUARDAR);
+export const crearVentaDirectaConVendedor = (t, p) => rpc(t, "vp_crear_venta_directa_v2", { p });
+export const asignarVendedor = (t, tabla, id, vendedor, version) => rpc(t, "vp_asignar_vendedor", { p_tabla: tabla, p_id: id, p_vendedor: vendedor ?? "", p_version: version });
+// Compra desde la cotización + aportes en UNA transacción (reintento seguro: claves fijas de la compra y de cada aporte).
+export const registrarCompraFinanciada = (t, compra, aportes) => rpc(t, "vp_registrar_compra_financiada", { p: { compra, aportes } });
+// Registro manual + aportes con clave de la operación (un reintento no duplica la compra).
+export const registrarCompraManualFinanciada = (t, clave, compra, aportes) => rpc(t, "vp_registrar_compra_manual_financiada", { p: { clave, compra, aportes } });
+export const registrarAportes = (t, ventaId, aportes) => rpc(t, "vp_fin_registrar_aportes", { p: { venta_id: ventaId, aportes } });
+export const registrarDevolucion = (t, p) => rpc(t, "vp_fin_registrar_devolucion", { p });
+export const anularFinanciamiento = (t, tabla, id, motivo) => rpc(t, "vp_fin_anular", { p_tabla: tabla, p_id: id, p_motivo: motivo });
 
 // ── Clientes ───────────────────────────────────────────────────────────────────────────────────────
 export const guardarCliente = (t, p) => rpc(t, "vp_guardar_cliente", { p });
@@ -57,6 +98,9 @@ export const guardarCliente = (t, p) => rpc(t, "vp_guardar_cliente", { p });
 export async function leerCotizacion(t, id) {
   const [cab] = await leer(t, `vp_cotizaciones_vista?select=*&id=eq.${q(id)}`);
   if (!cab) return null;
+  // Vendedor (11/11/2026): columnas de vp_cotizaciones; sin la migración, la cotización se lee como antes.
+  const vend = await leer(t, `vp_cotizaciones?select=vendedor_tipo,vendedor_id,vendedor_nombre&id=eq.${q(id)}`).catch((e) => { if (esColumnaFaltante(e)) return null; throw e; });
+  if (vend?.[0]) Object.assign(cab, vend[0], { _vendedorInstalado: true });
   const [revs, eett, docs] = await Promise.all([
     leer(t, `vp_cotizacion_revisiones?select=*&cotizacion_id=eq.${q(id)}&order=numero.desc`),
     leer(t, `vp_eett?select=id,folio,revision,estado,cotizacion_revision_id,hash,emitida_en,emitida_por,version,creado_en,actualizado_en&cotizacion_id=eq.${q(id)}&order=revision.desc`),
@@ -114,7 +158,7 @@ export async function guardarCotizacion(t, p) {
     const [vig] = await leer(t, `vp_cotizaciones?select=version&id=eq.${q(p.id)}`).catch(() => []);
     if (vig && Number(vig.version) !== Number(p.version)) throw new ErrorVP("VP409: otra persona guardó cambios en esta cotización; tus cambios no se guardaron", { status: 409, conflicto: true });
   }
-  try { const r = await rpc(t, "vp_guardar_cotizacion", { p }, LIMITE_GUARDAR); pendientesGuardar.delete(clave); return r; }
+  try { const r = await rpc(t, "vendedor" in p ? "vp_guardar_cotizacion_v2" : "vp_guardar_cotizacion", { p }, LIMITE_GUARDAR); pendientesGuardar.delete(clave); return r; }
   catch (e) {
     if (e.status !== 0) { pendientesGuardar.delete(clave); throw e; }
     pendientesGuardar.set(clave, info || {});
@@ -155,6 +199,13 @@ export async function leerVenta(t, id) {
     leer(t, `vp_historial?select=*&venta_id=eq.${q(id)}&order=fecha.desc,id.desc&limit=300`),
   ]);
   const eIds = (entregas || []).map((e) => e.id), pIds = (pagos || []).map((p) => p.id), iIds = (items || []).map((i) => i.id);
+  const finLeer = (ruta) => leer(t, ruta).catch((e) => { if (esColumnaFaltante(e)) return null; throw e; });
+  const [aportes, devoluciones, vend] = await Promise.all([
+    finLeer(`vp_fin_aportes?select=*&venta_id=eq.${q(id)}&order=fecha,creado_en`),
+    finLeer(`vp_fin_devoluciones?select=*&venta_id=eq.${q(id)}&order=fecha,creado_en`),
+    finLeer(`vp_ventas?select=vendedor_tipo,vendedor_id,vendedor_nombre&id=eq.${q(id)}`),
+  ]);
+  if (vend?.[0]) Object.assign(cab, vend[0]);
   const [entregaItems, imputaciones, costos, compras, eett] = await Promise.all([
     eIds.length ? leer(t, `vp_entrega_items?select=*&entrega_id=in.(${eIds.join(",")})`) : [],
     pIds.length ? leer(t, `vp_pago_imputaciones?select=*&pago_id=in.(${pIds.join(",")})`) : [],
@@ -164,7 +215,7 @@ export async function leerVenta(t, id) {
   ]);
   return { cab, items: items || [], oc: oc || [], entregas: entregas || [], entregaItems: entregaItems || [], facturas: facturas || [], pagos: pagos || [],
     imputaciones: imputaciones || [], documentos: docs || [], costos: costos || [], compras: compras || [], margen: (margen || [])[0] || null,
-    historial: historial || [], eett: eett || [] };
+    historial: historial || [], eett: eett || [], finInstalado: aportes !== null, aportes: aportes || [], devoluciones: devoluciones || [] };
 }
 export const registrarOcCliente = (t, p) => rpc(t, "vp_registrar_oc_cliente", { p });
 export const registrarEntrega = (t, p) => rpc(t, "vp_registrar_entrega", { p });

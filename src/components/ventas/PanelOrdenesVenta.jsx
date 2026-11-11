@@ -16,12 +16,15 @@ import { logoBFK } from "../../lib/cotizacionesDatos";
 import logoUrl from "../../assets/bfk-logo.jpg";
 import { folioVPDesdeHash, hashVP } from "../../lib/navegacion";
 import { CompraVentaPrivada } from "./CompraVentaPrivada";
+import { SeccionFinanciamiento, BloqueFinanciamientoCompra, subirComprobantes } from "./Financiamiento";
+import { asignarVendedor, registrarCompraManualFinanciada } from "../../lib/ventasPrivadasDatos";
+import { claveVendedor, nombreVendedor, opcionesVendedor, gruposVendedor, filtrarPorVendedor, validarAportes, aportesParaGuardar } from "../../lib/vpFinanciamiento";
 import { tieneBaseCotizacion } from "../../lib/compraVentaPrivada";
 
 const FILTROS = [{ key: "", label: "Vigentes" }, { key: "por_entregar", label: "Por entregar" }, { key: "por_facturar", label: "Por facturar" }, { key: "por_cobrar", label: "Por cobrar" }, { key: "vencidas", label: "Pago vencido" }, { key: "anuladas", label: "Anuladas" }];
 
 export function PanelOrdenesVenta({ token, perfil, vp, onRecargar, showToast, onAbrir, focoId, onFocoUsado }) {
-  const [texto, setTexto] = useState(""); const [filtro, setFiltro] = useState(""); const [abierta, setAbierta] = useState(null);
+  const [texto, setTexto] = useState(""); const [filtro, setFiltro] = useState(""); const [abierta, setAbierta] = useState(null); const [vendedor, setVendedor] = useState("*");
   useEffect(() => {
     const sync = (ev) => { const f = folioVPDesdeHash(window.location.hash, "vp_ordenes"); if (!f) { if (ev) setAbierta((a) => (a === "nueva" ? a : null)); return; } { const v = vp.ventas.find((x) => x.folio === f); if (v) setAbierta(v.id); } };
     sync(null); window.addEventListener("popstate", sync); return () => window.removeEventListener("popstate", sync);
@@ -29,7 +32,8 @@ export function PanelOrdenesVenta({ token, perfil, vp, onRecargar, showToast, on
   useEffect(() => { if (focoId) { setAbierta(focoId); onFocoUsado?.(); } }, [focoId]); // eslint-disable-line react-hooks/exhaustive-deps
   const abrir = (id) => { const v = vp.ventas.find((x) => x.id === id); if (v) window.history.pushState(null, "", hashVP("vp_ordenes", v.folio)); setAbierta(id); };
   const cerrar = () => { if (folioVPDesdeHash(window.location.hash, "vp_ordenes")) window.history.pushState(null, "", hashVP("vp_ordenes")); setAbierta(null); };
-  const filas = useMemo(() => filtrarVentas(vp.ventas, { texto, estado: filtro }), [vp.ventas, texto, filtro]);
+  const filas = useMemo(() => filtrarPorVendedor(filtrarVentas(vp.ventas, { texto, estado: filtro }), vp.finInstalado ? vendedor : "*"), [vp.ventas, texto, filtro, vendedor, vp.finInstalado]);
+  const vendedoresLista = useMemo(() => gruposVendedor(vp.ventas || []), [vp.ventas]);
   if (!vp.instalado) return <NoInstalado />;
   const vig = vp.ventas.filter((v) => v.estado !== "anulada");
   const n = (f) => filtrarVentas(vp.ventas, { estado: f }).length;
@@ -43,14 +47,18 @@ export function PanelOrdenesVenta({ token, perfil, vp, onRecargar, showToast, on
         <Kpi dato="ov-por-entregar" et="Por entregar" v={n("por_entregar")} onClick={() => setFiltro("por_entregar")} />
       </RejillaKpi>
       <Seccion titulo={`Órdenes de venta · ${filas.length}`}>
-        <Entrada data-buscar-ventas value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Buscar por folio, cliente, RUT, cotización u OC del cliente" style={{ marginBottom: 8 }} />
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+          <Entrada data-buscar-ventas value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Buscar por folio, cliente, RUT, cotización u OC del cliente" style={{ flex: "1 1 240px" }} />
+          {vp.finInstalado && <Selector aria-label="Vendedor" data-filtro-vendedor value={vendedor} onChange={(e) => setVendedor(e.target.value)} style={{ flex: "0 1 220px", width: "auto" }}
+            opciones={[{ v: "*", l: "Todos los vendedores" }, ...vendedoresLista.map((g) => ({ v: g.clave, l: g.nombre }))]} />}
+        </div>
         <Pestanas etiqueta="Filtro de ventas" activa={filtro} onCambiar={setFiltro} compacta items={FILTROS.map((f) => ({ ...f, n: f.key ? n(f.key) || null : null, tono: f.key === "vencidas" ? "danger" : null }))} />
         {!filas.length && <Vacio dato="sin-ventas">{vp.ventas.length ? "Ninguna venta coincide." : "Aún no hay ventas privadas. Crea una desde una cotización aceptada o con «+ Nuevo»."}</Vacio>}
         {filas.map((v) => (
           <button key={v.id} type="button" data-venta={v.folio} onClick={() => abrir(v.id)} style={{ ...cardStyle, borderRadius: R.md, padding: "11px 14px", marginBottom: 8, width: "100%", textAlign: "left", cursor: "pointer", opacity: v.estado === "anulada" ? 0.6 : 1 }}>
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
               <span style={{ fontFamily: MONO, fontWeight: 800, color: C.ink }}>{v.folio}</span>
-              <span style={{ fontSize: T.small, color: C.inkMuted, flex: 1, minWidth: 140 }}>{v.cliente_nombre} · {v.origen === "directa" ? "venta directa" : folioRevision(v.cotizacion_folio, v.cotizacion_revision)}{v.oc_cliente_numeros ? ` · OC ${v.oc_cliente_numeros}` : ""}</span>
+              <span style={{ fontSize: T.small, color: C.inkMuted, flex: 1, minWidth: 140 }}>{v.cliente_nombre} · {v.origen === "directa" ? "venta directa" : folioRevision(v.cotizacion_folio, v.cotizacion_revision)}{v.oc_cliente_numeros ? ` · OC ${v.oc_cliente_numeros}` : ""}{vp.finInstalado ? <> · <span data-vendedor-venta={claveVendedor(v) || "sin"}>vendedor {nombreVendedor(v)}</span></> : null}</span>
               <span style={{ fontFamily: MONO, fontWeight: 800 }}>{pesos(v.total)}</span>
             </div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
@@ -59,6 +67,7 @@ export function PanelOrdenesVenta({ token, perfil, vp, onRecargar, showToast, on
                 <BadgeVP mapa={ESTADOS_FACTURACION} k={v.estado_facturacion} dato={`fact-${v.estado_facturacion}`} />
                 <BadgeVP mapa={ESTADOS_PAGO} k={v.estado_pago} dato={`pago-${v.estado_pago}`} />
                 {Number(v.monto_vencido) > 0 && <Badge tono="danger">Vencido {pesos(v.monto_vencido)}</Badge>}
+                {Number(v.financiamiento?.sin_informar) > 0 && <Badge tono="warn"><span data-badge-fin-sin-informar>Financiamiento sin informar</span></Badge>}
               </>}
             </div>
           </button>
@@ -119,7 +128,7 @@ const pedirAnular = (setModal, tabla, id, titulo, texto) => setModal({ t: "anula
 
 // ── Detalle: cliente, origen, OC, ítems, precios, costos, margen y condiciones ─────────────────────
 function Detalle({ token, d, v, esResp, esAdmin, vigente, vp, showToast, refrescar, setModal, onAbrir }) {
-  const [editando, setEditando] = useState(false); const [f, setF] = useState(null); const [oc, setOc] = useState(false); const [compra, setCompra] = useState(false);
+  const [editando, setEditando] = useState(false); const [f, setF] = useState(null); const [oc, setOc] = useState(false); const [compra, setCompra] = useState(false); const [vend, setVend] = useState(false);
   // Costo estimado por ítem (puede faltar: ítem con proveedor y enlace pero sin precio de compra al cotizar).
   const costos = new Map(d.costos.map((k) => [k.item_id, k.costo_unitario_estimado == null ? null : Number(k.costo_unitario_estimado)]));
   const compras = new Map(d.costos.map((k) => [k.item_id, k]));
@@ -139,13 +148,15 @@ function Detalle({ token, d, v, esResp, esAdmin, vigente, vp, showToast, refresc
         <Fila k="Cliente" v={`${v.cliente_nombre} · ${v.cliente_rut || ""}`} />
         <Fila k="Origen" v={v.origen === "directa" ? "Venta directa (sin cotización)" : folioRevision(v.cotizacion_folio, v.cotizacion_revision)} />
         <Fila k="Fecha de la venta" v={fechaTxt(v.fecha)} />
-        <Fila k="Responsable" v={v.responsable_nombre || "—"} />
+        {d.finInstalado && <Fila k="Vendedor" v={<span data-vendedor-ficha={claveVendedor(v) || "sin"}>{nombreVendedor(v)}{v.vendedor_tipo === "bfk" ? " · sin comisión personal" : ""}</span>} />}
+        <Fila k="Responsable (gestiona y registra)" v={v.responsable_nombre || "—"} />
         <Fila k="OC del cliente" v={v.oc_cliente_numeros || "Sin OC del cliente (orden interna)"} />
       </div>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
         {v.cotizacion_id && <button type="button" data-ir-cotizacion onClick={() => onAbrir?.("vp_cotizaciones", v.cotizacion_id)} style={estiloBoton()}>Ver cotización</button>}
         {v.revision_id && <button type="button" data-pdf-aprobada onClick={pdfAprobada} style={estiloBoton()}>PDF cotización aprobada</button>}
         {vigente && <button type="button" data-registrar-oc onClick={() => setOc(true)} style={estiloBoton()}>Registrar OC del cliente</button>}
+        {vigente && d.finInstalado && esResp && (!v.vendedor_tipo || esAdmin) && <button type="button" data-cambiar-vendedor onClick={() => setVend(true)} style={estiloBoton()}>{v.vendedor_tipo ? "Cambiar vendedor" : "Asignar vendedor"}</button>}
         {vigente && esAdmin && <button type="button" data-anular-venta onClick={() => setModal({ t: "anular_venta" })} style={estiloBoton("peligro")}>Anular venta</button>}
       </div>
     </Seccion>
@@ -193,7 +204,8 @@ function Detalle({ token, d, v, esResp, esAdmin, vigente, vp, showToast, refresc
           {k.estado === "vigente" && <button type="button" onClick={() => pedirAnular(setModal, "compra", k.id, "Anular costo real")} style={estiloBoton("peligro")}>Anular</button>}
         </div>
       ))}
-    </Seccion> : <AvisoLinea tono="info" icono="🔒">Costos y márgenes: visibles solo para el responsable de la venta y los administradores.</AvisoLinea>}
+    </Seccion> : <AvisoLinea tono="info" icono="🔒">Costos, márgenes y financiamiento: visibles solo para el responsable de la venta y los administradores.</AvisoLinea>}
+    {verCostos && d.finInstalado && <SeccionFinanciamiento token={token} d={d} v={v} vp={vp} esResp={esResp} showToast={showToast} refrescar={refrescar} />}
     <Seccion titulo="Condiciones" accion={vigente && esResp && !editando && <button type="button" data-editar-venta onClick={() => { setF({ fecha_entrega_comprometida: v.fecha_entrega_comprometida || "", plazo_entrega: v.plazo_entrega || "", direccion_entrega: v.direccion_entrega || "", plazo_pago_dias: v.plazo_pago_dias, observaciones: d.cab.observaciones || "" }); setEditando(true); }} style={estiloBoton()}>Editar</button>}>
       {!editando ? <div style={{ ...cardStyle, borderRadius: R.md, padding: "8px 14px" }}>
         <Fila k="Entrega comprometida" v={v.fecha_entrega_comprometida ? fechaTxt(v.fecha_entrega_comprometida) : "Sin fecha"} />
@@ -213,7 +225,8 @@ function Detalle({ token, d, v, esResp, esAdmin, vigente, vp, showToast, refresc
     </Seccion>
     <Seccion titulo="Historial"><HistorialLista filas={d.historial} /></Seccion>
     {oc && <FormOC token={token} v={v} vp={vp} showToast={showToast} onCerrar={() => setOc(false)} onListo={async () => { setOc(false); await refrescar(); }} />}
-    {compra === "cotizacion" && <CompraVentaPrivada token={token} v={v} d={d} showToast={showToast} onCerrar={() => setCompra(false)} onManual={() => setCompra("manual")} onListo={async () => { setCompra(false); await refrescar(); }} />}
+    {vend && <FormVendedor token={token} v={v} vp={vp} showToast={showToast} onCerrar={() => setVend(false)} onListo={async () => { setVend(false); await refrescar(); }} />}
+    {compra === "cotizacion" && <CompraVentaPrivada token={token} v={v} d={d} vp={vp} showToast={showToast} onCerrar={() => setCompra(false)} onManual={() => setCompra("manual")} onListo={async () => { setCompra(false); await refrescar(); }} />}
     {compra === "manual" && <FormCompra token={token} v={v} d={d} vp={vp} showToast={showToast} onCerrar={() => setCompra(false)} onListo={async () => { setCompra(false); await refrescar(); }} />}
   </>);
 }
@@ -249,14 +262,28 @@ function FormCompra({ token, v, d, vp, showToast, onCerrar, onListo }) {
   const [origen, setOrigen] = useState("registro");
   const [f, setF] = useState({ proveedor: "", fecha: hoyISO(), documento_tipo: "factura", documento_numero: "", neto: "", iva: "", iva_recuperable: true, descripcion: "", venta_item_id: "" });
   const [gastos, setGastos] = useState(null); const [gasto, setGasto] = useState(null); const [q, setQ] = useState(""); const [err, setErr] = useState(""); const [ocupado, setOcupado] = useState(false);
+  // Financiamiento (11/11/2026): con la base actualizada, el registro manual lleva clave (un reintento no duplica la compra) y,
+  // opcionalmente, quién la financió. Un gasto ya registrado en Gastos no se financia aquí (su pago ya está registrado).
+  const conFin = !!(vp?.finInstalado && d.finInstalado); const clave = useRef(nuevaClave()); const enCurso = useRef(false);
+  const [finActivo, setFinActivo] = useState(false); const [finFilas, setFinFilas] = useState([]);
+  const totalCompra = (aPesos(f.neto) || 0) + (aPesos(f.iva) || 0);
   useEffect(() => { if (origen === "gasto_existente") buscarGastos(token, q).then(setGastos).catch((e) => setErr(mensajeVP(e))); }, [origen, q, token]);
   const ok = async () => {
-    setOcupado(true); setErr("");
+    if (enCurso.current) return;
+    setErr("");
+    if (origen === "gasto_existente" && !gasto) { setErr("Elige el gasto a vincular."); return; }
+    const usarFin = conFin && origen === "registro" && finActivo;
+    if (usarFin) { const val = validarAportes(finFilas, { disponible: totalCompra }); if (val.errores.length) { setErr(val.errores.join(" ")); return; } }
+    enCurso.current = true; setOcupado(true);
     try {
-      if (origen === "gasto_existente") { if (!gasto) { setErr("Elige el gasto a vincular."); setOcupado(false); return; } await registrarCompra(token, { venta_id: v.id, origen, gasto_id: gasto.id, venta_item_id: f.venta_item_id || null, descripcion: f.descripcion || null }); }
-      else await registrarCompra(token, { venta_id: v.id, origen, ...f, venta_item_id: f.venta_item_id || null, neto: aPesos(f.neto), iva: aPesos(f.iva) ?? 0 });
-      showToast?.("Costo real registrado"); onListo();
-    } catch (e) { setErr(mensajeVP(e)); } finally { setOcupado(false); }
+      const compra = origen === "gasto_existente" ? { venta_id: v.id, origen, gasto_id: gasto.id, venta_item_id: f.venta_item_id || null, descripcion: f.descripcion || null }
+        : { venta_id: v.id, origen, ...f, venta_item_id: f.venta_item_id || null, neto: aPesos(f.neto), iva: aPesos(f.iva) ?? 0 };
+      if (conFin) {
+        const r = await registrarCompraManualFinanciada(token, clave.current, compra, usarFin ? aportesParaGuardar(await subirComprobantes(token, v.id, finFilas, setFinFilas)) : []);
+        showToast?.(r?.ya_existia ? "La compra ya estaba registrada (no se duplicó)" : usarFin ? "Costo real y financiamiento registrados" : "Costo real registrado");
+      } else { await registrarCompra(token, compra); showToast?.("Costo real registrado"); }
+      onListo();
+    } catch (e) { setErr(e.status === 0 && conFin ? `Se perdió la conexión: ${mensajeVP(e)} Puedes reintentar: la misma compra no se registra dos veces.` : mensajeVP(e)); enCurso.current = false; setOcupado(false); }
   };
   const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value }));
   return (
@@ -288,7 +315,28 @@ function FormCompra({ token, v, d, vp, showToast, onCerrar, onListo }) {
         </div>
       </>}
       <Campo etiqueta="Descripción"><Area value={f.descripcion} onChange={set("descripcion")} /></Campo>
+      {origen === "registro" && conFin && <BloqueFinanciamientoCompra activo={finActivo} setActivo={setFinActivo} filas={finFilas} setFilas={setFinFilas} financiadores={vp.financiadores || []}
+        disponible={totalCompra} documentosHabilitados={vp.documentosHabilitados} />}
       {origen === "registro" && <div style={{ fontSize: T.small, color: C.inkFaint }}>El respaldo (factura del proveedor) se adjunta en Documentos como «Respaldo de compra (interno)».</div>}
+    </Ventana>
+  );
+}
+
+// Vendedor de la venta: BFK (la empresa, sin cuenta de acceso ni comisión personal) o un vendedor del catálogo de BFK. El
+// responsable no cambia. Una venta que ya tiene vendedor solo la reasigna un administrador. Queda en el historial.
+function FormVendedor({ token, v, vp, showToast, onCerrar, onListo }) {
+  const [val, setVal] = useState(claveVendedor(v)); const [err, setErr] = useState(""); const [ocupado, setOcupado] = useState(false);
+  const ok = async () => {
+    setOcupado(true); setErr("");
+    try { const r = await asignarVendedor(token, "venta", v.id, val, v.version); showToast?.(r?.sin_cambios ? "Sin cambios" : `Vendedor: ${r.vendedor_nombre || "sin asignar"}`); onListo(); }
+    catch (e) { setErr(mensajeVP(e)); setOcupado(false); }
+  };
+  return (
+    <Ventana titulo={`Vendedor de ${v.folio}`} onCerrar={onCerrar} dato="form-vendedor" ancho={480}
+      pie={<><button type="button" onClick={onCerrar} style={estiloBoton()}>Cancelar</button><button type="button" data-guardar-vendedor disabled={ocupado} onClick={ok} style={{ ...estiloBoton("pri"), minHeight: 44 }}>{ocupado ? "Guardando…" : "Guardar"}</button></>}>
+      <p style={{ marginTop: 0, fontSize: T.sm, color: C.inkMuted, lineHeight: 1.5 }}>A quién se atribuye la venta en los indicadores. El responsable ({v.responsable_nombre}) sigue gestionando la operación y registrando sus cambios. Una venta de <b>BFK</b> no se atribuye a ninguna persona ni genera comisión personal.</p>
+      <ErrorForm>{err}</ErrorForm>
+      <Campo etiqueta="Vendedor"><Selector data-selector-vendedor value={val} onChange={(e) => setVal(e.target.value)} vacio="Sin vendedor asignado" opciones={opcionesVendedor(vp.vendedores, v)} /></Campo>
     </Ventana>
   );
 }

@@ -11,6 +11,7 @@ import { BibliotecaTecnica } from "./BibliotecaTecnica";
 import { EditorCotizacionPrivada, HistorialLista } from "./EditorCotizacionPrivada";
 import { ESTADOS_COTIZACION, filtrarCotizaciones, pesos, fechaTxt, folioRevision } from "../../lib/ventasPrivadas";
 import { folioVPDesdeHash, hashVP } from "../../lib/navegacion";
+import { claveVendedor, nombreVendedor, gruposVendedor, filtrarPorVendedor } from "../../lib/vpFinanciamiento";
 
 const FILTROS = [{ v: "", l: "Todos los estados" }, ...["borrador", "enviada", "aceptada", "rechazada", "vencida"].map((k) => ({ v: k, l: ESTADOS_COTIZACION[k].l }))];
 
@@ -18,6 +19,7 @@ export function PanelCotizacionesPrivadas({ token, perfil, vp, onRecargar, showT
   const [pestana, setPestana] = useState("cotizaciones");
   const [texto, setTexto] = useState(""); const [estado, setEstado] = useState(""); const [cliente, setCliente] = useState(""); const [desde, setDesde] = useState(""); const [hasta, setHasta] = useState("");
   const [abierta, setAbierta] = useState(null);   // id | "nueva"
+  const [vendedor, setVendedor] = useState("*");
   // Enlace directo #/cotizaciones-privadas/CP-AAAA-NNNN
   useEffect(() => {
     const sync = (ev) => { const f = folioVPDesdeHash(window.location.hash, "vp_cotizaciones"); if (!f) { if (ev) setAbierta((a) => (a === "nueva" ? a : null)); return; } { const c = vp.cotizaciones.find((x) => x.folio === f); if (c) setAbierta(c.id); } };
@@ -27,7 +29,8 @@ export function PanelCotizacionesPrivadas({ token, perfil, vp, onRecargar, showT
   useEffect(() => { if (nuevaSolicitada) { setAbierta("nueva"); setPestana("cotizaciones"); onNuevaUsada?.(); } }, [nuevaSolicitada]); // eslint-disable-line react-hooks/exhaustive-deps
   const abrir = (id) => { const c = vp.cotizaciones.find((x) => x.id === id); if (c) window.history.pushState(null, "", hashVP("vp_cotizaciones", c.folio)); setAbierta(id); };
   const cerrar = () => { if (folioVPDesdeHash(window.location.hash, "vp_cotizaciones")) window.history.pushState(null, "", hashVP("vp_cotizaciones")); setAbierta(null); };
-  const filas = useMemo(() => filtrarCotizaciones(vp.cotizaciones, { texto, estado, cliente, desde, hasta }), [vp.cotizaciones, texto, estado, cliente, desde, hasta]);
+  const filas = useMemo(() => filtrarPorVendedor(filtrarCotizaciones(vp.cotizaciones, { texto, estado, cliente, desde, hasta }), vp.finInstalado ? vendedor : "*"), [vp.cotizaciones, texto, estado, cliente, desde, hasta, vendedor, vp.finInstalado]);
+  const vendedoresLista = useMemo(() => gruposVendedor(vp.cotizaciones || []), [vp.cotizaciones]);
   const clientesConCot = useMemo(() => [...new Map(vp.cotizaciones.map((c) => [c.cliente_id, c.cliente_nombre]))].map(([v, l]) => ({ v, l })).sort((a, b) => a.l.localeCompare(b.l)), [vp.cotizaciones]);
   if (!vp.instalado) return <NoInstalado />;
   const ind = { borrador: 0, enviada: 0, aceptada: 0, porVencer: 0, montoEnviado: 0 };
@@ -51,6 +54,7 @@ export function PanelCotizacionesPrivadas({ token, perfil, vp, onRecargar, showT
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 8, marginBottom: 12 }}>
             <Selector data-filtro-estado value={estado} onChange={(e) => setEstado(e.target.value)} opciones={FILTROS} />
             <Selector data-filtro-cliente value={cliente} onChange={(e) => setCliente(e.target.value)} vacio="Todos los clientes" opciones={clientesConCot} />
+            {vp.finInstalado && <Selector aria-label="Vendedor" data-filtro-vendedor-cot value={vendedor} onChange={(e) => setVendedor(e.target.value)} opciones={[{ v: "*", l: "Todos los vendedores" }, ...vendedoresLista.map((g) => ({ v: g.clave, l: g.nombre }))]} />}
             <Entrada type="date" aria-label="Emitidas desde" value={desde} onChange={(e) => setDesde(e.target.value)} />
             <Entrada type="date" aria-label="Emitidas hasta" value={hasta} onChange={(e) => setHasta(e.target.value)} />
           </div>
@@ -59,7 +63,7 @@ export function PanelCotizacionesPrivadas({ token, perfil, vp, onRecargar, showT
             <button key={c.id} type="button" data-cotizacion={c.folio} onClick={() => abrir(c.id)} style={{ ...cardStyle, borderRadius: R.md, padding: "11px 14px", marginBottom: 8, width: "100%", textAlign: "left", cursor: "pointer", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
               <div style={{ flex: "1 1 220px", minWidth: 0 }}>
                 <div style={{ fontFamily: MONO, fontWeight: 800, color: C.ink }}>{folioRevision(c.folio, c.revision_actual)}</div>
-                <div style={{ fontSize: T.small, color: C.inkMuted }}>{c.cliente_nombre} · emitida {fechaTxt(c.fecha_emision)} · vence {fechaTxt(c.vigencia_hasta)}</div>
+                <div style={{ fontSize: T.small, color: C.inkMuted }}>{c.cliente_nombre} · emitida {fechaTxt(c.fecha_emision)} · vence {fechaTxt(c.vigencia_hasta)}{vp.finInstalado ? <> · <span data-vendedor-cot={claveVendedor(c) || "sin"}>vendedor {nombreVendedor(c)}</span></> : null}</div>
               </div>
               <BadgeVP mapa={ESTADOS_COTIZACION} k={c.estado_efectivo} />
               {c.venta_folio && <Badge tono="ok">{c.venta_folio}</Badge>}

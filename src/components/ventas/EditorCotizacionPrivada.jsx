@@ -31,6 +31,8 @@ import { ImagenFicha } from "../cotizaciones/ImagenFicha";
 import { VistaPreviaEETT } from "../cotizaciones/VistaPreviaEETT";
 import { ConflictoVersion } from "../ui/ConflictoVersion";
 import { combinarVersiones, aplicarCombinacion, normalizarProductos, resumenProductos, textoValor } from "../../lib/conflictoVersion";
+import { claveVendedor, nombreVendedor, opcionesVendedor } from "../../lib/vpFinanciamiento";
+import { asignarVendedor } from "../../lib/ventasPrivadasDatos";
 import { leerCotizacion, guardarCotizacion, cambiarEstadoCotizacion, nuevaRevision, duplicarCotizacion, historialCotizacion, anular, esquemaFichaVP, leerEETT, listarEETT, guardarEETT, emitirEETT, ocClienteDeVenta } from "../../lib/ventasPrivadasDatos";
 import { accionesCotizacion, ESTADOS_COTIZACION, fechaTxt, hoyISO, sumarDias, folioRevision, mensajeVP, documentoDesdeEditor, cantidadTxt } from "../../lib/ventasPrivadas";
 import { itemVacioVP, cotizacionParaEditor, calcularCotizacionVP, precioConRecargo, lineaParaGuardarVP, validarItemsVP, descripcionDeFicha } from "../../lib/vpCotizacion";
@@ -60,10 +62,12 @@ const gruposConflicto = (clientes) => [
   { k: "cliente_id", etiqueta: "Cliente", claves: ["cliente_id"], resumen: (v) => clientes.find((x) => x.id === v.cliente_id)?.razon_social || textoValor(v.cliente_id) },
   ...CAMPOS_CAB.map((k) => ({ k, etiqueta: ETIQUETAS_CAB[k] || k, claves: [k] })),
   { k: "afecta_iva", etiqueta: "Afecta IVA", claves: ["afecta_iva"], resumen: (v) => (v.afecta_iva === false ? "No" : "Sí") },
+  { k: "vendedor", etiqueta: "Vendedor", claves: ["vendedor"], resumen: (v) => (v.vendedor === "bfk" ? "BFK" : v.vendedor ? v.vendedor : "Sin vendedor asignado") },
   { k: "productos", etiqueta: "Productos, precios y despachos", claves: ["items", "envios"], normalizar: normalizarProductos, resumen: resumenProductos },
 ];
 const cotDesde = (x) => { const { rev, items, envios } = cotizacionParaEditor(x, x.cab.revision_id);
-  return { cliente_id: x.cab.cliente_id, ...Object.fromEntries(CAMPOS_CAB.map((k) => [k, rev[k] ?? ""])), afecta_iva: rev.afecta_iva !== false, items, envios }; };
+  return { cliente_id: x.cab.cliente_id, ...Object.fromEntries(CAMPOS_CAB.map((k) => [k, rev[k] ?? ""])), afecta_iva: rev.afecta_iva !== false, items, envios,
+    ...(x.cab._vendedorInstalado ? { vendedor: claveVendedor(x.cab) } : {}) }; };
 
 // Campo de porcentaje (igual al de Mercado Público): muestra % y entrega fracción; conserva el texto mientras se escribe.
 function CampoPorcentaje({ id, dato, valor, onCambiar, disabled, ancho = 80 }) {
@@ -123,7 +127,8 @@ export function EditorCotizacionPrivada({ token, perfil, vp, id, showToast, onCe
       let x = null;
       if (id) x = await cargar(id);
       else setCot({ cliente_id: null, contacto_nombre: "", contacto_correo: "", contacto_telefono: "", fecha_emision: hoyISO(), vigencia_hasta: sumarDias(hoyISO(), 15), plazo_entrega: "",
-        direccion_entrega: "", condiciones_pago: "", observaciones: "", condiciones_comerciales: "", afecta_iva: true, items: [], envios: [] });
+        direccion_entrega: "", condiciones_pago: "", observaciones: "", condiciones_comerciales: "", afecta_iva: true, items: [], envios: [],
+        ...(vp.finInstalado ? { vendedor: perfil?.vendedor_id && (vp.vendedores || []).some((v) => v.id === perfil.vendedor_id && v.activo !== false) ? perfil.vendedor_id : "" } : {}) });
       // Borrador de recuperación de este dispositivo (cambios que no alcanzaron a guardarse).
       const b = await leerBorrador(usuarioLocal(usuarioId), id || "nueva").catch(() => null);
       if (b?.cot && (!id || b.versionBase === x?.cab?.version)) setRecuperable(b);
@@ -268,7 +273,9 @@ export function EditorCotizacionPrivada({ token, perfil, vp, id, showToast, onCe
     const items = await Promise.all(cot.items.map(async (it, i) => lineaParaGuardarVP(it, ca.lineas[i], {
       imagenes: await subirImagenesFicha(tokenRef.current, (it.ficha?.imagenes || []).slice(0, 4)),
       envio: it.tipo === "servicio" ? null : cot.envios.find((e) => e.key === it.envio_key) || null, conCostos: verCostos })));
-    const p = { ...(c ? { id: c.id, version: c.version } : {}), cliente_id: cot.cliente_id, ...Object.fromEntries(CAMPOS_CAB.map((k) => [k, cot[k]])), afecta_iva: cot.afecta_iva !== false, items };
+    const p = { ...(c ? { id: c.id, version: c.version } : {}), cliente_id: cot.cliente_id, ...Object.fromEntries(CAMPOS_CAB.map((k) => [k, cot[k]])), afecta_iva: cot.afecta_iva !== false, items,
+      // Vendedor (11/11/2026): solo se envía si cambió; sin cambio, se guarda con la función de siempre (vp_guardar_cotizacion).
+      ...("vendedor" in cot && vp.finInstalado && (cot.vendedor || "") !== (c ? claveVendedor(c) : "") ? { vendedor: cot.vendedor || "" } : {}) };
     const r = await guardarCotizacion(tokenRef.current, p);
     borrarBorrador(usuarioLocal(usuarioId), id || "nueva").catch(() => {});
     await onRecargar?.();
@@ -479,7 +486,9 @@ export function EditorCotizacionPrivada({ token, perfil, vp, id, showToast, onCe
             <Field label="Correo"><input data-campo="correo" type="email" disabled={ro} value={vista.contacto_correo || ""} maxLength={200} onChange={(e) => setCampo("contacto_correo", e.target.value)} style={iStyle} /></Field>
             <Field label="Teléfono"><input data-campo="telefono" disabled={ro} value={vista.contacto_telefono || ""} maxLength={40} onChange={(e) => setCampo("contacto_telefono", e.target.value)} style={iStyle} /></Field>
           </div>
-          <Field label="Responsable" hint="Quien crea la cotización queda como responsable (decide costos, envío, aceptación y venta)."><input data-campo="responsable" disabled value={c?.responsable_nombre || perfil?.nombre || ""} style={iStyle} /></Field>
+          {"vendedor" in (cot || {}) && vp.finInstalado && <CampoVendedor vp={vp} c={c} valor={vista.vendedor ?? ""} editable={!ro} puedeReasignar={!!c && esResp && (!c.vendedor_tipo || esAdmin)}
+            onCambiar={(v) => setCampo("vendedor", v)} onReasignar={async (v) => { try { await asignarVendedor(tokenRef.current, "cotizacion", c.id, v, c.version); showToast?.("Vendedor actualizado"); await onRecargar?.(); await cargar(c.id); } catch (e) { showToast?.(mensajeVP(e), "error"); } }} />}
+          <Field label="Responsable" hint="Quien crea la cotización queda como responsable (gestiona: decide costos, envío, aceptación y venta). El vendedor puede ser otra persona o BFK."><input data-campo="responsable" disabled value={c?.responsable_nombre || perfil?.nombre || ""} style={iStyle} /></Field>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             <Field label="Folio"><input data-campo="folio" disabled value={c ? folioRevision(c.folio, rvVista?.numero ?? c.revision_actual) : "Se asigna al guardar"} style={iMono} /></Field>
             <Field label="Fecha de emisión"><input data-campo="emision" type="date" disabled={ro} value={vista.fecha_emision || ""} onChange={(e) => setCampo("fecha_emision", e.target.value)} style={iStyle} /></Field>
@@ -759,5 +768,24 @@ export function HistorialLista({ filas }) {
         );
       })}
     </div>
+  );
+}
+
+// Vendedor de la cotización (11/11/2026): BFK (la empresa, sin cuenta de acceso ni comisión personal) o un vendedor del catálogo.
+// En borrador se guarda con la cotización; en una cotización ya enviada se asigna aparte (si ya tenía vendedor, solo un
+// administrador lo cambia). Al convertirla en venta, la venta conserva este vendedor.
+function CampoVendedor({ vp, c, valor, editable, puedeReasignar, onCambiar, onReasignar }) {
+  const [v, setV] = useState(valor); const [ocupado, setOcupado] = useState(false);
+  useEffect(() => { setV(valor); }, [valor]);
+  const op = opcionesVendedor(vp.vendedores, c || null);
+  const hint = valor === "bfk" ? "Venta de BFK: no se atribuye a una persona ni genera comisión personal." : "A quién se atribuye la venta en los indicadores.";
+  if (editable) return <Field label="Vendedor" hint={hint}><select data-campo="vendedor" value={valor} onChange={(e) => onCambiar(e.target.value)} style={selStyle}><option value="">Sin vendedor asignado</option>{op.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}</select></Field>;
+  return (
+    <Field label="Vendedor" hint={puedeReasignar ? hint : `${hint} Ya enviada: solo un administrador cambia un vendedor asignado.`}>
+      <div style={{ display: "flex", gap: 6 }}>
+        <select data-campo="vendedor" disabled={!puedeReasignar} value={v} onChange={(e) => setV(e.target.value)} style={{ ...selStyle, flex: 1 }}><option value="">{c ? nombreVendedor({}) : "Sin vendedor asignado"}</option>{op.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}</select>
+        {puedeReasignar && v !== valor && <button type="button" data-guardar-vendedor-cot disabled={ocupado} onClick={async () => { setOcupado(true); await onReasignar(v); setOcupado(false); }} style={{ minHeight: 40, padding: "0 12px", borderRadius: 8, border: "none", background: "#0B1120", color: "#fff", fontWeight: 800, cursor: "pointer" }}>{ocupado ? "…" : "Guardar"}</button>}
+      </div>
+    </Field>
   );
 }
