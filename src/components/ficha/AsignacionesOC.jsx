@@ -1,7 +1,7 @@
 // Vendedor y financiador de la OC, visibles y editables en pocos toques (ficha de OC).
 // La validación definitiva la hace la base (asignar_vendedor_oc / asignar_financiador_oc).
 import { useState } from "react";
-import { C, R, TOUCH, selStyle } from "../../lib/theme";
+import { C, R, TOUCH, selStyle, btnMini } from "../../lib/theme";
 import { Ic } from "../ui/Iconos";
 import { CAPITALIZACION, ETIQUETA_CAPITALIZACION, SIN_DEFINIR, esCapitalizacion, estadoComision, evaluarCambioFinanciador, evaluarCambioVendedor, faltaFinanciador, faltaVendedor, nombreFinanciador, nombreVendedor, valorVendedor } from "../../lib/asignaciones";
 import { tipoFinanciamiento, TIPOS_FINANCIAMIENTO } from "../../lib/finanzas";
@@ -30,7 +30,7 @@ function Fila({ etiqueta, rol, nombre, falta, detalle, opciones, extras = [], va
         </span>
         {!editando && !deshabilitado && (
           <button data-asignacion-editar onClick={abrir}
-            style={{ border: `1px solid ${C.borderFuerte}`, background: C.card, color: C.ink, borderRadius: R.sm, padding: "6px 12px", fontSize: 13, fontWeight: 500, cursor: "pointer", minHeight: TOUCH - 8 }}>
+            style={btnMini()}>
             Editar
           </button>
         )}

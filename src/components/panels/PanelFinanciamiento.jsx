@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Field, Modal, Trazabilidad } from "../ui/Basicos";
-import { C, MONO, btnP, fmt, iMono, iStyle } from "../../lib/theme";
+import { C, MONO, btnP, fmt, iMono, iStyle, btnMini } from "../../lib/theme";
 import { Ic, I } from "../ui/Iconos";
 import { Seccion, Tarjeta, Badge, Monto, Pestanas, PanelPestana, BarraAcciones, BotonPrincipal, BotonSecundario } from "../ui/Sistema";
 import { MEDIO_APORTE_SIN_BANCO } from "../../lib/mediosPago";
@@ -243,7 +243,7 @@ export function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onA
       <div style={{display:"flow-root",clear:"both",position:"relative"}}>
       <Seccion titulo="Saldo por socio"
         nota="Capital que entra o sale de la empresa. Suma a la caja pero no cuenta como venta ni utilidad."
-        accion={<button onClick={()=>setNuevoAporte(true)} style={{fontSize:13,background:C.okLight,color:"#047857",border:"none",borderRadius:12,minHeight:36,padding:"6px 12px",fontWeight:600,cursor:"pointer"}}>+ Registrar</button>}>
+        accion={<button onClick={()=>setNuevoAporte(true)} style={btnMini("marca")}>+ Registrar</button>}>
         {(()=>{
           const lista=aportes||[];
           if(!lista.length) return <div style={{fontSize:13,color:C.inkMuted,padding:"6px 2px"}}>Sin aportes registrados</div>;

@@ -2,7 +2,7 @@
 // Avance, estado mostrado y atraso vienen de la vista pi_actividades_vista. La base valida niveles, ciclos,
 // responsables del equipo, fechas reales no futuras y la coherencia estado ↔ avance.
 import { useEffect, useState } from "react";
-import { C, MONO, R, S, T, cardStyle } from "../../lib/theme";
+import { C, MONO, R, S, T, cardStyle, btnMini } from "../../lib/theme";
 import { Badge, Seccion } from "../ui/Sistema";
 import { BarraAvance, Ventana, Campo, Rejilla, Entrada, Area, Selector, ErrorForm, Vacio, estiloBoton } from "./Comunes";
 import { ESTADOS_ACTIVIDAD, ESPECIALIDADES_CONTENIDO, estadoActividadDe, especialidadDe, etiqueta, numerarEDT, nivelMaximo, formatoFecha, formatoPct, mensajeError, hoyChile } from "../../lib/proyectos";
@@ -49,9 +49,9 @@ export function PestanaActividades({ token, proyecto: p, per, nombres, version, 
                 {per.editarContenido && a.estado !== "anulada" && !a.tiene_subtareas && <AvanceRapido token={token} fila={a} onGuardado={tras} showToast={showToast} />}
                 {per.editarContenido && (
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
-                    <button type="button" data-editar-actividad={a.edt} onClick={() => setForm({ fila: a })} style={{ ...estiloBoton(), minHeight: 34 }}>Editar</button>
-                    {a.nivel < nivelMaximo && a.estado !== "anulada" && <button type="button" data-subtarea={a.edt} onClick={() => setForm({ padre: a })} style={{ ...estiloBoton(), minHeight: 34 }}>+ Subtarea</button>}
-                    {per.eliminarContenido && <button type="button" data-eliminar-actividad={a.edt} onClick={() => eliminar(a)} style={{ ...estiloBoton("peligro"), minHeight: 34 }}>Eliminar</button>}
+                    <button type="button" data-editar-actividad={a.edt} onClick={() => setForm({ fila: a })} style={btnMini()}>Editar</button>
+                    {a.nivel < nivelMaximo && a.estado !== "anulada" && <button type="button" data-subtarea={a.edt} onClick={() => setForm({ padre: a })} style={btnMini()}>+ Subtarea</button>}
+                    {per.eliminarContenido && <button type="button" data-eliminar-actividad={a.edt} onClick={() => eliminar(a)} style={btnMini("peligro")}>Eliminar</button>}
                   </div>
                 )}
               </div>
@@ -91,7 +91,7 @@ function AvanceRapido({ token, fila, onGuardado, showToast }) {
       <input type="range" min="0" max="100" step="5" value={Number(v) || 0} onChange={(e) => setV(e.target.value)} aria-label={`Avance de ${fila.nombre}`} style={{ flex: 1, minWidth: 80, accentColor: C.teal }} />
       <input data-avance-input inputMode="decimal" value={v} onChange={(e) => setV(e.target.value)} style={{ width: 64, minHeight: 34, padding: "4px 8px", border: `1px solid ${C.border}`, borderRadius: R.sm, fontFamily: MONO, fontSize: T.sm, textAlign: "right" }} />
       <span style={{ fontSize: T.small, color: C.inkMuted }}>%</span>
-      {cambio && <button type="button" data-guardar-avance disabled={ocupado} onClick={guardar} style={{ ...estiloBoton("pri"), minHeight: 34 }}>{ocupado ? "…" : "Guardar"}</button>}
+      {cambio && <button type="button" data-guardar-avance disabled={ocupado} onClick={guardar} style={btnMini("pri")}>{ocupado ? "…" : "Guardar"}</button>}
     </div>
   );
 }

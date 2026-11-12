@@ -2,7 +2,7 @@
 // La base: un hito con fecha real queda cumplido; un entregable emitido o aprobado registra su fecha de entrega;
 // código de entregable único por proyecto; fechas reales no futuras; eliminar solo administrador y sin dependencias.
 import { useEffect, useState } from "react";
-import { C, MONO, R, S, T, cardStyle } from "../../lib/theme";
+import { C, MONO, R, S, T, cardStyle, btnMini } from "../../lib/theme";
 import { Badge, Seccion } from "../ui/Sistema";
 import { Ventana, Campo, Rejilla, Entrada, Area, Selector, ErrorForm, Vacio, PedirMotivo, estiloBoton } from "./Comunes";
 import { TIPOS_HITO, TIPOS_ENTREGABLE, ESTADOS_ENTREGABLE, ESPECIALIDADES_CONTENIDO, ENTREGABLE_ABIERTO, tipoHitoDe, estadoHitoDe, tipoEntregableDe, estadoEntregableDe, especialidadDe,
@@ -46,10 +46,10 @@ export function PestanaEntregables({ token, proyecto: p, per, nombres, version, 
             {h.descripcion && <div style={{ fontSize: T.small, color: C.inkMuted, marginTop: 3 }}>{h.descripcion}</div>}
             {per.editarContenido && (
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
-                {h.estado === "pendiente" && <button type="button" data-cumplir-hito={h.nombre} onClick={() => act(() => actualizarHito(token, h, { fecha_real: hoy }), "Hito cumplido")} style={{ ...estiloBoton("pri"), minHeight: 34 }}>Marcar cumplido hoy</button>}
-                <button type="button" data-editar-hito={h.nombre} onClick={() => setForm({ tipo: "hito", fila: h })} style={{ ...estiloBoton(), minHeight: 34 }}>Editar</button>
-                {h.estado !== "anulado" && <button type="button" onClick={() => act(() => actualizarHito(token, h, { estado: "anulado" }), "Hito anulado")} style={{ ...estiloBoton("peligro"), minHeight: 34 }}>Anular</button>}
-                {per.eliminarContenido && <button type="button" data-eliminar-hito={h.nombre} onClick={() => eliminar("hito", h, eliminarHito)} style={{ ...estiloBoton("peligro"), minHeight: 34 }}>Eliminar</button>}
+                {h.estado === "pendiente" && <button type="button" data-cumplir-hito={h.nombre} onClick={() => act(() => actualizarHito(token, h, { fecha_real: hoy }), "Hito cumplido")} style={btnMini("pri")}>Marcar cumplido hoy</button>}
+                <button type="button" data-editar-hito={h.nombre} onClick={() => setForm({ tipo: "hito", fila: h })} style={btnMini()}>Editar</button>
+                {h.estado !== "anulado" && <button type="button" onClick={() => act(() => actualizarHito(token, h, { estado: "anulado" }), "Hito anulado")} style={btnMini("peligro")}>Anular</button>}
+                {per.eliminarContenido && <button type="button" data-eliminar-hito={h.nombre} onClick={() => eliminar("hito", h, eliminarHito)} style={btnMini("peligro")}>Eliminar</button>}
               </div>
             )}
           </div>
@@ -74,9 +74,9 @@ export function PestanaEntregables({ token, proyecto: p, per, nombres, version, 
             </div>
             {per.editarContenido && (
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
-                <button type="button" data-editar-entregable={e.codigo || e.nombre} onClick={() => setForm({ tipo: "entregable", fila: e })} style={{ ...estiloBoton(), minHeight: 34 }}>Editar</button>
-                {e.estado !== "anulado" && <button type="button" onClick={() => setAnular(e)} style={{ ...estiloBoton("peligro"), minHeight: 34 }}>Anular</button>}
-                {per.eliminarContenido && <button type="button" data-eliminar-entregable={e.codigo || e.nombre} onClick={() => eliminar("entregable", e, eliminarEntregable)} style={{ ...estiloBoton("peligro"), minHeight: 34 }}>Eliminar</button>}
+                <button type="button" data-editar-entregable={e.codigo || e.nombre} onClick={() => setForm({ tipo: "entregable", fila: e })} style={btnMini()}>Editar</button>
+                {e.estado !== "anulado" && <button type="button" onClick={() => setAnular(e)} style={btnMini("peligro")}>Anular</button>}
+                {per.eliminarContenido && <button type="button" data-eliminar-entregable={e.codigo || e.nombre} onClick={() => eliminar("entregable", e, eliminarEntregable)} style={btnMini("peligro")}>Eliminar</button>}
               </div>
             )}
           </div>

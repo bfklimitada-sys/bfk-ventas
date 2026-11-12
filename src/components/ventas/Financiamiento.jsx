@@ -4,7 +4,7 @@
 // lib/vpFinanciamiento.js (misma definición que vp_fin_resumen). Los aportes y devoluciones NO cambian el costo de compra, la
 // utilidad, las comisiones ni los cobros del cliente: cobrar una venta no devuelve nada a quien la financió.
 import { useEffect, useMemo, useRef, useState } from "react";
-import { C, MONO, R, T, cardStyle } from "../../lib/theme";
+import { C, MONO, R, T, cardStyle, btnMini } from "../../lib/theme";
 import { Seccion, AvisoLinea, Badge } from "../ui/Sistema";
 import { Ventana, Campo, Rejilla, Entrada, Selector, ErrorForm, PedirMotivo } from "../proyectos/Comunes";
 import { estiloBoton, Fila, Kpi, RejillaKpi, Vacio } from "./Comunes";
@@ -119,13 +119,13 @@ export function SeccionFinanciamiento({ token, d, v, vp, esResp, showToast, refr
                 <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", fontSize: T.small }}>
                   <span style={{ flex: 1, minWidth: 160, color: C.inkMuted }}><b style={{ color: C.ink, fontFamily: MONO }}>{pesos(a.monto)}</b> · {fechaTxt(a.fecha)} · {medioTxt(a.medio)}{a.comprobante ? ` · ${a.comprobante}` : ""}{a.documento_id ? " · con archivo" : ""}{a.observacion ? ` · ${a.observacion}` : ""}</span>
                   {esResp && a.aportante_tipo === "persona" && a.pendiente > 0 && <button type="button" data-registrar-devolucion={a.id} onClick={() => setForm({ t: "devolucion", aporte: a })} style={estiloBoton("pri")}>Registrar devolución</button>}
-                  {esResp && <button type="button" data-anular-aporte={a.id} onClick={() => setForm({ t: "anular", tabla: "aporte", id: a.id, titulo: `Anular aporte de ${a.aportante_nombre} (${pesos(a.monto)})`, texto: "El aporte se conserva en el historial y deja de contar. Si tiene devoluciones vigentes, anúlalas primero." })} style={estiloBoton("peligro")}>Anular</button>}
+                  {esResp && <button type="button" data-anular-aporte={a.id} onClick={() => setForm({ t: "anular", tabla: "aporte", id: a.id, titulo: `Anular aporte de ${a.aportante_nombre} (${pesos(a.monto)})`, texto: "El aporte se conserva en el historial y deja de contar. Si tiene devoluciones vigentes, anúlalas primero." })} style={btnMini("peligro")}>Anular</button>}
                 </div>
                 <div data-registrado-por style={{ fontSize: T.small, color: C.inkFaint }}>Registrado por {registradoPor(d, a) || (a.creado_por === v.responsable_id ? v.responsable_nombre : "otro usuario")}</div>
                 {d.devoluciones.filter((x) => x.aporte_id === a.id && x.estado === "vigente").map((x) => (
                   <div key={x.id} data-devolucion={x.id} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", fontSize: T.small, marginTop: 4, paddingLeft: 10, borderLeft: `3px solid ${C.ok}` }}>
                     <span style={{ flex: 1, minWidth: 160 }}>Devolución <b style={{ fontFamily: MONO }}>{pesos(x.monto)}</b> · {fechaTxt(x.fecha)} · {medioTxt(x.medio)}{x.comprobante ? ` · ${x.comprobante}` : ""}{x.documento_id ? " · con archivo" : ""}</span>
-                    {esResp && <button type="button" data-anular-devolucion={x.id} onClick={() => setForm({ t: "anular", tabla: "devolucion", id: x.id, titulo: `Anular devolución de ${pesos(x.monto)}`, texto: "La devolución se conserva en el historial y el saldo pendiente vuelve a subir." })} style={estiloBoton("peligro")}>Anular</button>}
+                    {esResp && <button type="button" data-anular-devolucion={x.id} onClick={() => setForm({ t: "anular", tabla: "devolucion", id: x.id, titulo: `Anular devolución de ${pesos(x.monto)}`, texto: "La devolución se conserva en el historial y el saldo pendiente vuelve a subir." })} style={btnMini("peligro")}>Anular</button>}
                   </div>
                 ))}
               </div>

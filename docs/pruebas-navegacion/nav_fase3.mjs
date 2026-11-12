@@ -25,13 +25,14 @@ async function ir(p,k,escritorio){
   await espera(p,450);
 }
 // Funciones que deben poder alcanzarse desde cada pantalla (texto visible de botones/campos)
+const MES_ACTUAL=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"][Number(new Intl.DateTimeFormat("en-US",{timeZone:"America/Santiago",month:"numeric"}).format(new Date()))-1];
 const FUNCIONES={
   panel:["Compra","Entrega","Factura","Pago","Cartola","Caja y compromisos","Mercado Público","Buscar OC, cliente, factura o monto"],
   finanzas:["Resultado del mes","Margen comercial"],
   impuestos:["IVA mensual","F29","Registrar IVA de otro mes","Ver historial"],
   banco:["Actualizar saldo de la cuenta","Conciliación","Cartola","Por revisar"],
   compras:["Buscar OC, cliente, RUT, comuna, factura...","Por comprar","Por entregar","Por facturar","Por cobrar","Financiamiento pendiente","Vale vista pendiente","Filtros"],
-  agenda:["Octubre","Ver alertas"],
+  agenda:[MES_ACTUAL,"Ver alertas"],   // la Agenda abre en el mes en curso (antes la prueba esperaba «Octubre» fijo)
   notif:["Urgente","Atención","Informativas"],
   financiamiento:["Abonar a un financiador","Ver cartola","Registrar"],
   vendedores:["+ Pago a vendedor","El IVA y el F29 se registran en"],

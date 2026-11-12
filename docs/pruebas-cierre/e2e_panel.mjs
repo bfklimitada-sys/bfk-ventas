@@ -16,6 +16,10 @@ d.saldo_banco.push({ id: "actual", saldo: 1000000, fecha_corte: dias(10) });
 const b = crearBase(d);
 const { page: p, errs } = await abrir(browser, b, { url: URL_APP, ancho: 1440, alto: 900, movil: false, espera: 3000 });
 const n0 = b.escr.length;
+// Orden visual 11/2026: «Caja y compromisos» parte cerrado también en escritorio (sus cuatro cifras principales ya están en los
+// indicadores de Inicio); el desglose se abre con un toque y conserva los mismos conceptos y montos que se validan aquí.
+const abrirCaja = async () => { if (!(await p.locator("[data-resumen-caja]").count())) await p.locator('[data-desplegable="caja"] > button').first().click(); };
+await abrirCaja();
 await p.waitForSelector("[data-resumen-caja]", { timeout: 8000 }).catch(() => {});
 const lineas = await p.$$eval("[data-resumen-caja] [data-linea]", (xs) => xs.map((x) => x.getAttribute("data-linea")));
 ok("orden_de_conceptos", JSON.stringify(lineas) === JSON.stringify(["banco", "por_cobrar", "por_facturar", "vale_vista", "deuda_fin", "comisiones", "comisiones_por_liquidar", "comisiones_en_curso", "f29"]), lineas);
@@ -31,7 +35,7 @@ const conc = await p.locator("[data-conciliacion]").innerText();
 const ayuda = p.locator('[data-conciliacion] button[aria-label="Qué significa la diferencia"]'); if (await ayuda.count()) { await ayuda.click(); await p.waitForTimeout(200); }
 const concCompleta = await p.locator("[data-conciliacion]").innerText();
 ok("conciliacion_diferencia_no_perdida", /Diferencia banco − caja registrada/.test(concCompleta) && /No es pérdida ni ganancia/.test(concCompleta) && !/pérdida de|ganancia de/i.test(concCompleta), concCompleta);
-await p.evaluate(() => { location.hash = "#/panel"; }); await p.waitForTimeout(700);
+await p.evaluate(() => { location.hash = "#/panel"; }); await p.waitForTimeout(700); await abrirCaja(); await p.waitForTimeout(300);
 ok("conciliacion_mismo_universo", /1\.000\.000/.test(conc) && /800\.000/.test(conc) && /230\.000/.test(conc) && /570\.000/.test(conc), conc);
 ok("iva_pendiente_de_registrar_sin_monto", (await p.locator("[data-iva-sin-registrar]").count()) === 1 && /Sin el F29 real no se estima/.test(await p.locator("[data-iva-sin-registrar]").innerText()));
 ok("proyectado_marcado_provisorio", (await p.locator("[data-proyectado-provisorio]").count()) === 1);

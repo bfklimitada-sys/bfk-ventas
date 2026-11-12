@@ -31,6 +31,7 @@ import { ImagenFicha } from "../cotizaciones/ImagenFicha";
 import { VistaPreviaEETT } from "../cotizaciones/VistaPreviaEETT";
 import { ConflictoVersion } from "../ui/ConflictoVersion";
 import { combinarVersiones, aplicarCombinacion, normalizarProductos, resumenProductos, textoValor } from "../../lib/conflictoVersion";
+import { PasosCotizacion } from "../cotizaciones/PasosCotizacion";
 import { claveVendedor, nombreVendedor, opcionesVendedor, vendedorDocumento } from "../../lib/vpFinanciamiento";
 import { asignarVendedor } from "../../lib/ventasPrivadasDatos";
 import { leerCotizacion, guardarCotizacion, cambiarEstadoCotizacion, nuevaRevision, duplicarCotizacion, historialCotizacion, anular, esquemaFichaVP, leerEETT, listarEETT, guardarEETT, emitirEETT, ocClienteDeVenta } from "../../lib/ventasPrivadasDatos";
@@ -466,9 +467,7 @@ export function EditorCotizacionPrivada({ token, perfil, vp, id, showToast, onCe
           const preciosOk = vista.items.length > 0 && calc.lineas.every((l) => l.precio_unitario != null);
           const pasos = [["Datos del cliente", !!vista.cliente_id, "datos"], ["Dirección", dirOk, "datos"], ["Productos", vista.items.length > 0, "productos"],
             ...(verInterno ? [["Verificación de despacho", despOk, "productos"]] : []), ["Precios", preciosOk, "precios"], ["EETT", eettLista, "eett"]];
-          return <div data-pasos-cotizacion style={{ display: "flex", flexWrap: "wrap", gap: 4, margin: "8px 0 12px", fontSize: T.small }}>
-            {pasos.map(([t, ok, tab], i) => <button key={t} type="button" onClick={() => setPestana(tab)} style={{ border: `1px solid ${ok ? C.ok : C.border}`, background: ok ? C.okLight : C.card, color: ok ? C.okText : C.inkMuted, borderRadius: 999, padding: "3px 9px", cursor: "pointer", fontWeight: 600 }}>{ok ? "✓" : i + 1} {t}</button>)}
-          </div>;
+          return <PasosCotizacion pasos={pasos} onIr={setPestana} />;
         })()}
 
         {/* ── Datos ── */}
@@ -482,7 +481,7 @@ export function EditorCotizacionPrivada({ token, perfil, vp, id, showToast, onCe
           <Tarjeta padding="12px" data-bloque-direccion style={{ borderColor: dirOk ? C.ok : C.warn, background: dirOk ? C.card : C.warnLight }}>
             <div style={{ fontSize: T.sm, fontWeight: 700, color: C.ink }}>Dirección de entrega del cliente</div>
             <div style={{ fontSize: T.small, color: dirOk ? C.okText : C.warnText, fontWeight: 600, margin: "2px 0 8px" }}>{dirOk ? "✓ Registrada: los despachos se verifican contra esta dirección." : "Complétala antes de confirmar despachos (los productos se pueden ingresar igual; su despacho quedará «Por verificar»)."}</div>
-            <Field label="Dirección de entrega"><input data-campo="direccion" disabled={ro} value={vista.direccion_entrega || ""} maxLength={300} onChange={(e) => setDireccion(e.target.value)} style={iStyle} placeholder="Calle, número, comuna" /></Field>
+            <Field label="Calle y número"><input data-campo="direccion" disabled={ro} value={vista.direccion_entrega || ""} maxLength={300} onChange={(e) => setDireccion(e.target.value)} style={iStyle} placeholder="Calle, número, comuna" /></Field>
           </Tarjeta>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 8 }}>
             <Field label="Contacto"><input data-campo="contacto" disabled={ro} value={vista.contacto_nombre || ""} maxLength={150} onChange={(e) => setCampo("contacto_nombre", e.target.value)} style={iStyle} /></Field>

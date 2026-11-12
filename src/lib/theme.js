@@ -61,9 +61,12 @@ export const btnP = (bg=C.teal) => {
 
 export const btnG = { padding:"11px 16px", minHeight:TOUCH, borderRadius:R.sm, border:`1px solid ${C.borderFuerte}`, background:C.card, color:C.ink, fontWeight:500, fontSize:14, cursor:"pointer" };
 
-// Botón pequeño dentro de una fila o tarjeta (Editar, Quitar, Ver…). tipo: "sec" (por defecto) · "marca" · "peligro".
-export const btnMini = (tipo="sec") => ({ minHeight:32, padding:"5px 10px", borderRadius:R.sm, fontSize:12, fontWeight:500, cursor:"pointer", whiteSpace:"nowrap",
-  border:`1px solid ${tipo==="peligro"?"#F3C5C5":C.border}`, background:C.card, color:tipo==="peligro"?C.dangerText:tipo==="marca"?C.tealDark:C.inkMuted });
+// Botón pequeño dentro de una fila o tarjeta (Editar, Quitar, Ver, Anular…): UN solo tamaño y aspecto en toda la app.
+//   "sec" (por defecto): acción normal · "marca": acción que hace avanzar el registro · "peligro": elimina, anula o deshace.
+// La destructiva se distingue por el texto y el borde rojos (no por un relleno), igual en Mercado Público, Ventas privadas y Proyectos.
+export const btnMini = (tipo="sec") => ({ minHeight:36, padding:"5px 10px", borderRadius:R.sm, fontSize:12, fontWeight:500, lineHeight:1.2, cursor:"pointer", whiteSpace:"nowrap",
+  display:"inline-flex", alignItems:"center", justifyContent:"center", gap:5, boxSizing:"border-box",
+  border:`1px solid ${tipo==="peligro"?"#F3C5C5":tipo==="marca"?C.teal:C.borderFuerte}`, background:C.card, color:tipo==="peligro"?C.dangerText:tipo==="marca"?C.tealDark:C.ink });
 
 // Etiqueta de un campo de formulario y botón de cerrar de una ventana: los mismos en Mercado Público, Ventas privadas y Proyectos.
 export const estiloEtiqueta = { display:"block", fontSize:13, fontWeight:600, color:C.inkMuted, marginBottom:5, lineHeight:1.3 };

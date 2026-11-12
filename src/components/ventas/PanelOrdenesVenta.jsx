@@ -2,7 +2,7 @@
 // Entrega, facturación y pago se controlan por separado (una venta entregada puede seguir pendiente de cobro).
 // Facturas: se REGISTRAN las emitidas en el SII (este módulo no emite documentos tributarios electrónicos).
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { C, MONO, R, S, T, cardStyle } from "../../lib/theme";
+import { C, MONO, R, S, T, cardStyle, btnMini } from "../../lib/theme";
 import { HojaLateral, Seccion, Pestanas, PanelPestana, AvisoLinea, Badge } from "../ui/Sistema";
 import { Ventana, Campo, Rejilla, Entrada, Area, Selector, ErrorForm, PedirMotivo } from "../proyectos/Comunes";
 import { NoInstalado, Vacio, estiloBoton, Fila, BadgeVP, SubirArchivo, ListaDocumentos, Kpi, RejillaKpi } from "./Comunes";
@@ -39,14 +39,14 @@ export function PanelOrdenesVenta({ token, perfil, vp, onRecargar, showToast, on
   const n = (f) => filtrarVentas(vp.ventas, { estado: f }).length;
   return (
     <div data-panel-vp-ordenes>
-      <div style={{ fontSize: T.sm, color: C.inkMuted, marginBottom: S.md }}>Órdenes de venta internas de BFK (folio <b>OV</b>). La OC del cliente, si existe, se registra dentro de cada venta.</div>
       <RejillaKpi>
         <Kpi dato="ov-vendido" et="Ventas vigentes (total)" v={pesos(vig.reduce((s, v) => s + Number(v.total), 0))} n={`${vig.length} venta${vig.length === 1 ? "" : "s"}`} />
         <Kpi dato="ov-por-cobrar" et="Saldo por cobrar" v={pesos(vig.reduce((s, v) => s + Number(v.saldo), 0))} tono="warn" onClick={() => setFiltro("por_cobrar")} />
         <Kpi dato="ov-vencido" et="Pago vencido" v={pesos(vig.reduce((s, v) => s + Number(v.monto_vencido), 0))} tono={vig.some((v) => Number(v.monto_vencido) > 0) ? "danger" : "ok"} onClick={() => setFiltro("vencidas")} />
-        <Kpi dato="ov-por-entregar" et="Por entregar" v={n("por_entregar")} onClick={() => setFiltro("por_entregar")} />
       </RejillaKpi>
-      <Seccion titulo={`Órdenes de venta · ${filas.length}`}>
+      {/* «Por entregar» ya está, con su cantidad, en los filtros de la lista (antes se repetía como cuarta tarjeta). */}
+      <div style={{ fontSize: T.small, color: C.inkFaint, marginBottom: S.md, lineHeight: 1.45 }}>Folio OV interno de BFK. La OC del cliente, si existe, se registra dentro de cada venta.</div>
+      <Seccion titulo={`${filas.length} orden${filas.length === 1 ? "" : "es"} de venta`}>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
           <Entrada data-buscar-ventas value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Buscar por folio, cliente, RUT, cotización u OC del cliente" style={{ flex: "1 1 240px" }} />
           {vp.finInstalado && <Selector aria-label="Vendedor" data-filtro-vendedor value={vendedor} onChange={(e) => setVendedor(e.target.value)} style={{ flex: "0 1 220px", width: "auto" }}
@@ -56,10 +56,13 @@ export function PanelOrdenesVenta({ token, perfil, vp, onRecargar, showToast, on
         {!filas.length && <Vacio dato="sin-ventas">{vp.ventas.length ? "Ninguna venta coincide." : "Aún no hay ventas privadas. Crea una desde una cotización aceptada o con «+ Nuevo»."}</Vacio>}
         {filas.map((v) => (
           <button key={v.id} type="button" data-venta={v.folio} onClick={() => abrir(v.id)} style={{ ...cardStyle, borderRadius: R.md, padding: "11px 14px", marginBottom: 8, width: "100%", textAlign: "left", cursor: "pointer", opacity: v.estado === "anulada" ? 0.6 : 1 }}>
-            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            {/* Folio y total en la primera línea (no se descuadran en el celular); cliente y origen, debajo. */}
+            <div style={{ display: "flex", gap: 8, alignItems: "baseline", justifyContent: "space-between" }}>
               <span style={{ fontFamily: MONO, fontWeight: 700, color: C.ink }}>{v.folio}</span>
-              <span style={{ fontSize: T.small, color: C.inkMuted, flex: 1, minWidth: 140 }}>{v.cliente_nombre} · {v.origen === "directa" ? "venta directa" : folioRevision(v.cotizacion_folio, v.cotizacion_revision)}{v.oc_cliente_numeros ? ` · OC ${v.oc_cliente_numeros}` : ""}{vp.finInstalado ? <> · <span data-vendedor-venta={claveVendedor(v) || "sin"}>vendedor {nombreVendedor(v)}</span></> : null}</span>
-              <span style={{ fontFamily: MONO, fontWeight: 700 }}>{pesos(v.total)}</span>
+              <span style={{ fontFamily: MONO, fontWeight: 700, color: C.ink }}>{pesos(v.total)}</span>
+            </div>
+            <div>
+              <span style={{ display: "block", fontSize: T.small, color: C.inkMuted, marginTop: 2, lineHeight: 1.4 }}>{v.cliente_nombre} · {v.origen === "directa" ? "venta directa" : folioRevision(v.cotizacion_folio, v.cotizacion_revision)}{v.oc_cliente_numeros ? ` · OC ${v.oc_cliente_numeros}` : ""}{vp.finInstalado ? <> · <span data-vendedor-venta={claveVendedor(v) || "sin"}>{claveVendedor(v) ? "vendedor " : ""}{nombreVendedor(v)}</span></> : null}</span>
             </div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
               {v.estado === "anulada" ? <Badge tono="danger">Anulada</Badge> : <>
@@ -164,7 +167,7 @@ function Detalle({ token, d, v, esResp, esAdmin, vigente, vp, showToast, refresc
       {d.oc.map((o) => (
         <div key={o.id} data-oc-cliente={o.numero} style={{ ...cardStyle, borderRadius: R.md, padding: "8px 12px", marginBottom: 6, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", opacity: o.estado === "vigente" ? 1 : 0.55 }}>
           <b style={{ fontFamily: MONO }}>OC {o.numero}</b><span style={{ fontSize: T.small, color: C.inkMuted, flex: 1 }}>{fechaTxt(o.fecha)}{o.monto != null ? ` · ${pesos(o.monto)}` : ""}{o.documento_id ? " · con archivo" : ""}{o.estado !== "vigente" ? ` · anulada: ${o.anulacion_motivo}` : ""}</span>
-          {o.estado === "vigente" && esResp && <button type="button" onClick={() => pedirAnular(setModal, "oc_cliente", o.id, `Anular OC ${o.numero}`)} style={estiloBoton("peligro")}>Anular</button>}
+          {o.estado === "vigente" && esResp && <button type="button" onClick={() => pedirAnular(setModal, "oc_cliente", o.id, `Anular OC ${o.numero}`)} style={btnMini("peligro")}>Anular</button>}
         </div>
       ))}
     </Seccion>}
@@ -201,12 +204,12 @@ function Detalle({ token, d, v, esResp, esAdmin, vigente, vp, showToast, refresc
         <div key={k.id} data-compra={k.origen} style={{ ...cardStyle, borderRadius: R.md, padding: "8px 12px", marginTop: 6, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", opacity: k.estado === "vigente" ? 1 : 0.55 }}>
           <span style={{ flex: 1, fontSize: T.sm }}><b>{k.proveedor || (k.origen === "gasto_existente" ? "Gasto vinculado" : "Compra")}</b>{k.concepto ? <span data-compra-detalle style={{ color: C.inkMuted }}> · {k.descripcion}</span> : null} · {fechaTxt(k.fecha)}{k.documento_numero ? ` · ${k.documento_tipo || "doc."} ${k.documento_numero}` : ""}{k.origen === "gasto_existente" ? " · desde Gastos" : ""}{k.estado !== "vigente" ? ` · anulada: ${k.anulacion_motivo}` : ""}</span>
           <b style={{ fontFamily: MONO }}>{pesos(k.iva_recuperable ? k.neto : k.total)}</b>
-          {k.estado === "vigente" && <button type="button" onClick={() => pedirAnular(setModal, "compra", k.id, "Anular costo real")} style={estiloBoton("peligro")}>Anular</button>}
+          {k.estado === "vigente" && <button type="button" onClick={() => pedirAnular(setModal, "compra", k.id, "Anular costo real")} style={btnMini("peligro")}>Anular</button>}
         </div>
       ))}
     </Seccion> : <AvisoLinea tono="info" icono="🔒">Costos, márgenes y financiamiento: visibles solo para el responsable de la venta y los administradores.</AvisoLinea>}
     {verCostos && d.finInstalado && <SeccionFinanciamiento token={token} d={d} v={v} vp={vp} esResp={esResp} showToast={showToast} refrescar={refrescar} />}
-    <Seccion titulo="Condiciones" accion={vigente && esResp && !editando && <button type="button" data-editar-venta onClick={() => { setF({ fecha_entrega_comprometida: v.fecha_entrega_comprometida || "", plazo_entrega: v.plazo_entrega || "", direccion_entrega: v.direccion_entrega || "", plazo_pago_dias: v.plazo_pago_dias, observaciones: d.cab.observaciones || "" }); setEditando(true); }} style={estiloBoton()}>Editar</button>}>
+    <Seccion titulo="Condiciones" accion={vigente && esResp && !editando && <button type="button" data-editar-venta onClick={() => { setF({ fecha_entrega_comprometida: v.fecha_entrega_comprometida || "", plazo_entrega: v.plazo_entrega || "", direccion_entrega: v.direccion_entrega || "", plazo_pago_dias: v.plazo_pago_dias, observaciones: d.cab.observaciones || "" }); setEditando(true); }} style={btnMini()}>Editar</button>}>
       {!editando ? <div style={{ ...cardStyle, borderRadius: R.md, padding: "8px 14px" }}>
         <Fila k="Entrega comprometida" v={v.fecha_entrega_comprometida ? fechaTxt(v.fecha_entrega_comprometida) : "Sin fecha"} />
         <Fila k="Plazo de entrega" v={v.plazo_entrega || "—"} />
@@ -362,7 +365,7 @@ function Entregas({ token, d, v, esResp, vigente, vp, showToast, refrescar, setM
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
             <b>Entrega {e.numero}</b><Badge tono={e.tipo === "servicio" ? "info" : "neutro"}>{e.tipo === "servicio" ? "Ejecución de servicio" : "Despacho"}</Badge>
             <span style={{ fontSize: T.small, color: C.inkMuted, flex: 1 }}>{fechaTxt(e.fecha)}{e.guia_numero ? ` · guía ${e.guia_numero}` : ""}{e.recibido_por ? ` · recibió ${e.recibido_por}` : ""}{e.estado !== "vigente" ? ` · anulada: ${e.anulacion_motivo}` : ""}</span>
-            {e.estado === "vigente" && esResp && <button type="button" onClick={() => pedirAnular(setModal, "entrega", e.id, `Anular entrega ${e.numero}`, "Las cantidades vuelven a quedar pendientes.")} style={estiloBoton("peligro")}>Anular</button>}
+            {e.estado === "vigente" && esResp && <button type="button" onClick={() => pedirAnular(setModal, "entrega", e.id, `Anular entrega ${e.numero}`, "Las cantidades vuelven a quedar pendientes.")} style={btnMini("peligro")}>Anular</button>}
           </div>
           <div style={{ fontSize: T.small, color: C.inkMuted, marginTop: 4 }}>{d.entregaItems.filter((x) => x.entrega_id === e.id).map((x) => { const it = d.items.find((i) => i.id === x.venta_item_id); return `${it?.orden}. ${cantidadTxt(x.cantidad)} ${it?.unidad}`; }).join(" · ")}</div>
         </div>
@@ -425,7 +428,7 @@ function Documentos({ token, d, v, esResp, vigente, vp, showToast, refrescar, se
           <div key={f.id} data-factura={f.numero} style={{ ...cardStyle, borderRadius: R.md, padding: "9px 12px", marginBottom: 6, opacity: f.estado === "vigente" ? 1 : 0.55, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
             <span style={{ flex: 1, minWidth: 180 }}><b>{TIPOS_DOCUMENTO_VENTA.find((x) => x.v === f.tipo_documento)?.l} N° {f.numero}</b><span style={{ display: "block", fontSize: T.small, color: C.inkMuted }}>{fechaTxt(f.fecha)} · neto {pesos(f.neto)} · IVA {pesos(f.iva)} · vence {fechaTxt(new Date(new Date(f.fecha + "T12:00:00Z").getTime() + v.plazo_pago_dias * 86400000).toISOString().slice(0, 10))} · pagos aplicados {pesos(aplicado)}{f.estado !== "vigente" ? ` · anulada: ${f.anulacion_motivo}` : ""}</span></span>
             <b style={{ fontFamily: MONO }}>{pesos(f.total)}</b>
-            {f.estado === "vigente" && esResp && <button type="button" onClick={() => pedirAnular(setModal, "factura", f.id, `Anular registro de factura ${f.numero}`, "Si la factura se anuló en el SII con nota de crédito, registra aquí su anulación. Las aplicaciones de pago deben anularse primero.")} style={estiloBoton("peligro")}>Anular</button>}
+            {f.estado === "vigente" && esResp && <button type="button" onClick={() => pedirAnular(setModal, "factura", f.id, `Anular registro de factura ${f.numero}`, "Si la factura se anuló en el SII con nota de crédito, registra aquí su anulación. Las aplicaciones de pago deben anularse primero.")} style={btnMini("peligro")}>Anular</button>}
           </div>
         );
       })}
@@ -435,7 +438,7 @@ function Documentos({ token, d, v, esResp, vigente, vp, showToast, refrescar, se
       {d.eett.map((e) => (
         <div key={e.id} data-eett-venta={`${e.folio}-R${e.revision}`} style={{ ...cardStyle, borderRadius: R.md, padding: "9px 12px", marginBottom: 6, display: "flex", gap: 8, alignItems: "center" }}>
           <span style={{ flex: 1 }}><b style={{ fontFamily: MONO }}>{e.folio} · Rev. {e.revision}</b> {e.id === v.eett_id && <Badge tono="ok">Vinculada a esta venta</Badge>} {e.estado === "reemplazada" && <Badge>Reemplazada</Badge>}</span>
-          <button type="button" data-pdf-eett-venta onClick={() => descargarEETT(token, e.id, vp.empresa, showToast)} style={estiloBoton()}>PDF</button>
+          <button type="button" data-pdf-eett-venta onClick={() => descargarEETT(token, e.id, vp.empresa, showToast)} style={btnMini()}>PDF</button>
         </div>
       ))}
     </Seccion>
@@ -507,8 +510,8 @@ function Pagos({ token, d, v, esResp, vigente, vp, showToast, refrescar, setModa
             </div>
             {p.estado === "vigente" && <div style={{ fontSize: T.small, color: C.inkMuted, marginTop: 4, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
               <span style={{ flex: 1 }}>{imps.length ? `Aplicado a ${imps.map((i) => `factura ${d.facturas.find((f) => f.id === i.factura_id)?.numero} (${pesos(i.monto)})`).join(", ")}` : "Sin aplicar a una factura"}{aplicado < Number(p.monto) && imps.length ? ` · disponible ${pesos(Number(p.monto) - aplicado)}` : ""}</span>
-              {esResp && aplicado < Number(p.monto) && facturasVig.length > 0 && <button type="button" data-imputar-pago onClick={() => setImputar(p)} style={estiloBoton()}>Aplicar a factura</button>}
-              {esResp && <button type="button" onClick={() => pedirAnular(setModal, "pago", p.id, "Anular pago", "El saldo vuelve a quedar pendiente. Sus aplicaciones a facturas también se anulan.")} style={estiloBoton("peligro")}>Anular</button>}
+              {esResp && aplicado < Number(p.monto) && facturasVig.length > 0 && <button type="button" data-imputar-pago onClick={() => setImputar(p)} style={btnMini()}>Aplicar a factura</button>}
+              {esResp && <button type="button" onClick={() => pedirAnular(setModal, "pago", p.id, "Anular pago", "El saldo vuelve a quedar pendiente. Sus aplicaciones a facturas también se anulan.")} style={btnMini("peligro")}>Anular</button>}
             </div>}
           </div>
         );

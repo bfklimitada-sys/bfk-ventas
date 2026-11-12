@@ -1,7 +1,7 @@
 import { anioMesDe } from "../../lib/calculos";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
-import { C, MONO, SANS, btnP, btnG, fmt } from "../../lib/theme";
+import { C, MONO, SANS, btnP, btnG, fmt, btnMini } from "../../lib/theme";
 import { Ic, I } from "../ui/Iconos";
 import { leerCartolaBancoEstado, totalesPorMes, unirCartolas } from "../../lib/cartolas";
 import { CIERRE_CONCILIACION, TABLA_REGISTRO, conciliarMovimientos, opcionesAbono } from "../../lib/conciliacion";
@@ -383,8 +383,8 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, ga
           {resultadoLote.fallas.map((f) => { const s0 = vista.ya.concat(vista.revisar, vista.sinRegistrar).find((i) => i.marca === f.marca); return (
             <div key={f.marca} data-falla-lote={f.marca} style={{ fontSize: 12, color: C.inkMuted }}>· {s0 ? `${fmt.date(s0.x.m.fecha)} ${s0.x.m.descripcion} ${fmt.money(s0.x.monto)}` : f.marca}: {f.motivo}</div>); })}
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
-            {resultadoLote.ids.length > 0 && onAnularDecision && <button data-deshacer-lote onClick={deshacerLote} style={{ ...btnG, fontSize: 12, padding: "6px 10px" }}>Deshacer este lote ({resultadoLote.ids.length})</button>}
-            <button data-cerrar-resultado-lote onClick={() => setResultadoLote(null)} style={{ ...btnG, fontSize: 12, padding: "6px 10px" }}>Cerrar</button>
+            {resultadoLote.ids.length > 0 && onAnularDecision && <button data-deshacer-lote onClick={deshacerLote} style={{ ...btnMini() }}>Deshacer este lote ({resultadoLote.ids.length})</button>}
+            <button data-cerrar-resultado-lote onClick={() => setResultadoLote(null)} style={{ ...btnMini() }}>Cerrar</button>
           </div>
         </div>
       )}
@@ -407,7 +407,7 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, ga
               <div style={{ flex: 1, minWidth: 0 }}>
                 <Movimiento it={sg.item}>
                   <button data-no-corresponde-auto={sg.ids.join(",")} disabled={!!decidiendo || !!progresoLote} onClick={() => { setSelSeguras((x) => { const n = new Set(x); n.delete(sg.marca); return n; }); decidir(sg.item, "rechazado", sg.registros); }}
-                    title="Si no es este registro, se descarta para este movimiento (no cambia el registro)." style={{ ...btnG, marginTop: 6, fontSize: 11, padding: "4px 10px" }}>No corresponde</button>
+                    title="Si no es este registro, se descarta para este movimiento (no cambia el registro)." style={{ ...btnMini(), marginTop: 6 }}>No corresponde</button>
                 </Movimiento>
               </div>
             </div>
@@ -451,9 +451,9 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, ga
               <div key={k} data-opcion-revision style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginTop: 6, paddingTop: 6, borderTop: `1px dashed ${C.border}` }}>
                 <span style={{ flex: "1 1 200px", fontSize: 12, color: C.ink }}>{op.grupo ? `Estos ${op.registros.length} registros juntos` : "Registro"}: {op.registros.map((r) => textoRegistro(r, categorias)).join(" + ")}</span>
                 <button data-vincular-registro={op.registros.map((r) => r.id).join(",")} disabled={decisiones === null || !!decidiendo} onClick={() => decidir(it, "vinculado", op.registros)}
-                  style={{ ...btnG, fontSize: 12, padding: "6px 10px", borderColor: C.ok, color: C.okText, opacity: decisiones === null ? 0.5 : 1 }}>Es este registro</button>
+                  style={{ ...btnMini("marca"), opacity: decisiones === null ? 0.5 : 1  }}>Es este registro</button>
                 <button data-rechazar={op.registros.map((r) => r.id).join(",")} disabled={decisiones === null || !!decidiendo} onClick={() => decidir(it, "rechazado", op.registros)}
-                  style={{ ...btnG, fontSize: 12, padding: "6px 10px", opacity: decisiones === null ? 0.5 : 1 }}>No corresponde</button>
+                  style={{ ...btnMini(), opacity: decisiones === null ? 0.5 : 1  }}>No corresponde</button>
               </div>
             ))}
             {it.tipo === "coincidencia" && (it.opciones.length > 1 || !it.opciones.length) && (it.x.candidatos || []).length > 0 && (
@@ -473,21 +473,21 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, ga
           <div data-serie style={{ background: C.tealLight, borderRadius: 10, padding: "9px 12px", marginBottom: 8, fontSize: 13, color: C.ink, lineHeight: 1.45 }}>
             <b>Registro {Math.min(serie.actual + 1, serie.claves.length)} de {serie.claves.length}</b> · {serie.hechos} registrado{serie.hechos === 1 ? "" : "s"}{serie.saltados ? ` · ${serie.saltados} saltado${serie.saltados === 1 ? "" : "s"}` : ""}. Cada uno se revisa y se confirma por separado; nada se crea solo.
             <div style={{ display: "flex", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
-              <button data-serie-saltar onClick={saltarEnSerie} disabled={guardando} style={{ ...btnG, fontSize: 12, padding: "6px 10px" }}>Saltar este</button>
-              <button data-serie-terminar onClick={terminarSerie} disabled={guardando} style={{ ...btnG, fontSize: 12, padding: "6px 10px" }}>Terminar</button>
+              <button data-serie-saltar onClick={saltarEnSerie} disabled={guardando} style={{ ...btnMini() }}>Saltar este</button>
+              <button data-serie-terminar onClick={terminarSerie} disabled={guardando} style={{ ...btnMini() }}>Terminar</button>
             </div>
           </div>
         )}
         {serie?.terminada && (
           <div data-serie-terminada role="status" style={{ background: C.okLight, borderRadius: 10, padding: "9px 12px", marginBottom: 8, fontSize: 13, color: C.ink }}>
             Serie terminada: {serie.hechos} registrado{serie.hechos === 1 ? "" : "s"}{serie.saltados ? `, ${serie.saltados} saltado${serie.saltados === 1 ? "" : "s"}` : ""}.
-            <button data-serie-cerrar onClick={() => setSerie(null)} style={{ ...btnG, fontSize: 12, padding: "4px 10px", marginLeft: 8 }}>Cerrar</button>
+            <button data-serie-cerrar onClick={() => setSerie(null)} style={{ ...btnMini(), marginLeft: 8  }}>Cerrar</button>
           </div>
         )}
         {!serie && vista.sinRegistrar.some((it) => it.x.registrable) && (
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8, alignItems: "center" }}>
             <span style={{ fontSize: 12, color: C.inkMuted, flex: "1 1 200px" }}>Marca varios para registrarlos en serie: cada uno se revisa y confirma por separado.</span>
-            {selNuevos.size > 0 && <button data-registrar-serie onClick={iniciarSerie} style={{ ...btnG, fontSize: 12, padding: "7px 10px", borderColor: C.teal, color: C.tealDark }}>Registrar {selNuevos.size} seleccionado{selNuevos.size === 1 ? "" : "s"}, uno por uno</button>}
+            {selNuevos.size > 0 && <button data-registrar-serie onClick={iniciarSerie} style={{ ...btnMini("marca") }}>Registrar {selNuevos.size} seleccionado{selNuevos.size === 1 ? "" : "s"}, uno por uno</button>}
           </div>
         )}
         {vista.sinRegistrar.map((it) => (
@@ -522,12 +522,12 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, ga
           {vista.ya.filter((it) => !marcaSegura.has(it.marca)).map((it) => (
             <Movimiento key={it.marca} it={it}>
               {it.x.origen === "decision" && onAnularDecision && (
-                <button data-deshacer-vinculo onClick={() => anular(it.x.decisiones.map((d) => d.id))} style={{ ...btnG, marginTop: 6, fontSize: 11, padding: "4px 10px" }}>Deshacer vínculo</button>
+                <button data-deshacer-vinculo onClick={() => anular(it.x.decisiones.map((d) => d.id))} style={{ ...btnMini(), marginTop: 6 }}>Deshacer vínculo</button>
               )}
               {it.reconocidoAuto && !it.x.anteriorCierre && (it.x.registros || []).length > 0 && (
                 <button data-no-corresponde-auto={it.x.registros.map((r) => r.id).join(",")} disabled={decisiones === null || !!decidiendo} onClick={() => decidir(it, "rechazado", it.x.registros)}
                   title="Reconocido automáticamente. Si no es este registro, se descarta para este movimiento (no cambia el registro)."
-                  style={{ ...btnG, marginTop: 6, fontSize: 11, padding: "4px 10px", opacity: decisiones === null ? 0.5 : 1 }}>No corresponde</button>
+                  style={{ ...btnMini(), marginTop: 6, opacity: decisiones === null ? 0.5 : 1 }}>No corresponde</button>
               )}
             </Movimiento>
           ))}

@@ -3,7 +3,7 @@
 // técnicas y manuales como archivos. Extracción asistida desde una ficha PDF: propone pares «característica: valor» que
 // aparecen literalmente en el texto (con su página) y quedan PENDIENTES hasta que una persona los revisa.
 import { useEffect, useState } from "react";
-import { C, MONO, R, S, T, cardStyle, iStyle } from "../../lib/theme";
+import { C, MONO, R, S, T, cardStyle, iStyle, btnMini } from "../../lib/theme";
 import { AvisoLinea, Badge, Seccion } from "../ui/Sistema";
 import { Ventana, Campo, Rejilla, Subtitulo, Entrada, Area, Selector, ErrorForm } from "../proyectos/Comunes";
 import { estiloBoton, Vacio, SubirArchivo, ListaDocumentos } from "./Comunes";
@@ -114,7 +114,7 @@ export function EditorProducto({ token, vp, id, showToast, onCerrar, onCreado })
           <input aria-label="Característica" value={c.caracteristica} onChange={(e) => setCar(i, "caracteristica", e.target.value)} style={{ ...iStyle, minHeight: 36, padding: "6px 8px" }} />
           <input aria-label="Valor" value={c.valor} onChange={(e) => setCar(i, "valor", e.target.value)} style={{ ...iStyle, minHeight: 36, padding: "6px 8px" }} />
           <input aria-label="Unidad" value={c.unidad || ""} onChange={(e) => setCar(i, "unidad", e.target.value)} style={{ ...iStyle, minHeight: 36, padding: "6px 8px" }} />
-          <button type="button" onClick={() => setF((x) => ({ ...x, caracteristicas: x.caracteristicas.filter((_, j) => j !== i) }))} style={estiloBoton("peligro")}>✕</button>
+          <button type="button" onClick={() => setF((x) => ({ ...x, caracteristicas: x.caracteristicas.filter((_, j) => j !== i) }))} style={btnMini("peligro")}>✕</button>
           {c.origen?.tipo === "archivo" && <div style={{ gridColumn: "1 / -1", fontSize: T.small, color: C.inkFaint, marginTop: -4 }}>Desde archivo{c.origen.pagina ? `, página ${c.origen.pagina}` : ""}</div>}
         </div>
       ))}
@@ -137,7 +137,7 @@ export function EditorProducto({ token, vp, id, showToast, onCerrar, onCreado })
           <select aria-label="Archivo de respaldo" value={n.respaldo_documento_id || ""} onChange={(e) => setF((x) => ({ ...x, normas: x.normas.map((m, j) => (j === i ? { ...m, respaldo_documento_id: e.target.value || null } : m)) }))} style={{ ...iStyle, minHeight: 36 }}>
             <option value="">Sin archivo</option>{docs.filter((d) => ["certificado", "ficha_tecnica", "manual"].includes(d.categoria)).map((d) => <option key={d.id} value={d.id}>{d.titulo}</option>)}
           </select>
-          <button type="button" onClick={() => setF((x) => ({ ...x, normas: x.normas.filter((_, j) => j !== i) }))} style={estiloBoton("peligro")}>✕</button>
+          <button type="button" onClick={() => setF((x) => ({ ...x, normas: x.normas.filter((_, j) => j !== i) }))} style={btnMini("peligro")}>✕</button>
         </div>
       ))}
       <button type="button" onClick={() => setF((x) => ({ ...x, normas: [...x.normas, { norma: "", respaldo_texto: "" }] }))} style={{ ...estiloBoton(), marginBottom: 12 }}>+ Norma</button>

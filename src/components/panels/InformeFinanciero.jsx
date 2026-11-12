@@ -38,7 +38,7 @@ export function InformeFinanciero({ ocs, financiadores, gastos, pagosVendedor, i
         <div data-informe-resultado style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
           <span style={{ fontWeight: 700, fontSize: 13 }}>Resultado del mes</span>
           <select data-periodo-resultado value={`${periodo.anio}-${periodo.mes}`} onChange={(e) => { const [a, m] = e.target.value.split("-").map(Number); setPeriodo({ anio: a, mes: m }); }}
-            style={{ fontSize: 12, padding: "4px 6px", borderRadius: 8, border: `1px solid ${C.border}` }}>
+            aria-label="Mes del resultado" style={{ padding: "4px 6px", minHeight: 36, width: "auto" }}>
             {Array.from({ length: 12 }, (_, k) => { const d = new Date(anioA, mesA - 1 - k, 1); return { a: d.getFullYear(), m: d.getMonth() + 1 }; })
               .map(({ a, m }) => <option key={`${a}-${m}`} value={`${a}-${m}`}>{MES[m - 1]}-{a}</option>)}
           </select>
@@ -79,7 +79,9 @@ export function InformeFinanciero({ ocs, financiadores, gastos, pagosVendedor, i
       </Desplegable>
 
       {/* 4. Financiadores */}
-      <Desplegable dato="informe-financiadores" abiertoInicial={escritorio} titulo={"Financiadores: deuda y devoluciones"}>
+      {/* Resúmenes de lo que vive en sus pestañas (Financiamiento y Comisiones): parten cerrados también en escritorio. */}
+      <Desplegable dato="informe-financiadores" titulo={"Financiadores: deuda y devoluciones"}
+        resumen={`${fins.filter((f) => f.saldo > 0).length} con saldo pendiente · el detalle por OC está en Financiamiento`}>
         {fins.map((f) => (
           <div key={f.id} data-financiador={f.id} style={{ fontSize: 12, padding: "4px 0", borderBottom: `1px solid ${C.border}` }}>
             <b>{f.nombre}</b> · compras financiadas {fmt.money(f.compras)} − devoluciones {fmt.money(f.devoluciones)}{f.ajustes ? ` ${f.ajustes > 0 ? "+" : "−"} ajustes ${fmt.money(Math.abs(f.ajustes))}` : ""} ={" "}
@@ -91,7 +93,8 @@ export function InformeFinanciero({ ocs, financiadores, gastos, pagosVendedor, i
       </Desplegable>
 
       {/* 5. Comisiones y apoyo en gestión */}
-      <Desplegable dato="informe-comisiones" abiertoInicial={escritorio} titulo={"Comisiones y apoyo en gestión (últimos pagos)"}>
+      <Desplegable dato="informe-comisiones" titulo={"Comisiones y apoyo en gestión (últimos pagos)"}
+        resumen={`${com.filas.length ? `${Math.min(6, com.filas.length)} pago${Math.min(6, com.filas.length) === 1 ? "" : "s"} reciente${Math.min(6, com.filas.length) === 1 ? "" : "s"}` : "Sin pagos registrados"} · el detalle por vendedor está en Comisiones`}>
         {com.filas.slice(-6).map((r) => (
           <div key={`${r.vendedorId}-${r.anio}-${r.mes}`} data-comision={`${r.vendedorId}-${r.anio}-${r.mes}`} style={{ fontSize: 12, padding: "3px 0", borderBottom: `1px solid ${C.border}` }}>
             {r.vendedor.split(" ")[0]} · ventas de {MES[r.mes - 1]}-{r.anio}: comisión {fmt.money(r.comision)}{r.apoyoEnPago ? ` + apoyo en gestión ${fmt.money(r.apoyoEnPago)}` : ""} = transferido {fmt.money(r.transferido)}

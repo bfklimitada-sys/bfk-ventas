@@ -133,8 +133,10 @@ export function FinanzasPorCanal({ canal, ocs, vp, onIr, children }) {
   return (<>
     <Seccion titulo={<>Todos los canales<Ayuda>Ventas del período por fecha de la OC (Mercado Público) o de la orden de venta (privadas), con su facturación y cobro. Cada monto proviene de un solo registro: no se suman cotizaciones como ingresos ni un anticipo dos veces. Los márgenes usan criterios distintos por canal y no se suman.</Ayuda></>} accion={selector}>
       <div data-consolidado style={{ ...cardStyle, borderRadius: R.md, padding: "6px 12px", overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 420 }}>
-          <thead><tr style={{ fontSize: T.small, color: C.inkMuted, textAlign: "right" }}><th style={{ textAlign: "left", padding: "6px 4px" }}>Concepto</th><th style={{ padding: 6 }}>Mercado Público</th><th style={{ padding: 6 }}>Ventas privadas</th><th style={{ padding: 6 }}>Total</th></tr></thead>
+        {/* Sin ancho mínimo fijo: en el celular las cuatro columnas caben a la vista (los encabezados ocupan dos líneas); solo se
+            desliza si los montos son muy largos. */}
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead><tr style={{ fontSize: T.small, color: C.inkMuted, textAlign: "right", verticalAlign: "bottom" }}><th style={{ textAlign: "left", padding: "6px 4px", fontWeight: 600 }}>Concepto</th><th style={{ padding: "6px 4px", fontWeight: 600 }}>Mercado Público</th><th style={{ padding: "6px 4px", fontWeight: 600 }}>Ventas privadas</th><th style={{ padding: "6px 4px", fontWeight: 600 }}>Total</th></tr></thead>
           <tbody>
             {filas.map(([k, a, b, suma, dato]) => (
               <tr key={k} data-consolidado-fila={dato} style={{ borderTop: `1px solid ${C.border}` }}>

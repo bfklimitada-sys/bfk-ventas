@@ -3,7 +3,7 @@ import { Fragment, useRef, useState, useEffect } from "react";
 import { estaCobrada, estaComprada, estaEntregada, estaFacturada, financiamientoPagado } from "../../lib/ocs";
 import { Field } from "./Basicos";
 import { del } from "../../lib/supabase";
-import { C, MONO, SANS, btnP, fmt, iMono, iStyle, selStyle } from "../../lib/theme";
+import { C, MONO, SANS, btnP, fmt, iMono, iStyle, selStyle, btnMini } from "../../lib/theme";
 import { Ic, I } from "./Iconos";
 import { FormCambiarFinanciamiento } from "../forms/FormCambiarFinanciamiento";
 import { TIPOS_FINANCIAMIENTO, financiamientoNoAplica, tipoFinanciamiento } from "../../lib/finanzas";
@@ -218,7 +218,7 @@ export function EtapasOC({ onCorregirCompra, oc, perfil, perfiles, activa, soloE
               <div style={{fontSize:12,color:C.inkMuted}}>Financiamiento: <b data-tipo-financiamiento={tipoFin}>{TIPOS_FINANCIAMIENTO[tipoFin]?.etiqueta}</b>{tipoFin!=="venta_propia"&&<> · <b>{oc.financiadores?.nombre||"—"}</b></>} · Vendedor: <b>{oc.vendedores?.nombre||"—"}</b></div>
               {onCambiarFinanciamiento&&i===0&&!bloqueado("financiamiento")&&!cambiandoFin&&(
                 <button data-accion="cambiar-financiamiento" onClick={()=>setCambiandoFin(true)}
-                  style={{background:"none",border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 10px",fontSize:12,fontWeight:600,color:C.tealDark,cursor:"pointer",marginTop:6}}>Cambiar financiamiento</button>
+                  style={{...btnMini(),marginTop:6}}>Cambiar financiamiento</button>
               )}
               {cambiandoFin&&i===0&&<FormCambiarFinanciamiento oc={oc} financiadores={financiadores} onCancel={()=>setCambiandoFin(false)}
                 onSave={async(d)=>{ await onCambiarFinanciamiento(d); setCambiandoFin(false); }} />}
@@ -268,30 +268,30 @@ export function EtapasOC({ onCorregirCompra, oc, perfil, perfiles, activa, soloE
             <div style={{display:"flex",gap:6,marginTop:8}}>
               {etapa.key==="postventa"?<>
                 {!incidenteCerrado(ev)&&<button onClick={()=>onPostventa&&onPostventa(ev,"cerrar")}
-                  style={{fontSize:12,background:C.okText,color:"#fff",border:"none",borderRadius:8,padding:"4px 10px",cursor:"pointer",fontWeight:600}}>✓ Cerrar incidente</button>}
+                  style={btnMini("marca")}>✓ Cerrar incidente</button>}
                 {incidenteCerrado(ev)&&<button onClick={()=>{ if(reabriendo.current.has(ev.id)) return; if(!window.confirm("¿Reabrir este incidente?")) return; reabriendo.current.add(ev.id); Promise.resolve(onReabrirPostventa&&onReabrirPostventa(ev)).finally(()=>reabriendo.current.delete(ev.id)); }}
-                  style={{fontSize:12,background:C.warnLight,color:C.warnText,border:"none",borderRadius:8,padding:"4px 10px",cursor:"pointer",fontWeight:600}}>↺ Reabrir</button>}
+                  style={btnMini()}>↺ Reabrir</button>}
                 <button onClick={()=>onPostventa&&onPostventa(ev,"editar")}
-                  style={{fontSize:12,background:C.tealLight,color:C.tealDark,border:"none",borderRadius:8,padding:"4px 10px",cursor:"pointer",fontWeight:500}}><Ic n="✏️"/> Editar</button>
+                  style={btnMini()}><Ic n="✏️"/> Editar</button>
               </>:
               etapa.tabla==="eventos_compra"&&esEventoDePedido(ev)?(
                 // 15/10/2026: compra desde cotización → se corrige o anula como un todo (productos, costo y deuda coherentes).
                 !(dominio&&bloqueado(dominio))&&onCorregirCompra&&<button data-corregir-compra={ev.id} onClick={()=>onCorregirCompra(ev)}
-                  style={{fontSize:12,background:C.tealLight,color:C.tealDark,border:"none",borderRadius:8,padding:"4px 10px",cursor:"pointer",fontWeight:600}}>Corregir compra</button>
+                  style={btnMini()}>Corregir compra</button>
               ):
               !(dominio&&bloqueado(dominio))&&<button onClick={()=>onEditarEvento&&onEditarEvento({tipo:etapa.label,e:ev,tabla:etapa.tabla})}
-                style={{fontSize:12,background:C.tealLight,color:C.tealDark,border:"none",borderRadius:8,padding:"4px 10px",cursor:"pointer",fontWeight:500}}><Ic n="✏️"/> Editar</button>}
+                style={btnMini()}><Ic n="✏️"/> Editar</button>}
               {perfil?.rol==="admin"&&etapa.key==="factura"&&!bloqueado("facturacion")&&(
                 <button onClick={async()=>{
                   if(!window.confirm(`¿Eliminar factura N°${ev.numero_factura}?\nEsto revertirá el estado a pendiente.`)) return;
                   await onEliminarFactura(oc.id, ev.id); setDetalle(null);
-                }} style={{fontSize:12,background:C.dangerLight,color:C.dangerText,border:"none",borderRadius:8,padding:"4px 10px",cursor:"pointer",fontWeight:500}}><Ic n="🗑"/> Eliminar</button>
+                }} style={btnMini("peligro")}><Ic n="🗑"/> Eliminar</button>
               )}
               {perfil?.rol==="admin"&&etapa.key!=="factura"&&!(dominio&&bloqueado(dominio))&&!(etapa.tabla==="eventos_compra"&&esEventoDePedido(ev))&&(
                 <button onClick={async()=>{
                   if(!window.confirm(`¿Eliminar este registro de ${etapa.label}?`)) return;
                   if(onEliminarEvento) await onEliminarEvento(etapa.tabla, ev.id, oc.id, etapa.key); setDetalle(null);
-                }} style={{fontSize:12,background:C.dangerLight,color:C.dangerText,border:"none",borderRadius:8,padding:"4px 10px",cursor:"pointer",fontWeight:500}}><Ic n="🗑"/> Eliminar</button>
+                }} style={btnMini("peligro")}><Ic n="🗑"/> Eliminar</button>
               )}
             </div>
           </div>

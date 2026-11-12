@@ -16,7 +16,8 @@ export function EstilosGlobales() {
     select,input:not([type=checkbox]):not([type=radio]),textarea{font-size:16px!important;}
     /* Aspecto base de los campos: lo usa todo campo sin estilo propio y unifica las listas desplegables. */
     select,textarea,input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]):not([type=color]){
-      font-family:inherit;color:${C.ink};background-color:${C.card};border:1px solid ${C.borderFuerte};border-radius:${R.sm}px;box-sizing:border-box;}
+      font-family:inherit;color:${C.ink};background-color:${C.card};border:1px solid ${C.borderFuerte};border-radius:${R.sm}px;box-sizing:border-box;
+      min-width:0;max-width:100%;}   /* dos campos lado a lado (p. ej. dos fechas) se reparten el ancho en vez de desbordar en celulares angostos */
     select{-webkit-appearance:none!important;appearance:none!important;background-image:${FLECHA}!important;background-repeat:no-repeat!important;
       background-position:right 10px center!important;background-size:16px 16px!important;padding-right:34px!important;cursor:pointer;text-overflow:ellipsis;}
     select:disabled,input:disabled,textarea:disabled{background-color:${C.paper};color:${C.inkFaint};cursor:default;}
@@ -34,6 +35,13 @@ export function EstilosGlobales() {
     /* Agenda: día cuadrado en el celular; en escritorio, alto fijo para que el mes completo quepa en pantalla. */
     .bfk-dia{aspect-ratio:1;min-height:0!important;}
     .bfk-sin-barra::-webkit-scrollbar{display:none;}
+    /* Celular: las pestañas internas usan menos relleno. Con dos o tres pestañas, un rótulo largo ocupa dos líneas para no cortarse;
+       con más, la fila se desliza (y la pestaña activa se lleva sola a la vista). */
+    @media (max-width:1023px){
+      .bfk-segmentada>button{padding-left:10px!important;padding-right:10px!important;}
+      .bfk-seg-pocas>button{white-space:normal!important;flex:1 1 0!important;line-height:1.2;}
+      .bfk-dia-n{font-size:10px!important;}
+    }
     @media (min-width:1024px){
       .bfk-ventana-fondo{align-items:center;padding:24px;box-sizing:border-box;}
       .bfk-ventana{border-radius:16px;max-height:88vh;}

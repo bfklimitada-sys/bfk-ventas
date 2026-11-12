@@ -64,7 +64,7 @@ export function PanelCotizacionesPrivadas({ token, perfil, vp, onRecargar, showT
             <button key={c.id} type="button" data-cotizacion={c.folio} onClick={() => abrir(c.id)} style={{ ...cardStyle, borderRadius: R.md, padding: "11px 14px", marginBottom: 8, width: "100%", textAlign: "left", cursor: "pointer", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
               <div style={{ flex: "1 1 220px", minWidth: 0 }}>
                 <div style={{ fontFamily: MONO, fontWeight: 700, color: C.ink }}>{folioRevision(c.folio, c.revision_actual)}</div>
-                <div style={{ fontSize: T.small, color: C.inkMuted }}>{c.cliente_nombre} · emitida {fechaTxt(c.fecha_emision)} · vence {fechaTxt(c.vigencia_hasta)}{vp.finInstalado ? <> · <span data-vendedor-cot={claveVendedor(c) || "sin"}>vendedor {nombreVendedor(c)}</span></> : null}</div>
+                <div style={{ fontSize: T.small, color: C.inkMuted }}>{c.cliente_nombre} · emitida {fechaTxt(c.fecha_emision)} · vence {fechaTxt(c.vigencia_hasta)}{vp.finInstalado ? <> · <span data-vendedor-cot={claveVendedor(c) || "sin"}>{claveVendedor(c) ? "vendedor " : ""}{nombreVendedor(c)}</span></> : null}</div>
               </div>
               <BadgeVP mapa={ESTADOS_COTIZACION} k={c.estado_efectivo} />
               {c.venta_folio && <Badge tono="ok">{c.venta_folio}</Badge>}

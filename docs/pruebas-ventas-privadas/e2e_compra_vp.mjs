@@ -4,6 +4,9 @@
 // antes de guardar, y costo real de la orden actualizado; precio de venta y cotización aprobada intactos.
 // Uso: (entorno.sh instalar) → PGRST_URL, JWT_SECRET, VP_DB_URL · node docs/pruebas-ventas-privadas/e2e_compra_vp.mjs http://127.0.0.1:4330/
 import { abrir, chromium, CHROME, U, psql, comoUsuario } from "./arnes_vp.mjs";
+// Fecha de hoy en Chile: con la fecha UTC, después de las 21:00 (hora de Chile) la base la rechazaba por «futura» (VP_FECHA) y la
+// comprobación P25 fallaba por la hora del día, no por lo que valida (no comprar más de lo vendido).
+const HOY_CHILE = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Santiago" }).format(new Date());
 
 const URL_APP = process.argv[2] || "http://127.0.0.1:4330/";
 let nOk = 0; const F = [];
@@ -125,7 +128,7 @@ try {
     && Number(m2.costo_real) === Math.round(59990 / 1.19) * 2 + Math.round(5990 / 1.19), m2);
   // La base rechaza comprar más de lo vendido aunque la app no lo valide.
   const it2 = q1(`select id from public.vp_venta_items where venta_id = '${o2.id}';`);
-  let rech = ""; try { rech = psql(`${comoUsuario(U.ana)}select public.vp_registrar_compras_cotizacion(${lit(JSON.stringify({ venta_id: o2.id, fecha: new Date().toISOString().slice(0, 10), filas: [{ clave: "X-1-a-0", pedido: "X-1", concepto: "producto", venta_item_id: it2, cantidad: 1, precio_unitario: 1000 }] }))}::jsonb);`); } catch (e) { rech = String(e.stderr || e.message); }
+  let rech = ""; try { rech = psql(`${comoUsuario(U.ana)}select public.vp_registrar_compras_cotizacion(${lit(JSON.stringify({ venta_id: o2.id, fecha: HOY_CHILE, filas: [{ clave: "X-1-a-0", pedido: "X-1", concepto: "producto", venta_item_id: it2, cantidad: 1, precio_unitario: 1000 }] }))}::jsonb);`); } catch (e) { rech = String(e.stderr || e.message); }
   ok("P25 la base rechaza comprar más de lo vendido", /VP_CANTIDAD/.test(rech), rech);
 
   // Orden directa (sin cotización): el botón abre el registro manual de siempre.

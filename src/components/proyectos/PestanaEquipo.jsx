@@ -2,7 +2,7 @@
 // La base: el responsable principal es siempre jefe activo; solo el jefe (o el administrador) gestiona el equipo;
 // solo el administrador o el responsable principal otorga o retira «Datos económicos».
 import { useEffect, useState } from "react";
-import { C, R, S, T, cardStyle } from "../../lib/theme";
+import { C, R, S, T, cardStyle, btnMini } from "../../lib/theme";
 import { Badge, Seccion } from "../ui/Sistema";
 import { Ventana, Campo, Entrada, Selector, ErrorForm, Vacio, estiloBoton } from "./Comunes";
 import { ROLES, rolDe, mensajeError } from "../../lib/proyectos";
@@ -37,9 +37,9 @@ export function PestanaEquipo({ token, proyecto: p, per, nombres, perfiles, vers
             {per.gestionarEquipo && f.activo && <Selector data-cambiar-rol={nombres[f.usuario_id]} style={{ width: 170, minHeight: 34 }} value={f.rol_proyecto} disabled={ocupado === f.id}
               onChange={(e) => cambiar(f, { rol_proyecto: e.target.value }, "Rol actualizado")} opciones={ROLES} />}
             {per.autorizarEconomia && f.activo && <button type="button" data-economia={nombres[f.usuario_id]} disabled={ocupado === f.id} onClick={() => cambiar(f, { ve_economia: !f.ve_economia }, f.ve_economia ? "Se retiró la autorización económica" : "Autorizado a ver los datos económicos")}
-              style={{ ...estiloBoton(), minHeight: 34 }}>{f.ve_economia ? "Retirar datos económicos" : "Autorizar datos económicos"}</button>}
+              style={btnMini()}>{f.ve_economia ? "Retirar datos económicos" : "Autorizar datos económicos"}</button>}
             {per.gestionarEquipo && <button type="button" data-activo={nombres[f.usuario_id]} disabled={ocupado === f.id} onClick={() => cambiar(f, { activo: !f.activo }, f.activo ? "Integrante desactivado" : "Integrante reactivado")}
-              style={{ ...estiloBoton(f.activo ? "peligro" : "sec"), minHeight: 34 }}>{f.activo ? "Quitar del equipo" : "Reactivar"}</button>}
+              style={btnMini(f.activo ? "peligro" : "sec")}>{f.activo ? "Quitar del equipo" : "Reactivar"}</button>}
           </div>
         )}
       </div>

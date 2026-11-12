@@ -37,8 +37,8 @@ export function Kpi({ et, v, n, tono, dato, onClick, plano, linea }) {
   const col = { ok: C.okText, warn: C.warnText, danger: C.dangerText, marca: C.tealDark }[tono] || C.ink;
   // linea: conteo en una sola línea (etiqueta · valor), igual que Indicador linea del sistema.
   if (linea) {
-    const st = { display: "inline-flex", alignItems: "baseline", gap: 8, border: `1px solid ${C.border}`, borderRadius: R.sm, background: C.card, padding: "7px 12px", minHeight: 36, font: "inherit", color: "inherit", boxSizing: "border-box" };
-    const c = (<><span style={{ fontSize: T.sm, color: C.inkMuted }}>{et}</span><span data-kpi-valor={dato} style={{ fontFamily: MONO, fontWeight: 600, fontSize: T.body, color: col }}>{v}</span>{n && <span style={{ fontSize: T.small, color: C.inkFaint }}>{n}</span>}</>);
+    const st = { display: "inline-flex", flexWrap: "wrap", alignItems: "baseline", gap: "0 8px", border: `1px solid ${C.border}`, borderRadius: R.sm, background: C.card, padding: "7px 12px", minHeight: 36, font: "inherit", color: "inherit", boxSizing: "border-box", textAlign: "left", maxWidth: "100%" };
+    const c = (<><span style={{ fontSize: T.sm, color: C.inkMuted, whiteSpace: "nowrap" }}>{et}</span><span data-kpi-valor={dato} style={{ fontFamily: MONO, fontWeight: 600, fontSize: T.body, color: col }}>{v}</span>{n && <span style={{ fontSize: T.small, color: C.inkFaint }}>{n}</span>}</>);
     return onClick ? <button type="button" data-compact data-kpi={dato} onClick={onClick} style={{ ...st, cursor: "pointer" }}>{c}</button> : <div data-kpi={dato} style={st}>{c}</div>;
   }
   // plano: dato dentro de una franja (sin tarjeta propia); la nota queda como texto de ayuda al pasar el cursor.
@@ -60,12 +60,18 @@ export function Kpi({ et, v, n, tono, dato, onClick, plano, linea }) {
 }
 export const RejillaKpi = ({ children, linea }) => linea ? <div style={{ display: "flex", flexWrap: "wrap", gap: S.sm, marginBottom: S.md }}>{children}</div> : <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", gap: S.sm, marginBottom: S.lg }}>{children}</div>;
 
-export const Fila = ({ k, v, fuerte, tono, dato }) => (
-  <div data-fila-vp={dato} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, padding: "7px 0", borderBottom: `1px solid ${C.border}` }}>
-    <span style={{ fontSize: T.sm, color: fuerte ? C.ink : C.inkMuted, fontWeight: fuerte ? 700 : 500 }}>{k}</span>
-    <span style={{ fontFamily: MONO, fontWeight: 700, fontSize: fuerte ? 16 : 14, color: { ok: C.okText, warn: C.warnText, danger: C.dangerText }[tono] || C.ink, textAlign: "right" }}>{v}</span>
-  </div>
-);
+// Cifras, fechas y folios van en monoespaciada; nombres y textos, en la letra normal (un nombre largo en negrita monoespaciada
+// pesaba más que los montos). El valor puede ocupar varias líneas: nunca se corta.
+const esCifra = (v) => typeof v === "number" || (typeof v === "string" && /^[\s$\d.,:%/()+\-−–·A-Z]*$/.test(v) && /\d/.test(v));
+export const Fila = ({ k, v, fuerte, tono, dato }) => {
+  const cifra = fuerte || esCifra(v);
+  return (
+    <div data-fila-vp={dato} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, padding: "7px 0", borderBottom: `1px solid ${C.border}` }}>
+      <span style={{ fontSize: T.sm, color: fuerte ? C.ink : C.inkMuted, fontWeight: fuerte ? 700 : 500, flexShrink: 0, maxWidth: "50%" }}>{k}</span>
+      <span style={{ fontFamily: cifra ? MONO : "inherit", fontWeight: fuerte ? 700 : cifra ? 600 : 500, fontSize: fuerte ? 16 : 14, color: { ok: C.okText, warn: C.warnText, danger: C.dangerText }[tono] || C.ink, textAlign: "right", minWidth: 0, overflowWrap: "anywhere" }}>{v}</span>
+    </div>
+  );
+};
 
 export function SelectorCliente({ clientes, valor, onCambiar, onNuevo, deshabilitado }) {
   const [q, setQ] = useState("");

@@ -3,7 +3,7 @@ import { diasAtrasoEntrega, esVenta, ocCanceladaEnMP, estaCerrada, estaCobrada, 
 import { CorreosPendientes } from "./CorreosBfk";
 import { useState, useEffect } from "react";
 import { del } from "../../lib/supabase";
-import { C, MONO, SANS, fmt } from "../../lib/theme";
+import { C, MONO, SANS, fmt, btnMini } from "../../lib/theme";
 import { Leyenda } from "./Basicos";
 import { Pestanas, PanelPestana, Chips, Tarjeta, Monto } from "./Sistema";
 import { esPendiente } from "../../lib/correosBfk";
@@ -327,7 +327,7 @@ export function PanelNotificaciones({ notificaciones, ocs, onMarcarLeidas, onNav
         <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10,fontSize:12,color:C.inkMuted}}>
           <span>Mostrando solo: <b>{ETAPA_ALERTA[etapa] || etapa}</b></span>
           <button onClick={() => setFa({ nivel: filtro, etapa: null })}
-            style={{border:`1px solid ${C.border}`,background:C.card,borderRadius:8,padding:"3px 9px",fontSize:12,cursor:"pointer",color:C.ink}}>Quitar ✕</button>
+            style={btnMini()}>Quitar ✕</button>
         </div>
       )}
 

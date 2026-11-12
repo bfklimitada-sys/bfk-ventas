@@ -22,7 +22,7 @@ import { BloqueoEstado, ComentariosOC, HistorialCambiosOC } from "../ui/Multiusu
 import { bloqueoOC, useBloqueoOC } from "../../lib/bloqueoOCUso";
 import { mensajeVerificacion } from "../../lib/bloqueoOC";
 import { del } from "../../lib/supabase";
-import { C, MONO, btnG, btnP, fmt, iMono, iStyle, selStyle } from "../../lib/theme";
+import { C, MONO, btnG, btnP, fmt, iMono, iStyle, selStyle, btnMini } from "../../lib/theme";
 import { calcMargen, estadoVencimiento, facturaVigente, gananciaReal, plazoPago } from "../../lib/calculos";
 import { coincideBusqueda } from "../../lib/busqueda";
 import { Ic, I } from "../ui/Iconos";
@@ -1120,9 +1120,9 @@ export function FilaOC({ tributario, notaVista, onCrearSeguimiento, onActualizar
                 {(()=>{ const creador=perfiles?.find(p=>p.id===oc.creado_por)?.nombre; return creador?<>Creada por {creador}</>:null; })()}
               </div>
               <div style={{display:"flex",flexDirection:"row",gap:6,flexShrink:0}}>
-                <button onClick={()=>setEditandoDatos(true)} style={{...btnG,flexShrink:0,fontSize:12,minHeight:36,padding:"6px 10px"}}><Ic n="✏️"/> Editar datos</button>
+                <button onClick={()=>setEditandoDatos(true)} style={{...btnMini(),flexShrink:0}}><Ic n="✏️"/> Editar datos</button>
                 <button data-consulta="1" data-ficha-pdf onClick={async()=>{ try{ await generarFichaPDF(oc); }catch(e){ window.alert(`No se pudo generar la ficha: ${e.message}`); } }}
-                  style={{...btnG,flexShrink:0,fontSize:12,minHeight:36,padding:"6px 10px"}}><Ic n="📄"/> Ficha PDF</button>
+                  style={{...btnMini(),flexShrink:0}}><Ic n="📄"/> Ficha PDF</button>
               </div>
             </div>
             {oc.direccion_entrega&&(

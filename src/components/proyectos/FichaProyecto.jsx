@@ -103,7 +103,7 @@ function Resumen({ token, proyecto: p, per, nombres, clientes, onCambio, onEdita
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: S.sm, marginBottom: S.md }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: S.sm, marginBottom: S.md }}>
         <Kpi dato="plazo" etiqueta="Plazo" valor={p.dias_restantes === null || p.dias_restantes === undefined ? "—" : `${p.dias_restantes} días`} nota={plazo || (p.fecha_termino_prevista ? `Término previsto ${formatoFecha(p.fecha_termino_prevista)}` : "Sin término previsto")}
           tono={activo && Number(p.dias_restantes) < 0 ? "danger" : activo && Number(p.dias_restantes) <= 15 ? "danger" : undefined} />
         {per.verEconomia ? (

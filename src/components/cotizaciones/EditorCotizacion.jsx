@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { C, T, R, iStyle, iMono, selStyle, fmt, MONO } from "../../lib/theme";
 import { Field, Modal } from "../ui/Basicos";
+import { PasosCotizacion } from "./PasosCotizacion";
 import { HojaLateral, Pestanas, PanelPestana, Tarjeta, Badge, AvisoLinea, BotonPrincipal, BotonSecundario, FilaDato, Desplegable, Seccion } from "../ui/Sistema";
 import { calcularCotizacion, formulaParaGuardar, formulaGuardadaExenta, esExentaAprobada, estadoParaPDF, destinoDe, direccionValida, invalidarDespachosPorDireccion, envioConfirmado, textoParaMercadoPublico, aplicarRecargoGeneral, aplicarRecargoProducto, itemVacio, envioVacio, nuevaClave, hoyISO, digitosValor, proveedorDeEnlace, ESTADOS_COTIZACION, ESTADOS_ENVIO, RECARGO_SUGERIDO } from "../../lib/cotizaciones";
 import { logoBFK } from "../../lib/cotizacionesDatos";
@@ -345,9 +346,7 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
           const despOk = cot.items.length > 0 && cot.items.every((it) => envioConfirmado(cot.envios.find((e) => e.key === it.envio_key) || {}));
           const pasos = [["Datos del cliente", !!String(cot.institucion || "").trim(), "datos"], ["Dirección", dirOk, "datos"], ["Productos", cot.items.length > 0, "productos"],
             ["Verificación de despacho", despOk && calc.listo, "productos"], ["Precios", calc.listo && cot.items.length > 0, "precios"], ["EETT", pdf.listo, "eett"]];
-          return <div data-pasos-cotizacion style={{ display: "flex", flexWrap: "wrap", gap: 4, margin: "8px 0 12px", fontSize: T.small }}>
-            {pasos.map(([t, ok, tab], i) => <button key={t} type="button" onClick={() => setPestana(tab)} style={{ border: `1px solid ${ok ? C.ok : C.border}`, background: ok ? C.okLight : C.card, color: ok ? C.okText : C.inkMuted, borderRadius: 999, padding: "3px 9px", cursor: "pointer", fontWeight: 600 }}>{ok ? "✓" : i + 1} {t}</button>)}
-          </div>;
+          return <PasosCotizacion pasos={pasos} onIr={setPestana} />;
         })()}
         {protegido && <AvisoLinea tono="info" icono="🔒" dato="cotizacion-protegida">Adjudicada: lo ofertado (productos, cantidades y precios) y el vínculo con la OC quedan protegidos. Puedes actualizar enlaces de compra y fichas técnicas y regenerar la EETT.</AvisoLinea>}
 
@@ -355,7 +354,7 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
           <Tarjeta padding="12px" data-bloque-direccion style={{ borderColor: dirOk ? C.ok : C.warn, background: dirOk ? C.card : C.warnLight }}>
             <div style={{ fontSize: T.sm, fontWeight: 700, color: C.ink }}>Dirección de entrega del cliente</div>
             <div style={{ fontSize: T.small, color: dirOk ? C.okText : C.warnText, fontWeight: 600, margin: "2px 0 8px" }}>{dirOk ? "✓ Registrada: los despachos se verifican contra esta dirección." : "Complétala antes de confirmar despachos (los productos se pueden ingresar igual; su despacho quedará «Por verificar»)."}</div>
-            <Field label="Dirección de entrega"><input data-campo="direccion" value={cot.direccion_entrega} onChange={(e) => setDireccion({ direccion_entrega: e.target.value })} style={iStyle} placeholder="Calle, número, oficina/bodega" /></Field>
+            <Field label="Calle y número"><input data-campo="direccion" value={cot.direccion_entrega} onChange={(e) => setDireccion({ direccion_entrega: e.target.value })} style={iStyle} placeholder="Calle, número, oficina/bodega" /></Field>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
               <Field label="Comuna / ciudad"><input data-campo="comuna" value={cot.comuna} onChange={(e) => setDireccion({ comuna: e.target.value })} style={iStyle} /></Field>
               <Field label="Región"><input data-campo="region" value={cot.region || ""} onChange={(e) => setDireccion({ region: e.target.value })} style={iStyle} /></Field>

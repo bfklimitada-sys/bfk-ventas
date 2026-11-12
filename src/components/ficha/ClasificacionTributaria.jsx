@@ -4,7 +4,7 @@
 // No habilita facturas DTE 34 ni cambia fórmulas de cotización (fases siguientes).
 import { useState } from "react";
 import { Field } from "../ui/Basicos";
-import { C, btnG, btnP, fmt, iStyle, selStyle } from "../../lib/theme";
+import { C, btnG, btnP, fmt, iStyle, selStyle, btnMini } from "../../lib/theme";
 import { Ic } from "../ui/Iconos";
 import { TRATAMIENTOS, ESTADOS_SOLICITUD, tratamientoDe, esClasificacionHistorica, esExentaClasificada, etiquetaTratamiento, historialDe, validarSolicitud } from "../../lib/clasificacionTributaria";
 
@@ -72,7 +72,7 @@ export function ClasificacionTributaria({ ambito, objetivo, historial, perfil, o
             Pedida por {pend.solicitado_por_nombre || "—"} el {fecha(pend.solicitado_en)}
           </div>
           {pend.respaldo_documento?.startsWith("trib-respaldos/") && acciones.abrirRespaldo && (
-            <button data-consulta="1" onClick={() => correr(async () => window.open(await acciones.abrirRespaldo(pend.respaldo_documento), "_blank"))} style={{ ...btnG, fontSize: 12, minHeight: 34, padding: "4px 10px", marginTop: 6 }}><Ic n="📄" /> Ver respaldo</button>
+            <button data-consulta="1" onClick={() => correr(async () => window.open(await acciones.abrirRespaldo(pend.respaldo_documento), "_blank"))} style={{ ...btnMini(), marginTop: 6 }}><Ic n="📄" /> Ver respaldo</button>
           )}
           {esAdmin && (
             <div style={{ marginTop: 8 }}>
@@ -83,7 +83,7 @@ export function ClasificacionTributaria({ ambito, objetivo, historial, perfil, o
               </div>
             </div>
           )}
-          {(esAdmin || pend.solicitado_por === perfil?.id) && <button data-trib-anular disabled={ocupado} onClick={() => correr(() => acciones.anular(pend.id))} style={{ ...btnG, fontSize: 12, minHeight: 34, padding: "4px 10px", marginTop: 6 }}>Anular solicitud</button>}
+          {(esAdmin || pend.solicitado_por === perfil?.id) && <button data-trib-anular disabled={ocupado} onClick={() => correr(() => acciones.anular(pend.id))} style={{ ...btnMini(), marginTop: 6 }}>Anular solicitud</button>}
         </div>
       )}
 

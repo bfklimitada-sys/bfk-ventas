@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from "react";
 import { selEliminacionesOC } from "../../lib/supabase";
 import { NOMBRE_REGISTRO, mensajeErrorEliminar } from "../../lib/eliminarOC";
 import { PanelDatos } from "./PanelDatos";
-import { C, btnP, fmt, iStyle } from "../../lib/theme";
+import { C, btnP, fmt, iStyle, btnMini } from "../../lib/theme";
 import { Ic } from "../ui/Iconos";
 import { Seccion, Tarjeta, Badge, BotonAdmin, Pestanas, PanelPestana } from "../ui/Sistema";
 import { ImportarEntidades } from "../forms/ImportarEntidades";
@@ -166,7 +166,7 @@ export function PanelUsuarios({ perfilPropio, onRecargar, perfiles, ocs, ocsArch
               <div data-correcciones-pendientes={l.length} style={{fontSize:12,color:C.inkMuted,lineHeight:1.5,marginBottom:8}}>
                 <b style={{color:C.ink}}>{l.length}</b> diferencias en <b style={{color:C.ink}}>{ocsCon.size}</b> OCs y <b style={{color:C.ink}}>{l.filter(d=>d.entidad==="financiador").length}</b> financiadores · <b style={{color:C.okText}}>{seg}</b> seguras de corregir · <b style={{color:C.warnText}}>{l.length-seg}</b> requieren decisión
               </div>
-              <button type="button" onClick={()=>setVerDifs(v=>!v)} style={{background:"none",border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 10px",fontSize:12,fontWeight:600,color:C.tealDark,cursor:"pointer"}}>{verDifs?"Ocultar detalle":"Ver detalle"}</button>
+              <button type="button" onClick={()=>setVerDifs(v=>!v)} style={{...btnMini()}}>{verDifs?"Ocultar detalle":"Ver detalle"}</button>
               {verDifs&&<div style={{marginTop:8,maxHeight:420,overflowY:"auto"}}>
                 {l.slice().sort((a,b)=>(a.clasificacion===b.clasificacion?0:a.clasificacion==="decision"?-1:1)||String(a.etiqueta).localeCompare(String(b.etiqueta))).map(d=>(
                   <div key={d.id} style={{borderTop:`1px solid ${C.border}`,padding:"7px 0",fontSize:12,lineHeight:1.45}}>

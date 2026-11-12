@@ -35,7 +35,7 @@ export function Modal({ title, onClose, children }) {
 
 export function Field({ label, required, hint, children }) {
   return (
-    <div style={{marginBottom:14}}>
+    <div style={{marginBottom:14,minWidth:0}}>
       <label style={estiloEtiqueta}>
         {label}{required&&<span style={{color:C.dangerText}}> *</span>}
       </label>

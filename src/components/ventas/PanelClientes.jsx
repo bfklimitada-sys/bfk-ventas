@@ -23,12 +23,13 @@ export function PanelClientes({ token, perfil, vp, onRecargar, showToast, onAbri
   const cli = abierto ? vp.clientes.find((c) => c.id === abierto) : null;
   return (
     <div data-panel-vp-clientes>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: S.md }}>
-        <div style={{ fontSize: T.sm, color: C.inkMuted, flex: "1 1 260px" }}>Empresas y personas de <b>ventas privadas</b>. El RUT es único: un cliente se registra una sola vez y se reutiliza en cotizaciones, ventas y Proyectos industriales.</div>
-        <button type="button" data-nuevo-cliente onClick={() => setForm({})} style={{ ...estiloBoton("pri"), minHeight: 44, padding: "10px 18px" }}>+ Nuevo cliente</button>
+      {/* Misma disposición que Cotizaciones: acción principal y búsqueda en una barra; la explicación, en una línea discreta. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: S.sm }}>
+        <button type="button" data-nuevo-cliente onClick={() => setForm({})} style={{ ...estiloBoton("pri"), minHeight: 44, padding: "10px 16px" }}>+ Nuevo cliente</button>
+        <Entrada data-buscar-clientes value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Buscar por nombre, RUT o contacto" style={{ flex: "1 1 220px", width: "auto" }} />
       </div>
-      <Seccion titulo={`Clientes · ${filas.length}`}>
-        <Entrada data-buscar-clientes value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Buscar por nombre, RUT o contacto" style={{ marginBottom: 8 }} />
+      <div style={{ fontSize: T.small, color: C.inkFaint, marginBottom: S.md, lineHeight: 1.45 }}>El RUT es único: un cliente se registra una sola vez y se reutiliza en cotizaciones, ventas y Proyectos industriales.</div>
+      <Seccion titulo={`${filas.length} cliente${filas.length === 1 ? "" : "s"}`}>
         <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: T.sm, color: C.inkMuted, marginBottom: 10 }}>
           <input type="checkbox" checked={!soloVP} onChange={(e) => setSoloVP(!e.target.checked)} /> Incluir clientes registrados solo en Proyectos industriales
         </label>

@@ -31,7 +31,12 @@ for (const ancho of [360, 390]) {
   ok(`M${ancho}_cabecera_sin_chips_estado`, !/✓ Compra|Financ\./.test(txtCab), txtCab);
   ok(`M${ancho}_tarjeta_conserva_resumen`, (await p.locator(`[data-oc="${NUM}"] > div`).first().innerText()).includes(NUM)
     && await p.locator(`[data-oc="${NUM}"] [data-asignaciones-fila]`).count() === 1);
-  ok(`M${ancho}_indice_presente`, await cab.locator("[data-indice-ficha] button").count() === 9);   // + «Seguimiento especial» (15/10/2026)
+  // El índice ofrece un acceso por cada sección de la ficha. Antes se comparaba con un número fijo (9), que quedó desactualizado
+  // al agregarse «Clasificación tributaria»: ahora se valida contra las secciones realmente presentes y las nueve permanentes.
+  const idsSec = await ficha.locator("[data-seccion-ficha]").evaluateAll((els) => els.map((e) => e.getAttribute("data-seccion-ficha").split("-")[0]));
+  const nInd = await cab.locator("[data-indice-ficha] button").count();
+  const fijas = ["info", "productos", "compra", "facturacion", "entrega", "cobranza", "seguimiento", "comunicaciones", "historial"];
+  ok(`M${ancho}_indice_presente`, nInd === idsSec.length && fijas.every((id) => idsSec.includes(id)), { nInd, idsSec });
   ok(`M${ancho}_edicion_presente`, await ficha.locator("[data-asignacion-editar]").count() >= 1 && await ficha.locator("[data-resumen-financiero]").count() === 1);
   // Ningún botón de la ficha sobresale del ancho de pantalla.
   const cortados = await p.evaluate(({ num }) => {

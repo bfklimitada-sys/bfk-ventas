@@ -102,7 +102,7 @@ export function Pestanas({ items, activa, onCambiar, etiqueta = "Secciones", sty
   // variante "chips": filtros de una lista (mismo aspecto que los chips de canal y de nivel de alerta).
   const chips = variante === "chips";
   return (
-    <div ref={ref} data-noprint role="tablist" aria-label={etiqueta} data-pestanas={etiqueta} className={sub || chips ? "bfk-sin-barra" : "bfk-segmentada bfk-sin-barra"}
+    <div ref={ref} data-noprint role="tablist" aria-label={etiqueta} data-pestanas={etiqueta} className={sub || chips ? "bfk-sin-barra" : `bfk-segmentada bfk-sin-barra${items.length <= 3 ? " bfk-seg-pocas" : ""}`}
       style={sub
         ? { display: "flex", gap: 2, overflowX: "auto", margin: `-4px 0 ${S.lg}px`, borderBottom: `1px solid ${C.border}`, WebkitOverflowScrolling: "touch", scrollbarWidth: "none", ...style }
         : chips

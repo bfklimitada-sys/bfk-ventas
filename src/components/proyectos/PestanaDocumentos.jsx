@@ -3,7 +3,7 @@
 // una versión nueva deja la anterior como «reemplazada» y anular exige motivo. La carga está deshabilitada hasta que
 // el respaldo diario de archivos esté activo (pi_configuracion); la descarga comprueba la huella.
 import { useEffect, useState } from "react";
-import { C, R, S, T, cardStyle } from "../../lib/theme";
+import { C, R, S, T, cardStyle, btnMini } from "../../lib/theme";
 import { Badge, Seccion, Desplegable, AvisoLinea } from "../ui/Sistema";
 import { Ventana, Campo, Rejilla, Entrada, Selector, ErrorForm, Vacio, PedirMotivo, estiloBoton } from "./Comunes";
 import { CATEGORIAS_DOC, MAX_ARCHIVO, agruparDocumentos, rutaArchivo, extension, categoriaDocDe, etiqueta, formatoTamano, mensajeError } from "../../lib/proyectos";
@@ -43,9 +43,9 @@ export function PestanaDocumentos({ token, proyecto: p, per, nombres, modulo, ve
         </div>
         {d.motivo_anulacion && <div style={{ fontSize: T.small, color: C.dangerText, marginTop: 2 }}>Anulado: {d.motivo_anulacion}</div>}
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
-          <button type="button" data-descargar={d.titulo} data-descargar-version={d.numero_version} disabled={bajando === d.id} onClick={() => descargar(d)} style={{ ...estiloBoton(), minHeight: 34 }}>{bajando === d.id ? "Descargando…" : "Descargar"}</button>
-          {grupo && d.estado === "vigente" && puedeSubir && <button type="button" data-nueva-version={d.titulo} onClick={() => setSubir({ base: d })} style={{ ...estiloBoton(), minHeight: 34 }}>Nueva versión</button>}
-          {grupo && d.estado === "vigente" && per.editarContenido && <button type="button" data-anular-documento={d.titulo} onClick={() => setAnular(d)} style={{ ...estiloBoton("peligro"), minHeight: 34 }}>Anular</button>}
+          <button type="button" data-descargar={d.titulo} data-descargar-version={d.numero_version} disabled={bajando === d.id} onClick={() => descargar(d)} style={btnMini()}>{bajando === d.id ? "Descargando…" : "Descargar"}</button>
+          {grupo && d.estado === "vigente" && puedeSubir && <button type="button" data-nueva-version={d.titulo} onClick={() => setSubir({ base: d })} style={btnMini()}>Nueva versión</button>}
+          {grupo && d.estado === "vigente" && per.editarContenido && <button type="button" data-anular-documento={d.titulo} onClick={() => setAnular(d)} style={btnMini("peligro")}>Anular</button>}
         </div>
       </div>
     </div>

@@ -1,4 +1,4 @@
-import { C, MONO, SANS, btnG, fmt } from "../../lib/theme";
+import { C, MONO, SANS, btnG, fmt, btnMini } from "../../lib/theme";
 import { registrosConAlerta } from "../../lib/registroCartola";
 
 // Registros MANUALES que la base marcó como posible duplicado de un movimiento ya registrado desde la cartola.
@@ -14,7 +14,7 @@ export function AlertasCartola({ ocs, gastos, pagosVendedor, pagoFinSueltos, apo
         <div key={r.tabla + r.id} data-alerta={r.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 0", borderTop: `1px solid ${C.border}`, fontSize: 13 }}>
           <span style={{ flex: 1 }}>{r.tipo} · {r.fecha ? fmt.date(r.fecha) : ""}{r.detalle ? ` · ${r.detalle}` : ""}<br /><span style={{ color: C.inkMuted, fontSize: 12 }}>{r.alerta}</span></span>
           <span style={{ fontFamily: MONO }}>{fmt.money(r.monto)}</span>
-          {onQuitar && <button data-quitar-alerta={r.id} onClick={() => onQuitar(r.tabla, r.id)} style={{ ...btnG, fontSize: 12, padding: "5px 9px" }}>Revisado</button>}
+          {onQuitar && <button data-quitar-alerta={r.id} onClick={() => onQuitar(r.tabla, r.id)} style={{ ...btnMini() }}>Revisado</button>}
         </div>
       ))}
     </div>

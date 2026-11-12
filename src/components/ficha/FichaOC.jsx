@@ -3,7 +3,7 @@ import { Field } from "../ui/Basicos";
 import { Badge } from "../ui/Sistema";
 import { Ic } from "../ui/Iconos";
 import { TarjetaCorreo } from "../ui/CorreosBfk";
-import { C, MONO, btnP, fmt, iMono, iStyle, selStyle } from "../../lib/theme";
+import { C, MONO, btnP, fmt, iMono, iStyle, selStyle, btnMini } from "../../lib/theme";
 import { gananciaReal, estadoVencimiento, plazoPago } from "../../lib/calculos";
 import {
   CODIGOS_REF, ETIQUETA_ESTADO, cadenaDocumental, codigoRef, efectoMonto, esFactura, esNotaCredito, esNotaDebito,
@@ -157,10 +157,10 @@ function FilaDocumento({ oc, d, primero, perfil, bloqueado, onEditar, onEliminar
         {!bloqueado && (
           <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
             {!nc && <button onClick={() => onEditar && onEditar({ tipo: esNotaDebito(d) ? "Nota de débito" : "Factura", e: d, tabla: "eventos_factura" })}
-              style={{ fontSize: 12, background: C.tealLight, color: C.tealDark, border: "none", borderRadius: 8, padding: "4px 10px", cursor: "pointer", fontWeight: 500 }}><Ic n="✏️" /> Editar</button>}
+              style={btnMini()}><Ic n="✏️" /> Editar</button>}
             {perfil?.rol === "admin" && (
               <button onClick={async () => { if (window.confirm(`¿Eliminar ${nombreDocumento(d)}?\nLo facturado se recalcula según los documentos que queden.`)) await onEliminar(oc.id, d.id); }}
-                style={{ fontSize: 12, background: C.dangerLight, color: C.dangerText, border: "none", borderRadius: 8, padding: "4px 10px", cursor: "pointer", fontWeight: 500 }}><Ic n="🗑" /> Eliminar</button>
+                style={btnMini("peligro")}><Ic n="🗑" /> Eliminar</button>
             )}
           </div>
         )}

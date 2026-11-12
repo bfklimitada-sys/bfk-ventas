@@ -67,9 +67,10 @@ export function PanelProyectos({ token, perfil, showToast }) {
 
   return (
     <div data-panel-proyectos>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: S.md }}>
-        <div style={{ fontSize: T.sm, color: C.inkMuted, flex: "1 1 260px" }}>Línea de negocio <b>PI</b>, separada de Mercado Público. {esAdmin ? "Como administrador ves todos los proyectos." : "Ves los proyectos donde integras el equipo."}</div>
-        <button type="button" data-nuevo-proyecto onClick={() => setForm({ nuevo: true })} style={{ ...estiloBoton("pri"), minHeight: 44, padding: "10px 18px", fontSize: T.body }}>+ Nuevo proyecto</button>
+      {/* Acción principal primero (como en el resto de las listas); la explicación, en una línea discreta a su lado. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: S.md }}>
+        <button type="button" data-nuevo-proyecto onClick={() => setForm({ nuevo: true })} style={{ ...estiloBoton("pri"), minHeight: 44, padding: "10px 16px" }}>+ Nuevo proyecto</button>
+        <div style={{ fontSize: T.small, color: C.inkFaint, flex: "1 1 240px", lineHeight: 1.45 }}>Línea separada de Mercado Público. {esAdmin ? "Como administrador ves todos los proyectos." : "Ves los proyectos donde integras el equipo."}</div>
       </div>
       {error && <AvisoLinea tono="danger" dato="error-carga">{error}</AvisoLinea>}
       {ind.propuestas > 0 && (
@@ -86,7 +87,7 @@ export function PanelProyectos({ token, perfil, showToast }) {
         </div>
       )}
 
-      <div data-indicadores-pi style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", gap: S.sm, marginBottom: S.lg }}>
+      <div data-indicadores-pi style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: S.sm, marginBottom: S.lg }}>
         <Kpi dato="activos" et="Activos" v={ind.activos} n={[`${ind.enEjecucion} en ejecución`, `${ind.porIniciar} por iniciar`, ind.suspendidos ? `${ind.suspendidos} suspendidos` : null].filter(Boolean).join(" · ")} onClick={() => setFiltro("activos")} />
         <Kpi dato="atraso" et="Con atraso" v={ind.conAtraso} tono={ind.conAtraso ? "danger" : "ok"} n={ind.conAtraso ? "Revisa actividades, hitos y entregables vencidos" : "Ningún proyecto activo atrasado"} onClick={() => setFiltro("atraso")} />
         <Kpi dato="finalizados" et="Finalizados y cerrados" v={ind.finalizados} onClick={() => setFiltro("finalizados")} />
@@ -94,7 +95,7 @@ export function PanelProyectos({ token, perfil, showToast }) {
           n={[ind.presupuesto.slice(1).map((x) => `+ ${formatoMonto(x.monto, x.moneda)}`).join(" · "), ind.presupuesto.length > 1 ? "(otras monedas, no se suman)" : null, "Línea base, sin IVA.", ind.reservados ? `${ind.reservados} con datos reservados.` : null].filter(Boolean).join(" ")} />
       </div>
 
-      <Seccion titulo={`Proyectos · ${visibles.length}`}>
+      <Seccion titulo={`${visibles.length} proyecto${visibles.length === 1 ? "" : "s"}`}>
         <input data-buscar-proyectos value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Buscar por código, nombre, cliente, mandante o ubicación"
           style={{ width: "100%", minHeight: 42, padding: "10px 12px", marginBottom: S.sm }} />
         <Pestanas etiqueta="Filtro de proyectos" activa={filtro} onCambiar={setFiltro} variante="chips"
