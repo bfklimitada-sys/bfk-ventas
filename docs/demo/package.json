@@ -1,0 +1,7 @@
+{
+  "name": "bfk-demo",
+  "private": true,
+  "type": "module",
+  "description": "Dependencias SOLO de la demostración aislada (no forman parte de la app publicada).",
+  "dependencies": { "@electric-sql/pglite": "0.5.16" }
+}
