@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { C, MONO, fmt } from "../../lib/theme";
-import { Seccion, Tarjeta, Desplegable } from "../ui/Sistema";
+import { Seccion, Tarjeta, Desplegable, ControlRotulado } from "../ui/Sistema";
 import { useEsEscritorio } from "../ui/Navegacion";
 import { calcularF29, desgloseF29 } from "../../lib/f29";
 import { cajaYFueraDelBanco, comisionesYApoyo, resultadoMes, resumenFinanciadores } from "../../lib/informes";
@@ -35,13 +35,13 @@ export function InformeFinanciero({ ocs, financiadores, gastos, pagosVendedor, i
     <Seccion titulo="Informe financiero" nota="Cada concepto por separado. Solo presentación: no modifica registros.">
       {/* 1. Margen comercial vs. resultado */}
       <Tarjeta padding="12px 14px">
-        <div data-informe-resultado style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+        <div data-informe-resultado style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 6 }}>
           <span style={{ fontWeight: 700, fontSize: 13 }}>Resultado del mes</span>
-          <select data-periodo-resultado value={`${periodo.anio}-${periodo.mes}`} onChange={(e) => { const [a, m] = e.target.value.split("-").map(Number); setPeriodo({ anio: a, mes: m }); }}
+          <ControlRotulado dato="mes-resultado" rotulo="Mes de este resultado"><select data-periodo-resultado value={`${periodo.anio}-${periodo.mes}`} onChange={(e) => { const [a, m] = e.target.value.split("-").map(Number); setPeriodo({ anio: a, mes: m }); }}
             aria-label="Mes del resultado" style={{ padding: "4px 6px", minHeight: 36, width: "auto" }}>
             {Array.from({ length: 12 }, (_, k) => { const d = new Date(anioA, mesA - 1 - k, 1); return { a: d.getFullYear(), m: d.getMonth() + 1 }; })
               .map(({ a, m }) => <option key={`${a}-${m}`} value={`${a}-${m}`}>{MES[m - 1]}-{a}</option>)}
-          </select>
+          </select></ControlRotulado>
         </div>
         <Linea dato="margen" k="Margen comercial" v={res.margenComercial} nota={`Venta ${fmt.money(res.venta)} − costo ${fmt.money(res.costo)} (por fecha de la OC, con postventa) · ${res.pctMargen}%`} />
         <Linea dato="comisiones" signo="−" k={`Comisiones${res.comisionesProvisorias ? " (provisorias)" : ""}`} v={res.comisiones} nota="Por mes de factura; provisorias mientras falte el IVA o el total del F29" />

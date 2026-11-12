@@ -5,7 +5,7 @@
 // (ventas, facturado, cobrado y saldo, todos con IVA). Los márgenes se muestran por canal y no se suman (criterios distintos).
 import { useMemo, useState } from "react";
 import { C, MONO, R, S, T, cardStyle } from "../../lib/theme";
-import { Seccion, AvisoLinea, Ayuda } from "../ui/Sistema";
+import { Seccion, AvisoLinea, Ayuda, ControlRotulado } from "../ui/Sistema";
 import { Selector } from "../proyectos/Comunes";
 import { Kpi, RejillaKpi, Fila, NoInstalado } from "./Comunes";
 import { indicadoresVP, alertasVP, pesos, pct, hoyISO } from "../../lib/ventasPrivadas";
@@ -116,7 +116,8 @@ export function FinanzasPorCanal({ canal, ocs, vp, onIr, children }) {
   const mp = useMemo(() => indicadoresMP(ocs, r), [ocs, periodo]); // eslint-disable-line react-hooks/exhaustive-deps
   const priv = useMemo(() => (vp?.instalado ? indicadoresVP(vp, r) : null), [vp, periodo]); // eslint-disable-line react-hooks/exhaustive-deps
   if (canal === "mp") return children;
-  const selector = <Selector aria-label="Período" data-periodo value={periodo} onChange={(e) => setPeriodo(e.target.value)} opciones={PERIODOS} style={{ width: "auto", minHeight: 36 }} />;
+  // Este período solo filtra el cuadro de ventas por canal (y sus márgenes). El «Resultado del mes» del informe financiero tiene su propio mes.
+  const selector = <ControlRotulado dato="periodo-canales" rotulo={canal === "vp" ? "Período de este resumen" : "Período de este cuadro"}><Selector aria-label={canal === "vp" ? "Período del resumen de Ventas privadas" : "Período del cuadro de ventas por canal"} data-periodo value={periodo} onChange={(e) => setPeriodo(e.target.value)} opciones={PERIODOS} style={{ width: "auto", minHeight: 36 }} /></ControlRotulado>;
   if (canal === "vp") return (
     <Seccion titulo={<>Ventas privadas<Ayuda>Ventas del período por fecha de la orden de venta, con su estado de facturación y cobro. Lo cotizado se informa aparte y nunca se suma como ingreso.</Ayuda></>} accion={selector}>
       <ResumenVentasPrivadas vp={vp} periodo={periodo} onIr={onIr} />

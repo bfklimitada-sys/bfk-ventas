@@ -14,7 +14,7 @@ import { DiasBadge, Field, Leyenda, Modal, Trazabilidad } from "../ui/Basicos";
 import { HojaLateral, BotonSecundario } from "../ui/Sistema";
 import { EtapasOC, FormPostventa } from "../ui/EtapasOC";
 import { diferenciasPendientes, tipoFinanciamiento, TIPOS_FINANCIAMIENTO } from "../../lib/finanzas";
-import { useEscritorio, useTopeFijo, SeccionFicha, IndiceFicha, ResumenFinanciero, FacturacionSII, FormNotaCredito, CobranzaFicha, ComunicacionesFicha } from "../ficha/FichaOC";
+import { useEscritorio, useFilaAncha, useTopeFijo, SeccionFicha, IndiceFicha, ResumenFinanciero, FacturacionSII, FormNotaCredito, CobranzaFicha, ComunicacionesFicha } from "../ficha/FichaOC";
 import { montoTributarioVigente, ventaExenta } from "../../lib/tributario";
 import { ClasificacionTributaria, resumenClasificacion } from "../ficha/ClasificacionTributaria";
 import { cotizacionVinculadaA } from "../../lib/clasificacionTributaria";
@@ -808,7 +808,7 @@ export function FilaOC({ tributario, notaVista, onCrearSeguimiento, onActualizar
   const [correoFecha,setCorreoFecha]=useState(false);
   const [sincronizandoMP,setSincronizandoMP]=useState(false);
   const [registrandoNC,setRegistrandoNC]=useState(false);
-  const escritorio=useEscritorio();
+  const escritorio=useEscritorio(); const filaAncha=useFilaAncha();
   const topeFijo=useTopeFijo();
   const [abiertas,setAbiertas]=useState(null);   // secciones abiertas de la ficha (null = según pantalla y etapa)
   const plazoOC = plazoPago(oc);
@@ -902,10 +902,10 @@ export function FilaOC({ tributario, notaVista, onCrearSeguimiento, onActualizar
   const lineaEntregaFactura=(oc.tipo_registro||"venta")!=="aporte_socio"?(
     <div data-fila-entrega-factura style={{display:"flex",alignItems:"center",gap:8,minWidth:0,fontSize:12,lineHeight:1.35}}>
       <span data-fila-direccion={dirEntrega.fuente||"ninguna"} title={dirEntrega.texto}
-        style={{flex:escritorio?"0 1 auto":"1 1 auto",minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:dirEntrega.fuente?C.inkMuted:C.inkFaint,fontStyle:dirEntrega.fuente?"normal":"italic"}}>
+        style={{flex:filaAncha?"0 1 auto":"1 1 auto",minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:dirEntrega.fuente?C.inkMuted:C.inkFaint,fontStyle:dirEntrega.fuente?"normal":"italic"}}>
         <Ic n="🚚"/> {dirEntrega.texto}</span>
       <span data-fila-factura={facVista.estado} title={[facVista.texto,facVista.extra].filter(Boolean).join(" · ")+(facVista.extra?" (detalle en la ficha)":"")}
-        style={{flexShrink:0,whiteSpace:"nowrap",fontWeight:600,marginLeft:escritorio?6:"auto",paddingLeft:escritorio?8:0,borderLeft:escritorio?`1px solid ${C.border}`:"none",color:facVista.estado==="vigente"?C.ink:facVista.estado==="anulada"?C.warnText:C.inkFaint}}>
+        style={{flexShrink:0,whiteSpace:"nowrap",fontWeight:600,marginLeft:filaAncha?6:"auto",paddingLeft:filaAncha?8:0,borderLeft:filaAncha?`1px solid ${C.border}`:"none",color:facVista.estado==="vigente"?C.ink:facVista.estado==="anulada"?C.warnText:C.inkFaint}}>
         <Ic n="🧾"/> {facVista.texto}{facVista.extra?<span style={{fontWeight:500,color:C.inkFaint}}> · {facVista.extra}</span>:null}</span>
     </div>
   ):null;
@@ -915,7 +915,7 @@ export function FilaOC({ tributario, notaVista, onCrearSeguimiento, onActualizar
     <div data-oc={oc.numero_oc} style={{background:expanded?C.tealLight:C.card,borderTop:`1px solid ${expanded?C.teal:C.border}`,borderRight:`1px solid ${expanded?C.teal:C.border}`,borderBottom:`1px solid ${expanded?C.teal:C.border}`,borderLeft:`4px solid ${estadoOC.color}`,borderRadius:12,marginBottom:8,overflow:expanded?"visible":"hidden"}}>
       {notaVista&&<div data-nota-vista style={{fontSize:12,fontWeight:600,color:C.inkMuted,background:C.paper,padding:"4px 12px",borderBottom:`1px solid ${C.border}`}}>{notaVista}</div>}
       <div onClick={handleToggle} role="button" tabIndex={0} aria-expanded={!!expanded} onKeyDown={e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); handleToggle(); } }} style={{padding:escritorio?"10px 14px":"12px 14px",cursor:"pointer"}}>
-        {escritorio?(
+        {filaAncha?(
           /* Escritorio: una fila compacta — código · cliente y asignaciones · estado y avance · monto */
           <div style={{display:"grid",gridTemplateColumns:"150px minmax(0,1fr) minmax(0,auto) 140px",gap:14,alignItems:"center"}}>
           <div style={{minWidth:0}}>

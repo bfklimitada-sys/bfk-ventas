@@ -1,6 +1,7 @@
 // Ficha de OC (expediente) y Facturación SII en escritorio y móvil, con Supabase simulado (sin datos reales).
 // Requiere: npx vite build && npx vite preview --port 4178 ; playwright-core.
 import { chromium } from "playwright-core";
+import { irSeccionFicha, abrirIndiceFicha, seccionesDelIndice } from "../pruebas-oc/indice_ficha.mjs";
 const APP = "http://127.0.0.1:4178/";
 const base = (i, extra) => ({ id: "oc" + i, numero_oc: `TEST-${i}-AG26`, cliente: "I MUNICIPALIDAD DE PRUEBA " + i, rut_cliente: "69.200.800-6", comuna: "La Unión", vendedor_id: "v1",
   estado_compra: "comprado", estado_entrega: "confirmada", estado_factura_propia: "emitida", estado_pago_cliente: "pendiente", estado_pago_financiamiento: "pagado",
@@ -49,10 +50,10 @@ for (const [modo, vp] of [["escritorio", { width: 1280, height: 900 }], ["movil"
   const f = page.locator('[data-ficha-oc="TEST-1-AG26"]');
   r.cabecera = await f.locator("[data-ficha-cabecera]").count() === 1;
   r.resumen_6 = await f.locator("[data-resumen-financiero] [data-tile]").count() === 6;
-  r.indice_10 = (await f.locator("[data-indice-ficha] button").count()) === 10;   // + «Seguimiento especial» (15/10/2026) + «Clasificación tributaria» (fase 2 exentas)
+  r.indice_10 = (await seccionesDelIndice(f)).length === 10;   // + «Seguimiento especial» (15/10/2026) + «Clasificación tributaria» (fase 2 exentas)
   r.secciones_10 = (await f.locator("[data-seccion-ficha]").count()) === 10;
   if (modo === "movil") { r.movil_acordeon_cerrado = !(await f.locator('[data-seccion-ficha^="info-"] [data-ficha-pdf]').count()); }
-  await f.locator("[data-indice-ficha] button", { hasText: "Facturación SII" }).click(); await page.waitForTimeout(600);
+  await irSeccionFicha(f, "Facturación SII"); await page.waitForTimeout(600);
   const fact = f.locator("[data-facturacion-sii]");
   const tf = await fact.innerText();
   r.f203_vigente = (await fact.locator('[data-documento="Factura 203"]').getAttribute("data-estado")) === "vigente";
@@ -65,7 +66,7 @@ for (const [modo, vp] of [["escritorio", { width: 1280, height: 900 }], ["movil"
   // Rediseño 2026-10: la ficha se abre en un panel encima de la lista; se cierra con Escape antes de abrir otra.
   await page.keyboard.press("Escape"); await page.waitForTimeout(400); await abrir(2);
   const f2 = page.locator('[data-ficha-oc="TEST-2-AG26"]');
-  await f2.locator("[data-indice-ficha] button", { hasText: "Facturación SII" }).click(); await page.waitForTimeout(600);
+  await irSeccionFicha(f2, "Facturación SII"); await page.waitForTimeout(600);
   r.cod1_anulada = (await f2.locator('[data-documento="Factura 100"]').getAttribute("data-estado")) === "anulada"
     && (await f2.locator('[data-documento="Factura 101"]').getAttribute("data-estado")) === "vigente"
     && /Monto tributario vigente\s*\$247\.000/i.test(await f2.locator("[data-monto-tributario]").innerText());
@@ -84,9 +85,9 @@ for (const [modo, vp] of [["escritorio", { width: 1280, height: 900 }], ["movil"
   if (modo === "movil") { await page.getByText("Compras", { exact: true }).last().click(); } else { await page.getByText("Compras", { exact: true }).first().click(); }
   await page.waitForTimeout(800); await abrir(3);
   const f3 = page.locator('[data-ficha-oc="TEST-3-AG26"]');
-  await f3.locator("[data-indice-ficha] button", { hasText: "Facturación SII" }).click(); await page.waitForTimeout(600);
+  await irSeccionFicha(f3, "Facturación SII"); await page.waitForTimeout(600);
   r.cod3_parcial = (await f3.locator('[data-documento="NC 60"]').getAttribute("data-estado")) === "nc_monto" && /Monto tributario vigente\s*\$228\.000/i.test(await f3.locator("[data-monto-tributario]").innerText());
-  await f3.locator("[data-indice-ficha] button", { hasText: "Cobranza" }).click(); await page.waitForTimeout(500);
+  await irSeccionFicha(f3, "Cobranza"); await page.waitForTimeout(500);
   // La ficha se desplaza dentro de su panel: la cabecera queda fija arriba del panel al bajar.
   r.cabecera_fija_visible_al_bajar = await f3.locator("[data-ficha-cabecera]").evaluate((el) => {
     const c = el.closest("[data-hoja-cuerpo]"); if (!c) return false;

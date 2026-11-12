@@ -4,6 +4,7 @@
 import { chromium, CHROME, crearBase, abrir } from "./mock_estado.mjs";
 import { crearDatos, RESPUESTAS_MP, dias } from "./datos_oc.mjs";
 import { FILTROS_PANEL } from "../../src/lib/ocs.js";
+import { irSeccionFicha } from "./indice_ficha.mjs";
 // 06/11/2026: «+ Nueva OC» pasó a ser «+ Nuevo › OC de Mercado Público» (mismo formulario de siempre).
 const nuevaOC = async (p) => { await p.locator("[data-boton-nuevo]:visible").first().click(); await p.waitForTimeout(250); await p.locator('[data-nuevo="mp_oc"]').first().click(); };
 
@@ -36,8 +37,7 @@ async function abrirOC(p, numero) {
 // ── Ficha de OC como expediente (desde 29ea625, 07/10/2026): se llega a cada sección por el índice de la ficha.
 //    Solo cambia la navegación; las comprobaciones de negocio son las mismas.
 async function irSeccion(p, titulo) {
-  const b = p.locator("[data-indice-ficha] button", { hasText: titulo }).first();
-  await b.click(); await p.waitForTimeout(450);
+  await irSeccionFicha(p, titulo); await p.waitForTimeout(450);
 }
 const SECCION_ETAPA = { compra: "Compra y financiamiento", financ: "Compra y financiamiento", entrega: "Entrega", postventa: "Entrega", factura: "Facturación SII", cobro: "Cobranza" };
 const DETALLE_ETAPA = (etapa) => etapa === "factura" ? "[data-facturacion-sii]" : `[data-etapa-seccion="${etapa}"]`;

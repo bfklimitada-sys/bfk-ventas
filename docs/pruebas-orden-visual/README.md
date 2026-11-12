@@ -63,18 +63,18 @@ Mismo alcance: solo presentación. Sin cambios en cálculos, permisos, datos, in
 * `pruebas-cierre/e2e_panel.mjs`: daba por abierto «Caja y compromisos» en escritorio; ahora lo abre antes de validar los mismos
   conceptos y montos (el desglose parte cerrado desde la primera pasada).
 
-### Defecto real detectado (NO corregido aquí: no es presentación)
-Los formularios de Mercado Público proponen la fecha con `new Date().toISOString().slice(0,10)` (fecha UTC): entre las 21:00 (20:00 en
-invierno) y la medianoche de Chile aparece por defecto la fecha del día siguiente. 19 lugares (compra, entrega, factura, pago, gasto,
-abono, aporte, saldo del banco, incidente, nombre del PDF…). Existe en `main`. Ventas privadas no lo tiene.
+### Defecto real detectado
+Los formularios de Mercado Público proponían la fecha UTC (el día siguiente entre las 21:00/20:00 y la medianoche de Chile). Existía
+en `main`. Corregido el 12/11/2026 en un commit aparte; detalle y pruebas en `docs/pruebas-fechas/README.md`.
 
 ### Cómo se verificó
 * `entorno.sh` + `semilla_vp.mjs`: base desechable local con datos representativos. `modulos.mjs`: listas, fichas y formularios de
   Ventas privadas y Proyectos en 1440, 390 y 360 px. `detalle.mjs`: ficha de OC (3 estados), ventanas y pestañas internas de
   Mercado Público en los mismos anchos. `revisar.mjs`: desplazamiento horizontal, controles fuera del ancho, contenido cortado y
   controles inalcanzables dentro de una ventana. `agenda.mjs`: leyenda única, meses de seis filas y días con varios eventos.
-* La suite `pruebas-proyectos/e2e_proyectos.mjs` falla igual en `main` (2 de 23) que en la rama: quedó desactualizada respecto de la
-  navegación actual. No se corrigió en esta pasada.
+* Corrección (12/11/2026): lo anotado aquí antes —«`e2e_proyectos.mjs` falla igual en `main` (2 de 23)»— era un error del entorno
+  de pruebas, no de la suite ni de la app: el sustituto local de PostgREST no escribía tablas. Con el entorno corregido
+  (`pgrest_nucleo.mjs`) la suite completa da 97 OK · 0 FALLA en la rama y en la versión publicada, sin modificar sus pruebas.
 
 ### Resultado (12/11/2026, compilación final de la rama)
 * Recorridos propios, sin problemas de maquetación ni errores de página: `detalle.mjs` 53 + 55 + 56 capturas (1440 · 390 · 360 px),
@@ -87,3 +87,31 @@ abono, aporte, saldo del banco, incidente, nombre del PDF…). Existe en `main`.
 * Ventas privadas, sobre base desechable: e2e_ventas_privadas 85 · cotizacion_como_mp 110 · compra_vp 28 · financiamiento 66 ·
   eett_cp_2026_0001 23 (escritorio) + 23 (celular).
 * `mp_byte_a_byte.mjs`: los 4 PDF de EETT de Mercado Público, idénticos byte a byte entre `main` y la rama.
+
+## Tercera pasada (12/11/2026)
+
+### Cambios de interfaz
+* **Ficha de OC en celular y tableta vertical:** el índice de cinco filas de botones (que repetía los títulos de las secciones que
+  están justo debajo) pasa a ser un solo control «Ir a una sección · N secciones» que despliega la lista completa, con la marca
+  «Requiere atención» donde corresponde. Todas las secciones siguen accesibles. En computador sigue la fila de accesos.
+* **Finanzas › Resumen:** se mantienen los dos selectores porque filtran cosas distintas, y cada uno dice qué controla:
+  «Período de este cuadro» (ventas por canal y sus márgenes; en Ventas privadas, «Período de este resumen») y «Mes de este
+  resultado» (Resultado del mes del informe financiero).
+* **Compras en tableta horizontal (1024–1150 px):** con la barra lateral, la fila de una línea cortaba el cliente («CORPORACIÓN
+  EDUCACIO…») y la dirección («Direcci…»). La fila decide ahora según el ancho del contenido, no de la ventana, y en ese tramo
+  usa la distribución apilada, sin cortar información.
+
+### Pruebas ajustadas (comportamiento, no distribución)
+* `pruebas-oc/indice_ficha.mjs` (nuevo): ir a una sección por su título, abriendo antes la lista si el índice es compacto. Lo usan
+  las 16 suites que navegaban por los botones del índice; funcionan igual con la versión publicada y con la rama.
+* `pruebas-ui-movil/e2e_compras_movil.mjs`: ya no cuenta botones; exige un acceso por sección, que cada acceso lleve a su sección
+  y la abra, y que la lista se cierre al elegir.
+* `pruebas-4c/e2e_fase4c.mjs` (C5): abre «Caja y compromisos» antes de leer el desglose (parte cerrado desde la primera pasada).
+* `pruebas-financieras/e2e_fase4b.mjs` (B13): llenaba un «precio de venta» que, con una OC existente, el formulario no pide (la
+  venta viene de la OC); fallaba igual en `main`. Ahora lo llena solo si aparece.
+
+### Tableta
+`tableta.mjs` recorre, sobre la demostración aislada, las 16 pantallas, los menús «+ Nuevo» y «Más», los formularios de compra,
+entrega, factura, pago y gasto, filtros, la ficha de OC con su índice, cotizaciones, cliente, cotización y venta privadas con sus
+pestañas y formularios, y la ficha y el alta de un proyecto: 768×1024, 820×1180, 1024×768 y 1180×820. Resultado: 188 capturas sin
+desplazamiento horizontal, contenido cortado ni controles fuera de pantalla; revisión visual de una muestra en cada ancho.

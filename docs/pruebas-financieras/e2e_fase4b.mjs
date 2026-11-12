@@ -4,6 +4,7 @@
 // Uso: node docs/pruebas-financieras/e2e_fase4b.mjs http://127.0.0.1:4178/   (build servido con vite preview)
 import { chromium, CHROME, crearBase, abrir } from "../pruebas-oc/mock_estado.mjs";
 import { crearDatos, RESPUESTAS_MP, dias } from "../pruebas-oc/datos_oc.mjs";
+import { irSeccionFicha, abrirIndiceFicha, seccionesDelIndice } from "../pruebas-oc/indice_ficha.mjs";
 
 const URL_APP = process.argv[2] || "http://127.0.0.1:4178/";
 const SOLO = process.env.SOLO ? new Set(process.env.SOLO.split(",")) : null;
@@ -42,7 +43,7 @@ async function etapa(p, numero, key) {
   const fila = p.locator(`[data-oc="${numero}"]`);
   const SECCION = { compra: "Compra y financiamiento", financ: "Compra y financiamiento", entrega: "Entrega", postventa: "Entrega", factura: "Facturación SII", cobro: "Cobranza" };
   const det = fila.locator(key === "factura" ? "[data-facturacion-sii]" : `[data-etapa-seccion="${key}"]`);
-  await fila.locator("[data-indice-ficha] button", { hasText: SECCION[key] }).first().click(); await espera(p, 400);
+  await irSeccionFicha(fila, SECCION[key]); await espera(p, 400);
   return det;
 }
 const enModal = (p) => p.locator("[role=dialog]").last();
@@ -404,7 +405,8 @@ await escenario("B13", async () => {
   const m = enModal(pB);
   await m.getByRole("button", { name: /Siguiente/ }).click(); await espera(pB, 300);
   await m.getByPlaceholder("ej: Silla ergonómica negra 3C").fill("Monitor 24");
-  const nums = m.locator("input[type=number]"); await nums.nth(1).fill("700000"); await nums.nth(2).fill("1190000");
+  // El precio de venta solo se pide al crear una OC nueva; con una OC existente la venta viene de la OC (FormIngresarCompra).
+  const nums = m.locator("input[type=number]"); await nums.nth(1).fill("700000"); if ((await nums.count()) > 2) await nums.nth(2).fill("1190000");
   await m.getByRole("button", { name: /Siguiente/ }).click(); await espera(pB, 300); await m.getByRole("button", { name: /Siguiente/ }).click(); await espera(pB, 300);
   await m.getByRole("button", { name: /Registrar compra/ }).click(); await espera(pB, 2000);
   const wsB = desde(b, n);

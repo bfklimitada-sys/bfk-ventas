@@ -11,6 +11,7 @@ import { calcularPagoVendedor, gananciaReal, facturasVigentes } from "../../src/
 import { ivaDeDocumento, tipoVentaPorDocumentos, ventaExentaPorDocumentos, bloqueoFacturaPorExenta, montoTributarioVigente } from "../../src/lib/tributario.js";
 import { ventaDeOC } from "../../src/lib/productosOC.js";
 import { facturaVisibleOC } from "../../src/lib/vistaCompras.js";
+import { irSeccionFicha, abrirIndiceFicha, seccionesDelIndice } from "./indice_ficha.mjs";
 
 const URL_APP = process.argv[2] || "http://127.0.0.1:4190/";
 const F = []; let nOk = 0;
@@ -124,7 +125,7 @@ for (const [pref, movil] of [["E", false], ["M", true]]) {
     await busc.fill(num); await espera(p, 500);
     await p.locator(`[data-oc="${num}"] > div`).first().click(); await espera(p, 1400);
   };
-  const seccion = async (t) => { await p.locator("[data-indice-ficha] button", { hasText: t }).first().click(); await espera(p, 500); };
+  const seccion = async (t) => { await irSeccionFicha(p, t); await espera(p, 500); };
   const txtFila = async (num, sel) => (await p.locator(`[data-oc="${num}"]`).locator(sel).first().innerText()).replace(/\s+/g, " ").trim();
   ok(`${pref}01_fila_factura_exenta`, /Factura exenta N\.º 3401/.test(await txtFila("7001-1-OC26", "[data-fila-factura]")));
   ok(`${pref}02_fila_afecta_igual`, /^Factura N\.º 702/.test(await txtFila("2002-102-SE26", "[data-fila-factura]")) && /^Factura N\.º 501/.test(await txtFila("7004-4-OC26", "[data-fila-factura]")));

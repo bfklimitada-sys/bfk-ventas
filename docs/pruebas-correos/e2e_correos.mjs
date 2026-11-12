@@ -2,6 +2,7 @@
 // vínculo a la OC y sección Comunicaciones de la ficha. Escritorio y móvil, Supabase simulado (sin datos reales).
 // Requiere: npx vite build && npx vite preview --port 4179 ; playwright-core.
 import { chromium } from "playwright-core";
+import { abrirIndiceFicha } from "../pruebas-oc/indice_ficha.mjs";
 const APP = "http://127.0.0.1:4179/";
 const hoy = new Date();
 const iso = (dias, h = 10) => { const d = new Date(hoy); d.setDate(d.getDate() - dias); d.setHours(h, 0, 0, 0); return d.toISOString(); };
@@ -88,7 +89,7 @@ for (const [modo, vp] of [["escritorio", { width: 1280, height: 900 }], ["movil"
     await sec.locator('[data-correo="1"] [data-correo-abrir-oc]').click(); await page.waitForTimeout(1500);
     const f = page.locator('[data-ficha-oc="TEST-1-AG26"]');
     r.abre_ficha_oc = (await f.count()) === 1;
-    const btn = f.locator("[data-indice-ficha] button", { hasText: "Comunicaciones" });
+    const btn = (await abrirIndiceFicha(f)).locator("button", { hasText: "Comunicaciones" });
     if (await btn.count()) { await btn.first().click(); await page.waitForTimeout(600); }
     const com = f.locator("[data-correos-oc]");
     r.ficha_correos_de_la_oc = (await com.getAttribute("data-correos-oc")) === "2" && (await com.locator('[data-correo="1"]').count()) === 1;

@@ -7,6 +7,7 @@ import { moduloSimulado } from "../pruebas-cotizaciones/modulo_simulado.mjs";
 import { calcularCotizacion } from "../../src/lib/cotizaciones.js";
 import { calcularPagoVendedor, gananciaReal, facturasVigentes } from "../../src/lib/calculos.js";
 import { validarRegistroFactura, tipoFacturaDeOC, camposFacturaExenta, ventaExenta, bloqueoFacturaPorExenta, montoTributarioVigente, ivaDeDocumento } from "../../src/lib/tributario.js";
+import { irSeccionFicha, abrirIndiceFicha, seccionesDelIndice } from "./indice_ficha.mjs";
 
 const URL_APP = process.argv[2] || "http://127.0.0.1:4190/";
 const F = []; let nOk = 0;
@@ -76,7 +77,7 @@ for (const [pref, movil] of [["E", false], ["M", true]]) {
     if (await p.locator("[data-hoja-lateral]").count()) { await p.keyboard.press("Escape"); await espera(p, 400); }
     await p.getByPlaceholder(/Buscar/i).first().fill(num); await espera(p, 500);
     await p.locator(`[data-oc="${num}"] > div`).first().click(); await espera(p, 1400);
-    if (seccion) { await p.locator("[data-indice-ficha] button", { hasText: seccion }).first().click(); await espera(p, 500); }
+    if (seccion) { await irSeccionFicha(p, seccion); await espera(p, 500); }
   };
   const hoja = () => p.locator("[data-hoja-lateral]").last();
   // ── OC exenta aprobada: DTE 34 ──

@@ -3,6 +3,7 @@
 import { chromium, CHROME, crearBase, abrir } from "./mock_estado.mjs";
 import { crearDatos, RESPUESTAS_MP, dias } from "./datos_oc.mjs";
 import { financiamientoPendiente, saldoFinanciamientoOC, tieneValeVistaPendiente, resumenFinanciamiento, documentosPendientes } from "../../src/lib/filtrosCompras.js";
+import { irSeccionFicha, abrirIndiceFicha, seccionesDelIndice } from "./indice_ficha.mjs";
 
 const URL_APP = process.argv[2] || "http://127.0.0.1:4190/";
 const F = []; let nOk = 0;
@@ -103,7 +104,7 @@ for (const [pref, movil] of [["E", false], ["M", true]]) {
     // Confirmar el cobro del vale vista (flujo existente: editar el cobro y marcar abonado) → la OC sale del filtro.
     const n0 = b.escr.length;
     await p.locator('[data-oc="3041-1-SE26"] > div').nth(1).click(); await espera(p, 1300);
-    await p.locator("[data-indice-ficha] button", { hasText: /Cobranza/ }).first().click(); await espera(p, 500);
+    await irSeccionFicha(p, /Cobranza/); await espera(p, 500);
     await p.locator("[data-ficha-oc] button", { hasText: /Editar/ }).last().click(); await espera(p, 600);
     const m = p.locator('[role="dialog"]').last();
     await m.locator('input[type="checkbox"]').first().check(); await m.getByRole("button", { name: /Guardar/ }).click(); await espera(p, 1800);

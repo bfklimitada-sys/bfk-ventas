@@ -7,6 +7,7 @@ import { chromium, CHROME, crearBase, abrir } from "./mock_estado.mjs";
 import { crearDatos, RESPUESTAS_MP } from "./datos_oc.mjs";
 import { validarSolicitud, motivoIncompatibleOC, etiquetaTratamiento, cotizacionVinculadaA, historialDe } from "../../src/lib/clasificacionTributaria.js";
 import { bloqueoFacturaPorExenta, validarRegistroFactura } from "../../src/lib/tributario.js";
+import { irSeccionFicha, abrirIndiceFicha, seccionesDelIndice } from "./indice_ficha.mjs";
 
 const URL_APP = process.argv[2] || "http://127.0.0.1:4190/";
 const F = []; let nOk = 0;
@@ -84,7 +85,7 @@ for (const [pref, movil] of [["E", false], ["M", true]]) {
     if (await p.locator("[data-hoja-lateral]").count()) { await p.keyboard.press("Escape"); await espera(p, 400); }
     await p.getByPlaceholder(/Buscar/i).first().fill(num); await espera(p, 500);
     await p.locator(`[data-oc="${num}"] > div`).first().click(); await espera(p, 1400);
-    await p.locator("[data-indice-ficha] button", { hasText: "Clasificación tributaria" }).first().click(); await espera(p, 500);
+    await irSeccionFicha(p, "Clasificación tributaria"); await espera(p, 500);
   };
   const seccion = (p) => p.locator("[data-hoja-lateral]").last().locator("[data-clasificacion-tributaria], [data-trib-no-instalada]").first();
   const escrTrib = (b) => b.escr.filter((w) => w.metodo !== "RPC" && TRIB_COLS.some((k) => k in (w.cuerpo || {})));
@@ -147,7 +148,7 @@ for (const [pref, movil] of [["E", false], ["M", true]]) {
     await abrirOC(p, "2003-103-SE26");
     const t = await seccion(p).innerText().catch(() => "");
     ok(`${pref}C2_vigente_exenta_con_respaldo`, /Exenta FO\.R\.A\. \(art\. 101, Ley 18\.948\)/.test(t) && /Fundamento: Art\. 101/.test(t) && /factura exenta \(DTE 34/.test(t) && /Aprobada/.test(t), t);
-    await p.locator("[data-indice-ficha] button", { hasText: "Facturación SII" }).first().click(); await espera(p, 400);
+    await irSeccionFicha(p, "Facturación SII"); await espera(p, 400);
     await p.locator("[data-hoja-lateral]").last().getByRole("button", { name: /Emitir factura$/ }).first().click(); await espera(p, 500);
     const m = p.locator("[role=dialog]").last();
     // Fase 3: la OC exenta aprobada registra factura exenta (DTE 34); la afecta no se ofrece.

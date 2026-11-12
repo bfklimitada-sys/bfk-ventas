@@ -7,6 +7,7 @@ import * as XLSX from "xlsx";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { irSeccionFicha, abrirIndiceFicha, seccionesDelIndice } from "../pruebas-oc/indice_ficha.mjs";
 
 const URL_APP = process.argv[2] || "http://127.0.0.1:4178/";
 const SOLO = process.env.SOLO ? new Set(process.env.SOLO.split(",")) : null;
@@ -63,7 +64,7 @@ await escenario("C1", async () => {
   ok("C1_producto_editado_no_se_pisa", b.db.oc_productos_link.find((l) => l.id === "l1v").descripcion.startsWith("Silla ergonómica"));
   ok("C1_comprados_no_se_tocan", ws.filter((w) => w.tabla === "oc_productos_link" && ["l1a", "l1b"].includes(w.id)).length === 0);
   // Ficha como expediente (desde 29ea625): el detalle de Mercado Público está en la sección «Productos».
-  await p.locator('[data-oc="2001-101-SE26"] [data-indice-ficha] button', { hasText: "Productos" }).first().click(); await espera(p, 500);
+  await irSeccionFicha(p.locator('[data-oc="2001-101-SE26"]'), "Productos"); await espera(p, 500);
   const det = await p.locator("[data-mp-detalle]").innerText().catch(() => "");
   ok("C1_detalle_muestra_neto_iva_aceptacion_recepcion", /Mercado Público/i.test(det) && /Neto/.test(det) && /IVA/.test(det) && /Aceptación/.test(det) && /Recepción/.test(det), det);
   ok("C1_responsable_oculto", (await p.locator('[data-oc="2001-101-SE26"] select option', { hasText: "Sin asignar" }).count()) === 0 && !/Responsable/.test(await p.locator('[data-oc="2001-101-SE26"]').innerText()));
@@ -150,6 +151,8 @@ await escenario("C5", async () => {
   const { page: p, errs, ctx } = await abrir(browser, b, { url: URL_APP, ...escritorio, espera: 3000 });
   // Desde el cierre financiero (6e825b5, 06/10/2026) el Panel muestra el resumen de caja (data-resumen-caja) en lugar
   // del antiguo desglose; el vale vista sin cobrar va en su propia línea en vez de dentro de «Por cobrar».
+  // Orden visual (11/11/2026): «Caja y compromisos» parte cerrado en el Panel; se abre antes de leer el desglose (el contenido no cambia).
+  if (!(await p.locator("[data-resumen-caja]").count())) await p.locator('[data-desplegable="caja"] > button').first().click().catch(() => {});
   await p.waitForSelector("[data-resumen-caja]", { timeout: 8000 }).catch(() => {});
   const nums = (s) => (/[-−]/.test(String(s)) ? -1 : 1) * Number(String(s).replace(/[^0-9]/g, ""));
   const m = async (k) => ((await p.locator(`[data-monto="${k}"]`).count()) ? nums(await p.locator(`[data-monto="${k}"]`).first().innerText()) : 0);

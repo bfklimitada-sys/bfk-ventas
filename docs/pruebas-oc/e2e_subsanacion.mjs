@@ -5,6 +5,7 @@ import { chromium, CHROME, crearBase, abrir } from "./mock_estado.mjs";
 import { crearDatos, RESPUESTAS_MP, dias } from "./datos_oc.mjs";
 import { productosVendidos } from "../../src/lib/productosOC.js";
 import { descripcionSubsanacion, leerSubsanacion, subsanacionDuplicada, alertasSeguimiento, etiquetaSeguimiento } from "../../src/lib/seguimientos.js";
+import { irSeccionFicha, abrirIndiceFicha, seccionesDelIndice } from "./indice_ficha.mjs";
 
 const URL_APP = process.argv[2] || "http://127.0.0.1:4190/";
 const F = []; let nOk = 0;
@@ -71,7 +72,7 @@ const abrirOC = async (p, numero) => { await busc(p).fill(numero); await espera(
 const cerrarFicha = async (p) => { await p.keyboard.press("Escape"); await espera(p, 500); if (await p.locator("[data-ficha-oc]").count()) { await p.locator("[data-cerrar-hoja]").last().click(); await espera(p, 500); } await busc(p).fill(""); await espera(p, 400); };
 const ficha = (p) => p.locator("[data-ficha-oc]").last();
 const resumenSec = async (p, id, ocId) => p.locator(`[data-seccion-ficha="${id}-${ocId}"]`).first().locator("button").first().innerText();
-const abrirSec = async (p, texto) => { await ficha(p).locator("[data-indice-ficha] button", { hasText: texto }).first().click(); await espera(p, 500); };
+const abrirSec = async (p, texto) => { await irSeccionFicha(ficha(p), texto); await espera(p, 500); };
 
 for (const [pref, movil] of [["E", false], ["M", true]]) {
   const b = crearBase(datos(), { mp: RESPUESTAS_MP });

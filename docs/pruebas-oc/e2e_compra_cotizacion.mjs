@@ -3,6 +3,7 @@
 import { chromium, CHROME, crearBase, abrir } from "./mock_estado.mjs";
 import { crearDatos, RESPUESTAS_MP } from "./datos_oc.mjs";
 import { baseCotizacion, compradoEnOC, estadoLineas, filasIniciales, armarPedidos, comparar, validarCompra, cotizacionesVinculadas, leerIdCompra, idFilaCompra } from "../../src/lib/compraCotizacion.js";
+import { irSeccionFicha, abrirIndiceFicha, seccionesDelIndice } from "./indice_ficha.mjs";
 
 const URL_APP = process.argv[2] || "http://127.0.0.1:4190/";
 const F = []; let nOk = 0;
@@ -56,7 +57,7 @@ async function abrirCompra(p, numero = "2005-105-SE26", boton = /Registrar (otra
   if (await p.locator("[data-hoja-lateral]").count()) { await p.keyboard.press("Escape"); await espera(p, 400); }
   await p.locator('aside [data-nav="compras"]').click(); await espera(p, 900);
   await p.locator(`[data-oc="${numero}"] > div`).first().click(); await espera(p, 1300);
-  if (!(await p.getByRole("button", { name: boton }).count())) { await p.locator("[data-indice-ficha] button", { hasText: "Compra y financiamiento" }).first().click(); await espera(p, 500); }
+  if (!(await p.getByRole("button", { name: boton }).count())) { await irSeccionFicha(p, "Compra y financiamiento"); await espera(p, 500); }
   await p.getByRole("button", { name: boton }).first().click(); await espera(p, 1200);
   return modal(p);
 }

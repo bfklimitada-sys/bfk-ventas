@@ -6,6 +6,7 @@
 import { execFileSync } from "node:child_process";
 import { chromium, CHROME, crearBase, abrir } from "./mock_estado.mjs";
 import { crearDatos, RESPUESTAS_MP } from "./datos_oc.mjs";
+import { irSeccionFicha, abrirIndiceFicha, seccionesDelIndice } from "./indice_ficha.mjs";
 
 const URL_APP = process.argv[2] || "http://127.0.0.1:4190/";
 const DBN = process.env.CI_E2E_DB || "bfk_e2e_contactos";
@@ -162,7 +163,7 @@ const browser = await chromium.launch({ executablePath: CHROME, args: ["--no-san
   await abrirOC(p, "2002-102-SE26");
   const t2 = await bloque(p).innerText().catch(() => "");
   ok("A11_otra_oc_misma_institucion_reutiliza", /diego\.mora@muni-alfa\.cl/.test(t2) && /bruno\.soto@muni-alfa\.cl/.test(t2) && !/elena@muni-alfa\.cl/.test(t2), t2.slice(0, 300));
-  await p.locator("[data-indice-ficha] button", { hasText: "Cobranza" }).first().click(); await espera(p, 450);
+  await irSeccionFicha(p, "Cobranza"); await espera(p, 450);
   await p.getByRole("button", { name: /Reclamar pago de factura/ }).first().click(); await espera(p, 600);
   const modal = p.locator('[role="dialog"]').last();
   const correoReclamo = await modal.locator('input[type="email"]').first().inputValue();
@@ -219,7 +220,7 @@ const browser = await chromium.launch({ executablePath: CHROME, args: ["--no-san
   const { page: p, errs } = await abrir(browser, b, { url: URL_APP, ancho: 390, alto: 844, movil: true, espera: 3000, usuario: "u2" });
   await abrirOC(p, "2001-101-SE26");
   ok("C00_celular_aviso_en_seccion_cerrada", /contacto(s)? por verificar|99\.111\.222-7/.test(await p.locator('[data-seccion-ficha^="info-"]').first().innerText()));
-  await p.locator("[data-indice-ficha] button", { hasText: "Información OC" }).first().click(); await espera(p, 600);
+  await irSeccionFicha(p, "Información OC"); await espera(p, 600);
   await bloque(p).scrollIntoViewIfNeeded().catch(() => {});
   const vis = await bloque(p).isVisible().catch(() => false);
   const desborde = await p.evaluate(() => { const e = document.querySelector("[data-contactos-oc]"); if (!e) return 999; let m = 0; for (const n of e.querySelectorAll("*")) { const r = n.getBoundingClientRect(); if (r.right > window.innerWidth + 1) m = Math.max(m, r.right - window.innerWidth); } return m; });

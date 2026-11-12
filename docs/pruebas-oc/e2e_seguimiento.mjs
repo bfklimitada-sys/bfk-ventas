@@ -5,6 +5,7 @@
 import { chromium, CHROME, crearBase, abrir } from "./mock_estado.mjs";
 import { crearDatos, RESPUESTAS_MP, dias } from "./datos_oc.mjs";
 import { alertasSeguimiento, tieneSeguimientoAbierto } from "../../src/lib/seguimientos.js";
+import { irSeccionFicha, abrirIndiceFicha, seccionesDelIndice } from "./indice_ficha.mjs";
 
 const URL_APP = process.argv[2] || "http://127.0.0.1:4190/";
 const F = []; let nOk = 0;
@@ -51,7 +52,7 @@ const cerrarFicha = async (p) => {
   if (await p.locator("[data-ficha-oc]").count()) { await p.locator("[data-cerrar-hoja]").last().click(); await espera(p, 600); }
 };
 const ficha = (p) => p.locator("[data-ficha-oc]").last();
-const irSeccion = async (p) => { const s = ficha(p).locator("[data-seguimiento-especial]"); if (!(await s.isVisible().catch(() => false))) { await ficha(p).locator("[data-indice-ficha] button", { hasText: /Seguimiento/ }).first().click(); await espera(p, 500); } return ficha(p).locator("[data-seguimiento-especial]"); };
+const irSeccion = async (p) => { const s = ficha(p).locator("[data-seguimiento-especial]"); if (!(await s.isVisible().catch(() => false))) { await irSeccionFicha(ficha(p), /Seguimiento/); await espera(p, 500); } return ficha(p).locator("[data-seguimiento-especial]"); };
 const nAlertasSeg = async (p) => p.locator("[data-alerta-seguimiento]").count();
 
 for (const [pref, movil] of [["E", false], ["M", true]]) {

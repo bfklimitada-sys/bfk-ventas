@@ -3,6 +3,7 @@
 // Base simulada (Fase 4A). Nada sale a la red.
 import { chromium, CHROME, crearBase, abrir } from "../pruebas-oc/mock_estado.mjs";
 import { crearDatos, RESPUESTAS_MP } from "../pruebas-oc/datos_oc.mjs";
+import { irSeccionFicha, seccionesDelIndice } from "../pruebas-oc/indice_ficha.mjs";
 
 const URL_APP = process.argv[2] || "http://127.0.0.1:4178/";
 const browser = await chromium.launch({ executablePath: CHROME, args: ["--no-sandbox"] });
@@ -34,9 +35,20 @@ for (const ancho of [360, 390]) {
   // El índice ofrece un acceso por cada sección de la ficha. Antes se comparaba con un número fijo (9), que quedó desactualizado
   // al agregarse «Clasificación tributaria»: ahora se valida contra las secciones realmente presentes y las nueve permanentes.
   const idsSec = await ficha.locator("[data-seccion-ficha]").evaluateAll((els) => els.map((e) => e.getAttribute("data-seccion-ficha").split("-")[0]));
-  const nInd = await cab.locator("[data-indice-ficha] button").count();
+  // 12/11/2026: en celular el índice es un solo control que despliega la lista; se valida lo necesario (un acceso por sección y que
+  // cada acceso lleve a su sección y la abra), no cuántas filas ocupa.
+  const titulosInd = await seccionesDelIndice(cab);
+  const titulosSec = await ficha.locator("[data-seccion-ficha] > button").evaluateAll((els) => els.map((e) => e.children[1].innerText.trim()));
   const fijas = ["info", "productos", "compra", "facturacion", "entrega", "cobranza", "seguimiento", "comunicaciones", "historial"];
-  ok(`M${ancho}_indice_presente`, nInd === idsSec.length && fijas.every((id) => idsSec.includes(id)), { nInd, idsSec });
+  ok(`M${ancho}_indice_presente`, titulosInd.length === idsSec.length && fijas.every((id) => idsSec.includes(id)) && titulosSec.every((t) => titulosInd.includes(t)), { titulosInd, titulosSec });
+  const llegadas = [];
+  for (const t of titulosInd) {
+    await irSeccionFicha(cab, t); await p.waitForTimeout(650);
+    llegadas.push(await ficha.locator("[data-seccion-ficha]").filter({ has: p.locator("> button > span:nth-child(2)", { hasText: new RegExp("^" + t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$") }) }).first().evaluate((sec) => {
+      const r = sec.getBoundingClientRect(); return { abierta: sec.querySelector(":scope > button").getAttribute("aria-expanded") === "true", visible: r.top < window.innerHeight && r.bottom > 0 }; }).catch((e) => ({ error: String(e.message).slice(0, 80) })));
+  }
+  ok(`M${ancho}_indice_lleva_a_cada_seccion`, llegadas.length === titulosInd.length && llegadas.every((x) => x.abierta && x.visible), llegadas);
+  ok(`M${ancho}_indice_se_cierra_al_elegir`, !(await cab.locator("[data-indice-lista]").count()) || !(await cab.locator("[data-indice-lista]").isVisible()));
   ok(`M${ancho}_edicion_presente`, await ficha.locator("[data-asignacion-editar]").count() >= 1 && await ficha.locator("[data-resumen-financiero]").count() === 1);
   // Ningún botón de la ficha sobresale del ancho de pantalla.
   const cortados = await p.evaluate(({ num }) => {

@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Field } from "../ui/Basicos";
 import { Badge } from "../ui/Sistema";
 import { Ic } from "../ui/Iconos";
 import { TarjetaCorreo } from "../ui/CorreosBfk";
-import { C, MONO, btnP, fmt, iMono, iStyle, selStyle, btnMini } from "../../lib/theme";
+import { C, MONO, btnP, fmt, iMono, iStyle, selStyle, btnMini, sombra } from "../../lib/theme";
 import { gananciaReal, estadoVencimiento, plazoPago } from "../../lib/calculos";
 import { hoyChile } from "../../lib/fechaChile";
 import {
@@ -18,6 +18,17 @@ import {
 // ═══════════════════════════════════════════════════════════════
 
 export const ANCHO_ESCRITORIO = 900;
+// Fila de una OC en la lista: la distribución en una sola línea (código · cliente · estado · monto) necesita ~900 px de contenido.
+// Con la barra lateral (≥ 1024 px) el contenido es unos 250 px más angosto que la ventana, así que en tabletas horizontales
+// (1024–1150 px) la fila usa la distribución apilada, que no corta el nombre del cliente ni la dirección.
+export const ANCHO_FILA_ANCHA = 900;
+export function useFilaAncha() {
+  const medir = () => { if (typeof window === "undefined") return false; const w = window.innerWidth; return (w >= 1024 ? w - 250 : w) >= ANCHO_FILA_ANCHA; };
+  const [es, setEs] = useState(medir);
+  useEffect(() => { const f = () => setEs(medir()); window.addEventListener("resize", f); return () => window.removeEventListener("resize", f); }, []);
+  return es;
+}
+
 export function useEscritorio() {
   const medir = () => (typeof window !== "undefined" ? window.innerWidth >= ANCHO_ESCRITORIO : false);
   const [es, setEs] = useState(medir);
@@ -63,12 +74,46 @@ export function SeccionFicha({ id, icono, titulo: t, resumen, abierta, onToggle,
 }
 
 // ── Índice de secciones ────────────────────────────────────────
+// Computador: una fila de accesos. Celular (compacto): un solo control «Ir a una sección» que despliega la lista completa; antes
+// eran cinco filas de botones que repetían los títulos de las secciones que están justo debajo.
 export function IndiceFicha({ items, onIr, envolver = false }) {
-  // En móvil (envolver) las pestañas pasan a varias filas para que ninguna quede cortada a la derecha.
+  const [abierto, setAbierto] = useState(false);
+  const caja = useRef(null);
+  useEffect(() => {
+    if (!abierto) return undefined;
+    const fuera = (e) => { if (caja.current && !caja.current.contains(e.target)) setAbierto(false); };
+    document.addEventListener("mousedown", fuera); document.addEventListener("touchstart", fuera, { passive: true });
+    return () => { document.removeEventListener("mousedown", fuera); document.removeEventListener("touchstart", fuera); };
+  }, [abierto]);
+  if (envolver) {
+    const conAviso = items.filter((it) => it.aviso).length;
+    return (
+      <nav ref={caja} data-consulta="1" data-indice-ficha data-indice-compacto aria-label="Secciones de la OC" style={{ position: "relative", padding: "2px 0" }}>
+        <button type="button" data-consulta="1" data-indice-abrir aria-expanded={abierto} aria-haspopup="true" onClick={() => setAbierto((v) => !v)}
+          style={{ width: "100%", minHeight: 44, display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: C.card, border: `1px solid ${abierto ? C.teal : C.borderFuerte}`, borderRadius: 10, cursor: "pointer", textAlign: "left", color: C.ink, fontSize: 14, fontWeight: 500 }}>
+          <span style={{ flex: 1, minWidth: 0 }}>Ir a una sección</span>
+          <span style={{ fontSize: 12, color: conAviso ? C.warnText : C.inkMuted, whiteSpace: "nowrap" }}>{conAviso ? `${conAviso} con aviso · ` : ""}{items.length} secciones</span>
+          <span aria-hidden="true" style={{ color: C.inkFaint, display: "flex", flexShrink: 0, transform: abierto ? "rotate(180deg)" : "none", transition: "transform .15s" }}><Ic n="chevD" /></span>
+        </button>
+        {abierto && (
+          <div data-indice-lista style={{ position: "absolute", top: "calc(100% + 2px)", left: 0, right: 0, zIndex: 8, background: C.card, border: `1px solid ${C.borderFuerte}`, borderRadius: 10, boxShadow: sombra.ventana, maxHeight: "min(62vh, 470px)", overflowY: "auto", WebkitOverflowScrolling: "touch", padding: 4 }}>
+            {items.map((it) => (
+              <button key={it.id} type="button" data-consulta="1" data-indice-seccion={it.id} onClick={() => { setAbierto(false); onIr(it.id); }}
+                style={{ width: "100%", minHeight: 44, display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", background: "none", border: "none", borderRadius: 8, cursor: "pointer", textAlign: "left", color: C.ink, fontSize: 14 }}>
+                <span style={{ flexShrink: 0, width: 18, justifyContent: "center", color: it.aviso ? C.warnText : C.inkMuted, display: "flex" }}><Ic n={it.icono} /></span>
+                <span style={{ flex: 1, minWidth: 0, fontWeight: 500 }}>{it.titulo}</span>
+                {it.aviso && <span style={{ fontSize: 12, fontWeight: 600, color: C.warnText, whiteSpace: "nowrap" }}>Requiere atención</span>}
+              </button>
+            ))}
+          </div>
+        )}
+      </nav>
+    );
+  }
   return (
-    <nav data-consulta="1" data-indice-ficha aria-label="Secciones de la OC" style={{ display: "flex", gap: 6, flexWrap: envolver ? "wrap" : "nowrap", overflowX: envolver ? "visible" : "auto", padding: "8px 0 2px", WebkitOverflowScrolling: "touch" }}>
+    <nav data-consulta="1" data-indice-ficha aria-label="Secciones de la OC" style={{ display: "flex", gap: 6, flexWrap: "nowrap", overflowX: "auto", padding: "8px 0 2px", WebkitOverflowScrolling: "touch" }}>
       {items.map((it) => (
-        <button key={it.id} type="button" data-consulta="1" onClick={() => onIr(it.id)}
+        <button key={it.id} type="button" data-consulta="1" data-indice-seccion={it.id} onClick={() => onIr(it.id)}
           style={{ flexShrink: 0, border: `1px solid ${it.aviso ? C.warn : C.border}`, background: C.card, borderRadius: 999, padding: "6px 12px", fontSize: 12, fontWeight: 600, color: it.aviso ? C.warnText : C.inkMuted, minHeight: 34, cursor: "pointer", whiteSpace: "nowrap" }}>
           <Ic n={it.icono} /> {it.titulo}
         </button>

@@ -4,6 +4,7 @@
 import { chromium, CHROME, crearBase, abrir } from "./mock_estado.mjs";
 import { crearDatos, RESPUESTAS_MP } from "./datos_oc.mjs";
 import { construirGmail, construirMailto, CUENTA_REMITENTE } from "../../src/lib/correos.js";
+import { irSeccionFicha, abrirIndiceFicha, seccionesDelIndice } from "./indice_ficha.mjs";
 
 const URL_APP = process.argv[2] || "http://127.0.0.1:4190/";
 const F = []; let nOk = 0;
@@ -27,7 +28,7 @@ async function abrirOC(p, numero) {
   await p.locator('aside [data-nav="compras"], [data-nav="compras"]').first().click(); await espera(p, 900);
   await p.locator(`[data-oc="${numero}"] > div`).first().click(); await espera(p, 1300);
 }
-const irSeccion = async (p, titulo) => { await p.locator("[data-indice-ficha] button", { hasText: titulo }).first().click(); await espera(p, 450); };
+const irSeccion = async (p, titulo) => { await irSeccionFicha(p, titulo); await espera(p, 450); };
 
 // ═════ A. Computador: reclamo de pago ═════
 {

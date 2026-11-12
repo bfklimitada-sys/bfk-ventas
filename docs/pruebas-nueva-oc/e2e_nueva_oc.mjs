@@ -6,6 +6,7 @@
 // Uso: node docs/pruebas-nueva-oc/e2e_nueva_oc.mjs http://127.0.0.1:4279/
 import { chromium, CHROME, crearBase, abrir } from "../pruebas-oc/mock_estado.mjs";
 import { crearDatos, dias } from "../pruebas-oc/datos_oc.mjs";
+import { irSeccionFicha, abrirIndiceFicha, seccionesDelIndice } from "../pruebas-oc/indice_ficha.mjs";
 // 06/11/2026: «+ Nueva OC» pasó a ser «+ Nuevo › OC de Mercado Público» (mismo formulario de siempre).
 const nuevaOC = async (p) => { await p.locator("[data-boton-nuevo]:visible").first().click(); await p.waitForTimeout(250); await p.locator('[data-nuevo="mp_oc"]').first().click(); };
 
@@ -208,7 +209,7 @@ const sinDesborde = (p) => p.evaluate(() => { const d = document.querySelector('
   // «Registrar otra compra» en la OC: reconoce la cotización vinculada y que todo está comprado.
   await p.locator('aside [data-nav="compras"]').click(); await espera(p, 900);
   await p.locator('[data-oc="2600-77-SE26"] > div').first().click(); await espera(p, 1300);
-  if (!(await p.getByRole("button", { name: /Registrar otra compra/ }).count())) { await p.locator("[data-indice-ficha] button", { hasText: "Compra y financiamiento" }).first().click().catch(() => {}); await espera(p, 500); }
+  if (!(await p.getByRole("button", { name: /Registrar otra compra/ }).count())) { await irSeccionFicha(p, "Compra y financiamiento").catch(() => {}); await espera(p, 500); }
   await p.getByRole("button", { name: /Registrar otra compra/ }).first().click(); await espera(p, 1500);
   ok("E26_ficha_reconoce_cotizacion_y_compra", (await modal(p).locator("[data-compra-cotizacion]").count()) === 1 && (await modal(p).locator("[data-todo-comprado]").count()) === 1);
   ok("E27_sin_errores", !errs.length, errs);

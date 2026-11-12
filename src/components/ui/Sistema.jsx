@@ -27,6 +27,15 @@ export function Seccion({ titulo, nota, accion, children, ocultarSiVacio, margen
   );
 }
 
+// Control con rótulo visible (p. ej. un selector de período): dice qué controla. En pantallas angostas el rótulo queda sobre el control.
+export function ControlRotulado({ rotulo, children, dato }) {
+  return (
+    <label data-control-rotulado={dato} style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "flex-end", gap: "2px 8px", fontSize: T.small, color: C.inkMuted, fontWeight: 400, minWidth: 0, textAlign: "right", textTransform: "none", letterSpacing: 0 }}>
+      <span>{rotulo}</span>{children}
+    </label>
+  );
+}
+
 // Tarjeta blanca estándar
 export function Tarjeta({ children, style, onClick, padding = "14px 16px", ...resto }) {
   const base = { ...cardStyle, borderRadius: R.md, padding, marginBottom: S.sm, ...style };

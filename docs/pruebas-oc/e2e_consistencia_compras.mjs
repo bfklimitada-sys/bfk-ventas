@@ -3,6 +3,7 @@
 import { chromium, CHROME, crearBase, abrir } from "./mock_estado.mjs";
 import { crearDatos, RESPUESTAS_MP } from "./datos_oc.mjs";
 import { compradoEnOC, pedidosDeOC, planCorreccion, filaProtegida, idFilaCompra } from "../../src/lib/compraCotizacion.js";
+import { irSeccionFicha, abrirIndiceFicha, seccionesDelIndice } from "./indice_ficha.mjs";
 
 const URL_APP = process.argv[2] || "http://127.0.0.1:4190/";
 const F = []; let nOk = 0;
@@ -62,7 +63,7 @@ async function abrirOC(p, numero = "2005-105-SE26") {
   await p.locator('aside [data-nav="compras"]').click(); await espera(p, 900);
   await p.locator(`[data-oc="${numero}"] > div`).first().click(); await espera(p, 1300);
 }
-const irSeccion = async (p, t) => { await p.locator("[data-indice-ficha] button", { hasText: t }).first().click(); await espera(p, 500); };
+const irSeccion = async (p, t) => { await irSeccionFicha(p, t); await espera(p, 500); };
 async function comprar(p, { opcion = "A", ajustes = async () => {} } = {}) {
   await abrirOC(p);
   let b = p.getByRole("button", { name: /Registrar (otra )?compra/ });
