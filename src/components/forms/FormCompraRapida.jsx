@@ -3,6 +3,7 @@ import { Field, BuscadorOC } from "../ui/Basicos";
 import { C, MONO, SANS, btnP, fmt, iStyle, iMono, selStyle } from "../../lib/theme";
 import { Ic } from "../ui/Iconos";
 
+import { hoyChile } from "../../lib/fechaChile";
 export function FormCompraRapida({ ocs, financiadores, perfil, onSave, ocPreseleccionada }) {
   // Solo OCs que todavía no tienen compra registrada
   const disponibles = useMemo(
@@ -12,7 +13,7 @@ export function FormCompraRapida({ ocs, financiadores, perfil, onSave, ocPresele
 
   const [ocId, setOcId] = useState(ocPreseleccionada || null);
   const [costo, setCosto] = useState("");
-  const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10));
+  const [fecha, setFecha] = useState(hoyChile());
   const [fechaEst, setFechaEst] = useState("");
   const [financiadorId, setFinanciadorId] = useState(
     perfil?.financiador_default || financiadores.find(f=>f.id==="fin_byron")?.id || financiadores[0]?.id || ""

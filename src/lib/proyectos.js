@@ -194,12 +194,9 @@ export function formatoTamano(b) {
   if (n < 1048576) return `${nf(n < 10240 ? 1 : 0).format(n / 1024)} KB`;
   return `${nf(1).format(n / 1048576)} MB`;
 }
-// Fecha de hoy en Chile (AAAA-MM-DD), igual que pi_hoy().
-export function hoyChile(ahora = new Date()) {
-  const p = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Santiago", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(ahora);
-  const g = (t) => p.find((x) => x.type === t)?.value;
-  return `${g("year")}-${g("month")}-${g("day")}`;
-}
+// Fecha de hoy en Chile (AAAA-MM-DD), igual que pi_hoy(). Definición única en fechaChile.js.
+import { hoyChile } from "./fechaChile.js";
+export { hoyChile };   // misma función para toda la app; se importa (no solo se reexporta) porque este archivo también la usa
 
 // ── Lectura de la vista pi_proyectos_resumen ───────────────────────────────────────────────────
 // Razones del atraso, en el mismo orden y con los mismos criterios que la columna «atrasado» de la vista.

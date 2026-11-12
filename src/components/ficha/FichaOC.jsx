@@ -5,6 +5,7 @@ import { Ic } from "../ui/Iconos";
 import { TarjetaCorreo } from "../ui/CorreosBfk";
 import { C, MONO, btnP, fmt, iMono, iStyle, selStyle, btnMini } from "../../lib/theme";
 import { gananciaReal, estadoVencimiento, plazoPago } from "../../lib/calculos";
+import { hoyChile } from "../../lib/fechaChile";
 import {
   CODIGOS_REF, ETIQUETA_ESTADO, cadenaDocumental, codigoRef, efectoMonto, esFactura, esNotaCredito, esNotaDebito,
   estadoDocumento, facturasVigentesDe, montoTributarioVigente, ncMontoAplicables, nombreDocumento, notasDebito,
@@ -238,7 +239,7 @@ export function FormNotaCredito({ oc, onSave }) {
   const facturas = (oc.eventos_factura || []).filter(esFactura);
   const vigentes = new Set(facturasVigentesDe(oc).map((f) => f.id));
   const orden = facturas.slice().sort((a, b) => (vigentes.has(b.id) ? 1 : 0) - (vigentes.has(a.id) ? 1 : 0));
-  const [folio, setFolio] = useState(""); const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10));
+  const [folio, setFolio] = useState(""); const [fecha, setFecha] = useState(hoyChile());
   const [ref, setRef] = useState(orden[0]?.id || ""); const [codigo, setCodigo] = useState(2);
   const [monto, setMonto] = useState(""); const [motivo, setMotivo] = useState("");
   const [err, setErr] = useState(""); const [saving, setSaving] = useState(false);

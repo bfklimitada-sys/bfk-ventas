@@ -70,6 +70,7 @@ import { ResumenVentasPrivadas, FinanzasPorCanal } from "./components/ventas/Res
 import { FinanciamientoVentasPrivadas } from "./components/ventas/Financiamiento";
 import { ConfigVentasPrivadas } from "./components/ventas/ConfigVentasPrivadas";
 
+import { hoyChile } from "./lib/fechaChile";
 // Pantallas, grupos, direcciones (#/ruta) y permisos: una sola definición en lib/navegacion.js.
 export const TABS=PANTALLAS.map(p=>({key:p.key,label:p.label,icon:<Ic n={p.icono}/>,adminOnly:!!p.adminOnly}));
 const ANCHO_CONTENIDO=1040; // ancho máximo del contenido en escritorio
@@ -280,6 +281,7 @@ export default function App() {
   // la app no puede leer cuánto consumió — así que lleva su propia
   // cuenta estimada, sumando lo que ella misma dispara en cada acción.
   const [usoMP,setUsoMP]=useState(null); // {id,solicitudes}
+  // Clave del contador diario de la API de Mercado Público: es el día UTC (así lo lleva el servidor); no es una fecha de formulario.
   const hoyISO=()=>new Date().toISOString().slice(0,10);
 
   const cargarUsoMP=async()=>{
@@ -1965,7 +1967,7 @@ export default function App() {
     try{
       window.scrollTo(0,0);
       const blob=await generarPdfPantallas(els,{fondo:C.paper,alMedida:(n,t)=>setPdfEstado({fase:"generando",txt:`Generando PDF… pantalla ${n} de ${t}`})});
-      const nombre=`BFK Ltda - Todas las pantallas - ${new Date().toISOString().slice(0,10)}.pdf`;
+      const nombre=`BFK Ltda - Todas las pantallas - ${hoyChile()}.pdf`;
       setPdfEstado({fase:"listo",url:URL.createObjectURL(blob),nombre,blob});
     }catch(e){ setPdfEstado({fase:"error",txt:"No se pudo generar el PDF. Intenta de nuevo."}); }
   };

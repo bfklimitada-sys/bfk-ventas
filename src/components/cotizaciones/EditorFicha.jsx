@@ -5,6 +5,7 @@ import { Badge, AvisoLinea, BotonPrincipal, BotonSecundario } from "../ui/Sistem
 import { revisarFicha, paresDeTexto, textoDePares, ESTADOS_ENVIO, proveedorDeEnlace, envioConfirmado, envioVacio } from "../../lib/cotizaciones";
 import { normalizarImagen, traerImagen, rutaConocida } from "../../lib/cotizacionesDatos";
 
+import { hoyChile } from "../../lib/fechaChile";
 const m = (x) => fmt.money(Math.round(Number(x) || 0));
 // En cotizaciones privadas todo el contenido va en un fieldset (una revisión enviada se muestra deshabilitada); en Mercado
 // Público no se agrega ningún elemento.
@@ -110,7 +111,7 @@ export function EditorFicha({ inicial, envios = [], items = [], destino = "", de
     // Sin dirección válida el producto se guarda igual, con el despacho «Por verificar» (nunca confirmado).
     const sinDireccion = envioConfirmado(desp) && !destinoValido;
     const envio = servicio ? { modo: "ninguno" } : modo === "item" && !protegido ? (sinDireccion ? { modo: despMod, ...desp, estado: "pendiente", destino: "" }
-      : { modo: despMod, ...desp, destino: envioConfirmado(desp) ? (reverificado ? destino : desp.destino) : "", fecha_cotizacion: reverificado ? new Date().toISOString().slice(0, 10) : desp.fecha_cotizacion }) : null;
+      : { modo: despMod, ...desp, destino: envioConfirmado(desp) ? (reverificado ? destino : desp.destino) : "", fecha_cotizacion: reverificado ? hoyChile() : desp.fecha_cotizacion }) : null;
     onGuardar(item, { guardarBiblioteca: guardarBib, actualizarBiblioteca: actualizarBib, envio });
   };
 

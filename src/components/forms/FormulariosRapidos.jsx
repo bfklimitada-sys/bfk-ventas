@@ -7,8 +7,9 @@ import { C, MONO, btnP, fmt, iMono, iStyle, selStyle } from "../../lib/theme";
 import { Ic } from "../ui/Iconos";
 import { MEDIOS_PAGO, esDocumentoBancario } from "../../lib/mediosPago";
 
+import { hoyChile } from "../../lib/fechaChile";
 export function FormConfirmarEntrega({ ocs, onSave, ocPreseleccionada }) {
-  const [ocId,setOcId]=useState(ocPreseleccionada||null); const [fecha,setFecha]=useState(new Date().toISOString().slice(0,10));
+  const [ocId,setOcId]=useState(ocPreseleccionada||null); const [fecha,setFecha]=useState(hoyChile());
   const [persona,setPersona]=useState(""); const [err,setErr]=useState(""); const [saving,setSaving]=useState(false);
   const handleSave=async()=>{ if(!ocId){setErr("Selecciona la OC");return;} setErr(""); setSaving(true); try{await onSave({ocId,fecha,personaRecibe:persona});}catch(e){setErr(e.message);}finally{setSaving(false);} };
   return (
@@ -23,7 +24,7 @@ export function FormConfirmarEntrega({ ocs, onSave, ocPreseleccionada }) {
 }
 
 export function FormEmitirFactura({ ocs, onSave, ocPreseleccionada }) {
-  const [ocId,setOcId]=useState(ocPreseleccionada||null); const [fecha,setFecha]=useState(new Date().toISOString().slice(0,10));
+  const [ocId,setOcId]=useState(ocPreseleccionada||null); const [fecha,setFecha]=useState(hoyChile());
   const [numFact,setNumFact]=useState(""); const [monto,setMonto]=useState("");
   const [notaCredito,setNotaCredito]=useState(""); const [motivoDif,setMotivoDif]=useState("");
   const [err,setErr]=useState(""); const [saving,setSaving]=useState(false);
@@ -121,7 +122,7 @@ export function FormEmitirFactura({ ocs, onSave, ocPreseleccionada }) {
 }
 
 export function FormPagoCliente({ ocs, onSave, ocPreseleccionada }) {
-  const [ocId,setOcId]=useState(ocPreseleccionada||null); const [fecha,setFecha]=useState(new Date().toISOString().slice(0,10));
+  const [ocId,setOcId]=useState(ocPreseleccionada||null); const [fecha,setFecha]=useState(hoyChile());
   const [monto,setMonto]=useState(""); const [err,setErr]=useState(""); const [saving,setSaving]=useState(false);
   const [medioPago,setMedioPago]=useState("transferencia");
   const [cobradoEnBanco,setCobradoEnBanco]=useState(true);
@@ -191,7 +192,7 @@ export function FormPagoFinanciamiento({ ocs, financiadores: todosFin, onSave, o
   // Fase 4B: los fondos propios (Cuenta BFK) no son deuda: no se les registran pagos (regla 2).
   const financiadores=(todosFin||[]).filter(f=>f.tipo!=="propio");
   const [finId,setFinId]=useState((financiadores.some(f=>f.id===financiadorPreseleccionado)?financiadorPreseleccionado:financiadores[0]?.id)||""); const [ocId,setOcId]=useState(ocPreseleccionada||null);
-  const [fecha,setFecha]=useState(new Date().toISOString().slice(0,10)); const [monto,setMonto]=useState("");
+  const [fecha,setFecha]=useState(hoyChile()); const [monto,setMonto]=useState("");
   const [err,setErr]=useState(""); const [saving,setSaving]=useState(false);
   const fin=financiadores.find(f=>f.id===finId);
   const handleSave=async()=>{

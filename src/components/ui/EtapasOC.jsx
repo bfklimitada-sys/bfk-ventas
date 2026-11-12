@@ -8,11 +8,12 @@ import { Ic, I } from "./Iconos";
 import { FormCambiarFinanciamiento } from "../forms/FormCambiarFinanciamiento";
 import { TIPOS_FINANCIAMIENTO, financiamientoNoAplica, tipoFinanciamiento } from "../../lib/finanzas";
 
+import { hoyChile } from "../../lib/fechaChile";
 export const TIPOS_PV={falla:"Falla del producto",faltante:"Faltante",cambio:"Cambio / reposición",devolucion:"Devolución",otro:"Otro"};
 
 export function FormPostventa({ oc, evento, cerrar, onSave }) {
   const [tipo,setTipo]=useState(evento?.tipo||"falla");
-  const [fecha,setFecha]=useState(evento?.fecha||new Date().toISOString().slice(0,10));
+  const [fecha,setFecha]=useState(evento?.fecha||hoyChile());
   const [descripcion,setDescripcion]=useState(evento?.descripcion||"");
   const [estado,setEstado]=useState(cerrar?"resuelto":(evento?.estado||"abierto"));
   const yaGuardado=useRef(false);   // evita duplicados por doble toque
@@ -28,7 +29,7 @@ export function FormPostventa({ oc, evento, cerrar, onSave }) {
     yaGuardado.current=true; setErr("");setSaving(true);
     try{ await onSave({id:evento?.id,ocId:oc.id,tipo,fecha,descripcion:descripcion.trim(),estado,
       solucion:solucion.trim()||null,
-      fecha_resolucion:estado==="resuelto"?(fechaRes||new Date().toISOString().slice(0,10)):null,
+      fecha_resolucion:estado==="resuelto"?(fechaRes||hoyChile()):null,
       costo_extra:costoExtra?Number(costoExtra):0,
       detalle_costo:detalleCosto.trim()||null}); }
     catch(e){yaGuardado.current=false;setErr(e.message);} finally{setSaving(false);}

@@ -5,11 +5,12 @@ import { Ic, I } from "../ui/Iconos";
 import { Seccion, Tarjeta, Badge, Monto, Pestanas, PanelPestana, BarraAcciones, BotonPrincipal, BotonSecundario } from "../ui/Sistema";
 import { MEDIO_APORTE_SIN_BANCO } from "../../lib/mediosPago";
 
+import { hoyChile } from "../../lib/fechaChile";
 function FormAporte({ aporte, socios, onSave, onEliminar }) {
   const [socio,setSocio]=useState(aporte?.socio&&aporte.socio!=="Por asignar"?aporte.socio:"");
   const [tipo,setTipo]=useState(aporte?.tipo||"aporte");
   const [monto,setMonto]=useState(aporte?.monto??"");
-  const [fecha,setFecha]=useState(aporte?.fecha?String(aporte.fecha).slice(0,10):new Date().toISOString().slice(0,10));
+  const [fecha,setFecha]=useState(aporte?.fecha?String(aporte.fecha).slice(0,10):hoyChile());
   const [medio,setMedio]=useState(aporte?.medio||"");
   const [notas,setNotas]=useState(aporte?.notas||"");
   const [err,setErr]=useState(""); const [saving,setSaving]=useState(false);
@@ -321,7 +322,7 @@ export function PanelFinanciamiento({ financiadores, ocs, ajustes, perfiles, onA
 
 export function FormAjusteSaldo({ financiador, onSave }) {
   const [monto,setMonto]=useState(""); const [tipo,setTipo]=useState("sumar");
-  const [motivo,setMotivo]=useState(""); const [fecha,setFecha]=useState(new Date().toISOString().slice(0,10));
+  const [motivo,setMotivo]=useState(""); const [fecha,setFecha]=useState(hoyChile());
   const [err,setErr]=useState(""); const [saving,setSaving]=useState(false);
   const handleSave=async()=>{
     if(!monto||Number(monto)<=0){setErr("Indica un monto");return;}

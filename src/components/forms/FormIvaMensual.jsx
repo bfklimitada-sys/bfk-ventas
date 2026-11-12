@@ -4,6 +4,7 @@ import { C, btnP, fmt, iMono, iStyle, selStyle } from "../../lib/theme";
 import { registroIvaDe, ivaNetoPeriodo, ivaAPagarPeriodo, aplicaRetenciones } from "../../lib/calculos";
 import { mesSugeridoIva, pagadoSiiDe, gastosImpuestoDe } from "../../lib/ivaUnificado";
 
+import { hoyChile } from "../../lib/fechaChile";
 const MESES=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 const conSigno=(n)=>(n<0?"−":"")+fmt.money(Math.abs(n));
 const txt=(v)=>v===null||v===undefined?"":String(v);
@@ -19,7 +20,7 @@ export function FormIvaMensual({ ivaMensual=[], gastos=[], periodo, onSave }) {
     const pag=pagadoSiiDe(gastos,anio,mes);
     const g=gastosImpuestoDe(gastos,anio,mes);
     return { vN:txt(r?.ventas_netas), iV:txt(r?.iva_ventas), cN:txt(r?.compras_netas), iC:txt(r?.iva_compras),
-      pagado:pag>0?String(pag):"", pagadoManual:pag>0, fecha:(g[0]?.fecha&&String(g[0].fecha).slice(0,10))||new Date().toISOString().slice(0,10),
+      pagado:pag>0?String(pag):"", pagadoManual:pag>0, fecha:(g[0]?.fecha&&String(g[0].fecha).slice(0,10))||hoyChile(),
       existe:!!r, pagos:g.length, totalRegistrado:r&&aplicaRetenciones(anio,mes)?Number(r.iva_pagado)||0:0 };
   };
   const [mes,setMes]=useState(Number(inicial.mes));

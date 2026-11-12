@@ -3,6 +3,7 @@ import { Field } from "../ui/Basicos";
 import { C, MONO, SANS, btnP, fmt, iStyle, iMono, selStyle } from "../../lib/theme";
 import { bloqueoDominio, deudaOC, financiadoresExternos } from "../../lib/finanzas";
 
+import { hoyChile } from "../../lib/fechaChile";
 // Reparte un abono entre las OCs pendientes del financiador,
 // de la más antigua a la más nueva (FIFO). La última puede quedar parcial.
 export function repartirFIFO(monto, ocsPendientes) {
@@ -41,7 +42,7 @@ export function FormAbonoFinanciador({ ocs, financiadores: todosFin, onSave, fin
   const financiadores = financiadoresExternos(todosFin);
   const [finId, setFinId] = useState((financiadorInicial && financiadores.some(f => f.id === financiadorInicial) ? financiadorInicial : financiadores[0]?.id) || "");
   const [monto, setMonto] = useState("");
-  const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10));
+  const [fecha, setFecha] = useState(hoyChile());
   const [referencia, setReferencia] = useState("");
   const [err, setErr] = useState("");
   const [saving, setSaving] = useState(false);

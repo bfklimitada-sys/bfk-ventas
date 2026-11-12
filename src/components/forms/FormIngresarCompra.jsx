@@ -8,6 +8,7 @@ import { fmt } from "../../lib/theme";
 import { ventaDeOC } from "../../lib/productosOC";
 import { ventaExenta } from "../../lib/tributario";
 
+import { hoyChile } from "../../lib/fechaChile";
 // Valor del selector para "sin vendedor" elegido a propósito (distinto de "no elegido").
 const SIN_VENDEDOR="__sin_vendedor__";
 
@@ -19,7 +20,7 @@ export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, ent
   // (si es vendedor); si no, queda sin elegir y hay que indicarlo (o elegir "Sin vendedor" a propósito).
   const [vendedorId,setVendedorId]=useState(ocExistente?.vendedor_id||((vendedores||[]).some(v=>v.id===perfil?.vendedor_id)?perfil.vendedor_id:""));
   const [ventaPropia,setVentaPropia]=useState(false);
-  const [fechaOC,setFechaOC]=useState(new Date().toISOString().slice(0,10));
+  const [fechaOC,setFechaOC]=useState(hoyChile());
   const [rutCliente,setRutCliente]=useState(ocExistente?.rut_cliente||"");
   const [cliente,setCliente]=useState(ocExistente?.cliente||"");
   const [entidad,setEntidad]=useState(ocExistente?.entidad||"");
@@ -31,7 +32,7 @@ export function FormIngresarCompra({ ocs, financiadores, vendedores, onSave, ent
   const [productos,setProductos]=useState([{desc:"",cantidad:1,precioCompra:"",precioVenta:"",link:""}]);
   // Paso 3 — Compra
   const [financiadorId,setFinanciadorId]=useState(perfil?.financiador_default||financiadores.find(f=>f.id==="fin_byron")?.id||financiadores[0]?.id||"");
-  const [fechaCompra,setFechaCompra]=useState(new Date().toISOString().slice(0,10));
+  const [fechaCompra,setFechaCompra]=useState(hoyChile());
   const [fechaEst,setFechaEst]=useState("");
   const [obs,setObs]=useState("");
   // Control

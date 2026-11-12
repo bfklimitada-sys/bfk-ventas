@@ -7,6 +7,7 @@ import { FormIvaMensual } from "../forms/FormIvaMensual";
 import { CATEGORIA_IMPUESTO, periodosIvaIncompletos } from "../../lib/ivaUnificado";
 import { apoyoEnGestion } from "../../lib/informes";
 
+import { hoyChile } from "../../lib/fechaChile";
 // Los pagos a vendedores hoy se administran en Vendedores; la categoria historica solo se consulta.
 const esHistoricaVendedor=(c)=>/vendedor/i.test(c?.nombre||"");
 
@@ -127,7 +128,7 @@ export function PanelGastos({ gastos, categorias, ivaMensual=[], pagosVendedor=[
 export function FormNuevoGasto({ categorias, onSave, onIva }) {
   const [catId,setCatId]=useState(categorias[0]?.id||""); const [sub,setSub]=useState(""); const [monto,setMonto]=useState("");
   const [mes,setMes]=useState(new Date().getMonth()+1); const [anio,setAnio]=useState(new Date().getFullYear());
-  const [fecha,setFecha]=useState(new Date().toISOString().slice(0,10)); const [detalle,setDetalle]=useState("");
+  const [fecha,setFecha]=useState(hoyChile()); const [detalle,setDetalle]=useState("");
   const [err,setErr]=useState(""); const [saving,setSaving]=useState(false);
   const cat=categorias.find(c=>c.id===catId); const subs=cat?.subcategorias||[];
   const handleSubChange=(n)=>{ setSub(n); const s=subs.find(x=>x.nombre===n); if(s?.monto_sugerido) setMonto(String(s.monto_sugerido)); };

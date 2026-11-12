@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Field } from "../ui/Basicos";
 import { C, MONO, SANS, btnP, fmt, iStyle, iMono } from "../../lib/theme";
 
+import { hoyChile } from "../../lib/fechaChile";
 // El saldo no se reconstruye sumando dos años de operación: se ancla al
 // número real del banco en una fecha, y desde ahí la app suma y resta
 // solo lo que se registre después.
@@ -9,7 +10,7 @@ export function FormSaldoBanco({ actual, onSave }) {
   const [saldo, setSaldo] = useState(actual?.saldo ?? "");
   const [fecha, setFecha] = useState(
     actual?.fecha_corte ? String(actual.fecha_corte).slice(0, 10)
-                        : new Date().toISOString().slice(0, 10));
+                        : hoyChile());
   const [nota, setNota] = useState(actual?.nota || "");
   const [err, setErr] = useState("");
   const [saving, setSaving] = useState(false);

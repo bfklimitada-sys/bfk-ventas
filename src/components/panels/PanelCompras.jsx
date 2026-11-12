@@ -40,6 +40,7 @@ import { ContactosOC, useContactos } from "../ficha/ContactosInstitucion";
 import { contactosDeInstitucion } from "../../lib/contactosInstitucionales";
 import { faltaFinanciador, faltaVendedor, nombreFinanciador, nombreVendedor, primerNombre } from "../../lib/asignaciones";
 
+import { periodosChile } from "../../lib/fechaChile";
 const SIN_CORREOS = [];
 
 // Fecha de creación de la OC para mostrar en la lista: si el dato viene
@@ -1563,10 +1564,10 @@ export function PanelCompras({ tributario, onCrearSeguimiento, onActualizarSegui
               <div style={{fontSize:12,fontWeight:700,color:C.inkFaint,textTransform:"uppercase",letterSpacing:0.4,marginBottom:6}}>Período</div>
               <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:12}}>
                 {[
-                  {t:"Este mes",d:()=>{const h=new Date();return [`${h.getFullYear()}-${String(h.getMonth()+1).padStart(2,"0")}-01`,h.toISOString().slice(0,10)];}},
-                  {t:"Mes pasado",d:()=>{const h=new Date();const i=new Date(h.getFullYear(),h.getMonth()-1,1);const f=new Date(h.getFullYear(),h.getMonth(),0);return [i.toISOString().slice(0,10),f.toISOString().slice(0,10)];}},
-                  {t:"90 días",d:()=>{const h=new Date();const i=new Date();i.setDate(i.getDate()-90);return [i.toISOString().slice(0,10),h.toISOString().slice(0,10)];}},
-                  {t:"Este año",d:()=>{const h=new Date();return [`${h.getFullYear()}-01-01`,h.toISOString().slice(0,10)];}},
+                  {t:"Este mes",d:()=>periodosChile().esteMes},
+                  {t:"Mes pasado",d:()=>periodosChile().mesPasado},
+                  {t:"90 días",d:()=>periodosChile().dias90},
+                  {t:"Este año",d:()=>periodosChile().esteAnio},
                 ].map(b=>{
                   const [i,f]=b.d(); const activo=desde===i&&hasta===f;
                   return (
