@@ -49,11 +49,17 @@ const esperado = Object.fromEntries(String(process.env.ESPERADO || "").split(","
 const vend = await rest("vendedores?select=id,nombre&order=nombre");
 await ir("vendedores");
 for (const v of vend) {
-  const el = page.getByText(v.nombre, { exact: true }).first(); if (!(await el.count())) continue;
-  await el.click().catch(() => {}); await page.waitForTimeout(1500);
-  let bt = await page.evaluate(() => document.body.innerText);
-  // En escritorio la ficha puede venir ya abierta (el toque la cierra): si no aparece el detalle, se vuelve a tocar.
-  if (!bloque(bt, "Oct/2026") && esperado[v.id]) { await el.click().catch(() => {}); await page.waitForTimeout(1500); bt = await page.evaluate(() => document.body.innerText); }
+  // El nombre puede aparecer en más de un lugar (p. ej. el usuario en la barra de escritorio): se prueba cada coincidencia
+  // hasta que aparezca el detalle mes a mes de ese vendedor.
+  const todos = page.getByText(v.nombre, { exact: true }); const nEl = await todos.count(); if (!nEl) continue;
+  let bt = "", el = todos.first();
+  for (let k = 0; k < nEl; k++) {
+    el = todos.nth(k); if (!(await el.isVisible().catch(() => false))) continue;
+    await el.click().catch(() => {}); await page.waitForTimeout(1500); bt = await page.evaluate(() => document.body.innerText);
+    if (bloque(bt, "Oct/2026") || !esperado[v.id]) break;
+    await el.click().catch(() => {}); await page.waitForTimeout(1200); bt = await page.evaluate(() => document.body.innerText);
+    if (bloque(bt, "Oct/2026")) break;
+  }
   const oct = bloque(bt, "Oct/2026");
   const m = oct.match(/= Comisión del mes: (\$[\d.]+)/); const d = oct.match(/Descuento tributario total: (\$[\d.]+)/);
   if (oct) console.log(`OCTUBRE_EN_PANTALLA|${v.id}|comisión ${m?.[1]}|descuento ${d?.[1]}|${/No incluidas en este mes[^\n]*/.exec(oct)?.[0] || "sin refacturadas fuera"}`);
