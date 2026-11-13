@@ -92,20 +92,24 @@ export const mesesConFactura = (vendedorId, ocs) => {
   return Array.from(set).sort((a, b) => b.localeCompare(a)).map((ym) => ({ anio: Number(ym.slice(0, 4)), mes: Number(ym.slice(5, 7)) }));
 };
 
-// ── Liquidación de la comisión de una OC (13/11/2026; vigente desde NOVIEMBRE 2026 por decisión de Kevin) ──
+// ── Liquidación de la comisión de una OC (regla definitiva, Kevin 13/11/2026 16:15; vigente desde NOVIEMBRE 2026) ──
 // La comisión queda ligada a la OC y a su LIQUIDACIÓN; la cobranza sigue a la factura vigente (facturaVigente).
 // Liquidación de la OC:
 //  · anclada ...... comision_anio/comision_mes (la base la fija al marcarla pagada o la migración con evidencia).
 //  · refacturada .. alguna factura anulada o reemplazada y la vigente en un mes posterior → mes de su PRIMERA factura.
 //  · normal ....... mes de su factura vigente más reciente (regla Fase 4C).
-// Período en que CUENTA la comisión (periodo):
+// Período en que CUENTA la comisión (periodo), una sola vez y para siempre:
+//  · período cerrado (comision_cierre_anio/mes): el mes en que la OC ya fue considerada hasta octubre 2026, registrado
+//    por la base el 13/11/2026 tal como se calculaba. No cambia aunque la OC se anule y refacture una o varias veces,
+//    en cualquier mes o año: así los cálculos, liquidaciones y pagos hasta octubre 2026 quedan intactos.
 //  · liquidación desde noviembre 2026 (VIGENCIA_LIQUIDACION) → su liquidación (una refacturación posterior no la mueve).
-//  · liquidación anterior y factura vigente desde noviembre 2026 (refacturada hacia la vigencia):
+//  · nunca considerada (sin período cerrado) y con liquidación anterior a noviembre:
 //      pagada → no cuenta en ningún mes (ya se pagó; no genera nueva comisión);
-//      no pagada → cuenta en el mes de la factura vigente (como hasta ahora), pero si su liquidación original tuvo un
-//      pago (posible pago parcial que la cubrió) queda «Por revisar» y fuera de todo pago hasta revisarla.
-//  · todo lo demás (períodos anteriores a noviembre 2026) → regla anterior sin cambios: mes de la factura vigente.
-//    Las liquidaciones, comisiones y pagos anteriores a noviembre 2026 no se recalculan.
+//      no pagada y refacturada hacia noviembre o después → su PRIMER período válido: el mes de su primera factura desde
+//      noviembre 2026 (fijo; nuevas refacturaciones no la mueven). Si su liquidación original tuvo un pago (posible pago
+//      parcial que la cubrió) queda «Por revisar» y fuera de todo pago hasta revisarla;
+//  · OC creada después del cierre (comision_tras_cierre, la marca la base) con factura de un período cerrado →
+//    primer período abierto (noviembre 2026), fijo y con aviso. Las demás OC sin período cerrado: regla anterior.
 // Por revisar guardado (comision_revision = 'por_revisar'): se conserva donde se calcula hoy, con aviso, y no se marca en
 // ningún pago. Utilidad liquidada (comision_utilidad, solo desde noviembre 2026): si la utilidad actual cambió, la diferencia
 // se muestra aparte como ajuste por revisar (no entra en la comisión ni en el saldo).
@@ -126,12 +130,20 @@ export const liquidacionComision = (oc, pagosVendedor = null) => {
   let liquidacion = anclada || (refacturada ? original : actual);
   if (!anclada && !vig.length) liquidacion = pagada ? original : null;   // anulada sin reemplazo: solo si ya se pagó
   const desde = claveMes(VIGENCIA_LIQUIDACION);
-  let periodo, motivoRevision = null, derivada = false;
-  if (liquidacion && claveMes(liquidacion) >= desde) periodo = liquidacion;
-  else if (liquidacion && actual && claveMes(actual) >= desde) {
+  const cierre = oc?.comision_cierre_anio != null && oc?.comision_cierre_mes != null ? { anio: Number(oc.comision_cierre_anio), mes: Number(oc.comision_cierre_mes) } : null;
+  let periodo, motivoRevision = null, derivada = false, motivoPeriodo = null;
+  if (cierre) periodo = cierre;   // período cerrado (hasta octubre 2026): definitivo
+  else if (liquidacion && claveMes(liquidacion) >= desde) periodo = liquidacion;
+  else if (liquidacion && oc?.comision_tras_cierre) {
+    // OC creada después del cierre con factura de un período cerrado: primer período abierto (fijo).
+    periodo = { ...VIGENCIA_LIQUIDACION };
+    motivoPeriodo = `Factura de ${fmt.monthYear(liquidacion.mes, liquidacion.anio)}, período ya cerrado: se considera en el primer período abierto`;
+  } else if (liquidacion && actual && claveMes(actual) >= desde) {
     if (pagada) periodo = null;
     else {
-      periodo = actual;
+      // Primer período válido: el mes de su primera factura desde noviembre 2026 (no se mueve con nuevas refacturaciones).
+      const primeraDesde = todas.map((f) => String(f.fecha).slice(0, 10)).filter((d) => claveMes(anioMesDe(d)) >= desde).sort()[0];
+      periodo = primeraDesde ? anioMesDe(primeraDesde) : actual;
       const pagoOriginal = (pagosVendedor || []).some((p) => !p?.anulado_en && p.vendedor_id === oc?.vendedor_id && Number(p.anio) === liquidacion.anio && Number(p.mes) === liquidacion.mes);
       if (pagoOriginal && oc?.comision_revision !== "revisada") { derivada = true;
         motivoRevision = `Su liquidación original (${fmt.monthYear(liquidacion.mes, liquidacion.anio)}) tuvo un pago y no se puede comprobar si la cubrió`; }
@@ -143,7 +155,7 @@ export const liquidacionComision = (oc, pagosVendedor = null) => {
   const utilidadActual = (Number(oc?.monto_total) || 0) - (Number(oc?.costo_total) || 0);
   const utilidadLiquidada = desdeVigencia && pagada && oc?.comision_utilidad != null ? Number(oc.comision_utilidad) : null;
   return {
-    periodo, liquidacion, actual, original, anclada: !!anclada, refacturada, pagada, porRevisar, motivoRevision, revisionDerivada: derivada,
+    periodo, liquidacion, actual, original, anclada: !!anclada, cerrada: !!cierre, motivoPeriodo, refacturada, pagada, porRevisar, motivoRevision, revisionDerivada: derivada,
     // Fuera de todo cálculo y pago: solo desde la vigencia y si no estaba pagada (lo anterior a octubre no se toca).
     excluida: porRevisar && !pagada && desdeVigencia,
     utilidad: utilidadLiquidada ?? utilidadActual, utilidadActual, utilidadLiquidada,
@@ -152,6 +164,16 @@ export const liquidacionComision = (oc, pagosVendedor = null) => {
     fueraDeSuMes: !!actual && claveMes(actual) >= desde && !mismoMes(periodo, actual),
   };
 };
+
+// Motivo por el que una OC refacturada no entra en el mes de su factura vigente (se muestra con su período original).
+export const motivoExclusion = (liq) => {
+  const m = (x) => (x ? fmt.monthYear(x.mes, x.anio) : "—");
+  if (!liq?.periodo) return `ya pagada en la liquidación de ${m(liq?.liquidacion)}; no genera nueva comisión`;
+  if (liq.cerrada) return `ya considerada en la comisión de ${m(liq.periodo)} (período cerrado)${liq.pagada ? ", ya pagada" : ""}`;
+  return `su comisión es de su liquidación original, ${m(liq.periodo)}${liq.pagada ? ", ya pagada" : ""}`;
+};
+// Texto de una OC no incluida en el mes (Comisiones, pago manual y cartola).
+export const textoNoIncluida = (x) => `${x.numero_oc} → ${x.liquidacion ? fmt.monthYear(x.liquidacion.mes, x.liquidacion.anio) : "—"}: ${x.motivo || (x.pagada ? "ya pagada" : "su liquidación original")}`;
 
 // Período de la comisión de una OC: el de su liquidación (ver liquidacionComision). Una OC entra en un solo mes.
 export const periodoComision = (oc) => liquidacionComision(oc).periodo;
@@ -315,7 +337,7 @@ export const calcularPagoVendedor = ({ vendedorId, ocs, anio, mes, ivaMensual = 
     const p = liq.periodo;
     const esteMes = { anio, mes };
     // Factura vigente en este mes pero su comisión cuenta en otro (o ya se pagó): no entra aquí; se informa por qué.
-    if (liq.fueraDeSuMes && mismoMes(liq.actual, esteMes)) refacturadasFuera.push({ ocId: o.id, numero_oc: o.numero_oc, liquidacion: liq.liquidacion, pagada: liq.pagada });
+    if (liq.fueraDeSuMes && mismoMes(liq.actual, esteMes)) refacturadasFuera.push({ ocId: o.id, numero_oc: o.numero_oc, liquidacion: p || liq.liquidacion, pagada: liq.pagada, motivo: motivoExclusion(liq) });
     // Liquidada (y pagada) en este mes y refacturada después hacia la vigencia: sigue apareciendo aquí, solo como referencia.
     if (liq.pagada && !p && mismoMes(liq.liquidacion, esteMes)) liquidadasAqui.push({ ocId: o.id, numero_oc: o.numero_oc, facturaVigenteMes: liq.actual, utilidad: liq.utilidadActual });
     if (!p || p.anio !== anio || p.mes !== mes) return;
@@ -333,6 +355,7 @@ export const calcularPagoVendedor = ({ vendedorId, ocs, anio, mes, ivaMensual = 
       // Solo cuando aplica (sin cambiar la forma de las líneas comunes):
       ...(liq.refacturada && !mismoMes(liq.actual, { anio, mes }) && liq.actual ? { refacturada: true, facturaVigenteMes: liq.actual } : {}),
       ...(liq.porRevisar ? { porRevisar: true, motivoRevision: liq.motivoRevision } : {}),
+      ...(liq.motivoPeriodo ? { motivoPeriodo: liq.motivoPeriodo } : {}),
       ...(liq.ajusteUtilidad ? { utilidadActual: liq.utilidadActual, ajusteUtilidad: liq.ajusteUtilidad } : {}) };
     if (o.es_venta_propia) {
       // IVA de su propia factura (fase 1 exentas, 20/10/2026): por documento vigente, el registrado o, si no hay,

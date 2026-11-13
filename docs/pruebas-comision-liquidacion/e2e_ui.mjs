@@ -13,13 +13,15 @@ const T = {
     // J: pagada en junio y refacturada dos veces (agosto y noviembre)
     oc("OC-J", 300000, 200000, [fac("j1", "100", "2026-06-10", 300000), fac("j2", "150", "2026-08-05", 300000, "100"), fac("j4", "190", "2026-11-07", 300000, "150")],
       { vendedor_pagado: true, comision_anio: 2026, comision_mes: 6 }),
-    oc("OC-H", 100000, 60000, [fac("h1", "110", "2026-06-20", 100000)], { vendedor_pagado: true, comision_anio: 2026, comision_mes: 6 }),
+    // H: junio (período cerrado registrado por la migración), refacturada en diciembre 2026 después del cierre
+    oc("OC-H", 100000, 60000, [fac("h1", "110", "2026-06-20", 100000), { ...fac("h2", "75", "2026-12-03", 0), tipo_dte: 61, ref_folio: "110", ref_codigo: 1 }, fac("h3", "530", "2026-12-03", 100000)],
+      { vendedor_pagado: true, comision_anio: 2026, comision_mes: 6, comision_cierre_anio: 2026, comision_cierre_mes: 6 }),
     // Noviembre: K normal y P con abono parcial, refacturada en enero
     oc("OC-K", 200000, 150000, [fac("k1", "191", "2026-11-09", 200000)]),
     oc("OC-P", 500000, 300000, [fac("p1", "200", "2026-11-15", 500000), fac("p3", "230", "2027-01-03", 500000, "200")]),
-    // R: liquidación de mayo (planilla verificada), no marcada, refacturada en diciembre → por revisar en diciembre
-    oc("OC-R", 200000, 100000, [fac("r1", "500", "2026-05-12", 200000), fac("r2", "510", "2026-12-02", 200000, "500")]),
-    oc("OC-M", 900000, 0, [fac("m1", "501", "2026-05-20", 900000)]),
+    // R: liquidación de mayo (planilla verificada), no marcada, refacturada el 2 de noviembre (antes del cierre) → por revisar en noviembre
+    oc("OC-R", 200000, 100000, [fac("r1", "500", "2026-05-12", 200000), fac("r2", "510", "2026-11-02", 200000, "500")]),
+    oc("OC-M", 900000, 0, [fac("m1", "501", "2026-05-20", 900000)], { comision_cierre_anio: 2026, comision_cierre_mes: 5 }),
     oc("OC-N", 300000, 200000, [fac("n1", "520", "2026-12-05", 300000)]),
   ],
   iva_mensual: [{ id: "i6", anio: 2026, mes: 6, iva_ventas: 0, iva_compras: 0, iva_pagado: 0 },
@@ -63,18 +65,19 @@ await ir("vendedores");
 await page.getByText("Vendedor Uno").first().click(); await page.waitForTimeout(900);
 const nov = await bloque("Nov/2026"), jun = await bloque("Jun/2026"), ago = await bloque("Ago/2026"), ene = await bloque("Ene/2027"), dic = await bloque("Dic/2026"), oct = await bloque("Oct/2026");
 // Junio (anterior a la vigencia): conserva su pago ($70.000) y su cálculo de siempre; J sigue apareciendo como pagada en esa liquidación.
-res.junio_conserva_pago = /Comisión pagada: \$70\.000/.test(jun) && /Pagadas en esta liquidación y refacturadas después.*OC-J/.test(jun);
+res.junio_conserva_pago = /Comisión pagada: \$70\.000/.test(jun) && /Pagadas en esta liquidación y refacturadas después.*OC-J/.test(jun) && /= Comisión del mes: \$20\.000/.test(jun) && /1 OC en este cálculo/.test(jun);
 // Noviembre: K + P con abono parcial; J no genera comisión.
-res.noviembre_sin_J = /= Comisión del mes: \$125\.000/.test(nov) && /OC-J → Jun\/2026 \(ya pagada\)/.test(nov);
+res.noviembre_sin_J = /= Comisión del mes: \$125\.000/.test(nov) && /OC-J → Jun\/2026: ya pagada en la liquidación de Jun\/2026/.test(nov);
+res.noviembre_por_revisar = /Por revisar · OC OC-R/.test(nov) && /No se incluye en esta comisión ni en ningún pago/.test(nov);
 res.noviembre_parcial_saldo = /Comisión pagada: \$40\.000/.test(nov) && /Falta pagarle: \$85\.000/.test(nov);
 res.agosto_octubre_y_enero_sin_comision = ago === "" && oct === "" && ene === "";
-res.diciembre_por_revisar = /Por revisar · OC OC-R/.test(dic) && /No se incluye en esta comisión ni en ningún pago/.test(dic) && /= Comisión del mes: \$50\.000/.test(dic);
+res.diciembre_cerrada_excluida = /= Comisión del mes: \$50\.000/.test(dic) && /OC-H → Jun\/2026: ya considerada en la comisión de Jun\/2026 \(período cerrado\), ya pagada/.test(dic);
 await page.locator('[data-liquidadas-aqui]').first().scrollIntoViewIfNeeded().catch(() => {}); await foto("1-junio");
 // Pago de noviembre: comisión $25.000, aviso de la refacturada, sin marcar J.
 await page.locator('[data-pagar-mes="v1|2026|11"]').click().catch(() => {}); await page.waitForTimeout(500);
 const formTxt = (await page.locator("[data-form-pago-vendedor]").count()) ? await page.locator("[data-form-pago-vendedor]").innerText() : "";
 res.pago_noviembre_comision = /\$125\.000/.test(formTxt) && /\$85\.000/.test(formTxt);
-res.pago_noviembre_aviso = (await page.locator("[data-aviso-refacturadas]").count()) === 1 && /OC-J → Jun\/2026 \(ya pagada\)/.test(formTxt);
+res.pago_noviembre_aviso = (await page.locator("[data-aviso-refacturadas]").count()) === 1 && /OC-J → Jun\/2026: ya pagada/.test(formTxt);
 await foto("2-pago-noviembre");
 await page.locator('[role="dialog"] button[aria-label="Cerrar"]').last().click().catch(() => {}); await page.waitForTimeout(300);
 // Revisión de R (administrador): «no estaba pagada».

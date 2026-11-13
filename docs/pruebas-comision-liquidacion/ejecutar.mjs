@@ -8,5 +8,5 @@ const D = path.dirname(fileURLToPath(import.meta.url));
 const anterior = path.resolve(process.argv[2] || process.env.BFK_ANTERIOR || "/tmp/bfk-3ac3a64");
 const salida = path.join(process.env.TMPDIR || "/tmp", "reglas_comision_liquidacion.bundle.mjs");
 await build({ entryPoints: [path.join(D, "reglas.test.mjs")], bundle: true, platform: "node", format: "esm", outfile: salida, logLevel: "error",
-  alias: { "@anterior": path.join(anterior, "src/lib") } });
+  alias: { "@anterior": path.join(anterior, "src/lib"), "@vigente": path.join(path.resolve(process.env.BFK_VIGENTE || "/tmp/bfk-460951e"), "src/lib") } });
 execFileSync(process.execPath, [salida], { stdio: "inherit" });

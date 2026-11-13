@@ -1,4 +1,4 @@
-import { anioMesDe, calcularPagoVendedor } from "../../lib/calculos";
+import { anioMesDe, calcularPagoVendedor, textoNoIncluida } from "../../lib/calculos";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { C, MONO, SANS, btnP, btnG, fmt, btnMini } from "../../lib/theme";
@@ -738,7 +738,7 @@ function PrepararRegistro({ x, ocs, pagosVendedor = [], financiadores, vendedore
         if (!rev.length && !fuera.length) return null;
         return (<div data-aviso-cartola-comision style={{ fontSize: 12, color: C.warnText, marginTop: 6, lineHeight: 1.45 }}>
           {rev.length > 0 && <div><Ic n="⚠" /> Por revisar en ese mes: {rev.map((r) => r.numero_oc).join(", ")} — no se incluyen en este pago ni se marcan pagadas hasta revisarlas.</div>}
-          {fuera.length > 0 && <div style={{ color: C.inkFaint }}>Refacturadas con comisión en su liquidación original (no entran en este mes): {fuera.map((x) => `${x.numero_oc} → ${x.liquidacion ? `${MESES[x.liquidacion.mes - 1]} ${x.liquidacion.anio}` : "—"}${x.pagada ? " (ya pagada)" : ""}`).join(", ")}</div>}
+          {fuera.length > 0 && <div style={{ color: C.inkFaint }}>Refacturadas con comisión en su liquidación original (no entran en este mes): {fuera.map(textoNoIncluida).join(" · ")}</div>}
         </div>);
       })()}
       {resumen && (

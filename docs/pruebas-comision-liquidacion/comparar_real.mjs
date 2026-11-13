@@ -1,9 +1,11 @@
-// Con los DATOS REALES de una copia (vía PostgREST, solo lectura): versión publicada vs nueva, comisión de cada vendedor y
+// Con los DATOS REALES de una copia (vía PostgREST, solo lectura). También simula refacturar TODAS las OC en 2027 y 2028.
+// versión publicada vs nueva, comisión de cada vendedor y
 // mes (calculada, pagada, saldo, OC incluidas) y los avisos nuevos (por revisar, refacturadas fuera, ajustes).
 //   PGRST_URL=… JWT_SECRET=… USUARIO=… node comparar_liq.bundle.mjs
 import { createHmac } from "node:crypto";
 import * as N from "../../src/lib/calculos.js";
 import * as A from "@anterior/calculos.js";
+import * as V from "@vigente/calculos.js";   // producción antes de esta regla (460951e), para mostrar lo que corrige
 const { PGRST_URL, JWT_SECRET, USUARIO } = process.env;
 const ANTES_DE = "2026-11";   // vigencia (13/11/2026 15:42): noviembre 2026; los meses anteriores, octubre incluido, deben quedar idénticos
 const b64 = (o) => Buffer.from(JSON.stringify(o)).toString("base64url"); const t = Math.floor(Date.now() / 1000);
@@ -53,6 +55,30 @@ const liqs = ocs.filter((o) => N.generaComision(o) && N.liquidacionComision(o).r
 liqs.forEach((x) => console.log("OC_REFACTURADA|" + x));
 console.log(`RESUMEN comparación de comisiones con datos reales: ${iguales + distintos} vendedor-mes, ${iguales} con montos idénticos, ${distintos} distintos (${distintosPrevios.length} anteriores a noviembre 2026)`);
 if (Object.keys(esperado).length) console.log(`OCTUBRE_ESPERADO|${octubreMal.length ? "NO COINCIDE: " + octubreMal.join("; ") : "coincide: " + JSON.stringify(esperado)}`);
+// ── Regla definitiva (13/11/2026 16:15): simulación con los datos reales. Todas las OC con comisión se anulan (NC código 1)
+// y se refacturan en marzo 2027, y otra vez en febrero 2028. Ningún mes anterior cambia (cálculo, OC y montos), ningún mes
+// nuevo genera comisión por ellas y cada OC cuenta en un solo mes. Solo en memoria: no escribe nada.
+const refacturarTodo = (lista, fecha) => lista.map((o) => { if (!N.generaComision(o) || !o.vendedor_id) return o; const vig = N.facturasVigentes(o); if (!vig.length) return o;
+  const nuevos = vig.flatMap((f, i) => [{ id: `sim-nc-${fecha}-${o.id}-${i}`, oc_id: o.id, numero_factura: `SNC${fecha}${i}${o.id}`, fecha, monto: Number(f.monto) || 0, tipo_dte: 61, ref_folio: f.numero_factura, ref_codigo: 1 },
+    { id: `sim-f-${fecha}-${o.id}-${i}`, oc_id: o.id, numero_factura: `SF${fecha}${i}${o.id}`, fecha, monto: Number(f.monto) || 0, tipo_dte: f.tipo_dte ?? 33 }]);
+  return { ...o, eventos_factura: [...(o.eventos_factura || []), ...nuevos] }; });
+const cuadro = (lista, L = N) => { const m = new Map(); for (const v of vendedores) for (const x of L.mesesConFactura(v.id, lista)) {
+  const c = L.calcularPagoVendedor({ vendedorId: v.id, ocs: lista, anio: x.anio, mes: x.mes, ivaMensual, pagosVendedor });
+  if (c) m.set(`${v.id}|${per(x)}`, JSON.stringify({ calc: c.pagoCalculado, pagado: c.pagado, saldo: c.deuda, util: c.sumaUtilidad, ocs: c.detalle.map((l) => `${l.numero_oc}:${l.utilidad}`).sort() })); } return m; };
+const conComision = ocs.filter((o) => N.generaComision(o) && o.vendedor_id && N.facturasVigentes(o).length);
+const sim1 = refacturarTodo(ocs, "2027-03-15"), sim2 = refacturarTodo(sim1, "2028-02-10");
+const base0 = cuadro(ocs), base2 = cuadro(sim2);
+const cambiados = [...base0].filter(([k, v]) => base2.get(k) !== v).map(([k]) => k);
+const nuevosMeses = [...base2.keys()].filter((k) => !base0.has(k));
+const v0 = cuadro(ocs, V), v2 = cuadro(sim2, V);
+const cambiadosV = [...v0].filter(([k, x]) => v2.get(k) !== x).length, nuevosV = [...v2.keys()].filter((k) => !v0.has(k)).length;
+const cerradas = ocs.filter((o) => o.comision_cierre_anio != null).length;
+const periodoMenorNov = ocs.filter((o) => N.generaComision(o) && o.vendedor_id && N.periodoComision(o) && N.periodoComision(o).anio * 12 + N.periodoComision(o).mes < 2026 * 12 + 11).length;
+const sinCierreAntesNov = ocs.filter((o) => N.generaComision(o) && o.vendedor_id && o.comision_cierre_anio == null && N.periodoComision(o) && N.periodoComision(o).anio * 12 + N.periodoComision(o).mes < 2026 * 12 + 11).map((o) => o.numero_oc);
+console.log(`SIMULACION_REFACTURAR|oc_refacturadas=${conComision.length} (dos veces: mar-2027 y feb-2028)|vendedor_mes=${base0.size}|cambiados=${cambiados.length}|meses_nuevos_con_comision=${nuevosMeses.length}${nuevosMeses.length ? " " + nuevosMeses.join(",") : ""}|version_anterior_460951e: cambiados=${cambiadosV} meses_nuevos_con_comision=${nuevosV}`);
+console.log(`PERIODO_CERRADO|oc_con_periodo_cerrado=${cerradas}|oc_con_comision_hasta_octubre=${periodoMenorNov}|sin_periodo_cerrado=${sinCierreAntesNov.length}${sinCierreAntesNov.length ? " " + sinCierreAntesNov.join(",") : ""}`);
+const fallaSim = cambiados.length || nuevosMeses.length || (process.env.EXIGIR_CIERRE && sinCierreAntesNov.length);
+if (fallaSim) { console.log("FALLA|" + JSON.stringify({ cambiados, nuevosMeses, sinCierreAntesNov })); process.exitCode = 1; }
 // Mes de comisión de cada OC según la app (para compararlo con fin_periodo_comision de la base): PERIODOS_SALIDA=archivo.
 if (process.env.PERIODOS_SALIDA) { const fs = await import("node:fs");
   fs.writeFileSync(process.env.PERIODOS_SALIDA, ocs.map((o) => { const x = N.periodoComision(o); return `${o.id}|${x ? per(x) : "-"}`; }).sort().join("\n") + "\n"); }
