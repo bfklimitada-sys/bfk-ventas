@@ -71,7 +71,10 @@ for (const ancho of [360, 390]) {
   // Identificación una sola vez: OC e institución solo en el encabezado de la hoja (no repetidos en la cabecera fija).
   const hoja = await p.locator(`[data-hoja-lateral="${NUM}"]`).innerText();
   ok("E_identificacion_una_sola_vez", (hoja.match(new RegExp(NUM, "g")) || []).length === 1 && !(await cab.innerText()).includes(NUM), (hoja.match(new RegExp(NUM, "g")) || []).length);
-  ok("E_cabecera_conserva_estados_y_asignaciones", /Compra/.test(await cab.innerText()) && await cab.locator("[data-cabecera-asignaciones]").count() === 1);
+  // 12/11/2026: la cabecera conserva los estados; vendedor y financiador quedan solo en sus filas editables (sin repetirlos abreviados).
+  const asig = p.locator(`[data-ficha-oc="${NUM}"] [data-asignaciones-oc]`);
+  ok("E_cabecera_conserva_estados_sin_repetir_asignaciones", /Compra/.test(await cab.innerText()) && await cab.locator("[data-cabecera-asignaciones]").count() === 0
+    && (await asig.locator('[data-asignacion="vendedor"] [data-asignacion-editar]').count()) === 1 && (await asig.locator('[data-asignacion="financiador"] [data-asignacion-editar]').count()) === 1);
   await p.screenshot({ path: process.env.CAPTURA_E || "/tmp/compras_escritorio.png", fullPage: false });
   await ctx.close();
 }

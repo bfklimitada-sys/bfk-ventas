@@ -3,7 +3,7 @@ import { C, MONO, fmt } from "../../lib/theme";
 import { resumenCaja } from "../../lib/caja";
 import { registrosConAlerta } from "../../lib/registroCartola";
 import { Ic } from "../ui/Iconos";
-import { Seccion, Tarjeta, Monto, Pestanas, PanelPestana, Indicador, Indicadores, BotonPrincipal, BotonSecundario, Desplegable, Ayuda } from "../ui/Sistema";
+import { Seccion, Tarjeta, Monto, Pestanas, PanelPestana, Indicador, Indicadores, BotonPrincipal, BotonSecundario, Desplegable, Ayuda, AvisoAccion } from "../ui/Sistema";
 import { AlertasCartola } from "./AlertasCartola";
 
 // Banco (rediseño 2026-10): saldo de BancoEstado, conciliación, importación de cartola y registros por revisar.
@@ -18,10 +18,17 @@ export function PanelBanco({ ocs, financiadores, gastos, pagosVendedor, ivaMensu
   const conciliado = Math.abs(r.diferenciaBancoCaja) <= 0.5;
   return (
     <div>
-      <Indicadores columnas={2}>
-        <Indicador dato="saldo-banco" destacado etiqueta={r.conciliacion.hayCorte ? `Saldo BancoEstado al ${fmt.date(r.conciliacion.corte)}` : "Saldo BancoEstado"} valor={r.conciliacion.hayCorte ? fmt.money(r.conciliacion.saldoBancoCorte) : "Sin registrar"} tono={r.conciliacion.hayCorte ? "marca" : "warn"} onClick={onEditarSaldo} nota={saldoBanco ? "Toca para actualizar" : "Toca para registrar"} />
-        <Indicador dato="diferencia" etiqueta={conciliado ? "Conciliación" : "Diferencia banco − caja"} valor={r.conciliacion.hayCorte ? (conciliado ? "Conciliado" : fmt.money(r.diferenciaBancoCaja)) : "—"} tono={!r.conciliacion.hayCorte ? "neutro" : conciliado ? "ok" : "warn"} onClick={() => setPestana("conciliacion")} />
-      </Indicadores>
+      {/* Sin saldo del banco: un solo aviso con su razón y su acción (antes: tarjeta «Sin registr…», mensaje y otra fila). */}
+      {r.conciliacion.hayCorte ? (
+        <Indicadores columnas={2}>
+          <Indicador dato="saldo-banco" destacado etiqueta={`Saldo BancoEstado al ${fmt.date(r.conciliacion.corte)}`} valor={fmt.money(r.conciliacion.saldoBancoCorte)} tono="marca" onClick={onEditarSaldo} nota="Toca para actualizar" />
+          <Indicador dato="diferencia" etiqueta={conciliado ? "Conciliación" : "Diferencia banco − caja"} valor={conciliado ? "Conciliado" : fmt.money(r.diferenciaBancoCaja)} tono={conciliado ? "ok" : "warn"} onClick={() => setPestana("conciliacion")} />
+        </Indicadores>
+      ) : (
+        <AvisoAccion dato="falta-saldo-banco" titulo={saldoBanco ? "Falta la fecha del saldo de BancoEstado" : "Falta registrar el saldo de BancoEstado"} accion={saldoBanco ? "Completar saldo" : "Registrar saldo"} onAccion={onEditarSaldo}>
+          {saldoBanco ? "Sin la fecha de corte" : "Sin ese saldo"} todavía no se puede conciliar: la conciliación lo compara con la caja registrada en BFK.
+        </AvisoAccion>
+      )}
       <Pestanas etiqueta="Banco" activa={pestana} onCambiar={setPestana} items={[
         { key: "conciliacion", label: "Conciliación" },
         { key: "cartola", label: "Cartola" },
@@ -41,12 +48,15 @@ export function PanelBanco({ ocs, financiadores, gastos, pagosVendedor, ivaMensu
                 <span>{conciliado ? "Conciliado" : "Diferencia banco − caja registrada"}{!conciliado && <Ayuda etiqueta="Qué significa la diferencia">La caja registrada incluye operaciones que no pasaron por BancoEstado (compras anteriores a la apertura o pagadas por un socio, pagos compensados fuera del banco) y movimientos del banco sin registro en BFK. No es pérdida ni ganancia ni dinero adicional: se explica con el expediente de conciliación. El saldo proyectado parte del saldo del banco.</Ayuda>}</span>
                 <Monto tam="sm">{fmt.money(r.diferenciaBancoCaja)}</Monto>
               </div>
-            </>) : <div style={{ fontSize: 12, color: C.inkMuted }}>Sin saldo del banco registrado: no se puede conciliar.</div>}
+            </>) : (
+              // El aviso de arriba ya explica qué falta; aquí solo el dato que se comparará, que es distinto.
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontWeight: 600, padding: "4px 0" }}><span>Caja registrada BFK</span><Monto tam="sm">{fmt.money(r.caja)}</Monto></div>
+            )}
           </div>
         </Tarjeta>
-        <BotonSecundario onClick={onEditarSaldo} style={{ width: "100%", justifyContent: "space-between", minHeight: 44 }}>
-          <span>{saldoBanco ? "Actualizar saldo de la cuenta" : "Registrar saldo de la cuenta"}</span><Ic n="chevR" />
-        </BotonSecundario>
+        {r.conciliacion.hayCorte && <BotonSecundario onClick={onEditarSaldo} style={{ width: "100%", justifyContent: "space-between", minHeight: 44 }}>
+          <span>Actualizar saldo de la cuenta</span><Ic n="chevR" />
+        </BotonSecundario>}
       </PanelPestana>
 
       <PanelPestana visible={pestana === "cartola"} titulo="Cartola">

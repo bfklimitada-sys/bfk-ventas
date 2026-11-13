@@ -58,7 +58,7 @@ function VerMasAvisoMP({n}){
   return <div style={{fontSize:12,color:C.inkFaint,marginTop:6,textAlign:"center"}}>y {n} más</div>;
 }
 
-export function PanelDashboard({ franjaCanales, ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, aportes: aportesLista, ajustes = [], categorias = [], perfil, onExportarTodo, exportando, onNavigate, onAccion, onSincronizar, onCorregirFechas, sincronizando, porAceptar, onActualizarPorAceptar, verificandoPorAceptar, aceptadasSinCargar, onCargarOC, onCargarTodasAceptadas, cargandoAceptadas, onActualizarAceptadas, verificandoAceptadas, canceladasEnMP, onArchivarCancelada, onActualizarCanceladas, verificandoCanceladas, onValidarTodo, validandoTodo, usoMP, actMP, esCodigoMP, ultimaCartola, saldoBanco, bancoMensual, onEditarSaldo, onBuscarCompras , onQuitarAlertaCartola, tokenSesion }) {
+export function PanelDashboard({ franjaCanales, avisoCanales, ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, aportes: aportesLista, ajustes = [], categorias = [], perfil, onExportarTodo, exportando, onNavigate, onAccion, onSincronizar, onCorregirFechas, sincronizando, porAceptar, onActualizarPorAceptar, verificandoPorAceptar, aceptadasSinCargar, onCargarOC, onCargarTodasAceptadas, cargandoAceptadas, onActualizarAceptadas, verificandoAceptadas, canceladasEnMP, onArchivarCancelada, onActualizarCanceladas, verificandoCanceladas, onValidarTodo, validandoTodo, usoMP, actMP, esCodigoMP, ultimaCartola, saldoBanco, bancoMensual, onEditarSaldo, onBuscarCompras , onQuitarAlertaCartola, tokenSesion }) {
   const [busq,setBusq]=useState("");
   const esAdmin=perfil?.rol==="admin";
   const [verTodasPrior,setVerTodasPrior]=useState(false);
@@ -167,6 +167,13 @@ export function PanelDashboard({ franjaCanales, ocs, financiadores, gastos, pago
     return items;
   },[ocs]);
 
+  const indicadoresClave=[
+    {dato:"banco",etiqueta:resumen.baseEsBanco?"Saldo BancoEstado":"Caja registrada BFK",valor:fmt.money(resumen.baseEsBanco?resumen.saldoBancario:resumen.caja),tono:resumen.baseEsBanco?"neutro":"warn",nota:resumen.baseEsBanco?"Saldo esperado en la cuenta":"Sin saldo del banco registrado",onClick:()=>onNavigate&&onNavigate("banco",null)},
+    {dato:"por_cobrar",etiqueta:"Facturas por cobrar",valor:fmt.money(resumen.facturasPorCobrar),nota:resumen.nValeVista?`+ ${fmt.money(resumen.valeVista)} en vale vista`:"Facturas vigentes",onClick:()=>onNavigate&&onNavigate("compras","cobro")},
+    {dato:"deuda_fin",etiqueta:"Deuda con financiadores",valor:fmt.money(resumen.deudaFinanciadores),tono:resumen.deudaFinanciadores>0?"danger":"ok",nota:"Devolución FIFO",onClick:()=>onNavigate&&onNavigate("financiamiento",null)},
+    {dato:"proyectado",destacado:true,etiqueta:"Saldo proyectado",valor:fmt.money(resumen.saldoProyectado),tono:resumen.saldoProyectado>=0?"marca":"danger",nota:resumen.provisorio?"Provisorio · no es dinero disponible hoy":"No es dinero disponible hoy",onClick:()=>onNavigate&&onNavigate("finanzas",null)},
+  ];
+
   return (
     <div style={{fontFamily:SANS}}>
       <div style={{marginBottom:14}}>
@@ -187,14 +194,13 @@ export function PanelDashboard({ franjaCanales, ocs, financiadores, gastos, pago
           </Tarjeta>);
         })()}
       </div>
-      {/* Indicadores clave (mismo cierre de caja de lib/caja.js; el desglose completo está en «Caja y compromisos») */}
-      <Indicadores columnas={escritorio?4:2}>
-        <Indicador dato="banco" etiqueta={resumen.baseEsBanco?"Saldo BancoEstado":"Caja registrada BFK"} valor={fmt.money(resumen.baseEsBanco?resumen.saldoBancario:resumen.caja)} tono={resumen.baseEsBanco?"neutro":"warn"} nota={resumen.baseEsBanco?"Saldo esperado en la cuenta":"Sin saldo del banco registrado"} onClick={()=>onNavigate&&onNavigate("banco",null)} />
-        <Indicador dato="por_cobrar" etiqueta="Facturas por cobrar" valor={fmt.money(resumen.facturasPorCobrar)} nota={resumen.nValeVista?`+ ${fmt.money(resumen.valeVista)} en vale vista`:"Facturas vigentes"} onClick={()=>onNavigate&&onNavigate("compras","cobro")} />
-        <Indicador dato="deuda_fin" etiqueta="Deuda con financiadores" valor={fmt.money(resumen.deudaFinanciadores)} tono={resumen.deudaFinanciadores>0?"danger":"ok"} nota="Devolución FIFO" onClick={()=>onNavigate&&onNavigate("financiamiento",null)} />
-        <Indicador dato="proyectado" destacado etiqueta="Saldo proyectado" valor={fmt.money(resumen.saldoProyectado)} tono={resumen.saldoProyectado>=0?"marca":"danger"} nota={resumen.provisorio?"Provisorio · no es dinero disponible hoy":"No es dinero disponible hoy"} onClick={()=>onNavigate&&onNavigate("finanzas",null)} />
-      </Indicadores>
-      {franjaCanales}
+      {/* Indicadores clave (mismo cierre de caja de lib/caja.js; el desglose completo está en «Caja y compromisos»).
+          En computador, arriba como tarjetas. En celular y tableta, más abajo y compactos: primero alertas, prioridades y Registrar. */}
+      {escritorio&&<Indicadores columnas={4}>
+        {indicadoresClave.map(x=><Indicador key={x.dato} {...x} />)}
+      </Indicadores>}
+      {escritorio&&franjaCanales}
+      {!escritorio&&avisoCanales}
       {nAlertasCartola>0&&<AvisoLinea dato="alertas-cartola" onClick={()=>onNavigate&&onNavigate("banco",null)} accion="Revisar">{nAlertasCartola} posible{nAlertasCartola>1?"s":""} duplicado{nAlertasCartola>1?"s":""} con la cartola del banco</AvisoLinea>}
       <div style={escritorio?{display:"grid",gridTemplateColumns:"minmax(0,1.05fr) minmax(0,1fr)",gap:20,alignItems:"start"}:undefined}>
         <div>
@@ -254,6 +260,24 @@ export function PanelDashboard({ franjaCanales, ocs, financiadores, gastos, pago
         ))}
       </div>
       </Seccion>
+
+      {/* Celular y tableta: el resumen va después de las tareas y acciones, en filas compactas (mismos datos, notas y destinos). */}
+      {!escritorio&&<Seccion titulo="Resumen" margen={16}>
+        <Tarjeta padding="2px 12px" style={{marginBottom:franjaCanales?10:0}}>
+          {indicadoresClave.map((x,i)=>(
+            <button key={x.dato} type="button" data-indicador={x.dato} onClick={x.onClick}
+              style={{width:"100%",display:"flex",alignItems:"center",gap:10,minHeight:52,padding:"8px 0",background:"none",border:"none",borderBottom:i<indicadoresClave.length-1?`1px solid ${C.border}`:"none",textAlign:"left",cursor:"pointer",font:"inherit",color:"inherit"}}>
+              <span style={{flex:1,minWidth:0}}>
+                <span style={{display:"block",fontSize:14,fontWeight:600,color:C.ink,lineHeight:1.3}}>{x.etiqueta}</span>
+                {x.nota&&<span style={{display:"block",fontSize:12,color:C.inkFaint,lineHeight:1.35,marginTop:1}}>{x.nota}</span>}
+              </span>
+              <Monto tam="sm" style={{color:({ok:C.okText,warn:C.warnText,danger:C.dangerText,marca:C.tealDark}[x.tono])||C.ink}}><span data-indicador-monto={x.dato}>{x.valor}</span></Monto>
+              <Ic n="chevR"/>
+            </button>
+          ))}
+        </Tarjeta>
+        {franjaCanales}
+      </Seccion>}
 
       <Desplegable dato="mercado-publico" icono={<Ic n="📦"/>} titulo="Mercado Público" tono={nAvisosMP>0?"warn":null}
         resumen={nAvisosMP>0?"OCs por aceptar, aceptadas sin cargar o canceladas":"Sin avisos pendientes · revisar de nuevo cuando quieras"}

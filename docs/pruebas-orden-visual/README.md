@@ -115,3 +115,26 @@ en `main`. Corregido el 12/11/2026 en un commit aparte; detalle y pruebas en `do
 entrega, factura, pago y gasto, filtros, la ficha de OC con su índice, cotizaciones, cliente, cotización y venta privadas con sus
 pestañas y formularios, y la ficha y el alta de un proyecto: 768×1024, 820×1180, 1024×768 y 1180×820. Resultado: 188 capturas sin
 desplazamiento horizontal, contenido cortado ni controles fuera de pantalla; revisión visual de una muestra en cada ancho.
+
+## Cuarta pasada, puntual (12/11/2026, tras revisar el PDF de 47 páginas)
+
+| Pantalla | Cambio | Qué se conserva |
+|---|---|---|
+| Inicio (celular y tableta) | Alertas, «Prioridades de hoy» y «Registrar» primero; el resumen después, en filas compactas | Los cuatro indicadores con sus notas y destinos (Banco, Compras, Financiamiento, Finanzas), Ventas privadas, Caja y compromisos. Computador sin cambios |
+| Ficha de OC | Sin «V: … · F: …» abreviados en la cabecera | Filas Vendedor/Financiador con «Editar»; aviso «Falta vendedor» en la lista |
+| Cotizaciones privadas | Un solo conteo (el de la lista: «6 cotizaciones» o «1 de 6»); en celular/tableta cliente, vendedor y fechas bajo «Filtros» con contador y «Limpiar filtros»; conteos rápidos en una fila deslizable | Estado, búsqueda y «+ Nueva cotización» visibles; en computador, todos los filtros a la vista |
+| Editores de cotización (MP y privada) | Las pestañas muestran el avance (✓ completa / punto pendiente); una línea «Falta: …» enlaza cada paso pendiente, con su cantidad; estado de guardado y aviso de revisión protegida breves, con detalle en (i); en la privada, estado + revisión + guardado en una fila | Los mismos pasos y validaciones; estado «Aceptada» y aviso de protección visibles; las cuatro pestañas caben en 360 px |
+| Ficha de venta › Pagos | Sin repetir total, cobrado y saldo: el resumen único son los indicadores de la ficha; luego «Registrar pago» e historial | «Vencido desde <fecha>» (dato distinto) como aviso |
+| Proyectos | Búsqueda junto a «+ Nuevo proyecto»; propuestas y (en celular/tableta) atrasos como alertas; resumen deslizable; estado y responsable bajo «Filtros»; la explicación de qué proyectos ves, en (i) | La configuración de carga de documentos pasa a Ficha › Documentos con su explicación y «Habilitar/Deshabilitar» (con motivo); el no administrador ve el aviso |
+| Banco | Un solo aviso «Falta registrar el saldo de BancoEstado» con la razón y «Registrar saldo» (o «Completar saldo» si falta la fecha) | Con saldo: los indicadores y «Actualizar saldo» como antes; la caja registrada que se comparará |
+
+Componentes compartidos nuevos: `FiltrosAgrupados`, `AvisoAccion` (ui/Sistema), `NavegacionCotizacion` (cotizaciones/PasosCotizacion),
+marca de avance en `Pestanas`, `RejillaKpi desliza`.
+
+Pruebas ajustadas por cambios deliberados de presentación (validan el comportamiento): `pruebas-vendfin/e2e.mjs` y
+`pruebas-ui-movil/e2e_compras_movil.mjs` (la cabecera no repite asignaciones y las filas editables siguen), `e2e_ventas_privadas.mjs`
+(cobrado y saldo se leen del resumen único), `e2e_cotizacion_como_mp.mjs` (avance en las pestañas + «Falta»), `e2e_proyectos.mjs`
+(la configuración de documentos se usa desde Documentos), `pruebas-oc/e2e_fase4a.mjs` S11 (esperaba el día UTC; commit aparte).
+
+Verificación: `pasada4.mjs` en 360, 390, 820, 1024 y 1440 px sobre la demostración (203 comprobaciones: orden de lo importante,
+filtros, pasos, secciones y acciones accesibles, sin textos cortados ni controles fuera de pantalla).

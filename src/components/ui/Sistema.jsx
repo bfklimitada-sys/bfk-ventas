@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useId, useRef, useState } from "r
 import { C, MONO, R, S, T, TOUCH, cardStyle, sombra, estiloCerrar } from "../../lib/theme";
 import { Ic } from "./Iconos";
 import { useCerrarConEscape } from "./Basicos";
-import { ANCHO_LATERAL } from "./Navegacion"; // en escritorio la barra lateral sigue disponible con la ficha abierta
+import { ANCHO_LATERAL, useEsEscritorio } from "./Navegacion"; // en escritorio la barra lateral sigue disponible con la ficha abierta
 
 // ── Modo "todas las pantallas" (imprimir / PDF): abre desplegables y muestra todas las pestañas ──
 export const ModoTodoContext = createContext(false);
@@ -95,7 +95,7 @@ export function IndiceSecciones({ items }) {
 
 // ── Pestañas (control segmentado con desplazamiento horizontal) ────────────
 // items: [{ key, label, n?, tono?, attrs? }]. Cada botón lleva data-tab={key} (y los attrs extra, p. ej. data-nav).
-export function Pestanas({ items, activa, onCambiar, etiqueta = "Secciones", style, compacta, variante = "segmentada" }) {
+export function Pestanas({ items, activa, onCambiar, etiqueta = "Secciones", style, compacta, variante = "segmentada", apretada }) {
   const todo = useModoTodo();
   const ref = useRef(null);
   // La pestaña activa siempre queda a la vista (en el celular la tira se desplaza).
@@ -123,10 +123,13 @@ export function Pestanas({ items, activa, onCambiar, etiqueta = "Secciones", sty
         const est = sub
           ? { flex: "0 0 auto", border: "none", borderBottom: `2px solid ${act ? C.teal : "transparent"}`, borderRadius: 0, padding: "10px 12px", minHeight: 42, background: "transparent", color: act ? C.tealDark : C.inkMuted, fontWeight: act ? 700 : 500, marginBottom: -1 }
           : chips ? estiloChip(act)
-          : { flex: compacta ? "0 0 auto" : "1 0 auto", border: "none", borderRadius: R.sm, padding: "7px 16px", minHeight: 36, background: act ? C.card : "transparent", boxShadow: act ? "0 1px 2px rgba(15,23,42,0.10)" : "none", color: act ? C.ink : C.inkMuted, fontWeight: act ? 700 : 500 };
+          : { flex: compacta ? "0 0 auto" : "1 0 auto", border: "none", borderRadius: R.sm, padding: apretada ? "7px 14px 7px 9px" : "7px 16px", minHeight: 36, background: act ? C.card : "transparent", boxShadow: act ? "0 1px 2px rgba(15,23,42,0.10)" : "none", color: act ? C.ink : C.inkMuted, fontWeight: act ? 700 : 500 };
         return (
           <button key={it.key} type="button" role="tab" aria-selected={act} data-tab={it.key} data-compact {...(it.attrs || {})} onClick={() => onCambiar(it.key)}
-            style={{ cursor: "pointer", whiteSpace: "nowrap", fontSize: T.sm, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, ...est }}>
+            style={{ cursor: "pointer", whiteSpace: "nowrap", fontSize: T.sm, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, position: it.estado ? "relative" : undefined, ...est }}>
+            {/* Avance (pestañas que son pasos): marca en la esquina, sin ocupar ancho, para que las pestañas quepan en 360 px. */}
+            {it.estado === "listo" && <span aria-hidden="true" data-marca-paso="listo" style={{ position: "absolute", top: 2, right: 2, width: 14, height: 14, borderRadius: 999, background: C.okLight, color: C.okText, display: "flex", alignItems: "center", justifyContent: "center" }}><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg></span>}
+            {it.estado === "pendiente" && <span aria-hidden="true" data-marca-paso="pendiente" style={{ position: "absolute", top: 4, right: 4, width: 9, height: 9, borderRadius: 999, background: C.warn, boxShadow: `0 0 0 2px ${act ? C.card : C.relleno}` }} />}
             {it.label}
             {it.n != null && it.n !== 0 && <span style={{ fontSize: T.small, fontWeight: 700, borderRadius: R.pill, padding: "0 7px", lineHeight: "18px", background: t ? t.bg : act ? (chips ? C.card : C.tealLight) : C.relleno, color: t ? t.fg : act ? C.tealDark : C.inkMuted }}>{it.n}</span>}
           </button>
@@ -241,6 +244,48 @@ export function AvisoLinea({ tono = "warn", children, accion, onClick, dato, ico
       <span style={{ flex: 1, minWidth: 0, lineHeight: 1.35, fontSize: T.sm, fontWeight: 600 }}>{children}</span>
       {accion && <span style={{ flexShrink: 0, fontSize: T.small, fontWeight: 700, textDecoration: "underline" }}>{accion}</span>}
     </Tag>
+  );
+}
+
+// ── Filtros agrupados: en computador, todos visibles; en celular y tableta, el filtro principal queda a la vista y los secundarios
+// se agrupan bajo «Filtros», con el número de filtros activos y «Limpiar filtros». Ningún filtro desaparece.
+export function FiltrosAgrupados({ principal, children, activos = 0, onLimpiar, dato, minimo = 150 }) {
+  const escritorio = useEsEscritorio();
+  const [abierto, setAbierto] = useState(false);
+  const limpiar = onLimpiar && activos > 0 && (
+    <button type="button" data-limpiar-filtros onClick={() => { onLimpiar(); }} style={{ background: "none", border: "none", padding: "8px 4px", minHeight: TOUCH, color: C.tealDark, fontSize: T.sm, fontWeight: 600, cursor: "pointer", textDecoration: "underline", justifySelf: "start" }}>Limpiar filtros</button>);
+  if (escritorio) return (
+    <div data-filtros-agrupados={dato} style={{ display: "grid", gridTemplateColumns: `repeat(auto-fit,minmax(${minimo}px,1fr))`, gap: 8, marginBottom: 12, alignItems: "center" }}>{principal}{children}{limpiar}</div>);
+  return (
+    <div data-filtros-agrupados={dato} data-compacto="" style={{ marginBottom: 12 }}>
+      <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
+        {principal && <div style={{ flex: 1, minWidth: 0 }}>{principal}</div>}
+        <button type="button" data-abrir-filtros aria-expanded={abierto} onClick={() => setAbierto((v) => !v)}
+          style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 6, minHeight: TOUCH, padding: "8px 14px", borderRadius: R.sm, border: `1px solid ${activos || abierto ? C.teal : C.borderFuerte}`, background: activos ? C.tealLight || C.card : C.card, color: C.ink, fontSize: T.sm, fontWeight: 600, cursor: "pointer" }}>
+          <Ic n="filtro" /> Filtros{activos > 0 && <span data-filtros-activos style={{ minWidth: 20, height: 20, padding: "0 6px", borderRadius: 999, background: C.teal, color: "#fff", fontSize: 12, fontWeight: 700, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{activos}</span>}
+          <span aria-hidden="true" style={{ display: "flex", color: C.inkFaint, transform: abierto ? "rotate(180deg)" : "none" }}><Ic n="chevD" /></span>
+        </button>
+      </div>
+      {abierto && <div data-filtros-panel style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 8, marginTop: 8, padding: 10, border: `1px solid ${C.border}`, borderRadius: R.md, background: C.card }}>{children}{limpiar}</div>}
+      {!abierto && activos > 0 && limpiar && <div style={{ marginTop: 2 }}>{limpiar}</div>}
+    </div>
+  );
+}
+
+// ── Aviso con acción: qué falta, por qué importa (una frase) y el botón que lo resuelve, en un solo bloque ──
+// Para no repetir la misma instrucción en una tarjeta, un mensaje y otra fila. El botón es un botón real (no texto subrayado).
+export function AvisoAccion({ tono = "warn", titulo, children, accion, onAccion, dato, icono = "⚠", accionDato, accionPeligro }) {
+  const t = tonoDe(tono);
+  return (
+    <div data-aviso-accion={dato} role="status" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px 12px", background: t.bg, border: `1px solid ${t.fg}33`, borderRadius: R.md, padding: "12px 14px", marginBottom: S.md }}>
+      <span aria-hidden="true" style={{ display: "flex", flexShrink: 0, color: t.fg }}><Ic n={icono} /></span>
+      <div style={{ flex: "1 1 220px", minWidth: 0 }}>
+        {titulo && <div style={{ fontSize: T.body, fontWeight: 600, color: t.fg, lineHeight: 1.35 }}>{titulo}</div>}
+        {children && <div style={{ fontSize: T.sm, color: C.ink, lineHeight: 1.45, marginTop: titulo ? 2 : 0 }}>{children}</div>}
+      </div>
+      {accion && <button type="button" data-aviso-accion-boton={accionDato || dato} onClick={onAccion}
+        style={{ flexShrink: 0, minHeight: TOUCH, padding: "8px 16px", borderRadius: R.sm, border: `1px solid ${accionPeligro ? "#F3C5C5" : C.teal}`, background: accionPeligro ? C.card : C.teal, color: accionPeligro ? C.dangerText : "#fff", fontSize: T.sm, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>{accion}</button>}
+    </div>
   );
 }
 

@@ -1086,7 +1086,7 @@ export function FilaOC({ tributario, notaVista, onCrearSeguimiento, onActualizar
         return (
         <HojaLateral abierta onCerrar={handleToggle} dato={oc.numero_oc} titulo={oc.numero_oc} subtitulo={[oc.cliente||oc.entidad,fmt.money(oc.monto_total)].filter(Boolean).join(" · ")}>
         <div data-ficha-oc={oc.numero_oc} style={{background:C.paper,minHeight:"100%"}}>
-          {/* Cabecera fija: OC · cliente · monto · vendedor · estados principales + índice.
+          {/* Cabecera fija: estados principales + índice (vendedor y financiador están en sus filas editables, justo debajo).
               En móvil solo queda el índice: el resumen ya está en la tarjeta principal. */}
           <div data-ficha-cabecera style={{position:"sticky",top:0,zIndex:6,background:C.paper,padding:escritorio?"9px 14px 6px":"6px 14px 6px",borderBottom:`1px solid ${C.border}`}}>
             {escritorio&&<>
@@ -1095,7 +1095,7 @@ export function FilaOC({ tributario, notaVista, onCrearSeguimiento, onActualizar
               <span style={{background:estadoOC.bg,color:estadoOC.color,padding:"2px 8px",borderRadius:999,fontSize:12,fontWeight:700}}>{estadoOC.icono} {estadoOC.texto}</span>
               {estadoChip(estaComprada(oc),"Compra")}{estadoChip(estaEntregada(oc),"Entrega")}{estadoChip(estaFacturada(oc),"Factura")}
               {estadoChip(estaCobrada(oc),"Cobro")}{estadoChip(financiamientoPagado(oc),"Financ.")}
-              <span data-cabecera-asignaciones style={{marginLeft:"auto",fontSize:13,color:C.inkMuted,whiteSpace:"nowrap"}}>V: <b style={{color:faltaVendedor(oc)?C.warnText:C.ink}}>{primerNombre(nombreVendedor(oc,vendedores))}</b> · F: <b style={{color:faltaFinanciador(oc)?C.warnText:C.ink}}>{primerNombre(nombreFinanciador(oc,financiadores))}</b></span>
+              {/* Vendedor y financiador: solo en las filas editables de la ficha (Asignaciones), no repetidos aquí abreviados. */}
             </div>
             </>}
             <IndiceFicha items={secciones} onIr={ir} envolver={!escritorio} />

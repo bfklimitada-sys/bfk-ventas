@@ -4,12 +4,12 @@
 // el respaldo diario de archivos esté activo (pi_configuracion); la descarga comprueba la huella.
 import { useEffect, useState } from "react";
 import { C, R, S, T, cardStyle, btnMini } from "../../lib/theme";
-import { Badge, Seccion, Desplegable, AvisoLinea } from "../ui/Sistema";
+import { Badge, Seccion, Desplegable, AvisoLinea, AvisoAccion } from "../ui/Sistema";
 import { Ventana, Campo, Rejilla, Entrada, Selector, ErrorForm, Vacio, PedirMotivo, estiloBoton } from "./Comunes";
 import { CATEGORIAS_DOC, MAX_ARCHIVO, agruparDocumentos, rutaArchivo, extension, categoriaDocDe, etiqueta, formatoTamano, mensajeError } from "../../lib/proyectos";
 import { listarDocumentos, listarEntregables, subirDocumento, descargarDocumento, guardarArchivo, actualizarDocumento } from "../../lib/proyectosDatos";
 
-export function PestanaDocumentos({ token, proyecto: p, per, nombres, modulo, version, onCambio, showToast }) {
+export function PestanaDocumentos({ token, proyecto: p, per, nombres, modulo, version, onCambio, showToast, onConfigDocumentos }) {
   const [docs, setDocs] = useState(null); const [ents, setEnts] = useState([]); const [error, setError] = useState("");
   const [subir, setSubir] = useState(null); const [anular, setAnular] = useState(null); const [bajando, setBajando] = useState(null);
   const cargar = async () => {
@@ -54,7 +54,16 @@ export function PestanaDocumentos({ token, proyecto: p, per, nombres, modulo, ve
     <Seccion titulo={`Documentos · ${vigentes.length}`} accion={puedeSubir && <button type="button" data-subir-documento onClick={() => setSubir({})} style={estiloBoton("pri")}>+ Subir</button>}
       nota="Privados: solo el equipo del proyecto puede verlos. Los archivos no se reemplazan ni se borran; cada versión queda guardada.">
       {error && <ErrorForm>{error}</ErrorForm>}
-      {!habilitada && <AvisoLinea tono="warn" icono="🔒" dato="documentos-deshabilitados">La carga de documentos está deshabilitada hasta que el respaldo diario de archivos esté activo.{per.admin ? " Puedes habilitarla con un motivo desde el panel de Proyectos Industriales." : ""}</AvisoLinea>}
+      {/* Configuración de la carga (antes, en la lista de Proyectos): aplica a todos los proyectos; solo el administrador la cambia, con motivo. */}
+      {per.admin && onConfigDocumentos ? (
+        <div data-config-documentos={habilitada ? "habilitada" : "deshabilitada"}>
+          <AvisoAccion tono={habilitada ? "ok" : "warn"} icono="🔒" dato="config-documentos" accionDato="alternar-documentos"
+            titulo={`Carga de documentos ${habilitada ? "habilitada" : "deshabilitada"} (todos los proyectos)`}
+            accion={habilitada ? "Deshabilitar" : "Habilitar"} accionPeligro={habilitada} onAccion={onConfigDocumentos}>
+            {habilitada ? (modulo.motivoDocumentos || "Los documentos se pueden subir.") : "Se habilita cuando el respaldo diario de archivos esté activo. El cambio pide un motivo y queda en el historial."}
+          </AvisoAccion>
+        </div>
+      ) : !habilitada && <AvisoLinea tono="warn" icono="🔒" dato="documentos-deshabilitados">La carga de documentos está deshabilitada hasta que el respaldo diario de archivos esté activo.</AvisoLinea>}
       {!vigentes.length && <Vacio dato="documentos">Sin documentos vigentes.</Vacio>}
       {vigentes.map((g) => <div key={g.id} style={{ ...cardStyle, borderRadius: R.md, padding: "12px 14px", marginBottom: S.sm }}><Fila d={g.actual} grupo={g} /></div>)}
       {anteriores.length > 0 && (

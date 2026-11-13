@@ -19,7 +19,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { C, T, R, MONO, iStyle, iMono, selStyle, fmt, cardStyle } from "../../lib/theme";
 import { Field } from "../ui/Basicos";
-import { HojaLateral, Pestanas, PanelPestana, Tarjeta, Badge, AvisoLinea, BotonPrincipal, BotonSecundario, FilaDato, Seccion } from "../ui/Sistema";
+import { HojaLateral, Pestanas, PanelPestana, Tarjeta, Badge, AvisoLinea, BotonPrincipal, BotonSecundario, FilaDato, Seccion, Ayuda } from "../ui/Sistema";
 import { Ventana, Campo, Entrada, Area, ErrorForm, PedirMotivo } from "../proyectos/Comunes";
 import { Vacio, estiloBoton, BadgeVP, SelectorCliente, SubirArchivo, ListaDocumentos } from "./Comunes";
 import { FormCliente } from "./PanelClientes";
@@ -31,7 +31,7 @@ import { ImagenFicha } from "../cotizaciones/ImagenFicha";
 import { VistaPreviaEETT } from "../cotizaciones/VistaPreviaEETT";
 import { ConflictoVersion } from "../ui/ConflictoVersion";
 import { combinarVersiones, aplicarCombinacion, normalizarProductos, resumenProductos, textoValor } from "../../lib/conflictoVersion";
-import { PasosCotizacion } from "../cotizaciones/PasosCotizacion";
+import { NavegacionCotizacion } from "../cotizaciones/PasosCotizacion";
 import { claveVendedor, nombreVendedor, opcionesVendedor, vendedorDocumento } from "../../lib/vpFinanciamiento";
 import { asignarVendedor } from "../../lib/ventasPrivadasDatos";
 import { leerCotizacion, guardarCotizacion, cambiarEstadoCotizacion, nuevaRevision, duplicarCotizacion, historialCotizacion, anular, esquemaFichaVP, leerEETT, listarEETT, guardarEETT, emitirEETT, ocClienteDeVenta } from "../../lib/ventasPrivadasDatos";
@@ -442,32 +442,28 @@ export function EditorCotizacionPrivada({ token, perfil, vp, id, showToast, onCe
             <b>Hay cambios sin guardar de esta cotización en este dispositivo</b> ({fechaHora(recuperable.actualizado)}).{recuperable.desactualizado ? <> Se escribieron sobre la versión {recuperable.versionBase}; en BFK hay una más nueva (versión {recuperable.versionBFK}): no se sobrescribirá, se combinan campo por campo.</> : null} <button type="button" data-descartar-recuperado onClick={descartarRecuperable} style={{ border: "none", background: "none", color: C.tealDark, textDecoration: "underline", cursor: "pointer", padding: 0, fontSize: T.small }}>Descartarlos</button>
           </AvisoLinea>
         )}
-        {editable && <div data-estado-guardado={sucio || !c ? "local" : "bfk"} style={{ fontSize: T.small, color: sucio || !c ? C.warnText : C.inkMuted, marginBottom: 6 }}>
-          {sucio || !c ? "● Cambios sin guardar en BFK · copia de recuperación solo en este dispositivo" : `✓ Cotización guardada en BFK (versión ${c.version})`}
-        </div>}
-        {c && <div data-estado-cotizacion={c.estado_efectivo} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 8 }}>
-          <BadgeVP mapa={ESTADOS_COTIZACION} k={c.estado_efectivo} />
-          {c.estado === "enviada" && c.estado_efectivo === "vencida" && <span style={{ fontSize: T.small, color: C.warnText }}>Vigencia cumplida el {fechaTxt(c.vigencia_hasta)} sin respuesta registrada.</span>}
-          {d.revisiones.length > 1 && <select aria-label="Revisión" data-selector-revision value={revVista} onChange={(e) => setRevVista(e.target.value)} style={{ ...selStyle, width: "auto", minHeight: 36 }}>
+        {/* Una sola fila de estado: estado de la cotización, revisión y si está guardada en BFK. */}
+        <div style={{ display: "flex", gap: "6px 10px", alignItems: "center", flexWrap: "wrap", marginBottom: 8 }}>
+          {c && <span data-estado-cotizacion={c.estado_efectivo} style={{ display: "inline-flex" }}><BadgeVP mapa={ESTADOS_COTIZACION} k={c.estado_efectivo} /></span>}
+          {c && d.revisiones.length > 1 && <select aria-label="Revisión" data-selector-revision value={revVista} onChange={(e) => setRevVista(e.target.value)} style={{ ...selStyle, width: "auto", minHeight: 36 }}>
             {d.revisiones.map((r) => <option key={r.id} value={r.id}>{`R${r.numero} · ${ESTADOS_COTIZACION[r.estado]?.l}${r.id === c.revision_id ? " (actual)" : ""}`}</option>)}
           </select>}
-        </div>}
+          {editable && <span data-estado-guardado={sucio || !c ? "local" : "bfk"} style={{ fontSize: T.small, color: sucio || !c ? C.warnText : C.inkMuted }}>
+            {sucio || !c ? <>● Cambios sin guardar en BFK<Ayuda etiqueta="Dónde quedan los cambios">Mientras no guardes, la copia de recuperación queda solo en este dispositivo.</Ayuda></> : `✓ Guardada en BFK (versión ${c.version})`}
+          </span>}
+        </div>
+        {c && c.estado === "enviada" && c.estado_efectivo === "vencida" && <div style={{ fontSize: T.small, color: C.warnText, margin: "-2px 0 8px" }}>Vigencia cumplida el {fechaTxt(c.vigencia_hasta)} sin respuesta registrada.</div>}
         {c && !viendoActual && <AvisoLinea tono="info" icono="ℹ">Estás viendo una revisión anterior (solo lectura). Se conserva tal como se envió{revAceptada?.id === revVista ? " y es la que respalda la venta" : ""}.</AvisoLinea>}
-        {c && viendoActual && !editable && c.estado !== "borrador" && <AvisoLinea tono="info" icono="🔒" dato="cotizacion-protegida">Esta revisión ya fue {ESTADOS_COTIZACION[c.estado]?.l.toLowerCase()}: su contenido no se modifica. Para cambiarla crea una revisión nueva.</AvisoLinea>}
+        {c && viendoActual && !editable && c.estado !== "borrador" && <AvisoLinea tono="info" icono="🔒" dato="cotizacion-protegida">Revisión {ESTADOS_COTIZACION[c.estado]?.l.toLowerCase()}: su contenido no se modifica.<Ayuda etiqueta="Cómo cambiarla">Para cambiarla crea una revisión nueva (la actual se conserva tal como se envió).</Ayuda></AvisoLinea>}
         {c && <Acciones c={c} acc={acc} ocupado={ocupado} onModal={registrar} onRevision={revision} onDuplicar={duplicar} onAbrir={onAbrir} />}
 
-        <Pestanas etiqueta="Cotización" activa={pestana} onCambiar={setPestana} items={[
-          { key: "datos", label: "Datos" },
-          { key: "productos", label: "Productos", n: vista.items.length || null },
-          { key: "precios", label: "Precios", n: verInterno && nPend ? nPend : null, tono: verInterno && nPend ? "warn" : null },
-          { key: "eett", label: "EETT", n: nRev || null, tono: nRev ? "warn" : null },
-        ]} />
         {(() => {
           const despOk = vista.items.length > 0 && vista.items.every((it) => it.tipo === "servicio" || envioConfirmado(vista.envios.find((e) => e.key === it.envio_key) || {}));
           const preciosOk = vista.items.length > 0 && calc.lineas.every((l) => l.precio_unitario != null);
           const pasos = [["Datos del cliente", !!vista.cliente_id, "datos"], ["Dirección", dirOk, "datos"], ["Productos", vista.items.length > 0, "productos"],
             ...(verInterno ? [["Verificación de despacho", despOk, "productos"]] : []), ["Precios", preciosOk, "precios"], ["EETT", eettLista, "eett"]];
-          return <PasosCotizacion pasos={pasos} onIr={setPestana} />;
+          return <NavegacionCotizacion pasos={pasos} activa={pestana} onCambiar={setPestana}
+            conteos={{ productos: verInterno ? nPend : 0, precios: verInterno ? nPend : 0, eett: nRev }} />;
         })()}
 
         {/* ── Datos ── */}

@@ -62,7 +62,9 @@ async function recorrido(browser, { pref, ancho, alto, movil }) {
   const revisarDesborde = async (donde) => { if (movil && !(await sinDesborde(p))) desborde.push(donde); };
   await irACotizaciones(p, movil);
   await p.locator("[data-nueva-cotizacion]").click(); await h.waitFor(); await espera(p, 600);
-  ok(`${pref}01 cuatro pestañas en el orden de Mercado Público y pasos`, JSON.stringify(await h.locator('[data-pestanas="Cotización"] [data-tab]').evaluateAll((b) => b.map((x) => x.dataset.tab))) === JSON.stringify(["datos", "productos", "precios", "eett"]) && (await h.locator("[data-pasos-cotizacion] button").count()) >= 5);
+  ok(`${pref}01 cuatro pestañas en el orden de Mercado Público y pasos`, JSON.stringify(await h.locator('[data-pestanas="Cotización"] [data-tab]').evaluateAll((b) => b.map((x) => x.dataset.tab))) === JSON.stringify(["datos", "productos", "precios", "eett"]) && (await h.locator("[data-pasos-cotizacion] button").count()) >= 5
+    // 12/11/2026: el avance va en las pestañas (✓ / pendiente) y una línea «Falta» enlaza cada paso pendiente.
+    && JSON.stringify(await h.locator('[data-pestanas="Cotización"] [data-tab]').evaluateAll((b) => b.map((x) => x.dataset.estadoPaso))) === JSON.stringify(["pendiente", "pendiente", "pendiente", "pendiente"]));
   const txtDatos = await h.locator('[role="tabpanel"]').first().innerText().catch(() => h.innerText());
   ok(`${pref}02 Datos sin campos exclusivos de Mercado Público`, !/Mercado P[uú]blico|licitaci|Compra [AÁ]gil|ChileCompra|Instituci[oó]n|Presupuesto del comprador/i.test(await h.innerText()) && !(await h.locator('[data-campo="id_externo"]').count()), txtDatos.slice(0, 200));
   await ui.elegirCliente(p, "Maderas", "76.086.428-5");

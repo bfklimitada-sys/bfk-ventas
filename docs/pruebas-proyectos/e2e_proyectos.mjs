@@ -41,7 +41,8 @@ await escenario("E01", async () => {
   ok("P02_indicadores_activos_atraso_finalizados", [await kv("activos"), await kv("atraso"), await kv("finalizados")].join("|") === "2|1|1", [await kv("activos"), await kv("atraso"), await kv("finalizados")]);
   ok("P03_presupuesto_activos_por_moneda_sin_sumar", (await kv("presupuesto")) === "$48.500.000" && (await txt(p.locator('[data-kpi-pi="presupuesto"]'))).includes("UF 1.250,75"), await txt(p.locator('[data-kpi-pi="presupuesto"]')));
   ok("P04_aviso_propuestas_para_el_administrador", (await txt(p.locator('[data-aviso-linea="propuestas"]'))).includes("1 propuesta esperando tu autorización"));
-  ok("P05_carga_documentos_deshabilitada_al_instalar", (await p.locator('[data-config-documentos="deshabilitada"]').count()) === 1);
+  // 12/11/2026: la configuración de la carga de documentos ya no ocupa la lista; está en la sección Documentos de cada ficha (P64a).
+  ok("P05_lista_sin_configuracion_de_documentos", (await p.locator("[data-config-documentos]").count()) === 0);
   ok("P06_listado_con_atrasado_primero", (await p.locator("[data-proyecto]").first().getAttribute("data-proyecto")) === B && (await p.locator("[data-proyecto]").count()) === 4);
   await p.locator('[data-pestanas="Filtro de proyectos"] [data-tab="atraso"]').click(); await p.waitForTimeout(300);
   ok("P07_filtro_con_atraso", (await p.locator("[data-proyecto]").count()) === 1 && (await p.locator(`[data-proyecto="${B}"]`).count()) === 1);
@@ -249,10 +250,14 @@ const MEM = Buffer.from("Memoria de cálculo de prueba — contenido ficticio\n"
 await escenario("E11", async () => {
   let r = await abrir(browser, { usuario: U.jefa, url: URL_APP, hash: `#/proyectos/${A}`, ...ESC }); let p = r.page;
   await ficha(p, A).waitFor(); await pest(p, "documentos");
-  ok("P62_carga_deshabilitada_sin_boton_subir", (await p.locator('[data-aviso-linea="documentos-deshabilitados"]').count()) === 1 && (await p.locator("[data-subir-documento]").count()) === 0);
+  ok("P62_carga_deshabilitada_sin_boton_subir", (await p.locator('[data-aviso-linea="documentos-deshabilitados"]').count()) === 1 && (await p.locator("[data-subir-documento]").count()) === 0
+    && (await p.locator("[data-config-documentos]").count()) === 0);   // la jefa ve el aviso, no el control de configuración
   await r.ctx.close();
-  const a = await abrir(browser, { usuario: U.admin, url: URL_APP, ...ESC }); await irAProyectos(a.page, false);
-  await a.page.locator("[data-alternar-documentos]").click(); await a.page.locator("[data-confirmar-motivo]").click(); await a.page.waitForTimeout(300);
+  // La carga se configura desde la sección Documentos de un proyecto (aplica a todos), con explicación y acción.
+  const a = await abrir(browser, { usuario: U.admin, url: URL_APP, hash: `#/proyectos/${A}`, ...ESC }); await ficha(a.page, A).waitFor(); await pest(a.page, "documentos");
+  ok("P64a_configuracion_en_documentos_con_explicacion", (await a.page.locator('[data-config-documentos="deshabilitada"]').count()) === 1
+    && /respaldo diario/.test(await txt(a.page.locator("[data-config-documentos]"))));
+  await a.page.locator('[data-aviso-accion-boton="alternar-documentos"]').click(); await a.page.locator("[data-confirmar-motivo]").click(); await a.page.waitForTimeout(300);
   ok("P63_habilitar_exige_motivo", (await txt(a.page.locator('[data-ventana="motivo"]'))).includes("Indica el motivo"));
   await confirmarMotivo(a.page, "Respaldo diario de documentos activo y verificado (prueba)");
   ok("P64_administrador_habilita_la_carga", (await a.page.locator('[data-config-documentos="habilitada"]').count()) === 1 && psql("select valor::text from public.pi_configuracion") === "true");

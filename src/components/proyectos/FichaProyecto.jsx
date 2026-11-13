@@ -14,7 +14,7 @@ import { PestanaDocumentos } from "./PestanaDocumentos";
 import { PestanaEquipo } from "./PestanaEquipo";
 import { PestanaHistorial } from "./PestanaHistorial";
 
-export function FichaProyecto({ token, yo, proyecto, perfiles, clientes, modulo, onCerrar, onRecargar, onEditar, showToast }) {
+export function FichaProyecto({ token, yo, proyecto, perfiles, clientes, modulo, onCerrar, onRecargar, onEditar, showToast, onConfigDocumentos }) {
   const [pestana, setPestana] = useState("resumen");
   const [version, setVersion] = useState(0);   // al guardar en una pestaña, se recargan las demás
   const p = { ...proyecto, _yo: yo };
@@ -42,7 +42,7 @@ export function FichaProyecto({ token, yo, proyecto, perfiles, clientes, modulo,
         </PanelPestana>
         <PanelPestana visible={pestana === "actividades"} titulo="Actividades">{pestana === "actividades" && <PestanaActividades {...comunes} />}</PanelPestana>
         <PanelPestana visible={pestana === "entregables"} titulo="Entregables e hitos">{pestana === "entregables" && <PestanaEntregables {...comunes} />}</PanelPestana>
-        <PanelPestana visible={pestana === "documentos"} titulo="Documentos">{pestana === "documentos" && <PestanaDocumentos {...comunes} modulo={modulo} />}</PanelPestana>
+        <PanelPestana visible={pestana === "documentos"} titulo="Documentos">{pestana === "documentos" && <PestanaDocumentos {...comunes} modulo={modulo} onConfigDocumentos={onConfigDocumentos} />}</PanelPestana>
         <PanelPestana visible={pestana === "equipo"} titulo="Equipo">{pestana === "equipo" && <PestanaEquipo {...comunes} />}</PanelPestana>
         <PanelPestana visible={pestana === "historial"} titulo="Historial">{pestana === "historial" && <PestanaHistorial {...comunes} />}</PanelPestana>
       </div>

@@ -32,7 +32,15 @@ export function indicadoresMP(ocs, { desde, hasta } = {}) {
   return { n: vs.length, vendido, facturado, cobrado, saldo, margen, pctMargen: vendido > 0 ? margen / vendido : null };
 }
 
-export function ResumenVentasPrivadas({ vp, periodo, onIr, compacto }) {
+// Alertas de Ventas privadas como aviso suelto (Inicio en celular y tableta: va arriba, con las prioridades, no dentro del resumen).
+export function AvisoAlertasVP({ vp, onIr }) {
+  const alertas = useMemo(() => (vp?.instalado ? alertasVP(vp) : []), [vp]);
+  if (!alertas.length) return null;
+  return <AvisoLinea tono={alertas.some((a) => a.nivel === "alto") ? "danger" : "warn"} icono="⚠" dato="alertas-vp" accion="Ver alertas" onClick={onIr && (() => onIr("notif"))}>
+    {alertas.length} alerta{alertas.length > 1 ? "s" : ""} de ventas privadas</AvisoLinea>;
+}
+
+export function ResumenVentasPrivadas({ vp, periodo, onIr, compacto, sinAlerta }) {
   const r = rangoPeriodo(periodo);
   const k = useMemo(() => indicadoresVP(vp, r), [vp, periodo]); // eslint-disable-line react-hooks/exhaustive-deps
   const alertas = useMemo(() => alertasVP(vp), [vp]);
@@ -55,7 +63,7 @@ export function ResumenVentasPrivadas({ vp, periodo, onIr, compacto }) {
           <Kpi plano dato="vp-cobrado" et="Cobros recibidos" v={pesos(k.cobrado)} n={k.anticipos ? `Incluye anticipos ${pesos(k.anticipos)}` : null} />
           <Kpi plano dato="vp-saldo" et="Saldo por cobrar" v={pesos(k.saldo)} tono={k.vencido ? "danger" : k.saldo ? "warn" : "ok"} n={k.vencido ? `${pesos(k.vencido)} vencido` : null} />
         </div>
-        {alertas.length > 0 && <div style={{ marginTop: 8 }}><AvisoLinea tono={alertas.some((a) => a.nivel === "alto") ? "danger" : "warn"} icono="⚠" dato="alertas-vp" accion="Ver alertas" onClick={onIr && (() => onIr("notif"))}>
+        {!sinAlerta && alertas.length > 0 && <div style={{ marginTop: 8 }}><AvisoLinea tono={alertas.some((a) => a.nivel === "alto") ? "danger" : "warn"} icono="⚠" dato="alertas-vp" accion="Ver alertas" onClick={onIr && (() => onIr("notif"))}>
           {alertas.length} alerta{alertas.length > 1 ? "s" : ""} de ventas privadas</AvisoLinea></div>}
       </div>
     );

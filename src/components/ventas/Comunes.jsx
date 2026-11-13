@@ -1,5 +1,5 @@
 // Ventas privadas — piezas de presentación compartidas (las reglas están en lib/ventasPrivadas.js y en la base).
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, Children } from "react";
 import { C, MONO, R, S, T, cardStyle, iStyle } from "../../lib/theme";
 import { Badge, estiloChip } from "../ui/Sistema";
 import { Ic } from "../ui/Iconos";
@@ -58,7 +58,8 @@ export function Kpi({ et, v, n, tono, dato, onClick, plano, linea }) {
   const base = { ...cardStyle, borderRadius: R.md, padding: "12px 14px", textAlign: "left", font: "inherit", color: "inherit", minWidth: 0 };
   return onClick ? <button type="button" data-kpi={dato} onClick={onClick} style={{ ...base, cursor: "pointer", width: "100%" }}>{cuerpo}</button> : <div data-kpi={dato} style={base}>{cuerpo}</div>;
 }
-export const RejillaKpi = ({ children, linea }) => linea ? <div style={{ display: "flex", flexWrap: "wrap", gap: S.sm, marginBottom: S.md }}>{children}</div> : <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", gap: S.sm, marginBottom: S.lg }}>{children}</div>;
+// desliza: en pantallas angostas, los conteos en una sola fila que se desliza (no ocupan tres o cuatro filas antes de la lista).
+export const RejillaKpi = ({ children, linea, desliza }) => linea ? <div className={desliza ? "bfk-sin-barra" : undefined} data-rejilla-desliza={desliza ? "" : undefined} style={{ display: "flex", flexWrap: desliza ? "nowrap" : "wrap", overflowX: desliza ? "auto" : undefined, WebkitOverflowScrolling: "touch", gap: S.sm, marginBottom: S.md, ...(desliza ? { margin: `0 -16px ${S.md}px`, padding: "0 16px" } : {}) }}>{desliza ? Children.map(children, (h) => h && <div style={{ flexShrink: 0 }}>{h}</div>) : children}</div> : <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", gap: S.sm, marginBottom: S.lg }}>{children}</div>;
 
 // Cifras, fechas y folios van en monoespaciada; nombres y textos, en la letra normal (un nombre largo en negrita monoespaciada
 // pesaba más que los montos). El valor puede ocupar varias líneas: nunca se corta.

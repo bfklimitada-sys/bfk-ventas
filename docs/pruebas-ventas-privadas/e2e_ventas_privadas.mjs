@@ -166,15 +166,16 @@ try {
   ok("F3 neto e IVA propuestos para lo pendiente", (await ff.locator("[data-factura-neto]").inputValue()) === "876875" && (await ff.locator("[data-factura-iva]").inputValue()) === "166606");
   await ff.locator("[data-factura-numero]").fill("1501"); await ff.locator("[data-guardar-factura]").click(); await espera(p, 1800);
   ok("F4 factura registrada (facturada)", (await fv.locator('[data-estado-vp="fact-facturada"]').count()) === 1 && (await fv.locator('[data-factura="1501"]').count()) === 1);
+  // 12/11/2026: la pestaña Pagos ya no repite total, cobrado y saldo; se leen del resumen único de la ficha (sus indicadores).
   await fv.locator('[data-tab="pagos"]').click(); await fv.locator("[data-registrar-pago]").click(); const fp = p.locator('[data-ventana="form-pago"]');
   await fp.locator("[data-pago-tipo]").selectOption("anticipo"); await fp.locator("[data-pago-monto]").fill("521740"); await fp.locator("[data-guardar-pago]").dblclick(); await espera(p, 2000);
-  ok("P1 anticipo registrado una sola vez (doble clic)", q1(`select count(*) from public.vp_pagos where tipo = 'anticipo';`) === "1" && /521\.740/.test(await fv.locator('[data-fila-vp="cobrado"]').innerText()));
+  ok("P1 anticipo registrado una sola vez (doble clic)", q1(`select count(*) from public.vp_pagos where tipo = 'anticipo';`) === "1" && /521\.740/.test(await fv.locator('[data-kpi-valor="v-cobrado"]').innerText()));
   await fv.locator("[data-imputar-pago]").click(); await p.locator('[data-ventana="form-imputar"] [data-guardar-imputacion]').click(); await espera(p, 1600);
-  ok("P2 aplicar el anticipo a la factura NO cambia lo cobrado", /521\.740/.test(await fv.locator('[data-fila-vp="cobrado"]').innerText()) && q1(`select count(*) from public.vp_pago_imputaciones where estado = 'vigente';`) === "1");
+  ok("P2 aplicar el anticipo a la factura NO cambia lo cobrado", /521\.740/.test(await fv.locator('[data-kpi-valor="v-cobrado"]').innerText()) && q1(`select count(*) from public.vp_pago_imputaciones where estado = 'vigente';`) === "1");
   await fv.locator("[data-registrar-pago]").click();
   ok("P3 el saldo se propone como monto", (await fp.locator("[data-pago-monto]").inputValue()) === "521741");
   await fp.locator("[data-pago-factura]").selectOption({ index: 1 }); await fp.locator("[data-guardar-pago]").click(); await espera(p, 1800);
-  ok("P4 venta pagada: saldo $0", (await fv.locator('[data-estado-vp="pago-pagada"]').count()) === 1 && /\$0/.test(await fv.locator('[data-fila-vp="saldo"]').innerText()));
+  ok("P4 venta pagada: saldo $0", (await fv.locator('[data-estado-vp="pago-pagada"]').count()) === 1 && /\$0/.test(await fv.locator('[data-kpi-valor="v-saldo"]').innerText()));
   ok("P5 base: cobrado = total, sin duplicar", q1(`select cobrado||'|'||saldo||'|'||facturado from public.vp_ventas_vista where folio = '${ov}';`) === "1043481|0|1043481");
 
   // ── 8. Finanzas, Inicio, Alertas y Agenda ─────────────────────────────────────────────────────

@@ -6,7 +6,8 @@
 // ═══════════════════════════════════════════════════════════════════════════════════════════════
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { C, MONO, R, S, T, cardStyle } from "../../lib/theme";
-import { Badge, Pestanas, AvisoLinea, Seccion } from "../ui/Sistema";
+import { Badge, Pestanas, AvisoLinea, Seccion, Ayuda, FiltrosAgrupados } from "../ui/Sistema";
+import { useEsEscritorio } from "../ui/Navegacion";
 import { Ic } from "../ui/Iconos";
 import { BarraAvance, BadgeEstado, Selector, Vacio, PedirMotivo, estiloBoton } from "./Comunes";
 import { FormProyecto } from "./FormProyecto";
@@ -17,6 +18,7 @@ import { detalleDesdeHash, hashProyecto } from "../../lib/navegacion";
 
 export function PanelProyectos({ token, perfil, showToast }) {
   const yo = perfil?.id; const esAdmin = perfil?.rol === "admin";
+  const escritorio = useEsEscritorio();
   const [modulo, setModulo] = useState(null);           // null = cargando · {instalado, documentosHabilitados}
   const [filas, setFilas] = useState([]); const [perfiles, setPerfiles] = useState([]); const [clientes, setClientes] = useState([]);
   const [error, setError] = useState("");
@@ -67,43 +69,43 @@ export function PanelProyectos({ token, perfil, showToast }) {
 
   return (
     <div data-panel-proyectos>
-      {/* Acción principal primero (como en el resto de las listas); la explicación, en una línea discreta a su lado. */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: S.md }}>
+      {/* Acción principal y búsqueda primero. La explicación de qué proyectos ves, en la ayuda del conteo. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: S.sm }}>
         <button type="button" data-nuevo-proyecto onClick={() => setForm({ nuevo: true })} style={{ ...estiloBoton("pri"), minHeight: 44, padding: "10px 16px" }}>+ Nuevo proyecto</button>
-        <div style={{ fontSize: T.small, color: C.inkFaint, flex: "1 1 240px", lineHeight: 1.45 }}>Línea separada de Mercado Público. {esAdmin ? "Como administrador ves todos los proyectos." : "Ves los proyectos donde integras el equipo."}</div>
+        <input data-buscar-proyectos aria-label="Buscar proyectos" value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Buscar por código, nombre, cliente, mandante o ubicación"
+          style={{ flex: "1 1 220px", minWidth: 0, minHeight: 44, padding: "10px 12px" }} />
       </div>
       {error && <AvisoLinea tono="danger" dato="error-carga">{error}</AvisoLinea>}
+      {/* Alertas operativas: siempre visibles (propuestas por autorizar y, en celular y tableta, proyectos con atraso). */}
       {ind.propuestas > 0 && (
         <AvisoLinea tono="info" icono="⏳" dato="propuestas" onClick={() => setFiltro("propuestas")} accion="Ver">
           {esAdmin ? `${ind.propuestas} ${ind.propuestas === 1 ? "propuesta esperando tu autorización" : "propuestas esperando tu autorización"}` : `${ind.propuestas} ${ind.propuestas === 1 ? "propuesta esperando" : "propuestas esperando"} la autorización de un administrador`}
         </AvisoLinea>
       )}
-      {esAdmin && (
-        <div data-config-documentos={modulo.documentosHabilitados ? "habilitada" : "deshabilitada"} style={{ ...cardStyle, borderRadius: R.md, padding: "10px 14px", marginBottom: S.md, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-          <Ic n="🔒" color={modulo.documentosHabilitados ? C.ok : C.warn} />
-          <span style={{ flex: "1 1 220px", fontSize: T.sm, color: C.ink }}>Carga de documentos: <b>{modulo.documentosHabilitados ? "habilitada" : "deshabilitada"}</b>
-            <span style={{ display: "block", fontSize: T.small, color: C.inkFaint }}>{modulo.documentosHabilitados ? (modulo.motivoDocumentos || "") : "Se habilita cuando el respaldo diario de archivos esté activo."}</span></span>
-          <button type="button" data-alternar-documentos onClick={() => setConfDoc(true)} style={estiloBoton(modulo.documentosHabilitados ? "peligro" : "sec")}>{modulo.documentosHabilitados ? "Deshabilitar" : "Habilitar"}</button>
-        </div>
+      {!escritorio && ind.conAtraso > 0 && (
+        <AvisoLinea tono="danger" icono="⚠" dato="atrasos" onClick={() => setFiltro("atraso")} accion="Ver">
+          {ind.conAtraso} {ind.conAtraso === 1 ? "proyecto activo con atraso" : "proyectos activos con atraso"}: revisa actividades, hitos y entregables vencidos
+        </AvisoLinea>
       )}
 
-      <div data-indicadores-pi style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: S.sm, marginBottom: S.lg }}>
-        <Kpi dato="activos" et="Activos" v={ind.activos} n={[`${ind.enEjecucion} en ejecución`, `${ind.porIniciar} por iniciar`, ind.suspendidos ? `${ind.suspendidos} suspendidos` : null].filter(Boolean).join(" · ")} onClick={() => setFiltro("activos")} />
-        <Kpi dato="atraso" et="Con atraso" v={ind.conAtraso} tono={ind.conAtraso ? "danger" : "ok"} n={ind.conAtraso ? "Revisa actividades, hitos y entregables vencidos" : "Ningún proyecto activo atrasado"} onClick={() => setFiltro("atraso")} />
-        <Kpi dato="finalizados" et="Finalizados y cerrados" v={ind.finalizados} onClick={() => setFiltro("finalizados")} />
-        <Kpi dato="presupuesto" et="Presupuesto inicial activos (neto)" v={ind.presupuesto.length ? formatoMonto(ind.presupuesto[0].monto, ind.presupuesto[0].moneda) : "—"}
+      {/* Resumen: tarjetas en computador; en celular y tableta, una fila que se desliza (mismos datos y notas). */}
+      <div data-indicadores-pi data-compacto={escritorio ? undefined : ""} className={escritorio ? undefined : "bfk-sin-barra"}
+        style={escritorio ? { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: S.sm, marginBottom: S.lg }
+          : { display: "flex", gap: S.sm, overflowX: "auto", WebkitOverflowScrolling: "touch", margin: `0 -16px ${S.md}px`, padding: "0 16px" }}>
+        <Kpi compacto={!escritorio} dato="activos" et="Activos" v={ind.activos} n={[`${ind.enEjecucion} en ejecución`, `${ind.porIniciar} por iniciar`, ind.suspendidos ? `${ind.suspendidos} suspendidos` : null].filter(Boolean).join(" · ")} onClick={() => setFiltro("activos")} />
+        <Kpi compacto={!escritorio} dato="atraso" et="Con atraso" v={ind.conAtraso} tono={ind.conAtraso ? "danger" : "ok"} n={ind.conAtraso ? (escritorio ? "Revisa actividades, hitos y entregables vencidos" : null) : "Ningún proyecto activo atrasado"} onClick={() => setFiltro("atraso")} />
+        <Kpi compacto={!escritorio} dato="finalizados" et="Finalizados y cerrados" v={ind.finalizados} onClick={() => setFiltro("finalizados")} />
+        <Kpi compacto={!escritorio} dato="presupuesto" et="Presupuesto inicial activos (neto)" v={ind.presupuesto.length ? formatoMonto(ind.presupuesto[0].monto, ind.presupuesto[0].moneda) : "—"}
           n={[ind.presupuesto.slice(1).map((x) => `+ ${formatoMonto(x.monto, x.moneda)}`).join(" · "), ind.presupuesto.length > 1 ? "(otras monedas, no se suman)" : null, "Línea base, sin IVA.", ind.reservados ? `${ind.reservados} con datos reservados.` : null].filter(Boolean).join(" ")} />
       </div>
 
-      <Seccion titulo={`${visibles.length} proyecto${visibles.length === 1 ? "" : "s"}`}>
-        <input data-buscar-proyectos value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Buscar por código, nombre, cliente, mandante o ubicación"
-          style={{ width: "100%", minHeight: 42, padding: "10px 12px", marginBottom: S.sm }} />
+      <Seccion titulo={<>{`${visibles.length} proyecto${visibles.length === 1 ? "" : "s"}`}<Ayuda etiqueta="Qué proyectos ves">Línea separada de Mercado Público. {esAdmin ? "Como administrador ves todos los proyectos." : "Ves los proyectos donde integras el equipo."}</Ayuda></>}>
         <Pestanas etiqueta="Filtro de proyectos" activa={filtro} onCambiar={setFiltro} variante="chips"
           items={FILTROS.filter((x) => x.v !== "propuestas" || ind.propuestas > 0 || filtro === "propuestas").map((x) => ({ key: x.v, label: x.l, n: x.v === "propuestas" ? ind.propuestas : x.v === "atraso" ? ind.conAtraso : null, tono: x.v === "atraso" ? "danger" : null }))} />
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: S.sm, marginBottom: S.md }}>
-          <Selector data-filtro-estado value={estado} onChange={(e) => setEstado(e.target.value)} vacio="Todos los estados" opciones={ESTADOS} />
-          <Selector data-filtro-responsable value={resp} onChange={(e) => setResp(e.target.value)} vacio="Todos los responsables" opciones={responsables} />
-        </div>
+        <FiltrosAgrupados dato="proyectos" minimo={200} activos={[estado, resp].filter(Boolean).length} onLimpiar={() => { setEstado(""); setResp(""); }}>
+          <Selector data-filtro-estado aria-label="Estado" value={estado} onChange={(e) => setEstado(e.target.value)} vacio="Todos los estados" opciones={ESTADOS} />
+          <Selector data-filtro-responsable aria-label="Responsable" value={resp} onChange={(e) => setResp(e.target.value)} vacio="Todos los responsables" opciones={responsables} />
+        </FiltrosAgrupados>
         {!filas.length && <Vacio dato="sin-proyectos">{esAdmin ? "Aún no hay proyectos industriales." : "No integras el equipo de ningún proyecto industrial."} Crea uno con «+ Nuevo proyecto».</Vacio>}
         {filas.length > 0 && !visibles.length && <Vacio dato="sin-resultados">Ningún proyecto coincide con la búsqueda o los filtros.</Vacio>}
         {visibles.map((p) => <TarjetaProyecto key={p.id} p={p} onAbrir={() => abrir(p.codigo)} />)}
@@ -114,7 +116,8 @@ export function PanelProyectos({ token, perfil, showToast }) {
       )}
       {proyectoAbierto && (
         <FichaProyecto token={token} yo={yo} proyecto={proyectoAbierto} perfiles={perfiles} clientes={clientes} modulo={modulo} showToast={showToast}
-          onCerrar={cerrar} onRecargar={recargarProyecto} onEditar={() => setForm({ proyecto: proyectoAbierto })} />
+          onCerrar={cerrar} onRecargar={recargarProyecto} onEditar={() => setForm({ proyecto: proyectoAbierto })}
+          onConfigDocumentos={esAdmin ? () => setConfDoc(true) : undefined} />
       )}
       {form && (
         <FormProyecto token={token} yo={yo} esAdmin={esAdmin} perfiles={perfiles} clientes={clientes} proyecto={form.proyecto} showToast={showToast}
@@ -133,11 +136,12 @@ export function PanelProyectos({ token, perfil, showToast }) {
   );
 }
 
-function Kpi({ et, v, n, tono, onClick, dato }) {
+function Kpi({ et, v, n, tono, onClick, dato, compacto }) {
   const col = { danger: C.dangerText, ok: C.okText }[tono] || C.ink;
   const Tag = onClick ? "button" : "div";
+  // compacto: tarjeta de ancho propio dentro de la fila deslizable (mismo texto y tamaño de letra; la nota en máximo 2 líneas de ~230 px).
   return (
-    <Tag type={onClick ? "button" : undefined} data-kpi-pi={dato} onClick={onClick} style={{ ...cardStyle, borderRadius: R.md, padding: "12px 14px", minWidth: 0, textAlign: "left", font: "inherit", cursor: onClick ? "pointer" : "default", width: "100%", boxSizing: "border-box" }}>
+    <Tag type={onClick ? "button" : undefined} data-kpi-pi={dato} onClick={onClick} style={{ ...cardStyle, borderRadius: R.md, padding: compacto ? "10px 12px" : "12px 14px", minWidth: 0, textAlign: "left", font: "inherit", cursor: onClick ? "pointer" : "default", width: compacto ? "auto" : "100%", maxWidth: compacto ? 240 : undefined, flexShrink: 0, boxSizing: "border-box" }}>
       <span style={{ display: "block", fontSize: T.small, fontWeight: 700, color: C.inkMuted }}>{et}</span>
       <span data-kpi-valor style={{ display: "block", fontFamily: MONO, fontWeight: 700, fontSize: 18, letterSpacing: -0.5, color: col, marginTop: 4, overflowWrap: "anywhere" }}>{v}</span>
       {n && <span style={{ display: "block", fontSize: T.small, color: C.inkFaint, marginTop: 3, lineHeight: 1.4 }}>{n}</span>}

@@ -83,8 +83,8 @@ for (const [modo, vp] of [["escritorio", { width: 1280, height: 900 }], ["movil"
   const bloque = f.locator("[data-asignaciones-oc]");
   r.ficha_visible_sin_definir = (await bloque.count()) === 1 && (await bloque.locator('[data-asignacion="vendedor"]').innerText()).includes("Sin definir")
     && (await bloque.locator('[data-asignacion="financiador"]').innerText()).includes("Sin definir");
-  // En el celular la cabecera de la ficha no repite vendedor/financiador (regla de docs/pruebas-ui-movil): se comprueba solo en escritorio.
-  r.cabecera_v_f = modo === "movil" ? (await f.locator("[data-cabecera-asignaciones]").count()) === 0 : /V: Sin definir · F: Sin definir/.test(await f.locator("[data-cabecera-asignaciones]").innerText());
+  // Orden visual (12/11/2026): la cabecera ya no repite vendedor/financiador abreviados en ningún tamaño; se ven y editan en sus filas.
+  r.cabecera_v_f = (await f.locator("[data-cabecera-asignaciones]").count()) === 0;
   await bloque.locator('[data-asignacion="vendedor"] [data-asignacion-editar]').click();
   await bloque.locator('[data-asignacion="vendedor"] [data-asignacion-select]').selectOption("v2");
   await bloque.locator('[data-asignacion="vendedor"] [data-asignacion-guardar]').click(); await page.waitForTimeout(1200);

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { C, T, R, iStyle, iMono, selStyle, fmt, MONO } from "../../lib/theme";
 import { Field, Modal } from "../ui/Basicos";
-import { PasosCotizacion } from "./PasosCotizacion";
-import { HojaLateral, Pestanas, PanelPestana, Tarjeta, Badge, AvisoLinea, BotonPrincipal, BotonSecundario, FilaDato, Desplegable, Seccion } from "../ui/Sistema";
+import { NavegacionCotizacion } from "./PasosCotizacion";
+import { HojaLateral, Pestanas, PanelPestana, Tarjeta, Badge, AvisoLinea, BotonPrincipal, BotonSecundario, FilaDato, Desplegable, Seccion, Ayuda } from "../ui/Sistema";
 import { calcularCotizacion, formulaParaGuardar, formulaGuardadaExenta, esExentaAprobada, estadoParaPDF, destinoDe, direccionValida, invalidarDespachosPorDireccion, envioConfirmado, textoParaMercadoPublico, aplicarRecargoGeneral, aplicarRecargoProducto, itemVacio, envioVacio, nuevaClave, hoyISO, digitosValor, proveedorDeEnlace, ESTADOS_COTIZACION, ESTADOS_ENVIO, RECARGO_SUGERIDO } from "../../lib/cotizaciones";
 import { logoBFK } from "../../lib/cotizacionesDatos";
 import { generarPdfEETT, descargarBlob, huellaPDF } from "../../lib/eettPdf";
@@ -334,21 +334,16 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
           </AvisoLinea>
         )}
         <div data-estado-guardado={sucio ? "local" : "bfk"} style={{ fontSize: T.small, color: sucio ? C.warnText : C.inkMuted, marginBottom: 6 }}>
-          {sucio ? "● Cambios sin guardar en BFK · copia de recuperación solo en este dispositivo" : `✓ Cotización guardada en BFK${cot.version ? ` (versión ${cot.version})` : ""}`}
+          {sucio ? <>● Cambios sin guardar en BFK<Ayuda etiqueta="Dónde quedan los cambios">Mientras no guardes, la copia de recuperación queda solo en este dispositivo.</Ayuda></> : `✓ Guardada en BFK${cot.version ? ` (versión ${cot.version})` : ""}`}
         </div>
-        <Pestanas etiqueta="Cotización" activa={pestana} onCambiar={setPestana} items={[
-          { key: "datos", label: "Datos" },
-          { key: "productos", label: "Productos", n: cot.items.length || null },
-          { key: "precios", label: "Precios", n: nPend || null, tono: nPend ? "warn" : null },
-          { key: "eett", label: "EETT", n: nRev || null, tono: nRev ? "warn" : null },
-        ]} />
         {(() => {
           const despOk = cot.items.length > 0 && cot.items.every((it) => envioConfirmado(cot.envios.find((e) => e.key === it.envio_key) || {}));
           const pasos = [["Datos del cliente", !!String(cot.institucion || "").trim(), "datos"], ["Dirección", dirOk, "datos"], ["Productos", cot.items.length > 0, "productos"],
             ["Verificación de despacho", despOk && calc.listo, "productos"], ["Precios", calc.listo && cot.items.length > 0, "precios"], ["EETT", pdf.listo, "eett"]];
-          return <PasosCotizacion pasos={pasos} onIr={setPestana} />;
+          return <NavegacionCotizacion pasos={pasos} activa={pestana} onCambiar={setPestana}
+            conteos={{ productos: nPend, precios: nPend, eett: nRev }} />;
         })()}
-        {protegido && <AvisoLinea tono="info" icono="🔒" dato="cotizacion-protegida">Adjudicada: lo ofertado (productos, cantidades y precios) y el vínculo con la OC quedan protegidos. Puedes actualizar enlaces de compra y fichas técnicas y regenerar la EETT.</AvisoLinea>}
+        {protegido && <AvisoLinea tono="info" icono="🔒" dato="cotizacion-protegida">Adjudicada: productos, cantidades, precios y vínculo con la OC protegidos.<Ayuda etiqueta="Qué se puede cambiar">Puedes actualizar enlaces de compra y fichas técnicas y regenerar la EETT.</Ayuda></AvisoLinea>}
 
         <PanelPestana visible={pestana === "datos"} titulo="Datos">
           <Tarjeta padding="12px" data-bloque-direccion style={{ borderColor: dirOk ? C.ok : C.warn, background: dirOk ? C.card : C.warnLight }}>

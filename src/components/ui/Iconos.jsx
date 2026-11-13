@@ -2,6 +2,7 @@
 // <Ic n="📦" /> acepta el nombre o el emoji histórico como clave.
 // <I t="📧 Texto" /> convierte los emojis de un texto en iconos.
 const P = {
+  filtro: <path d="M4 6h16M7 12h10M10 18h4"/>,
   chart: <><path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/><path d="M22 20H2"/></>,
   box: <><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></>,
   calendar: <><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></>,

@@ -490,12 +490,9 @@ function Pagos({ token, d, v, esResp, vigente, vp, showToast, refrescar, setModa
   const [form, setForm] = useState(false); const [imputar, setImputar] = useState(null);
   const facturasVig = d.facturas.filter((f) => f.estado === "vigente");
   return (<>
-    <div style={{ ...cardStyle, borderRadius: R.md, padding: "8px 14px", marginBottom: 12 }}>
-      <Fila k="Total de la venta" v={pesos(v.total)} />
-      <Fila k="Cobrado (pagos vigentes)" v={pesos(v.cobrado)} dato="cobrado" />
-      <Fila k="Saldo pendiente" v={pesos(v.saldo)} fuerte tono={Number(v.monto_vencido) > 0 ? "danger" : Number(v.saldo) > 0 ? "warn" : "ok"} dato="saldo" />
-      {Number(v.monto_vencido) > 0 && <Fila k={`Vencido desde ${fechaTxt(v.primer_vencimiento)}`} v={pesos(v.monto_vencido)} tono="danger" dato="vencido" />}
-    </div>
+    {/* Un solo resumen financiero: los indicadores de la ficha (total, facturado, cobrado y saldo). Aquí solo lo que agrega
+        información distinta: desde cuándo hay saldo vencido. Luego «Registrar pago» y el historial. */}
+    {Number(v.monto_vencido) > 0 && <AvisoLinea tono="danger" dato="vencido">Vencido desde {fechaTxt(v.primer_vencimiento)}: {pesos(v.monto_vencido)}</AvisoLinea>}
     <Seccion titulo={`Pagos · ${d.pagos.length}`} accion={vigente && esResp && Number(v.saldo) > 0 && <button type="button" data-registrar-pago onClick={() => setForm(true)} style={estiloBoton("pri")}>Registrar pago</button>}>
       {!d.pagos.length && <Vacio>Sin pagos registrados.</Vacio>}
       {d.pagos.map((p) => {
