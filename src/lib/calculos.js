@@ -92,24 +92,24 @@ export const mesesConFactura = (vendedorId, ocs) => {
   return Array.from(set).sort((a, b) => b.localeCompare(a)).map((ym) => ({ anio: Number(ym.slice(0, 4)), mes: Number(ym.slice(5, 7)) }));
 };
 
-// ── Liquidación de la comisión de una OC (13/11/2026; vigente desde octubre 2026 por decisión de Kevin) ──
+// ── Liquidación de la comisión de una OC (13/11/2026; vigente desde NOVIEMBRE 2026 por decisión de Kevin) ──
 // La comisión queda ligada a la OC y a su LIQUIDACIÓN; la cobranza sigue a la factura vigente (facturaVigente).
 // Liquidación de la OC:
 //  · anclada ...... comision_anio/comision_mes (la base la fija al marcarla pagada o la migración con evidencia).
 //  · refacturada .. alguna factura anulada o reemplazada y la vigente en un mes posterior → mes de su PRIMERA factura.
 //  · normal ....... mes de su factura vigente más reciente (regla Fase 4C).
 // Período en que CUENTA la comisión (periodo):
-//  · liquidación desde octubre 2026 (VIGENCIA_LIQUIDACION) → su liquidación (una refacturación posterior no la mueve).
-//  · liquidación anterior y factura vigente desde octubre 2026 (refacturada hacia la vigencia):
+//  · liquidación desde noviembre 2026 (VIGENCIA_LIQUIDACION) → su liquidación (una refacturación posterior no la mueve).
+//  · liquidación anterior y factura vigente desde noviembre 2026 (refacturada hacia la vigencia):
 //      pagada → no cuenta en ningún mes (ya se pagó; no genera nueva comisión);
 //      no pagada → cuenta en el mes de la factura vigente (como hasta ahora), pero si su liquidación original tuvo un
 //      pago (posible pago parcial que la cubrió) queda «Por revisar» y fuera de todo pago hasta revisarla.
-//  · todo lo demás (períodos anteriores a octubre 2026) → regla anterior sin cambios: mes de la factura vigente.
-//    Las liquidaciones, comisiones y pagos anteriores a octubre 2026 no se recalculan.
+//  · todo lo demás (períodos anteriores a noviembre 2026) → regla anterior sin cambios: mes de la factura vigente.
+//    Las liquidaciones, comisiones y pagos anteriores a noviembre 2026 no se recalculan.
 // Por revisar guardado (comision_revision = 'por_revisar'): se conserva donde se calcula hoy, con aviso, y no se marca en
-// ningún pago. Utilidad liquidada (comision_utilidad, solo desde octubre 2026): si la utilidad actual cambió, la diferencia
+// ningún pago. Utilidad liquidada (comision_utilidad, solo desde noviembre 2026): si la utilidad actual cambió, la diferencia
 // se muestra aparte como ajuste por revisar (no entra en la comisión ni en el saldo).
-export const VIGENCIA_LIQUIDACION = { anio: 2026, mes: 10 };
+export const VIGENCIA_LIQUIDACION = { anio: 2026, mes: 11 };   // 13/11/2026 15:42 (Kevin): desde noviembre; octubre queda como estaba
 const claveMes = (p) => (p ? Number(p.anio) * 12 + Number(p.mes) : null);
 const mismoMes = (a, b) => !!a && !!b && claveMes(a) === claveMes(b);
 export const liquidacionComision = (oc, pagosVendedor = null) => {
@@ -317,7 +317,7 @@ export const calcularPagoVendedor = ({ vendedorId, ocs, anio, mes, ivaMensual = 
     // Factura vigente en este mes pero su comisión cuenta en otro (o ya se pagó): no entra aquí; se informa por qué.
     if (liq.fueraDeSuMes && mismoMes(liq.actual, esteMes)) refacturadasFuera.push({ ocId: o.id, numero_oc: o.numero_oc, liquidacion: liq.liquidacion, pagada: liq.pagada });
     // Liquidada (y pagada) en este mes y refacturada después hacia la vigencia: sigue apareciendo aquí, solo como referencia.
-    if (liq.pagada && mismoMes(liq.liquidacion, esteMes) && !mismoMes(p, esteMes)) liquidadasAqui.push({ ocId: o.id, numero_oc: o.numero_oc, facturaVigenteMes: liq.actual, utilidad: liq.utilidadActual });
+    if (liq.pagada && !p && mismoMes(liq.liquidacion, esteMes)) liquidadasAqui.push({ ocId: o.id, numero_oc: o.numero_oc, facturaVigenteMes: liq.actual, utilidad: liq.utilidadActual });
     if (!p || p.anio !== anio || p.mes !== mes) return;
     hayFacturas = true;
     if (liq.excluida) { porRevisar.push({ ocId: o.id, numero_oc: o.numero_oc, utilidad: liq.utilidad, motivo: liq.motivoRevision, incluida: false }); return; }

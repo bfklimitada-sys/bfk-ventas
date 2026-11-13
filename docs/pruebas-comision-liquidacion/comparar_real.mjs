@@ -5,7 +5,7 @@ import { createHmac } from "node:crypto";
 import * as N from "../../src/lib/calculos.js";
 import * as A from "@anterior/calculos.js";
 const { PGRST_URL, JWT_SECRET, USUARIO } = process.env;
-const ANTES_DE = "2026-10";   // vigencia: los meses anteriores deben quedar idénticos
+const ANTES_DE = "2026-11";   // vigencia (13/11/2026 15:42): noviembre 2026; los meses anteriores, octubre incluido, deben quedar idénticos
 const b64 = (o) => Buffer.from(JSON.stringify(o)).toString("base64url"); const t = Math.floor(Date.now() / 1000);
 const h = b64({ alg: "HS256", typ: "JWT" }), p = b64({ sub: USUARIO, role: "authenticated", aud: "authenticated", exp: t + 3600, iat: t });
 const TOKEN = `${h}.${p}.${createHmac("sha256", JWT_SECRET).update(`${h}.${p}`).digest("base64url")}`;
@@ -30,16 +30,18 @@ for (const v of vendedores) {
     }
   }
 }
-// Duplicados: con la versión nueva ninguna OC cuenta en dos meses, y ninguna OC pagada antes de octubre 2026 vuelve a contar
-// desde octubre. Se informan también los duplicados que tenía la versión publicada.
+// Duplicados: con la versión nueva ninguna OC que cuente desde noviembre 2026 cuenta además en otro mes, y ninguna OC pagada
+// antes de noviembre vuelve a contar desde noviembre. Los duplicados anteriores a la vigencia (octubre incluido) se dejan como
+// estaban y solo se informan.
 const usos = (lib) => { const m = new Map(); for (const v of vendedores) for (const x of lib.mesesConFactura(v.id, ocs)) {
   const c = lib.calcularPagoVendedor({ vendedorId: v.id, ocs, anio: x.anio, mes: x.mes, ivaMensual, pagosVendedor }); (c?.detalle || []).forEach((l) => m.set(l.numero_oc, [...(m.get(l.numero_oc) || []), per(x)])); } return m; };
 const uN = usos(N), uA = usos(A);
-const dobleN = [...uN].filter(([, ms]) => ms.length > 1);
-const pagadasPreOct = ocs.filter((o) => o.vendedor_pagado && N.liquidacionComision(o).liquidacion && N.liquidacionComision(o).liquidacion.anio * 12 + N.liquidacionComision(o).liquidacion.mes < 2026 * 12 + 10);
-const repagoN = pagadasPreOct.filter((o) => (uN.get(o.numero_oc) || []).some((k) => k >= "2026-10")).map((o) => o.numero_oc);
-const repagoA = pagadasPreOct.filter((o) => (uA.get(o.numero_oc) || []).some((k) => k >= "2026-10")).map((o) => `${o.numero_oc}(${(uA.get(o.numero_oc) || []).join(",")})`);
-console.log(`DUPLICADOS|nueva: OC en dos meses ${dobleN.length}, pagadas antes de octubre que vuelven a contar ${repagoN.length}|publicada: pagadas antes de octubre que volvían a contar desde octubre ${repagoA.join(" ") || "ninguna"}`);
+const dobleN = [...uN].filter(([, ms]) => ms.length > 1 && ms.some((k) => k >= ANTES_DE));
+const doblePrevios = [...uN].filter(([, ms]) => ms.length > 1 && !ms.some((k) => k >= ANTES_DE)).map(([o, ms]) => `${o}(${ms.join(",")})`);
+const pagadasPrevias = ocs.filter((o) => o.vendedor_pagado && N.liquidacionComision(o).liquidacion && N.liquidacionComision(o).liquidacion.anio * 12 + N.liquidacionComision(o).liquidacion.mes < 2026 * 12 + 11);
+const repagoN = pagadasPrevias.filter((o) => (uN.get(o.numero_oc) || []).some((k) => k >= ANTES_DE)).map((o) => o.numero_oc);
+const repagoA = pagadasPrevias.filter((o) => (uA.get(o.numero_oc) || []).some((k) => k >= ANTES_DE)).map((o) => `${o.numero_oc}(${(uA.get(o.numero_oc) || []).join(",")})`);
+console.log(`DUPLICADOS|nueva: OC en dos meses (desde noviembre) ${dobleN.length}, pagadas antes de noviembre que vuelven a contar ${repagoN.length}|anteriores a la vigencia, se dejan como estaban: ${doblePrevios.join(" ") || "ninguno"}|publicada: pagadas antes de noviembre que volvían a contar desde noviembre ${repagoA.join(" ") || "ninguna"}`);
 // Octubre 2026 en detalle (F29 y pagos registrados).
 const esperado = Object.fromEntries(String(process.env.ESPERADO_OCTUBRE || "").split(",").filter(Boolean).map((x) => x.split("=")).map(([k, v]) => [k, Number(v)]));
 const octubreMal = [];
@@ -49,6 +51,6 @@ for (const v of vendedores) { const c = N.calcularPagoVendedor({ vendedorId: v.i
 const liqs = ocs.filter((o) => N.generaComision(o) && N.liquidacionComision(o).refacturada).map((o) => { const l = N.liquidacionComision(o);
   return `${o.numero_oc}|${o.vendedor_id}|antes ${A.periodoComision(o) ? per(A.periodoComision(o)) : "-"}|ahora ${l.periodo ? per(l.periodo) : "ninguno (ya pagada)"}|liquidación ${l.liquidacion ? per(l.liquidacion) : "-"}|factura vigente ${l.actual ? per(l.actual) : "-"}|${l.pagada ? "pagada" : "no pagada"}|${l.anclada ? "anclada" : "derivada"}|${l.porRevisar ? "POR REVISAR: " + l.motivoRevision : "ok"}`; });
 liqs.forEach((x) => console.log("OC_REFACTURADA|" + x));
-console.log(`RESUMEN comparación de comisiones con datos reales: ${iguales + distintos} vendedor-mes, ${iguales} con montos idénticos, ${distintos} distintos (${distintosPrevios.length} anteriores a octubre 2026)`);
+console.log(`RESUMEN comparación de comisiones con datos reales: ${iguales + distintos} vendedor-mes, ${iguales} con montos idénticos, ${distintos} distintos (${distintosPrevios.length} anteriores a noviembre 2026)`);
 if (Object.keys(esperado).length) console.log(`OCTUBRE_ESPERADO|${octubreMal.length ? "NO COINCIDE: " + octubreMal.join("; ") : "coincide: " + JSON.stringify(esperado)}`);
 if (distintosPrevios.length || dobleN.length || repagoN.length || octubreMal.length) { console.log("FALLA|" + JSON.stringify({ distintosPrevios, dobleN, repagoN, octubreMal })); process.exitCode = 1; }

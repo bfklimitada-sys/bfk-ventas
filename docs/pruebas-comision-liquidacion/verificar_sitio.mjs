@@ -1,5 +1,5 @@
 // Navegación de SOLO LECTURA de Comisiones (Vendedores) con los datos de una copia (PostgREST) — sitio local o de producción.
-// Uso: PGRST_URL=… JWT_SECRET=… USUARIO=… CHROME=… ESPERADO="vend_matias=783968,vend_kevin=92527" node verificar_sitio.mjs <url> [celular|escritorio]
+// Uso: PGRST_URL=… JWT_SECRET=… USUARIO=… CHROME=… ESPERADO="vend_matias=846880,vend_kevin=92637" node verificar_sitio.mjs <url> [celular|escritorio]
 import { chromium } from "playwright-core";
 import { createHmac } from "node:crypto";
 const URL_APP = process.argv[2].replace(/\/$/, "") + "/";
@@ -44,7 +44,7 @@ await page.goto(URL_APP, { waitUntil: "load" }); await page.waitForTimeout(4000)
 const ir = async (r) => { await page.evaluate((x) => { location.hash = "#/" + x; }, r); await page.waitForTimeout(1500); };
 const bloque = (bt, etiqueta) => { const ini = Math.max(0, bt.search(/comisión mes a mes/i)); const m = bt.slice(ini).search(new RegExp("(^|\\n)" + etiqueta.replace("/", "\\/") + "\\n"));
   if (m < 0) return ""; const i0 = ini + m + 1; return bt.slice(i0, bt.indexOf("Comisión pagada:", i0) + 160); };
-// Esperado (desde la copia): ESPERADO="vend_matias=783968,vend_kevin=92527"
+// Esperado (desde la copia): ESPERADO="vend_matias=846880,vend_kevin=92637"
 const esperado = Object.fromEntries(String(process.env.ESPERADO || "").split(",").filter(Boolean).map((x) => x.split("=")));
 const vend = await rest("vendedores?select=id,nombre&order=nombre");
 await ir("vendedores");
@@ -64,7 +64,7 @@ for (const v of vend) {
   const m = oct.match(/= Comisión del mes: (\$[\d.]+)/); const d = oct.match(/Descuento tributario total: (\$[\d.]+)/);
   if (oct) console.log(`OCTUBRE_EN_PANTALLA|${v.id}|comisión ${m?.[1]}|descuento ${d?.[1]}|${/No incluidas en este mes[^\n]*/.exec(oct)?.[0] || "sin refacturadas fuera"}`);
   if (esperado[v.id]) ok(`octubre_${v.id}_${esperado[v.id]}`, m && Number(m[1].replace(/[$.]/g, "")) === Number(esperado[v.id]) && d?.[1] === "$31.656", oct.slice(0, 400));
-  for (const mes of ["Jul/2026", "Ago/2026", "Sep/2026"]) { const b = bloque(bt, mes); if (b) console.log(`MES_EN_PANTALLA|${v.id}|${mes}|${(b.match(/= Comisión del mes: \$[\d.]+/) || b.match(/Comisión del mes: \$[\d.]+/) || [""])[0]}|${(b.match(/Comisión pagada: \$[\d.]+/) || [""])[0]}|${/Por revisar · OC [^ ]+/.exec(b)?.[0] || ""}|${/Pagadas en esta liquidación[^\n]*/.exec(b)?.[0] || ""}`); }
+  for (const mes of ["Jul/2026", "Ago/2026", "Sep/2026", "Nov/2026"]) { const b = bloque(bt, mes); if (b) console.log(`MES_EN_PANTALLA|${v.id}|${mes}|${(b.match(/= Comisión del mes: \$[\d.]+/) || b.match(/Comisión del mes: \$[\d.]+/) || [""])[0]}|${(b.match(/Comisión pagada: \$[\d.]+/) || [""])[0]}|${/Por revisar · OC [^ ]+/.exec(b)?.[0] || ""}|${/Pagadas en esta liquidación[^\n]*/.exec(b)?.[0] || ""}`); }
   await el.click().catch(() => {}); await page.waitForTimeout(500);
 }
 ok("sin_errores_de_pagina", errs.length === 0, errs.join(" | "));
