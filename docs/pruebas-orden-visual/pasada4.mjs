@@ -85,6 +85,10 @@ for (const [id, ancho, alto, movil] of TAM) {
     ok(`${K}_editorvp_sin_fila_de_pasos_repetida`, (await h.locator("[data-paso=listo]").count()) === 0);
     await h.locator('[data-pestanas="Cotización"] [data-tab="datos"]').click(); await p.waitForTimeout(500);
     ok(`${K}_editorvp_pestana_datos_abierta`, (await h.locator('[data-tab="datos"]').getAttribute("aria-selected")) === "true" && (await h.locator('[data-campo="direccion"]').isVisible()));
+    // 13/11/2026: razón social y RUT una sola vez (cliente elegido); debajo, solo el giro.
+    const txtDatos = await h.locator('[role="tabpanel"]').filter({ has: p.locator('[data-campo="direccion"]') }).first().innerText();
+    const rut = (await h.locator("[data-cliente-elegido]").innerText()).match(/\d{1,2}\.\d{3}\.\d{3}-[\dkK]/)?.[0];
+    ok(`${K}_editorvp_cliente_una_sola_vez_y_giro`, !!rut && txtDatos.split(rut).length - 1 === 1 && !/Razón social:/.test(txtDatos) && /Giro: /.test(txtDatos), { rut, veces: rut && txtDatos.split(rut).length - 1 });
     await foto("editor-vp-datos", { ventana: true });
     const pend = h.locator("[data-pasos-cotizacion] [data-paso=pendiente]");
     if (await pend.count()) { const destino = await pend.first().getAttribute("data-paso-pestana"); await pend.first().click(); await p.waitForTimeout(500);
@@ -119,6 +123,9 @@ for (const [id, ancho, alto, movil] of TAM) {
       await p.locator("[data-abrir-filtros]").click(); await p.waitForTimeout(300); await p.locator("[data-filtro-estado]").selectOption("finalizado"); await p.waitForTimeout(400);
       ok(`${K}_proyectos_filtro_estado_funciona`, (await p.locator("[data-proyecto]").count()) === 1 && (await p.locator("[data-filtros-activos]").innerText()).trim() === "1");
       await p.locator("[data-limpiar-filtros]").first().click(); await p.waitForTimeout(300); await p.evaluate(() => window.scrollTo(0, 0)); }
+    // 13/11/2026: en el celular los estados van debajo del título (el nombre usa todo el ancho); en tableta y computador, a su lado.
+    const disp = await p.locator("[data-proyecto]").first().evaluate((t) => { const n = t.querySelector("[data-cabecera-proyecto] > div:first-child").getBoundingClientRect(); const e = t.querySelector("[data-estados-proyecto]").getBoundingClientRect(); return { debajo: e.top >= n.bottom - 1, anchoNombre: Math.round(n.width), anchoTarjeta: Math.round(t.getBoundingClientRect().width) }; });
+    ok(`${K}_proyectos_estados_${ancho <= 400 ? "debajo_del_titulo" : "al_lado_del_titulo"}`, ancho <= 400 ? disp.debajo && disp.anchoNombre >= disp.anchoTarjeta - 40 : !disp.debajo, disp);
     await foto("proyectos");
     await p.locator("[data-proyecto]").filter({ hasText: /concentradora/ }).first().click(); await p.waitForTimeout(1500);
     await p.locator('[data-pestanas="Ficha del proyecto"] [data-tab="documentos"]').click(); await p.waitForTimeout(900);

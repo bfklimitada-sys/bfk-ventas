@@ -156,15 +156,17 @@ function TarjetaProyecto({ p, onAbrir }) {
   return (
     <button type="button" data-proyecto={p.codigo} data-atrasado={p.atrasado ? "si" : "no"} onClick={onAbrir}
       style={{ ...cardStyle, width: "100%", boxSizing: "border-box", textAlign: "left", font: "inherit", color: "inherit", cursor: "pointer", display: "block", padding: "12px 16px", marginBottom: S.sm, borderLeft: `4px solid ${p.atrasado ? C.danger : activo ? C.teal : p.estado === "propuesta" ? C.info : C.border}` }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start" }}>
-        <div style={{ minWidth: 0 }}>
+      {/* Título y estados: lado a lado si hay espacio (tableta y computador); en el celular los estados pasan debajo del título
+          (el bloque del título pide ~280 px), para que el nombre use todo el ancho. */}
+      <div data-cabecera-proyecto style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: "6px 8px", alignItems: "flex-start" }}>
+        <div style={{ minWidth: 0, flex: "1 1 280px" }}>
           <div style={{ fontFamily: MONO, fontSize: T.small, fontWeight: 700, color: C.tealDark }}>{p.codigo}</div>
           <div style={{ fontWeight: 700, fontSize: T.title, color: C.ink, overflowWrap: "anywhere" }}>{p.nombre}</div>
           <div style={{ fontSize: T.small, color: C.inkMuted, marginTop: 1, overflowWrap: "anywhere" }}>
             {[p.cliente_nombre, p.mandante_nombre ? `mandante ${p.mandante_nombre}` : null, etiqueta(tipoDe, p.tipo), p.ubicacion].filter(Boolean).join(" · ")}
           </div>
         </div>
-        <div style={{ display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "flex-end", flexShrink: 0 }}>
+        <div data-estados-proyecto style={{ display: "flex", gap: 4, flexWrap: "wrap", flexShrink: 0 }}>
           <BadgeEstado estado={p.estado} />
           {activo && (p.atrasado ? <Badge tono="danger">Con atraso</Badge> : <Badge tono="ok">Al día</Badge>)}
         </div>

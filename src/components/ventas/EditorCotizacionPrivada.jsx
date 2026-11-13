@@ -471,9 +471,8 @@ export function EditorCotizacionPrivada({ token, perfil, vp, id, showToast, onCe
           <Field label="Cliente" required hint="Registro compartido de clientes (RUT único). La OC del cliente se registra después, al crear la venta: no se necesita para cotizar.">
             <SelectorCliente clientes={vp.clientes} valor={vista.cliente_id} onCambiar={elegirCliente} onNuevo={editable ? () => setNuevoCliente(true) : null} deshabilitado={ro} />
           </Field>
-          {cliente && <div data-datos-cliente style={{ fontSize: T.small, color: C.inkMuted, margin: "-6px 0 12px", lineHeight: 1.5 }}>
-            Razón social: <b style={{ color: C.ink }}>{cliente.razon_social}</b> · RUT: <b style={{ color: C.ink, fontFamily: MONO }}>{cliente.rut || "Sin RUT"}</b>{cliente.giro ? <> · Giro: {cliente.giro}</> : null}
-          </div>}
+          {/* Razón social y RUT se ven una sola vez, en el cliente elegido (arriba); aquí solo lo adicional, como el giro. */}
+          {cliente?.giro && <div data-datos-cliente style={{ fontSize: T.small, color: C.inkMuted, margin: "-6px 0 12px", lineHeight: 1.5 }}>Giro: {cliente.giro}</div>}
           <Tarjeta padding="12px" data-bloque-direccion style={{ borderColor: dirOk ? C.ok : C.warn, background: dirOk ? C.card : C.warnLight }}>
             <div style={{ fontSize: T.sm, fontWeight: 700, color: C.ink }}>Dirección de entrega del cliente</div>
             <div style={{ fontSize: T.small, color: dirOk ? C.okText : C.warnText, fontWeight: 600, margin: "2px 0 8px" }}>{dirOk ? "✓ Registrada: los despachos se verifican contra esta dirección." : "Complétala antes de confirmar despachos (los productos se pueden ingresar igual; su despacho quedará «Por verificar»)."}</div>

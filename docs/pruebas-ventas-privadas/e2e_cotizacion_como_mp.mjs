@@ -68,7 +68,9 @@ async function recorrido(browser, { pref, ancho, alto, movil }) {
   const txtDatos = await h.locator('[role="tabpanel"]').first().innerText().catch(() => h.innerText());
   ok(`${pref}02 Datos sin campos exclusivos de Mercado Público`, !/Mercado P[uú]blico|licitaci|Compra [AÁ]gil|ChileCompra|Instituci[oó]n|Presupuesto del comprador/i.test(await h.innerText()) && !(await h.locator('[data-campo="id_externo"]').count()), txtDatos.slice(0, 200));
   await ui.elegirCliente(p, "Maderas", "76.086.428-5");
-  ok(`${pref}03 cliente del registro: propone contacto, dirección y condiciones`, (await h.locator('[data-campo="contacto"]').inputValue()) === "Rosa Pérez" && (await h.locator('[data-campo="direccion"]').inputValue()) === "Planta km 5, Laja" && (await h.locator('[data-campo="pago"]').inputValue()) === "50% anticipo y saldo a 30 días" && /76\.086\.428-5/.test(await h.locator("[data-datos-cliente]").innerText()));
+  ok(`${pref}03 cliente del registro: propone contacto, dirección y condiciones`, (await h.locator('[data-campo="contacto"]').inputValue()) === "Rosa Pérez" && (await h.locator('[data-campo="direccion"]').inputValue()) === "Planta km 5, Laja" && (await h.locator('[data-campo="pago"]').inputValue()) === "50% anticipo y saldo a 30 días" && /76\.086\.428-5/.test(await h.locator("[data-cliente-elegido]").innerText())
+    // 13/11/2026: razón social y RUT una sola vez (cliente elegido); debajo solo lo adicional (giro), sin repetirlos.
+    && (await h.locator("[data-datos-cliente]").count() === 0 || !/76\.086\.428-5|Razón social/.test(await h.locator("[data-datos-cliente]").innerText())));
   await h.locator('[data-campo="plazo"]').fill(LARGO);
   await h.locator('[data-campo="condiciones"]').fill("Precios netos en pesos chilenos. Despacho incluido.");
   ok(`${pref}04 cambios sin guardar señalados (protección)`, (await h.locator('[data-estado-guardado="local"]').count()) === 1);
