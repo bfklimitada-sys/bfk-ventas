@@ -57,6 +57,18 @@ const abrirForm = async (mes, anio) => { await page.getByRole("tab", { name: /^I
   await page.getByText("+ Registrar IVA de otro mes").first().click(); await page.waitForTimeout(600);
   await page.locator("[data-form-f29] select").first().selectOption(String(mes)); await page.locator('[data-form-f29] input[type="number"]').first().fill(String(anio)); await page.waitForTimeout(300); };
 const llenar = async (vals) => { for (const [k, v] of Object.entries(vals)) await page.locator(`[data-f29-campo="${k}"]`).fill(v); await page.waitForTimeout(200); };
+// Comisiones de octubre 2026 en pantalla: por cada vendedor con bloque Oct/2026, el texto «Descuento tributario total: $X».
+const comisionesOctubre = async () => {
+  const vend = await rest("vendedores?select=id,nombre&order=nombre"); const out = [];
+  for (const v of vend) {
+    await ir("vendedores"); const el = page.getByText(v.nombre, { exact: true }).first();
+    if (!(await el.count())) continue; await el.click().catch(() => {}); await page.waitForTimeout(1200);
+    const bt = await page.evaluate(() => document.body.innerText); const i0 = bt.indexOf("Oct/2026", Math.max(0, bt.search(/comisión mes a mes/i)));
+    if (i0 < 0) continue; const bloque = bt.slice(i0, bt.indexOf("= Comisión del mes", i0) + 40);
+    out.push({ vendedor: v.id, descuento: (bloque.match(/Descuento tributario total: \$[\d.]+/) || [])[0] || null, tiene58559: /58\.559/.test(bloque) });
+  }
+  return out;
+};
 const OCT = { vN: "$ 6.331.221", cN: "6.189.588", iV: "1.202.931", iC: "$ 1.176.028", rem: "149.951", ppm: "31.656", otras: "–" };
 
 await ir("impuestos");
@@ -67,9 +79,20 @@ await abrirForm(10, 2026);
 ok("formulario_con_desglose", (await page.locator('[data-form-f29="desglose"]').count()) === 1);
 await llenar(OCT);
 const vals = { neto: await desg("iva-neto"), aPagar: await desg("iva-a-pagar"), remSig: await desg("remanente-siguiente"), total: await desg("total-f29"), desc: await desg("descuento-comisiones") };
-ok("formulario_desglose_octubre", /\$26\.903/.test(vals.neto) && /\$0$/.test(vals.aPagar) && /\$123\.048/.test(vals.remSig) && /\$31\.656/.test(vals.total) && /\$58\.559/.test(vals.desc), JSON.stringify(vals));
+ok("formulario_desglose_octubre", /\$26\.903/.test(vals.neto) && /\$0$/.test(vals.aPagar) && /\$123\.048/.test(vals.remSig) && /Total a pagar F29.*\$31\.656/.test(vals.total) && /\$31\.656/.test(vals.desc) && !/58\.559/.test(vals.desc), JSON.stringify(vals));
 if (MODO === "lectura") {
   await cerrar(); await tabF29();
+  const octReal = ivaAntes.find((r) => r.anio === 2026 && r.mes === 10 && r.desglose_f29);
+  if (octReal) {   // octubre ya registrado (por Kevin) en los datos de la copia: verificar ambas pantallas sin escribir
+    await page.locator('[data-f29="2026-10"]').click(); await page.waitForTimeout(600);
+    const tot = await det("total-f29"); const desc = await det("descuento-comisiones");
+    console.log("IMPUESTOS_OCTUBRE|" + tot + "|" + desc);
+    ok("impuestos_total_a_pagar_f29_31656", /Total a pagar F29.*\$31\.656/.test(tot), tot);
+    await cerrar();
+    const com = await comisionesOctubre(); console.log("COMISIONES_OCTUBRE|" + JSON.stringify(com));
+    ok("comisiones_descuento_tributario_total_31656", com.length > 0 && com.every((x) => x.descuento === "Descuento tributario total: $31.656" && !x.tiene58559), JSON.stringify(com));
+    await ir("impuestos"); await tabF29();
+  } else console.log("OCTUBRE_NO_REGISTRADO_EN_LA_COPIA");
   const legacy = ivaAntes.filter((r) => !r.desglose_f29 && Number(r.anio) * 12 + Number(r.mes) >= 2026 * 12 + 8).slice(-1)[0];
   if (legacy) { await page.locator(`[data-f29="${legacy.anio}-${legacy.mes}"]`).click(); await page.waitForTimeout(500);
     ok("historico_vista_anterior", (await page.locator("[data-detalle-f29] [data-f29-anterior]").count()) === 1); await cerrar(); }
@@ -83,7 +106,7 @@ if (MODO === "lectura") {
   await tabF29();
   await page.locator('[data-f29="2026-10"]').click(); await page.waitForTimeout(600);
   ok("declarado_pendiente_31656", /Declarado · pendiente de pago \$31\.656/.test(await page.locator("[data-estado-f29]").innerText()) && (await page.locator("[data-saldo-f29]").getAttribute("data-saldo-f29")) === "31656");
-  ok("vista_periodo_desglose", /\$123\.048/.test(await det("remanente-siguiente")) && /\$58\.559/.test(await det("descuento-comisiones")) && /\$31\.656/.test(await det("total-f29")));
+  ok("vista_periodo_desglose", /\$123\.048/.test(await det("remanente-siguiente")) && /\$31\.656/.test(await det("descuento-comisiones")) && /\$31\.656/.test(await det("total-f29")));
   await page.locator("[data-f29-registrar-pago]").click(); await page.waitForTimeout(300);
   await page.locator("[data-pago-fecha]").fill("2026-11-12");
   await page.locator("[data-pago-confirmar]").dblclick(); await page.waitForTimeout(3000);
@@ -94,6 +117,10 @@ if (MODO === "lectura") {
   gOct = await rest("gastos_indirectos?select=*&anio=eq.2026&mes=eq.10&categoria_id=eq.cat_impuesto");
   ok("volver_a_guardar_no_duplica", gOct.length === 1 && (await page.locator("[data-saldo-f29]").getAttribute("data-saldo-f29")) === "0", gOct.length);
   await cerrar();
+  ok("impuestos_total_a_pagar_f29_31656", /Total a pagar F29.*\$31\.656/.test(await (async () => { await page.locator('[data-f29="2026-10"]').click(); await page.waitForTimeout(500); const t = await det("total-f29"); await cerrar(); return t; })()));
+  const com = await comisionesOctubre(); console.log("COMISIONES_OCTUBRE|" + JSON.stringify(com));
+  ok("comisiones_descuento_tributario_total_31656", com.length > 0 && com.every((x) => x.descuento === "Descuento tributario total: $31.656" && !x.tiene58559), JSON.stringify(com));
+  await ir("impuestos");
   // F29 en $0 (noviembre 2026) y período con IVA a pagar (diciembre 2026, pago parcial).
   await abrirForm(11, 2026); await llenar({ vN: "0", cN: "0", iV: "0", iC: "0", rem: "123.048", ppm: "0", otras: "0" });
   await page.locator("[data-f29-guardar]").click(); await page.waitForTimeout(2200);
@@ -101,7 +128,7 @@ if (MODO === "lectura") {
   ok("f29_cero_guardado", nov.desglose_f29 === true && Number(nov.ppm) === 0 && Number(nov.otras_retenciones) === 0 && Number(nov.iva_pagado) === 0, JSON.stringify(nov));
   await tabF29(); ok("f29_cero_listado", /\$0 a pagar/.test(await page.locator('[data-f29="2026-11"]').innerText()));
   await abrirForm(12, 2026); await llenar({ vN: "5.263.158", cN: "3.157.895", iV: "1.000.000", iC: "600.000", rem: "123.048", ppm: "26.316", otras: "5.000" });
-  ok("iva_a_pagar_desglose", /\$276\.952/.test(await desg("iva-a-pagar")) && /\$308\.268/.test(await desg("total-f29")) && /\$431\.316/.test(await desg("descuento-comisiones")));
+  ok("iva_a_pagar_desglose", /\$276\.952/.test(await desg("iva-a-pagar")) && /\$308\.268/.test(await desg("total-f29")) && /\$308\.268/.test(await desg("descuento-comisiones")));
   await page.locator("[data-f29-guardar]").click(); await page.waitForTimeout(2200);
   await tabF29(); await page.locator('[data-f29="2026-12"]').click(); await page.waitForTimeout(500);
   await page.locator("[data-f29-registrar-pago]").click(); await page.waitForTimeout(300);

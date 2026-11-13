@@ -43,8 +43,10 @@ eq("oct: IVA a pagar = $0", d.ivaAPagar, 0);
 eq("oct: PPM = $31.656 / otras retenciones = $0", [d.ppm, d.otras], [31656, 0]);
 eq("oct: Total a pagar F29 = $31.656", d.total, 31656);
 eq("oct: Remanente para noviembre = $123.048", d.remanenteSiguiente, 123048);
-eq("oct: descuento tributario para comisiones = $58.559", d.descuentoComisiones, 58559);
-eq("oct: descuento del período en la regla de comisiones = $58.559", descuentoTributarioPeriodo(db.iva, 2026, 10).descuentoF29, 58559);
+// 13/11/2026 12:48 (Kevin): desde octubre 2026, con el desglose completo, el descuento es el Total a pagar F29 ($31.656), no $58.559.
+eq("oct: descuento tributario total para comisiones = Total a pagar F29 = $31.656", [d.descuentoComisiones, d.reglaTotalF29], [31656, true]);
+const tOct = descuentoTributarioPeriodo(db.iva, 2026, 10);
+eq("oct: regla de comisiones → IVA a pagar $0 + PPM y otras $31.656 = $31.656 (no $58.559)", [tOct.impIva, tOct.retenciones, tOct.descuentoF29, tOct.reglaTotalF29], [0, 31656, 31656, true]);
 // Guardado sin pago: pendiente $31.656, ningún gasto creado.
 let f = desgloseF29(db.iva, db.gastos, 2026, 10);
 eq("oct sin pago: pendiente $31.656, pagado $0", [f.det, f.pag, f.pend, f.faltaTotalF29], [31656, 0, 31656, false]);
@@ -78,11 +80,25 @@ const oc = (id, v, venta, costo, fecha) => ({ id, numero_oc: id, vendedor_id: v,
   eventos_factura: [{ id: "f" + id, numero_factura: id, fecha, monto: venta }] });
 const ocs1 = [oc("A", "v1", 1500000, 1000000, "2026-10-10")];
 let c = calcularPagoVendedor({ vendedorId: "v1", ocs: ocs1, anio: 2026, mes: 10, ivaMensual: db.iva, pagosVendedor: [] });
-eq("comisión oct, un vendedor: (500.000 − 58.559)/2 = 220.721 (redondeo)", [c.comisionOrdinaria, c.descuentoF29, c.retenciones, c.impIva, c.f29Incompleto, comisionProvisoria(c)], [Math.round(500000 / 2 - 58559 / 2), 58559, 31656, 26903, false, false]);
+eq("comisión oct, un vendedor: (500.000 − 31.656)/2 = 234.172", [c.comisionOrdinaria, c.descuentoF29, c.retenciones, c.impIva, c.f29Incompleto, comisionProvisoria(c)], [234172, 31656, 31656, 0, false, false]);
+eq("comisión oct: datos del desglose para la pantalla", [c.reglaTotalF29, c.ivaNetoF29, c.remanenteF29], [true, 26903, 149951]);
 const ocs2 = [oc("A", "v1", 1500000, 1000000, "2026-10-10"), oc("B", "v2", 900000, 600000, "2026-10-12")];
 const per = comisionOrdinariaPeriodo({ ocs: ocs2, anio: 2026, mes: 10, ivaMensual: db.iva });
-eq("comisión oct, dos vendedores: total = (800.000 − 58.559)/2, descuento una sola vez", [per.descuentoF29, per.total, per.partes.get("v1") + per.partes.get("v2")], [58559, Math.round(800000 / 2 - 58559 / 2), Math.round(800000 / 2 - 58559 / 2)]);
-eq("comisión oct: el total efectivo del F29 ($31.656) NO es el descuento de comisiones", per.descuentoF29 !== 31656, true);
+eq("comisión oct, dos vendedores: total = (800.000 − 31.656)/2 = 384.172, descuento una sola vez", [per.descuentoF29, per.total, per.partes.get("v1") + per.partes.get("v2")], [31656, 384172, 384172]);
+eq("comisión oct, dos vendedores: reparto por utilidad (500.000 y 300.000)", [per.partes.get("v1"), per.partes.get("v2")], [Math.round(384172 * 5 / 8), 384172 - Math.round(384172 * 5 / 8)]);
+// Aunque el F29 siga pendiente de pago, el descuento es el mismo (se registra el pago después).
+const ivSinPago = db.iva; const gSinPago = db.gastos.filter((g) => !(g.anio === 2026 && g.mes === 10));
+eq("comisión oct: el descuento no depende del pago del F29", [descuentoTributarioPeriodo(ivSinPago, 2026, 10).descuentoF29, desgloseF29(ivSinPago, gSinPago, 2026, 10).pend], [31656, 31656]);
+// Montos verificados y pagos se respetan.
+c = calcularPagoVendedor({ vendedorId: "v1", ocs: ocs1, anio: 2026, mes: 10, ivaMensual: db.iva, pagosVendedor: [{ id: "pv", vendedor_id: "v1", anio: 2026, mes: 10, monto_pagado: 200000, monto_verificado: 210000 }] });
+eq("comisión oct: un monto verificado manda sobre la fórmula; el pago se conserva", [c.pagoCalculado, c.pagado, c.esVerificado], [210000, 200000, true]);
+// Desglose INCOMPLETO en octubre (remanente pendiente): regla anterior y comisión provisoria hasta completarlo.
+const ivInc = [{ ...rOct, remanente_anterior: null }];
+c = calcularPagoVendedor({ vendedorId: "v1", ocs: ocs1, anio: 2026, mes: 10, ivaMensual: ivInc, pagosVendedor: [] });
+eq("oct con remanente pendiente: sin regla del total, provisoria", [c.reglaTotalF29, c.descuentoF29, c.f29Incompleto, comisionProvisoria(c)], [undefined, 58559, true, true]);
+// Antes de octubre 2026 un período con desglose completo conserva la regla anterior (IVA neto + retenciones).
+const ivSep = [{ ...rOct, id: "s", mes: 9 }];
+eq("sep 2026 con desglose completo: regla anterior (IVA neto + PPM + otras)", [descuentoTributarioPeriodo(ivSep, 2026, 9).descuentoF29, desgloseRegistroF29(ivSep[0]).descuentoComisiones], [58559, 58559]);
 
 // ── 2. F29 en $0 frente a dato pendiente ─────────────────────────────────────────────────────────────
 const cero = { anio: 2026, mes: 11, ventasNetas: 0, comprasNetas: 0, ivaVentas: 0, ivaCompras: 0, desglose: true, remanenteAnterior: 0, ppm: 0, otrasRetenciones: 0 };
@@ -108,7 +124,7 @@ let pi = planGuardarIva({ data: conIva, gastos: [], ivaMensual: [] }); const ivI
 const dI = desgloseRegistroF29(ivI[0]);
 eq("IVA a pagar: neto 400.000 − remanente 123.048 = 276.952; remanente siguiente 0", [dI.ivaNeto, dI.ivaAPagar, dI.remanenteSiguiente], [400000, 276952, 0]);
 eq("IVA a pagar: total F29 = 276.952 + 26.316 + 5.000 = 308.268 (iva_pagado guarda el total)", [dI.total, pi.iva.fila.iva_pagado], [308268, 308268]);
-eq("IVA a pagar: descuento comisiones = 400.000 + 26.316 + 5.000 = 431.316", dI.descuentoComisiones, 431316);
+eq("IVA a pagar: descuento comisiones = Total a pagar F29 = 308.268", dI.descuentoComisiones, 308268);
 const gI = [];
 let pq = planPagoF29({ id: "p1", anio: 2026, mes: 12, monto: 200000, fecha: "2027-01-15", gastos: gI, ivaMensual: ivI, hoy: "2027-01-20" });
 eq("IVA a pagar: pago parcial → saldo 108.268", [pq.accion, pq.pendienteDespues], ["insertar", 108268]); gI.push(pq.fila);

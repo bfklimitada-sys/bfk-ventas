@@ -79,7 +79,7 @@ await escribir("otras", "–"); await page.waitForTimeout(200);
 await page.locator("[data-desglose-f29]").scrollIntoViewIfNeeded(); await foto("1-formulario-octubre");
 res.form_iva_neto = await desg("iva-neto"); res.form_iva_a_pagar = await desg("iva-a-pagar"); res.form_remanente_sig = await desg("remanente-siguiente");
 res.form_total = await desg("total-f29"); res.form_descuento = await desg("descuento-comisiones");
-res.form_ok = /\$26\.903/.test(res.form_iva_neto) && /\$0$/.test(res.form_iva_a_pagar) && /noviembre.*\$123\.048/.test(res.form_remanente_sig) && /\$31\.656/.test(res.form_total) && /\$58\.559/.test(res.form_descuento);
+res.form_ok = /\$26\.903/.test(res.form_iva_neto) && /\$0$/.test(res.form_iva_a_pagar) && /noviembre.*\$123\.048/.test(res.form_remanente_sig) && /Total a pagar F29.*\$31\.656/.test(res.form_total) && /\$31\.656/.test(res.form_descuento) && !/58\.559/.test(res.form_descuento);
 await page.locator("[data-f29-guardar]").click(); await page.waitForTimeout(1500);
 const post = escr.filter((e) => e.t === "iva_mensual");
 const b = post[0]?.body || {};
@@ -96,7 +96,7 @@ await page.locator('[data-f29="2026-10"]').click(); await page.waitForTimeout(50
 await foto("2-detalle-octubre");
 res.detalle_estado = await texto("[data-estado-f29]");
 res.detalle_ok = /Declarado · pendiente de pago \$31\.656/.test(res.detalle_estado) && (await page.locator("[data-detalle-f29] [data-saldo-f29]").getAttribute("data-saldo-f29")) === "31656"
-  && /\$123\.048/.test(await det("remanente-siguiente")) && /\$58\.559/.test(await det("descuento-comisiones")) && (await page.locator("[data-sin-pagos]").count()) === 1;
+  && /\$123\.048/.test(await det("remanente-siguiente")) && /Total a pagar F29.*\$31\.656/.test(await det("total-f29")) && /\$31\.656/.test(await det("descuento-comisiones")) && (await page.locator("[data-sin-pagos]").count()) === 1;
 
 // 3) Registrar el pago (doble toque): una sola salida de caja; saldo $0.
 await page.locator("[data-f29-registrar-pago]").click(); await page.waitForTimeout(300);
@@ -133,14 +133,16 @@ await page.locator("[data-f29-guardar]").click(); await page.waitForTimeout(600)
 res.historico_no_se_completa_solo = escr.length === antesConv && /No se completan con valores supuestos/.test(await page.locator("[data-form-f29]").innerText());
 await cerrar();
 
-// 5) Comisiones de octubre: descuento único $58.559 (IVA neto $26.903 + PPM $31.656).
+// 5) Comisiones de octubre: descuento único = Total a pagar F29 $31.656 (IVA a pagar $0 + PPM $31.656 + otras $0); NUNCA $58.559.
 await ir("vendedores");
 await page.getByText("Vendedor Uno").first().click(); await page.waitForTimeout(800);
+await page.locator('[data-descuento-tributario="total-f29"]').first().scrollIntoViewIfNeeded().catch(() => {}); await foto("4-comisiones-octubre");
 const bt = await page.evaluate(() => document.body.innerText);
 const i0 = bt.indexOf("Oct/2026", bt.search(/comisión mes a mes/i)); const bloque = bt.slice(i0, bt.indexOf("= Comisión del mes", i0) + 40);
-res.comision_bloque_ok = /−\$31\.656/.test(bloque) && /\$58\.559/.test(bloque) && /\$26\.903/.test(bloque);
+res.comision_descuento_texto = (bloque.match(/Descuento tributario total: \$[\d.]+/) || [])[0] || null;
+res.comision_bloque_ok = res.comision_descuento_texto === "Descuento tributario total: $31.656" && !/58\.559/.test(bloque) && /IVA a pagar F29.*\$0/.test(bloque) && /PPM y otras retenciones del F29: −\$31\.656/.test(bloque);
 res.comision_octubre = (bloque.match(/= Comisión del mes: (\$[\d.]+)/) || [])[1] || null;
-res.comision_ok = res.comision_octubre === "$" + Math.round(500000 / 2 - 58559 / 2).toLocaleString("es-CL");
+res.comision_ok = res.comision_octubre === "$234.172";   // (500.000 − 31.656) / 2
 
 // 6) F29 en $0 (noviembre) y dato pendiente distinguible.
 await ir("impuestos");

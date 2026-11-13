@@ -16,6 +16,10 @@
 //   Descuento para comisiones   = IVA neto (con signo) + PPM + otras retenciones → una sola vez, antes de dividir
 // ═══════════════════════════════════════════════════════════════
 
+// Desde este período el descuento tributario de las comisiones es el Total a pagar F29 (con el desglose completo).
+export const DESCUENTO_TOTAL_F29_DESDE = { anio: 2026, mes: 10 };
+export const usaReglaTotalF29 = (anio, mes) => Number(anio) * 12 + Number(mes) >= DESCUENTO_TOTAL_F29_DESDE.anio * 12 + DESCUENTO_TOTAL_F29_DESDE.mes;
+
 // Valor guardado: null/undefined/"" = pendiente; cualquier otro, número.
 export const datoF29 = (v) => (v === null || v === undefined || v === "" ? null : Number(v));
 export const tieneDesgloseF29 = (r) => r?.desglose_f29 === true;
@@ -43,10 +47,16 @@ export const desgloseRegistroF29 = (r) => {
   const remanenteSiguiente = remanente === null ? null : Math.max(0, remanente - ivaNeto);
   const total = ivaAPagar === null || ppm === null || otras === null ? null : ivaAPagar + ppm + otras;
   const retenciones = ppm === null || otras === null ? null : ppm + otras;
-  const descuentoComisiones = retenciones === null ? null : ivaNeto + retenciones;
+  // Descuento tributario para comisiones (una sola vez, antes de dividir):
+  //  · desde octubre 2026 (DESCUENTO_TOTAL_F29_DESDE) con el desglose COMPLETO: el Total a pagar F29 después del remanente
+  //    (IVA a pagar + PPM + otras retenciones), aunque esté pendiente de pago. Regla de Kevin, 13/11/2026 12:48.
+  //  · antes de octubre 2026: IVA neto con signo + PPM + otras retenciones (regla del 13/11/2026 10:30).
+  //  · con datos pendientes en un período desde octubre 2026: null (pendiente; la comisión queda provisoria).
+  const reglaTotalF29 = usaReglaTotalF29(r?.anio, r?.mes);
+  const descuentoComisiones = reglaTotalF29 ? total : retenciones === null ? null : ivaNeto + retenciones;
   const pendientes = [remanente === null && "remanente_anterior", ppm === null && "ppm", otras === null && "otras_retenciones"].filter(Boolean);
   return {
-    debito, credito, ivaNeto, remanente, ppm, otras, ivaAPagar, remanenteSiguiente, total, retenciones, descuentoComisiones, pendientes,
+    debito, credito, ivaNeto, remanente, ppm, otras, ivaAPagar, remanenteSiguiente, total, retenciones, descuentoComisiones, reglaTotalF29, pendientes,
     // Lo que ya se sabe que hay que pagar (los datos pendientes cuentan $0 hasta ingresarlos).
     totalConocido: (ivaAPagar ?? 0) + (ppm ?? 0) + (otras ?? 0),
     completo: pendientes.length === 0,

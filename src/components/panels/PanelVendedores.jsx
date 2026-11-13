@@ -124,13 +124,19 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, gastos=[], pagosV
                       ) : (
                         <>
                           <div>Utilidad del mes: <b style={{color:C.ink}}>+{fmt.money(d.sumaUtilidad)}</b> <span style={{color:C.inkFaint}}>(de {fmt.money(d.sumaFacts)} facturados)</span></div>
-                          {d.sinIva
+                          {d.reglaTotalF29
+                            ? <div data-descuento-tributario="total-f29">
+                                <div>IVA a pagar F29 (IVA neto {d.ivaNetoF29<0?"−":""}{fmt.money(Math.abs(d.ivaNetoF29))} − remanente anterior reajustado {fmt.money(d.remanenteF29)}): <b style={{color:d.impIva>0?C.dangerText:C.ink}}>{d.impIva>0?"−":""}{fmt.money(d.impIva)}</b></div>
+                                <div>PPM y otras retenciones del F29: <b style={{color:d.retenciones>0?C.dangerText:C.ink}}>{d.retenciones>0?"−":""}{fmt.money(d.retenciones)}</b></div>
+                                <div data-descuento-tributario-total={d.descuentoF29}>Descuento tributario total: <b style={{color:C.dangerText}}>{fmt.money(d.descuentoF29)}</b> <span style={{color:C.inkFaint}}>(Total a pagar F29; se descuenta una sola vez, antes de dividir)</span></div>
+                              </div>
+                            : d.sinIva
                             ? <div style={{color:C.inkFaint}}>Sin descuento de IVA (regla especial de ese mes)</div>
                             : d.ivaRegistrado
                               ? <div>IVA neto del período (débito {fmt.money(d.ivaVentas)} − crédito {fmt.money(d.ivaCompras)}): <b style={{color:d.impIva>0?C.dangerText:C.okText}}>{d.impIva>0?"−":d.impIva<0?"+":""}{fmt.money(Math.abs(d.impIva))}</b>{d.impIva<0&&<span style={{color:C.inkFaint}}> (crédito mayor que débito: suma)</span>}</div>
                               : <div style={{color:C.warnText}}><Ic n="⚠"/> IVA de este mes sin registrar todavía — se está calculando sin IVA neto; cambiará cuando lo cargues{" "}{onIrImpuestos&&<button data-ir-iva-periodo={`${d.anio}-${d.mes}`} onClick={()=>onIrImpuestos({anio:d.anio,mes:d.mes})} style={{background:"none",border:"none",color:C.info,fontSize:13,fontWeight:600,cursor:"pointer",textDecoration:"underline",padding:0}}>Registrar IVA de {fmt.monthYear(d.mes,d.anio)}</button>}</div>
                           }
-                          {!d.sinIva&&d.retenciones>0&&<div>Retenciones del F29 (PPM y otras): <b style={{color:C.dangerText}}>−{fmt.money(d.retenciones)}</b> <span style={{color:C.inkFaint}}>· descuento tributario total (IVA neto + retenciones) {d.descuentoF29<0?"−":""}{fmt.money(Math.abs(d.descuentoF29))}</span></div>}
+                          {!d.reglaTotalF29&&!d.sinIva&&d.retenciones>0&&<div>Retenciones del F29 (PPM y otras): <b style={{color:C.dangerText}}>−{fmt.money(d.retenciones)}</b> <span style={{color:C.inkFaint}}>· descuento tributario total (IVA neto + retenciones) {d.descuentoF29<0?"−":""}{fmt.money(Math.abs(d.descuentoF29))}</span></div>}
                           {d.periodo&&!d.detalle.some(l=>!l.ventaPropia) ? (
                             <div data-comision-periodo="solo_ventas_propias" style={{color:C.inkFaint}}>Sin ventas ordinarias en el período: no participa de la comisión ordinaria (solo ventas propias)</div>
                           ) : d.periodo&&d.periodo.vendedores>1 ? (
@@ -138,14 +144,14 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, gastos=[], pagosV
                             // ordinaria total se reparte según la utilidad ordinaria positiva de cada vendedor.
                             <div data-comision-periodo={d.periodo.metodo}>
                               <div>Utilidad ordinaria del período ({d.periodo.vendedores} vendedores): <b style={{color:C.ink}}>{conSigno(d.periodo.utilidadTotal)}</b></div>
-                              <div>Comisión ordinaria del período = mitad de (utilidad del período − IVA neto{d.retenciones>0?" − retenciones":""}, una sola vez): <b style={{color:C.ink}}>{fmt.money(d.periodo.total)}</b>{d.periodo.total===0&&<span style={{color:C.inkFaint}}> (no positiva: cuenta como $0)</span>}</div>
+                              <div>Comisión ordinaria del período = mitad de (utilidad del período − {d.reglaTotalF29?"descuento tributario total":`IVA neto${d.retenciones>0?" − retenciones":""}`}, una sola vez): <b style={{color:C.ink}}>{fmt.money(d.periodo.total)}</b>{d.periodo.total===0&&<span style={{color:C.inkFaint}}> (no positiva: cuenta como $0)</span>}</div>
                               <div>Su parte: <b style={{color:C.ink}}>{fmt.money(d.comisionOrdinaria)}</b>{" "}
                                 <span style={{color:C.inkFaint}}>{d.periodo.metodo==="partes_iguales"?`(partes iguales entre ${d.periodo.vendedores}: ningún vendedor tuvo utilidad positiva)`
                                   :d.periodo.peso>0?`(su utilidad ${fmt.money(d.periodo.peso)} de ${fmt.money(d.periodo.pesoTotal)} con utilidad positiva = ${(d.periodo.peso*100/d.periodo.pesoTotal).toLocaleString("es-CL",{maximumFractionDigits:2})}%)`
                                   :d.sumaUtilidad!==0||d.detalle.some(l=>!l.ventaPropia)?"(su utilidad ordinaria no es positiva: su parte es $0)":"(sin ventas ordinarias en el período: solo ventas propias)"}</span></div>
                             </div>
                           ) : (
-                            <div>Mitad de (utilidad − IVA neto{d.retenciones>0?" − retenciones":""}): <b style={{color:C.ink}}>{conSigno(Math.round((d.sumaUtilidad-(d.sinIva?0:d.descuentoF29))/2))}</b>{(d.sumaUtilidad-(d.sinIva?0:d.descuentoF29))<0&&<span style={{color:C.inkFaint}}> (negativo: cuenta como $0)</span>}</div>
+                            <div>Mitad de (utilidad − {d.reglaTotalF29?"descuento tributario total":`IVA neto${d.retenciones>0?" − retenciones":""}`}): <b style={{color:C.ink}}>{conSigno(Math.round((d.sumaUtilidad-(d.sinIva?0:d.descuentoF29))/2))}</b>{(d.sumaUtilidad-(d.sinIva?0:d.descuentoF29))<0&&<span style={{color:C.inkFaint}}> (negativo: cuenta como $0)</span>}</div>
                           )}
                           {d.pagoVentasPropias>0&&<div>+ Ventas propias (100% de esa utilidad, sin repartir): <b style={{color:C.ink}}>+{fmt.money(d.pagoVentasPropias)}</b></div>}
                           <div style={{fontWeight:700,color:C.ink,marginTop:2}}>= Comisión del mes: {fmt.money(d.pagoCalculado)}</div>

@@ -67,10 +67,10 @@ const extra = {};
 if (oct?.desglose_f29) {
   const t = N_CALC.descuentoTributarioPeriodo(D.ivaMensual, 2026, 10); const f = N_F29.desgloseF29(D.ivaMensual, D.gastos, 2026, 10);
   extra.octubre = { descuento: t.descuentoF29, ivaNeto: t.impIva, retenciones: t.retenciones, totalF29: f.det, pagado: f.pag, pendiente: f.pend };
-  extra.octubre_ok = t.descuentoF29 === 58559 && t.impIva === 26903 && t.retenciones === 31656 && f.det === 31656;
+  extra.octubre_ok = t.descuentoF29 === 31656 && t.impIva === 0 && t.retenciones === 31656 && f.det === 31656;
   extra.comisiones_octubre = D.vendedores.map((v) => N_CALC.calcularPagoVendedor({ vendedorId: v.id, ocs, anio: 2026, mes: 10, ivaMensual: D.ivaMensual, pagosVendedor: D.pagosVendedor }))
     .filter(Boolean).map((c) => ({ descuentoF29: c.descuentoF29, f29Incompleto: c.f29Incompleto, provisoria: N_CALC.comisionProvisoria(c) }));
-  extra.comisiones_octubre_ok = extra.comisiones_octubre.every((c) => c.descuentoF29 === 58559 && !c.f29Incompleto);
+  extra.comisiones_octubre_ok = extra.comisiones_octubre.every((c) => c.descuentoF29 === 31656 && !c.f29Incompleto);
 }
 const noPermitidas = dif.filter((d) => !d.permitido);
 if (process.argv[3]) writeFileSync(process.argv[3], JSON.stringify({ dif, extra }, null, 1));

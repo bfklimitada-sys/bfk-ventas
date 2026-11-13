@@ -66,7 +66,7 @@ export function DetalleF29({ ivaMensual=[], gastos=[], anio, mes, onEditar, onPa
         {fila("ppm","PPM",monto(x.ppm))}
         {fila("otras","Otras retenciones",monto(x.otras))}
         {fila("total-f29","Total a pagar F29",x.total===null?pendiente:fmt.money(x.total),true)}
-        {fila("descuento-comisiones","Descuento tributario para comisiones",!conRet?`${conSigno(x.ivaNeto)} (solo IVA neto)`:x.descuentoComisiones===null?pendiente:conSigno(x.descuentoComisiones),true)}
+        {fila("descuento-comisiones",x.reglaTotalF29?"Descuento tributario total para comisiones (= Total a pagar F29)":"Descuento tributario para comisiones",!conRet?`${conSigno(x.ivaNeto)} (solo IVA neto)`:x.descuentoComisiones===null?pendiente:conSigno(x.descuentoComisiones),true)}
         {x.pendientes.length>0&&<div style={{fontSize:12,color:C.warnText,fontWeight:600,margin:"4px 0"}}>Pendiente de ingresar: {x.pendientes.map(p=>ETIQUETA_PENDIENTE[p]).join(", ")}.</div>}
       </>):(<>
         <div data-f29-anterior style={{fontSize:12,color:C.inkFaint,marginBottom:4}}>Registro anterior sin desglose (cálculo de siempre).</div>

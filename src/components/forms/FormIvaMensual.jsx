@@ -41,7 +41,7 @@ export function FormIvaMensual({ ivaMensual=[], gastos=[], periodo, onSave }) {
 
   const L={vN:leerMontoF29(v.vN),iV:leerMontoF29(v.iV),cN:leerMontoF29(v.cN),iC:leerMontoF29(v.iC),
     rem:leerMontoF29(v.rem),ppm:leerMontoF29(v.ppm),otras:leerMontoF29(v.otras),total:leerMontoF29(v.total)};
-  const d=desgloseRegistroF29({iva_ventas:L.iV.valor,iva_compras:L.iC.valor,remanente_anterior:L.rem.valor,ppm:L.ppm.valor,otras_retenciones:L.otras.valor});
+  const d=desgloseRegistroF29({anio,mes,iva_ventas:L.iV.valor,iva_compras:L.iC.valor,remanente_anterior:L.rem.valor,ppm:L.ppm.valor,otras_retenciones:L.otras.valor});
   // Referencia (no se copia): remanente nominal que dejó el mes anterior, si se registró con desglose.
   const mPrev=mes===1?12:mes-1, aPrev=mes===1?anio-1:anio;
   const rPrev=registroIvaDe(ivaMensual,aPrev,mPrev);
@@ -111,7 +111,7 @@ export function FormIvaMensual({ ivaMensual=[], gastos=[], periodo, onSave }) {
           {fila("otras","(+) Otras retenciones",monto(d.otras))}
           <div style={{borderTop:`1px solid ${C.teal}55`,margin:"4px 0"}} />
           {fila("total-f29","Total a pagar F29",d.total===null?<>{pendiente} <span style={{fontWeight:500}}>(conocido {fmt.money(d.totalConocido)})</span></>:fmt.money(d.total),{fuerte:true})}
-          {fila("descuento-comisiones","Descuento tributario para comisiones (antes de dividir)",
+          {fila("descuento-comisiones",d.reglaTotalF29?"Descuento tributario total para comisiones (= Total a pagar F29)":"Descuento tributario para comisiones (IVA neto + PPM + otras)",
             !conRet?`${conSigno(d.ivaNeto)} (solo IVA neto: antes de ago-2026 no se descuentan retenciones)`:d.descuentoComisiones===null?pendiente:conSigno(d.descuentoComisiones))}
           {d.pendientes.length>0&&<div data-f29-pendientes style={{fontSize:12,color:C.warnText,marginTop:4,fontWeight:600}}>Pendiente de ingresar: {d.pendientes.map(p=>ETIQUETA_PENDIENTE[p]).join(", ")}. {d.pendientes.some(p=>p!=="remanente_anterior")&&conRet?"Las comisiones del mes quedan provisorias.":""}</div>}
         </div>

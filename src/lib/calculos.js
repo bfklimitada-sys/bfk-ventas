@@ -5,7 +5,7 @@
 // ═══════════════════════════════════════════════════════════════
 import { C, fmt } from "./theme.js";
 import { facturasVigentesDe, montoTributarioVigente, ivaDeDocumento } from "./tributario.js";
-import { tieneDesgloseF29, desgloseRegistroF29 } from "./f29Desglose.js";
+import { tieneDesgloseF29, desgloseRegistroF29, usaReglaTotalF29 } from "./f29Desglose.js";
 
 // ── Facturas vigentes (regla 4, Fase 4B · modelo tributario SII) ──
 // La regla vive en lib/tributario.js (misma que la base, fin_facturas_vigentes):
@@ -131,7 +131,11 @@ export const aplicaRetenciones = (anio, mes) =>
 //    registrados explícitamente: la comisión es definitiva cuando ambos están ingresados (un $0 explícito cuenta).
 export const f29TotalRegistrado = (registro) => {
   if (!registro) return false;
-  if (tieneDesgloseF29(registro)) return desgloseRegistroF29(registro).retenciones !== null;
+  if (tieneDesgloseF29(registro)) {
+    const d = desgloseRegistroF29(registro);
+    // Desde octubre 2026 el descuento es el Total a pagar F29: definitivo solo con el desglose completo (remanente incluido).
+    return usaReglaTotalF29(registro.anio, registro.mes) ? d.completo : d.retenciones !== null;
+  }
   const total = Number(registro.iva_pagado);
   return Number.isFinite(total) && total > 0 && total >= ivaAPagarPeriodo(registro);
 };
@@ -156,6 +160,15 @@ export const extraGestion = (p) => Number(p?.monto_extra_gestion) || 0;
 export const descuentoTributarioPeriodo = (ivaMensual, anio, mes) => {
   const sinIva = Number(anio) === 2025 && Number(mes) === 4;
   const ivaMes = sinIva ? null : registroIvaDe(ivaMensual, anio, mes);
+  // 13/11/2026 12:48 (Kevin): desde octubre 2026, en un período con el desglose del informe COMPLETO, el descuento es el
+  // Total a pagar F29 después del remanente = IVA a pagar + PPM + otras retenciones (aunque esté pendiente de pago).
+  // impIva pasa a ser el IVA a pagar (tras el remanente), de modo que impIva + retenciones = descuentoF29 sigue valiendo.
+  // Con datos pendientes, o antes de octubre 2026, se mantiene la regla anterior (y la comisión queda provisoria si faltan).
+  if (ivaMes && tieneDesgloseF29(ivaMes) && usaReglaTotalF29(anio, mes)) {
+    const d = desgloseRegistroF29(ivaMes);
+    if (d.completo) return { sinIva, ivaMes, impIva: d.ivaAPagar, retenciones: d.retenciones, descuentoF29: d.total,
+      reglaTotalF29: true, ivaNetoF29: d.ivaNeto, remanenteF29: d.remanente };
+  }
   const impIva = ivaNetoPeriodo(ivaMes);          // con signo (0 si el período no tiene IVA registrado)
   const retenciones = retencionesPeriodo(ivaMes); // desde agosto 2026: PPM y demás retenciones del F29
   return { sinIva, ivaMes, impIva, retenciones, descuentoF29: impIva + retenciones };
@@ -263,7 +276,8 @@ export const calcularPagoVendedor = ({ vendedorId, ocs, anio, mes, ivaMensual = 
     detalle.push(linea);
   });
   if (!hayFacturas) return null;
-  const { sinIva, ivaMes, impIva, retenciones, descuentoF29 } = descuentoTributarioPeriodo(ivaMensual, anio, mes);
+  const tribut = descuentoTributarioPeriodo(ivaMensual, anio, mes);
+  const { sinIva, ivaMes, impIva, retenciones, descuentoF29 } = tribut;
   // Comisión ordinaria: su parte del período (regla común) o, antes de COMISION_PERIODO_DESDE, la fórmula anterior.
   const reglaPeriodo = aplicaComisionPeriodo(anio, mes);
   const per = reglaPeriodo ? comisionOrdinariaPeriodo({ ocs, anio, mes, ivaMensual }) : null;
@@ -285,6 +299,8 @@ export const calcularPagoVendedor = ({ vendedorId, ocs, anio, mes, ivaMensual = 
     // Desde agosto 2026 la comisión descuenta el PPM del F29: sin el total del F29 registrado aún no es definitiva.
     f29Incompleto: !sinIva && !!ivaMes && aplicaRetenciones(anio, mes) && !f29TotalRegistrado(ivaMes),
     ivaVentas: ivaMes ? Number(ivaMes.iva_ventas) || 0 : 0, ivaCompras: ivaMes ? Number(ivaMes.iva_compras) || 0 : 0,
+    // Solo en períodos con la regla del Total a pagar F29 (desde octubre 2026, desglose completo): datos para el desglose en pantalla.
+    ...(tribut.reglaTotalF29 ? { reglaTotalF29: true, ivaNetoF29: tribut.ivaNetoF29, remanenteF29: tribut.remanenteF29 } : {}),
     deuda: Math.max(0, pagoCalculado - pagado),
     // Extra por gestión del período (aparte de la comisión) y total transferido; si la comisión bajó después de pagarla
     // (p. ej. al registrar el IVA), la diferencia queda como saldo por regularizar: no se reclasifica ningún pago.
