@@ -1,4 +1,4 @@
-import { anioMesDe } from "../../lib/calculos";
+import { anioMesDe, calcularPagoVendedor } from "../../lib/calculos";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { C, MONO, SANS, btnP, btnG, fmt, btnMini } from "../../lib/theme";
@@ -731,6 +731,16 @@ function PrepararRegistro({ x, ocs, financiadores, vendedores, categorias, borra
         )}
         <datalist id="socios-cartola">{(financiadores || []).filter((f) => f.tipo !== "propio").map((f) => <option key={f.id} value={f.nombre} />)}</datalist>
       </>)}
+      {borrador.tipo === "vendedor" && borrador.destinoId && Number(borrador.mesCom) >= 1 && Number(borrador.anioCom) >= 2020 && (() => {
+        // 13/11/2026: misma regla que Comisiones y el pago manual (comisión ligada a la liquidación original de la OC).
+        const c = calcularPagoVendedor({ vendedorId: borrador.destinoId, ocs: ocs || [], anio: Number(borrador.anioCom), mes: Number(borrador.mesCom) });
+        const rev = c?.porRevisar || [], fuera = c?.refacturadasFuera || [];
+        if (!rev.length && !fuera.length) return null;
+        return (<div data-aviso-cartola-comision style={{ fontSize: 12, color: C.warnText, marginTop: 6, lineHeight: 1.45 }}>
+          {rev.length > 0 && <div><Ic n="⚠" /> Por revisar en ese mes: {rev.map((r) => r.numero_oc).join(", ")} — no se incluyen en este pago ni se marcan pagadas hasta revisarlas.</div>}
+          {fuera.length > 0 && <div style={{ color: C.inkFaint }}>Refacturadas con comisión en su liquidación original (no entran en este mes): {fuera.map((x) => `${x.numero_oc} → ${MESES[x.liquidacion.mes - 1]} ${x.liquidacion.anio}`).join(", ")}</div>}
+        </div>);
+      })()}
       {resumen && (
         <div data-confirmacion style={{ background: C.warnLight, border: `1px solid ${C.warn}`, borderRadius: 8, padding: "9px 11px", marginTop: 8, fontSize: 12, color: C.ink, lineHeight: 1.45 }}>
           <div style={{ fontWeight: 600, marginBottom: 4 }}>Se registrará en BFK:</div>

@@ -1445,6 +1445,17 @@ export default function App() {
     showToast("F29 guardado · el pago se registra aparte, cuando esté hecho");
     await cargarTodo();
   };
+  // Revisión de la comisión de una OC «Por revisar» (13/11/2026, solo administrador; la base lo exige). Queda registrado
+  // quién y cuándo. conservar: sigue en su liquidación pagada · pagada: quedó cubierta (se marca pagada en su liquidación
+  // original) · pendiente: no estaba pagada (entra en el cálculo de su liquidación original como saldo).
+  const handleRevisarOC=async({ocId,numero_oc,resultado,mes,anio})=>{
+    const t=session.access_token;
+    const quien=perfil?.nombre||session.user.email||"administrador";
+    const texto={conservar:"se mantiene en la liquidación pagada",pagada:`quedó cubierta en la liquidación de ${String(mes).padStart(2,"0")}/${anio}`,pendiente:`no estaba pagada: entra como saldo de ${String(mes).padStart(2,"0")}/${anio}`}[resultado];
+    await upd("ordenes_compra_v2",t,ocId,{comision_revision:"revisada",comision_revision_motivo:`Revisada el ${hoyChile()} por ${quien}: ${texto}`,...(resultado==="pagada"?{vendedor_pagado:true}:{})});
+    showToast(`OC ${numero_oc} revisada: ${texto}`);
+    await cargarTodo();
+  };
   // Pago realizado del F29: un gasto «Impuesto SII» del período, con monto y fecha reales. El id lo fija el formulario
   // al abrirse: un segundo envío choca con la clave primaria y no se registra dos veces.
   const handlePagoF29=async({id,anio,mes,monto,fecha})=>{
@@ -2031,7 +2042,7 @@ export default function App() {
       {(tab==="finanzas"||todo)&&hoja("finanzas",<>{!todo&&<CanalFiltro valor={canal} onCambiar={setCanal} dato="finanzas" />}<FinanzasPorCanal canal={todo?"mp":canal} ocs={ocs} vp={vp} onIr={irA}><PanelResumenFinanzas ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} aportes={aportes} ajustes={ajustesSaldo} categorias={categoriasGasto} onIrImpuestos={()=>irA("impuestos")} /></FinanzasPorCanal></>)}
       {(tab==="impuestos"||todo)&&hoja("impuestos",<PanelImpuestos ivaMensual={ivaMensual} gastos={gastos} onGuardarIva={handleGuardarIva} onPagoF29={handlePagoF29} periodoInicial={ivaPeriodoInicial} onPeriodoInicialUsado={()=>setIvaPeriodoInicial(null)} />)}
       {(tab==="banco"||todo)&&hoja("banco",<PanelBanco ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} aportes={aportes} saldoBanco={saldoBanco} ultimaCartola={ultimaCartola} bancoMensual={bancoMensual} onEditarSaldo={()=>setAccion("saldo_banco")} onImportarCartola={()=>setAccion("cartola")} onQuitarAlertaCartola={handleQuitarAlertaCartola} />)}
-      {(tab==="vendedores"||todo)&&hoja("vendedores",<PanelVendedores vendedores={vendedores} ocs={ocs} ivaMensual={ivaMensual} gastos={gastos} pagosVendedor={pagosVendedor} onGuardarIva={handleGuardarIva} onPagoVendedor={handlePagoVendedorSimple} onAnularPago={handleAnularPagoVendedor} esAdmin={perfil?.rol==="admin"} onIrImpuestos={(p)=>{ setIvaPeriodoInicial(p&&Number.isInteger(p.anio)&&Number.isInteger(p.mes)?{anio:p.anio,mes:p.mes}:null); irA("impuestos"); }} onVerOCs={(filtro)=>{setFiltroCompras(filtro);setOcFoco(null);setVolverA(null);setTab("compras");}} onAbrirOC={(ocId)=>{setFiltroCompras(null);setOcFoco(ocId);setVolverA(null);setTab("compras");}} />)}
+      {(tab==="vendedores"||todo)&&hoja("vendedores",<PanelVendedores vendedores={vendedores} ocs={ocs} ivaMensual={ivaMensual} gastos={gastos} pagosVendedor={pagosVendedor} onRevisarOC={handleRevisarOC} onGuardarIva={handleGuardarIva} onPagoVendedor={handlePagoVendedorSimple} onAnularPago={handleAnularPagoVendedor} esAdmin={perfil?.rol==="admin"} onIrImpuestos={(p)=>{ setIvaPeriodoInicial(p&&Number.isInteger(p.anio)&&Number.isInteger(p.mes)?{anio:p.anio,mes:p.mes}:null); irA("impuestos"); }} onVerOCs={(filtro)=>{setFiltroCompras(filtro);setOcFoco(null);setVolverA(null);setTab("compras");}} onAbrirOC={(ocId)=>{setFiltroCompras(null);setOcFoco(ocId);setVolverA(null);setTab("compras");}} />)}
       {(tab==="usuarios"||todo)&&perfil?.rol==="admin"&&hoja("usuarios",<PanelUsuarios perfilPropio={perfil} onRecargar={cargarTodo} onEliminarOC={setEliminandoOC} eliminacionesVersion={eliminacionesVersion} difsHistoricas={difsHistoricas} perfiles={perfiles} ocs={ocs} ocsArchivadas={ocsArchivadas} onRestaurarOC={handleRestaurarOC} onChangeRol={handleChangeRol} session={session} showToast={showToast} entidadesCatalogo={entidadesCatalogo} onEntidadesImportadas={handleEntidadesImportadas} usoMP={usoMP} sincronizando={sincronizando} validandoTodo={validandoTodo} exportando={exportando} onCorregirFechas={corregirFechasTodas} onValidarTodo={validarTodoContraMP} onExportarTodo={handleExportarTodo} configVP={todo?null:<ConfigVentasPrivadas key={vp.instalado?"vp-cfg":"vp-cfg-0"} token={session?.access_token} vp={vp} onRecargar={cargarVP} showToast={showToast} />} />)}
     </ContactosContext.Provider></ModoTodoContext.Provider>
   );

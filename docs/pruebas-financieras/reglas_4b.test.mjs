@@ -37,13 +37,18 @@ const ocOtra = { id: "o2", vendedor_id: "v", estado_factura_propia: "emitida", e
   eventos_factura: [f("c", "300", "2026-07-10", 200000)] };
 const julio = calcularPagoVendedor({ vendedorId: "v", ocs: [ocRe, ocOtra], anio: 2026, mes: 7 });
 const agosto = calcularPagoVendedor({ vendedorId: "v", ocs: [ocRe, ocOtra], anio: 2026, mes: 8 });
-eq("comisión: julio ya no cuenta la OC refacturada (solo la otra)", [julio.sumaUtilidad, julio.sumaFacts], [100000, 200000]);
-eq("comisión: agosto (factura vigente) cuenta la OC una vez", [agosto.sumaUtilidad, agosto.sumaFacts], [16230, 239200]);
-eq("comisión: mes que solo tenía la anulada no aparece", mesesConFactura("v", [ocRe]).map((m) => `${m.anio}-${m.mes}`), ["2026-8"]);
+// 13/11/2026 (Kevin): la comisión queda ligada a la liquidación ORIGINAL de la OC. Antes la OC refacturada pasaba al mes
+// de la nueva factura (julio dejaba de contarla y agosto la sumaba); ahora se queda en julio y agosto no la cuenta.
+eq("comisión: julio (liquidación original) sigue contando la OC refacturada", [julio.sumaUtilidad, julio.sumaFacts], [116230, 439200]);
+eq("comisión: agosto (mes de la nueva factura) no cuenta la OC refacturada", agosto, null);
+eq("comisión: el mes de la liquidación es el de la primera factura", mesesConFactura("v", [ocRe]).map((m) => `${m.anio}-${m.mes}`), ["2026-7"]);
+// Con la liquidación anclada (pagada en agosto, comprobado): se queda en agosto.
+const ocAnclada = { ...ocRe, vendedor_pagado: true, comision_anio: 2026, comision_mes: 8 };
+eq("comisión: liquidación anclada en agosto se respeta", [calcularPagoVendedor({ vendedorId: "v", ocs: [ocAnclada, ocOtra], anio: 2026, mes: 8 })?.sumaUtilidad, calcularPagoVendedor({ vendedorId: "v", ocs: [ocAnclada, ocOtra], anio: 2026, mes: 7 })?.sumaUtilidad], [16230, 100000]);
 const verificado = calcularPagoVendedor({ vendedorId: "v", ocs: [ocRe, ocOtra], anio: 2026, mes: 7, pagosVendedor: [{ vendedor_id: "v", anio: 2026, mes: 7, monto_pagado: 90000, monto_verificado: 90000 }] });
 eq("comisión: un mes verificado conserva su monto verificado", verificado.pagoCalculado, 90000);
 const vp = { ...ocRe, id: "o3", es_venta_propia: true };
-eq("comisión venta propia: también solo con la factura vigente", calcularPagoVendedor({ vendedorId: "v", ocs: [vp], anio: 2026, mes: 7 }), null);
+eq("comisión venta propia: refacturada, se queda en su liquidación original (julio), no en agosto", [calcularPagoVendedor({ vendedorId: "v", ocs: [vp], anio: 2026, mes: 7 })?.detalle.map((l) => l.ventaPropia), calcularPagoVendedor({ vendedorId: "v", ocs: [vp], anio: 2026, mes: 8 })], [[true], null]);
 
 // ── 3. Reglas 2 y 3: etapa de financiamiento "no aplica" ──
 const vpCobrada = { estado_pago_cliente: "pagado", estado_pago_financiamiento: "no_aplica", estado_entrega: "confirmada", estado_factura_propia: "emitida", eventos_compra: [{}], es_venta_propia: true };

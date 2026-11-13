@@ -13,7 +13,8 @@ import { periodosIvaIncompletos } from "../../lib/ivaUnificado";
 // Monto con signo explícito (el IVA neto puede ser negativo).
 const conSigno=(n)=>(n<0?"−":"")+fmt.money(Math.abs(n));
 
-export function PanelVendedores({ vendedores, ocs, ivaMensual, gastos=[], pagosVendedor, onGuardarIva, onPagoVendedor, onAnularPago, esAdmin, onVerOCs, onAbrirOC, onIrImpuestos }) {
+const estiloRevisar={display:"block",marginTop:4,background:"none",border:"none",padding:0,color:C.info,fontWeight:600,fontSize:12,cursor:"pointer",textDecoration:"underline",minHeight:32};
+export function PanelVendedores({ vendedores, ocs, ivaMensual, gastos=[], pagosVendedor, onGuardarIva, onPagoVendedor, onAnularPago, esAdmin, onVerOCs, onAbrirOC, onIrImpuestos, onRevisarOC }) {
   const [anulando,setAnulando]=useState(null); // pago a anular (solo administrador)
   const [detalleMes,setDetalleMes]=useState(null); // "vendedor|anio|mes" con las OCs del cálculo desplegadas (Fase 4C)
   // Fase 4A: OCs sin vendedor no entran en ninguna comisión; se advierte para que no pase inadvertido.
@@ -175,6 +176,9 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, gastos=[], pagosV
                               <div style={{color:C.inkMuted}}>
                                 Factura vigente N° {l.factura} · {l.fechaFactura?fmt.date(String(l.fechaFactura).slice(0,10)):"—"} · {fmt.money(l.montoFacturas)}
                               </div>
+                              {l.refacturada&&<div data-oc-refacturada={l.ocId} style={{color:C.info,fontWeight:600}}>Refacturada en {fmt.monthYear(l.facturaVigenteMes.mes,l.facturaVigenteMes.anio)}: la cobranza sigue a la nueva factura; la comisión se mantiene en esta liquidación</div>}
+                              {l.porRevisar&&<div data-oc-por-revisar={l.ocId} style={{color:C.warnText,fontWeight:600}}><Ic n="⚠"/> Por revisar: {l.motivoRevision}</div>}
+                              {l.ajusteUtilidad?<div data-oc-ajuste={l.ocId} style={{color:C.warnText}}>Utilidad liquidada {fmt.money(l.utilidad)} · actual {fmt.money(l.utilidadActual)} · diferencia {l.ajusteUtilidad>0?"+":"−"}{fmt.money(Math.abs(l.ajusteUtilidad))} (ajuste aparte, por revisar)</div>:null}
                               <div style={{color:C.inkFaint}}>
                                 Venta {fmt.money(l.venta)} − costo {fmt.money(l.costo)} = utilidad {fmt.money(l.utilidad)}
                                 {l.ventaPropia&&<> · <b style={{color:C.ink}}>venta propia</b>: 100% de la utilidad menos el IVA de su factura = {fmt.money(l.pagoVentaPropia)}</>}
@@ -188,6 +192,28 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, gastos=[], pagosV
                         </div>
                       )}
                     </>); })()}
+                    {/* 13/11/2026: comisión ligada a la OC y a su liquidación original */}
+                    {(d.porRevisar||[]).map(r=>(
+                      <div key={r.ocId} data-por-revisar={r.ocId} style={{background:C.warnLight,borderRadius:8,padding:"7px 10px",margin:"4px 0",fontSize:12,color:C.warnText,lineHeight:1.45}}>
+                        <b><Ic n="⚠"/> Por revisar · OC {r.numero_oc}</b> (utilidad {fmt.money(r.utilidad)}): {r.motivo}. {r.incluida?"Se conserva en esta liquidación ya pagada; no se vuelve a incluir en otro pago.":"No se incluye en esta comisión ni en ningún pago hasta revisarla."}
+                        {esAdmin&&onRevisarOC&&(r.incluida
+                          ?<button data-marcar-revisada={r.ocId} onClick={()=>onRevisarOC({ocId:r.ocId,numero_oc:r.numero_oc,resultado:"conservar",mes:d.mes,anio:d.anio})} style={estiloRevisar}>Marcar revisada (se mantiene en esta liquidación)</button>
+                          :<div style={{display:"flex",gap:12,flexWrap:"wrap",marginTop:4}}>
+                            <button data-revisada-pagada={r.ocId} onClick={()=>onRevisarOC({ocId:r.ocId,numero_oc:r.numero_oc,resultado:"pagada",mes:d.mes,anio:d.anio})} style={estiloRevisar}>Revisada: ya estaba pagada</button>
+                            <button data-revisada-pendiente={r.ocId} onClick={()=>onRevisarOC({ocId:r.ocId,numero_oc:r.numero_oc,resultado:"pendiente",mes:d.mes,anio:d.anio})} style={estiloRevisar}>Revisada: no estaba pagada (incluir aquí)</button>
+                          </div>)}
+                      </div>
+                    ))}
+                    {d.ajusteUtilidadTotal?(
+                      <div data-ajuste-utilidad={d.ajusteUtilidadTotal} style={{background:C.relleno,borderRadius:8,padding:"7px 10px",margin:"4px 0",fontSize:12,color:C.inkMuted,lineHeight:1.45}}>
+                        <b style={{color:C.ink}}>Ajuste por revisar (aparte de la comisión):</b> la utilidad de {d.ajustesUtilidad.length} OC cambió después de liquidarla · diferencia de utilidad {d.ajusteUtilidadTotal>0?"+":"−"}{fmt.money(Math.abs(d.ajusteUtilidadTotal))} ({d.ajustesUtilidad.map(a=>`${a.numero_oc}: ${fmt.money(a.utilidadLiquidada)} → ${fmt.money(a.utilidadActual)}`).join("; ")}). No cambia el saldo ni se paga automáticamente.
+                      </div>
+                    ):null}
+                    {(d.refacturadasFuera||[]).length>0&&(
+                      <div data-refacturadas-fuera style={{fontSize:12,color:C.inkFaint,margin:"4px 0",lineHeight:1.45}}>
+                        No incluidas en este mes (factura vigente de este mes, comisión en su liquidación original): {d.refacturadasFuera.map(x=>`${x.numero_oc} → ${fmt.monthYear(x.liquidacion.mes,x.liquidacion.anio)}${x.pagada?" (pagada)":""}`).join(", ")}
+                      </div>
+                    )}
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
                       <span style={{fontSize:12,color:C.inkMuted}}>Comisión pagada: {fmt.money(d.pagado)}</span>
                       {d.deuda>0&&(d.estadoComision==="pendiente"
@@ -305,6 +331,9 @@ export function FormPagoVendedorSimple({ vendedores, ocs, ivaMensual, pagosVende
         <Linea k={`Comisión calculada · ${labelMes}`} v={ev.comision} dato="comision" />
         <Linea k="Comisión ya pagada" v={ev.pagadoAntes} dato="pagada" />
         <Linea k="Saldo pendiente" v={ev.pendienteAntes} fuerte dato="pendiente" />
+        {ev.porRevisar.length>0&&<div data-aviso-por-revisar style={{color:C.warnText,fontWeight:600,marginTop:4}}><Ic n="⚠"/> {ev.porRevisar.length} OC por revisar en {labelMes} ({ev.porRevisar.map(r=>r.numero_oc).join(", ")}): {ev.porRevisar.some(r=>!r.incluida)?"no se incluyen en este pago ni se marcan pagadas hasta revisarlas.":"ya están en un pago histórico; no se vuelven a pagar."}</div>}
+        {ev.refacturadasFuera.length>0&&<div data-aviso-refacturadas style={{color:C.inkFaint,marginTop:4}}>No se incluyen aquí (refacturadas, comisión en su liquidación original): {ev.refacturadasFuera.map(x=>`${x.numero_oc} → ${fmt.monthYear(x.liquidacion.mes,x.liquidacion.anio)}`).join(", ")}</div>}
+        {ev.ajusteUtilidadTotal?<div data-aviso-ajuste style={{color:C.inkFaint,marginTop:4}}>Ajuste de utilidad por revisar (aparte, no incluido en este pago): {ev.ajusteUtilidadTotal>0?"+":"−"}{fmt.money(Math.abs(ev.ajusteUtilidadTotal))}</div>:null}
         {ev.enCurso&&<div data-aviso-en-curso style={{color:C.warnText,fontWeight:600,marginTop:4}}><Ic n="⚠"/> {labelMes} es el mes en curso: su comisión todavía no es exigible y seguirá cambiando con las ventas del mes.</div>}
         {ev.provisoria&&<div data-aviso-provisoria style={{color:C.warnText,fontWeight:600,marginTop:4}}><Ic n="⚠"/> Comisión provisoria: {ev.sinIvaRegistrado?`el IVA de ${labelMes} no está registrado`:`falta el total del F29 (IVA + PPM) de ${labelMes}`}. Puede cambiar al registrarlo; si baja, la diferencia quedará como saldo por regularizar (el pago no se reclasifica solo).</div>}
       </div>

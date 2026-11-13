@@ -1,25 +1,19 @@
-import { anioMesDe, calcularPagoVendedor, comisionProvisoria, esMesEnCurso, facturaVigente, pagoVigente } from "./calculos.js";
+import { calcularPagoVendedor, comisionProvisoria, esMesEnCurso, liquidacionComision, pagoVigente } from "./calculos.js";
 
-// OC del vendedor con factura propia emitida, aún no marcadas como pagadas,
-// cuya factura vigente cae en el mes/año de la comisión.
+// OC del vendedor con factura propia emitida, aún no marcadas como pagadas, cuya LIQUIDACIÓN cae en el mes/año de la
+// comisión (13/11/2026: liquidacionComision; una OC refacturada en otro mes sigue en su liquidación original y nunca se
+// marca desde el mes de la nueva factura). Las OC «Por revisar» no se marcan en ningún pago hasta revisarlas.
+const enMes = (liq, mes, anio) => !!liq.periodo && liq.periodo.mes === Number(mes) && liq.periodo.anio === Number(anio);
 export const ocsPagablesDelMes = (ocs, vendedorId, mes, anio) =>
   (ocs || []).filter((o) => {
     if (o.vendedor_id !== vendedorId || o.estado_factura_propia !== "emitida" || o.vendedor_pagado) return false;
-    const evF = facturaVigente(o);
-    if (!evF) return false;
-    const f = anioMesDe(evF.fecha);
-    return f.mes === Number(mes) && f.anio === Number(anio);
+    const liq = liquidacionComision(o);
+    return enMes(liq, mes, anio) && !liq.porRevisar;
   });
 
 // OC del período ya marcadas como pagadas (para desmarcarlas si una anulación deja la comisión impaga).
 const ocsMarcadasDelMes = (ocs, vendedorId, mes, anio) =>
-  (ocs || []).filter((o) => {
-    if (o.vendedor_id !== vendedorId || !o.vendedor_pagado) return false;
-    const evF = facturaVigente(o);
-    if (!evF) return false;
-    const f = anioMesDe(evF.fecha);
-    return f.mes === Number(mes) && f.anio === Number(anio);
-  });
+  (ocs || []).filter((o) => o.vendedor_id === vendedorId && o.vendedor_pagado && enMes(liquidacionComision(o), mes, anio));
 
 // Reparto de UNA transferencia (08/10/2026):
 //   pago de comisión  = mínimo(monto transferido, comisión pendiente del período)
@@ -56,6 +50,9 @@ export const evaluarPagoVendedor = ({ vendedorId, mes, anio, monto, ocs, ivaMens
     enCurso: esMesEnCurso(anio, mes, hoy),
     sinIvaRegistrado: !!calc && !calc.ivaRegistrado, f29Incompleto: !!calc?.f29Incompleto,
     ocIds: completo && r.total > 0 ? ocsPagablesDelMes(ocs, vendedorId, mes, anio).map((o) => o.id) : [],
+    // 13/11/2026: avisos para el pago manual y la cartola (no cambian el monto).
+    porRevisar: calc?.porRevisar || [], refacturadasFuera: calc?.refacturadasFuera || [],
+    ajusteUtilidadTotal: calc?.ajusteUtilidadTotal || 0,
   };
 };
 
