@@ -59,22 +59,25 @@ const abrirForm = async (mes, anio) => { await page.getByRole("tab", { name: /^I
 const llenar = async (vals) => { for (const [k, v] of Object.entries(vals)) await page.locator(`[data-f29-campo="${k}"]`).fill(v); await page.waitForTimeout(200); };
 // Comisiones de octubre 2026 en pantalla: por cada vendedor con bloque Oct/2026, el texto «Descuento tributario total: $X».
 const comisionesOctubre = async () => {
-  const vend = await rest("vendedores?select=id,nombre&order=nombre"); const out = [];
+  // Expande cada vendedor y reúne los «Descuento tributario total» que aparecen (solo se muestran en períodos con la regla
+  // del Total a pagar F29, es decir octubre 2026 en adelante con el desglose completo) y si aparece $58.559 en algún lugar.
+  const vend = await rest("vendedores?select=id,nombre&order=nombre"); const out = []; let vio58559 = false;
+  await ir("vendedores");
   for (const v of vend) {
-    await ir("vendedores"); const el = page.getByText(v.nombre, { exact: true }).first();
+    const el = page.getByText(v.nombre, { exact: true }).first();
     if (!(await el.count())) continue; await el.click().catch(() => {}); await page.waitForTimeout(1200);
-    const bt = await page.evaluate(() => document.body.innerText); const i0 = bt.indexOf("Oct/2026", Math.max(0, bt.search(/comisión mes a mes/i)));
-    if (i0 < 0) continue; const bloque = bt.slice(i0, bt.indexOf("= Comisión del mes", i0) + 40);
-    out.push({ vendedor: v.id, descuento: (bloque.match(/Descuento tributario total: \$[\d.]+/) || [])[0] || null, tiene58559: /58\.559/.test(bloque) });
+    const textos = await page.locator("[data-descuento-tributario-total]").evaluateAll((els) => els.map((e) => e.innerText.replace(/\s+/g, " ").match(/Descuento tributario total: \$[\d.]+/)?.[0] || e.innerText));
+    textos.forEach((t) => out.push({ vendedor: v.id, descuento: t }));
+    if (/58\.559/.test(await page.evaluate(() => document.body.innerText))) vio58559 = true;
   }
-  return out;
+  return out.map((x) => ({ ...x, tiene58559: vio58559 }));
 };
 const OCT = { vN: "$ 6.331.221", cN: "6.189.588", iV: "1.202.931", iC: "$ 1.176.028", rem: "149.951", ppm: "31.656", otras: "–" };
 
 await ir("impuestos");
 ok("carga_impuestos", (await page.locator('[data-dato="f29-pendiente"], [data-indicador="f29-pendiente"]').count()) + (await page.getByText("IVA mensual").count()) > 0);
 const ivaAntes = await rest("iva_mensual?select=*&order=anio,mes");
-ok("copia_sin_f29_octubre_2026", !ivaAntes.some((r) => r.anio === 2026 && r.mes === 10), "la copia ya tenía octubre");
+if (MODO === "escribir") ok("copia_sin_f29_octubre_2026", !ivaAntes.some((r) => r.anio === 2026 && r.mes === 10), "la copia ya tenía octubre");
 await abrirForm(10, 2026);
 ok("formulario_con_desglose", (await page.locator('[data-form-f29="desglose"]').count()) === 1);
 await llenar(OCT);
