@@ -280,7 +280,7 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, ga
   const renderPreparar = (x) => abierto !== x.m.clave
     ? <button data-preparar={x.m.clave} onClick={() => abrir(x)} style={{ ...btnG, width: "100%", marginTop: 7, fontSize: 12, padding: "7px" }}>Preparar registro…</button>
     : (<>
-      <PrepararRegistro x={x} ocs={ocs} financiadores={financiadores} vendedores={vendedores} categorias={categorias}
+      <PrepararRegistro x={x} ocs={ocs} pagosVendedor={pagosVendedor} financiadores={financiadores} vendedores={vendedores} categorias={categorias}
         borrador={borrador} setBorrador={(p) => { setBorrador((b) => ({ ...b, ...p })); setConfirmo(false); }}
         confirmo={confirmo} setConfirmo={setConfirmo} problema={problemaBorrador(x)} guardando={guardando}
         onCancelar={cerrar} onRegistrar={() => registrar(x)} />
@@ -672,7 +672,7 @@ function Movimiento({ it, abierto, children }) {
 }
 
 // Preparación del registro de UN movimiento pendiente posterior al cierre. Nada viene elegido por defecto.
-function PrepararRegistro({ x, ocs, financiadores, vendedores, categorias, borrador, setBorrador, confirmo, setConfirmo, problema, guardando, onCancelar, onRegistrar }) {
+function PrepararRegistro({ x, ocs, pagosVendedor = [], financiadores, vendedores, categorias, borrador, setBorrador, confirmo, setConfirmo, problema, guardando, onCancelar, onRegistrar }) {
   const m = x.m;
   const opciones = x.dir === "entra" ? opcionesAbono(m, ocs) : [];
   const sugerencia = x.dir === "sale" ? clasificarCargo(m, financiadores, vendedores) : null;
@@ -733,12 +733,12 @@ function PrepararRegistro({ x, ocs, financiadores, vendedores, categorias, borra
       </>)}
       {borrador.tipo === "vendedor" && borrador.destinoId && Number(borrador.mesCom) >= 1 && Number(borrador.anioCom) >= 2020 && (() => {
         // 13/11/2026: misma regla que Comisiones y el pago manual (comisión ligada a la liquidación original de la OC).
-        const c = calcularPagoVendedor({ vendedorId: borrador.destinoId, ocs: ocs || [], anio: Number(borrador.anioCom), mes: Number(borrador.mesCom) });
+        const c = calcularPagoVendedor({ vendedorId: borrador.destinoId, ocs: ocs || [], anio: Number(borrador.anioCom), mes: Number(borrador.mesCom), pagosVendedor });
         const rev = c?.porRevisar || [], fuera = c?.refacturadasFuera || [];
         if (!rev.length && !fuera.length) return null;
         return (<div data-aviso-cartola-comision style={{ fontSize: 12, color: C.warnText, marginTop: 6, lineHeight: 1.45 }}>
           {rev.length > 0 && <div><Ic n="⚠" /> Por revisar en ese mes: {rev.map((r) => r.numero_oc).join(", ")} — no se incluyen en este pago ni se marcan pagadas hasta revisarlas.</div>}
-          {fuera.length > 0 && <div style={{ color: C.inkFaint }}>Refacturadas con comisión en su liquidación original (no entran en este mes): {fuera.map((x) => `${x.numero_oc} → ${MESES[x.liquidacion.mes - 1]} ${x.liquidacion.anio}`).join(", ")}</div>}
+          {fuera.length > 0 && <div style={{ color: C.inkFaint }}>Refacturadas con comisión en su liquidación original (no entran en este mes): {fuera.map((x) => `${x.numero_oc} → ${x.liquidacion ? `${MESES[x.liquidacion.mes - 1]} ${x.liquidacion.anio}` : "—"}${x.pagada ? " (ya pagada)" : ""}`).join(", ")}</div>}
         </div>);
       })()}
       {resumen && (

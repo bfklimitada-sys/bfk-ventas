@@ -1,4 +1,5 @@
--- Comisión ligada a la OC y a su liquidación original (13/11/2026). BORRADOR: requiere autorización de Kevin para producción.
+-- Comisión ligada a la OC y a su liquidación original (13/11/2026), vigente desde octubre 2026. Autorizada por Kevin el
+-- 13/11/2026 14:58 con condiciones: nada anterior a octubre 2026 se recalcula; 1398-624 y 564162-290 quedan «Por revisar».
 -- 1) ordenes_compra_v2: columnas que admiten NULL, sin valor por defecto (no reescribe la tabla):
 --      comision_anio, comision_mes ....... liquidación de la comisión de la OC (mes en que se liquidó o se liquidará)
 --      comision_utilidad ................. utilidad de la OC al quedar pagada (la fija solo el disparador)
@@ -6,6 +7,7 @@
 -- 2) Disparador oc_comision_liquidacion: al marcar la OC pagada ancla su liquidación y guarda su utilidad; al desmarcarla
 --    (pago anulado) libera la utilidad liquidada. Solo un administrador cambia la liquidación o la revisión.
 -- 3) fin_periodo_comision (lo usan la protección del vendedor y la revisión de eliminación): misma regla que la app.
+--    Antes de octubre 2026 da el mismo mes que hoy para toda OC cuya factura vigente sea anterior a octubre 2026.
 -- 4) Marcas con evidencia, SOLO en OC pagadas refacturadas en otro mes (no toca montos, pagos, cierres ni otras OC):
 --      un solo mes con un pago mensual registrado mientras la OC estuvo en ese mes → se ancla a ese mes;
 --      dos o más meses posibles → «Por revisar» (posible pago en dos liquidaciones), anclada donde hoy se calcula;
@@ -28,9 +30,11 @@ alter table public.ordenes_compra_v2 add constraint oc_comision_liquidacion_ck c
   and (comision_anio is null or comision_anio between 2020 and 2100)
   and (comision_revision is null or comision_revision in ('por_revisar', 'revisada')));
 
--- Período de la comisión de una OC (misma regla que liquidacionComision en src/lib/calculos.js):
---   liquidación anclada; si no, OC refacturada (alguna factura anulada o reemplazada y la vigente en un mes posterior)
---   → mes de su primera factura; si no → mes de su factura vigente más reciente. Sin factura vigente: solo si ya se pagó.
+-- Período en que cuenta la comisión de una OC (misma regla que liquidacionComision en src/lib/calculos.js), VIGENTE DESDE
+-- OCTUBRE 2026: liquidación = anclada; si no, OC refacturada (factura anulada o reemplazada y la vigente en un mes
+-- posterior) → mes de su primera factura; si no → mes de su factura vigente. Si la liquidación es desde octubre 2026 cuenta
+-- ahí; si es anterior y la factura vigente es desde octubre 2026: pagada → en ningún mes (ya se pagó), no pagada → mes de la
+-- factura vigente; todo lo anterior a octubre 2026, sin cambios (mes de la factura vigente).
 -- Conserva la guarda de seguridad del 23/10/2026 (bfk_exigir_perfil_api) y sus permisos (create or replace no los cambia).
 create or replace function public.fin_periodo_comision(p_oc_id text, out anio int, out mes int)
 language sql stable security definer set search_path = public, pg_temp as $$
@@ -39,11 +43,16 @@ language sql stable security definer set search_path = public, pg_temp as $$
        v as (select max(f.fecha) m, count(*) n from public.fin_facturas_vigentes(p_oc_id) f),
        t as (select min(e.fecha) m, count(*) n from public.eventos_factura e
               where e.oc_id = p_oc_id and coalesce(e.tipo_dte, 33) not in (56, 61) and e.fecha is not null),
-       r as (select case when o.comision_anio is not null then make_date(o.comision_anio, o.comision_mes, 1)
-                         when v.m is null then case when o.pagada then t.m end
-                         when t.n > v.n and date_trunc('month', t.m) < date_trunc('month', v.m) then t.m
-                         else v.m end d
-               from o, v, t)
+       l as (select case when o.comision_anio is not null then make_date(o.comision_anio, o.comision_mes, 1)
+                         when v.m is null then case when o.pagada then date_trunc('month', t.m)::date end
+                         when t.n > v.n and date_trunc('month', t.m) < date_trunc('month', v.m) then date_trunc('month', t.m)::date
+                         else date_trunc('month', v.m)::date end liq,
+                    date_trunc('month', v.m)::date act, o.pagada
+               from o, v, t),
+       r as (select case when l.liq >= date '2026-10-01' then l.liq
+                         when l.liq is not null and l.act >= date '2026-10-01' then case when l.pagada then null else l.act end
+                         else l.act end d
+               from l)
   select extract(year from d)::int anio, extract(month from d)::int mes from r where d is not null
   ) z where public.bfk_exigir_perfil_api()   -- seguridad 23/10/2026
 $$;

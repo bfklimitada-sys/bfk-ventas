@@ -92,51 +92,64 @@ export const mesesConFactura = (vendedorId, ocs) => {
   return Array.from(set).sort((a, b) => b.localeCompare(a)).map((ym) => ({ anio: Number(ym.slice(0, 4)), mes: Number(ym.slice(5, 7)) }));
 };
 
-// ── Liquidación de la comisión de una OC (13/11/2026) ──
-// La comisión queda ligada a la OC y a su liquidación ORIGINAL. Al anular y reemplazar una factura, la cobranza sigue a
-// la factura vigente (facturaVigente), pero la comisión NO se mueve al mes de la nueva factura:
-//  · anclada ...... comision_anio/comision_mes guardados en la OC (liquidación comprobada; los fija la base al marcarla
-//                   pagada o la migración con evidencia de pagos). Manda sobre todo lo demás.
-//  · refacturada .. alguna factura de la OC quedó anulada o reemplazada y la vigente cae en un mes POSTERIOR al de su
-//                   primera factura: se liquida en el mes de su PRIMERA factura (su liquidación original), pagada o no.
-//                   Si ese mes tuvo un pago parcial, el pago se reconoce y solo queda el saldo (deuda del mes).
-//  · normal ....... el mes de su factura vigente más reciente (regla Fase 4C, sin cambios).
-// Por revisar: comision_revision = 'por_revisar' (guardado), o una OC refacturada, no marcada pagada, cuya liquidación
-// original es una planilla verificada sin detalle por OC (hasta LIQ_SIN_DETALLE_HASTA): no se puede comprobar si quedó
-// cubierta. Si no está marcada pagada, NO entra en ningún cálculo ni pago hasta revisarla; si ya está marcada pagada se
-// conserva donde se pagó (cierre histórico) con el aviso.
-// Utilidad: una OC marcada pagada con utilidad liquidada (comision_utilidad) usa ESA utilidad; si la utilidad actual
-// cambió, la diferencia se muestra aparte como ajuste por revisar (no entra en la comisión ni en el saldo).
-export const LIQ_SIN_DETALLE_HASTA = { anio: 2026, mes: 6 };
+// ── Liquidación de la comisión de una OC (13/11/2026; vigente desde octubre 2026 por decisión de Kevin) ──
+// La comisión queda ligada a la OC y a su LIQUIDACIÓN; la cobranza sigue a la factura vigente (facturaVigente).
+// Liquidación de la OC:
+//  · anclada ...... comision_anio/comision_mes (la base la fija al marcarla pagada o la migración con evidencia).
+//  · refacturada .. alguna factura anulada o reemplazada y la vigente en un mes posterior → mes de su PRIMERA factura.
+//  · normal ....... mes de su factura vigente más reciente (regla Fase 4C).
+// Período en que CUENTA la comisión (periodo):
+//  · liquidación desde octubre 2026 (VIGENCIA_LIQUIDACION) → su liquidación (una refacturación posterior no la mueve).
+//  · liquidación anterior y factura vigente desde octubre 2026 (refacturada hacia la vigencia):
+//      pagada → no cuenta en ningún mes (ya se pagó; no genera nueva comisión);
+//      no pagada → cuenta en el mes de la factura vigente (como hasta ahora), pero si su liquidación original tuvo un
+//      pago (posible pago parcial que la cubrió) queda «Por revisar» y fuera de todo pago hasta revisarla.
+//  · todo lo demás (períodos anteriores a octubre 2026) → regla anterior sin cambios: mes de la factura vigente.
+//    Las liquidaciones, comisiones y pagos anteriores a octubre 2026 no se recalculan.
+// Por revisar guardado (comision_revision = 'por_revisar'): se conserva donde se calcula hoy, con aviso, y no se marca en
+// ningún pago. Utilidad liquidada (comision_utilidad, solo desde octubre 2026): si la utilidad actual cambió, la diferencia
+// se muestra aparte como ajuste por revisar (no entra en la comisión ni en el saldo).
+export const VIGENCIA_LIQUIDACION = { anio: 2026, mes: 10 };
 const claveMes = (p) => (p ? Number(p.anio) * 12 + Number(p.mes) : null);
-export const liquidacionComision = (oc) => {
+const mismoMes = (a, b) => !!a && !!b && claveMes(a) === claveMes(b);
+export const liquidacionComision = (oc, pagosVendedor = null) => {
   const vig = facturasVigentes(oc);
   const todas = (oc?.eventos_factura || []).filter((f) => esFactura(f) && f.fecha);
   const fv = facturaVigente(oc);
-  const actual = fv?.fecha ? anioMesDe(fv.fecha) : null;
+  const actual = fv?.fecha ? anioMesDe(fv.fecha) : null;   // mes de la factura vigente (regla anterior)
   const primera = todas.map((f) => String(f.fecha).slice(0, 10)).sort()[0];
   const original = primera ? anioMesDe(primera) : null;
   const anclada = oc?.comision_anio != null && oc?.comision_mes != null ? { anio: Number(oc.comision_anio), mes: Number(oc.comision_mes) } : null;
   const hayReemplazo = todas.some((f) => !vig.some((v) => v.id === f.id));
   const refacturada = hayReemplazo && !!original && (!actual || claveMes(original) < claveMes(actual));
   const pagada = !!oc?.vendedor_pagado;
-  let periodo = anclada || (refacturada ? original : actual);
-  if (!anclada && !vig.length) periodo = pagada ? original : null;   // anulada sin reemplazo: solo si ya se pagó
-  let motivoRevision = null;
+  let liquidacion = anclada || (refacturada ? original : actual);
+  if (!anclada && !vig.length) liquidacion = pagada ? original : null;   // anulada sin reemplazo: solo si ya se pagó
+  const desde = claveMes(VIGENCIA_LIQUIDACION);
+  let periodo, motivoRevision = null, derivada = false;
+  if (liquidacion && claveMes(liquidacion) >= desde) periodo = liquidacion;
+  else if (liquidacion && actual && claveMes(actual) >= desde) {
+    if (pagada) periodo = null;
+    else {
+      periodo = actual;
+      const pagoOriginal = (pagosVendedor || []).some((p) => !p?.anulado_en && p.vendedor_id === oc?.vendedor_id && Number(p.anio) === liquidacion.anio && Number(p.mes) === liquidacion.mes);
+      if (pagoOriginal && oc?.comision_revision !== "revisada") { derivada = true;
+        motivoRevision = `Su liquidación original (${fmt.monthYear(liquidacion.mes, liquidacion.anio)}) tuvo un pago y no se puede comprobar si la cubrió`; }
+    }
+  } else periodo = actual;
   if (oc?.comision_revision === "por_revisar") motivoRevision = oc.comision_revision_motivo || "Marcada por revisar";
-  else if (!anclada && refacturada && !pagada && oc?.comision_revision !== "revisada" && claveMes(original) <= claveMes(LIQ_SIN_DETALLE_HASTA))
-    motivoRevision = `Su liquidación original (${fmt.monthYear(original.mes, original.anio)}) es una planilla verificada sin detalle por OC: no se puede comprobar si quedó cubierta`;
-  else if (!anclada && pagada && !vig.length && periodo) motivoRevision = "Factura anulada sin reemplazo después de pagada";
   const porRevisar = !!motivoRevision;
+  const desdeVigencia = !!periodo && claveMes(periodo) >= desde;
   const utilidadActual = (Number(oc?.monto_total) || 0) - (Number(oc?.costo_total) || 0);
-  const utilidadLiquidada = pagada && oc?.comision_utilidad != null ? Number(oc.comision_utilidad) : null;
+  const utilidadLiquidada = desdeVigencia && pagada && oc?.comision_utilidad != null ? Number(oc.comision_utilidad) : null;
   return {
-    periodo, actual, original, anclada: !!anclada, refacturada, pagada, porRevisar, motivoRevision,
-    excluida: porRevisar && !pagada,
+    periodo, liquidacion, actual, original, anclada: !!anclada, refacturada, pagada, porRevisar, motivoRevision, revisionDerivada: derivada,
+    // Fuera de todo cálculo y pago: solo desde la vigencia y si no estaba pagada (lo anterior a octubre no se toca).
+    excluida: porRevisar && !pagada && desdeVigencia,
     utilidad: utilidadLiquidada ?? utilidadActual, utilidadActual, utilidadLiquidada,
     ajusteUtilidad: utilidadLiquidada != null ? utilidadActual - utilidadLiquidada : 0,
-    // La factura vigente cae en otro mes que la liquidación: ese mes NO la incluye (refacturación).
-    fueraDeSuMes: !!periodo && !!actual && claveMes(periodo) !== claveMes(actual),
+    // La factura vigente cae (desde octubre 2026) en otro mes que el que cuenta: ese mes no la incluye.
+    fueraDeSuMes: !!actual && claveMes(actual) >= desde && !mismoMes(periodo, actual),
   };
 };
 
@@ -257,11 +270,11 @@ export const repartirComision = (total, pesos) => {
 };
 
 // Utilidad ordinaria por vendedor de un período (OC que generan comisión, no venta propia, con vendedor asignado).
-const utilidadOrdinariaPorVendedor = (ocs, anio, mes) => {
+const utilidadOrdinariaPorVendedor = (ocs, anio, mes, pagosVendedor = null) => {
   const u = new Map();
   (ocs || []).forEach((o) => {
     if (!o?.vendedor_id || o.es_venta_propia || !generaComision(o)) return;
-    const liq = liquidacionComision(o);
+    const liq = liquidacionComision(o, pagosVendedor);
     const p = liq.periodo;
     if (!p || p.anio !== Number(anio) || p.mes !== Number(mes) || liq.excluida) return;
     u.set(o.vendedor_id, (u.get(o.vendedor_id) || 0) + liq.utilidad);
@@ -270,8 +283,8 @@ const utilidadOrdinariaPorVendedor = (ocs, anio, mes) => {
 };
 
 // Comisión ordinaria total del período y su reparto (solo cálculo; no lee pagos).
-export const comisionOrdinariaPeriodo = ({ ocs, anio, mes, ivaMensual = [] }) => {
-  const util = utilidadOrdinariaPorVendedor(ocs, anio, mes);
+export const comisionOrdinariaPeriodo = ({ ocs, anio, mes, ivaMensual = [], pagosVendedor = null }) => {
+  const util = utilidadOrdinariaPorVendedor(ocs, anio, mes, pagosVendedor);
   const t = descuentoTributarioPeriodo(ivaMensual, anio, mes);
   const utilidadTotal = [...util.values()].reduce((s, x) => s + x, 0);
   const total = util.size ? Math.max(0, Math.round(utilidadTotal / 2 - t.descuentoF29 / 2)) : 0;
@@ -295,13 +308,16 @@ export const comisionOrdinariaPeriodo = ({ ocs, anio, mes, ivaMensual = [] }) =>
 export const calcularPagoVendedor = ({ vendedorId, ocs, anio, mes, ivaMensual = [], pagosVendedor = [] }) => {
   let sumaFacts = 0, sumaUtilidad = 0, pagoVentasPropias = 0, hayFacturas = false;
   const detalle = [];   // las OCs que forman el cálculo del mes (Fase 4C)
-  const porRevisar = [], ajustes = [], refacturadasFuera = [];   // 13/11/2026: fuera del cálculo, solo para revisar
+  const porRevisar = [], ajustes = [], refacturadasFuera = [], liquidadasAqui = [];   // 13/11/2026: avisos, fuera del cálculo
   ocs.filter((o) => o.vendedor_id === vendedorId && generaComision(o)).forEach((o) => {
-    // 13/11/2026: el mes es el de su LIQUIDACIÓN (liquidacionComision); una refacturación no la mueve de mes.
-    const liq = liquidacionComision(o);
+    // 13/11/2026: el mes es el de su liquidación desde octubre 2026 (liquidacionComision); antes, la regla anterior.
+    const liq = liquidacionComision(o, pagosVendedor);
     const p = liq.periodo;
-    // Factura vigente en este mes pero liquidada en otro: no entra aquí (se informa para que se vea por qué).
-    if (liq.fueraDeSuMes && liq.actual.anio === anio && liq.actual.mes === mes) refacturadasFuera.push({ ocId: o.id, numero_oc: o.numero_oc, liquidacion: p, pagada: liq.pagada });
+    const esteMes = { anio, mes };
+    // Factura vigente en este mes pero su comisión cuenta en otro (o ya se pagó): no entra aquí; se informa por qué.
+    if (liq.fueraDeSuMes && mismoMes(liq.actual, esteMes)) refacturadasFuera.push({ ocId: o.id, numero_oc: o.numero_oc, liquidacion: liq.liquidacion, pagada: liq.pagada });
+    // Liquidada (y pagada) en este mes y refacturada después hacia la vigencia: sigue apareciendo aquí, solo como referencia.
+    if (liq.pagada && mismoMes(liq.liquidacion, esteMes) && !mismoMes(p, esteMes)) liquidadasAqui.push({ ocId: o.id, numero_oc: o.numero_oc, facturaVigenteMes: liq.actual, utilidad: liq.utilidadActual });
     if (!p || p.anio !== anio || p.mes !== mes) return;
     hayFacturas = true;
     if (liq.excluida) { porRevisar.push({ ocId: o.id, numero_oc: o.numero_oc, utilidad: liq.utilidad, motivo: liq.motivoRevision, incluida: false }); return; }
@@ -315,7 +331,7 @@ export const calcularPagoVendedor = ({ vendedorId, ocs, anio, mes, ivaMensual = 
       fechaFactura: fv?.fecha || null, montoFacturas: montoFacts, venta: Number(o.monto_total) || 0, costo: Number(o.costo_total) || 0,
       utilidad: utilOC, ventaPropia: !!o.es_venta_propia, pagoVentaPropia: 0,
       // Solo cuando aplica (sin cambiar la forma de las líneas comunes):
-      ...(liq.fueraDeSuMes ? { refacturada: true, facturaVigenteMes: liq.actual } : {}),
+      ...(liq.refacturada && !mismoMes(liq.actual, { anio, mes }) && liq.actual ? { refacturada: true, facturaVigenteMes: liq.actual } : {}),
       ...(liq.porRevisar ? { porRevisar: true, motivoRevision: liq.motivoRevision } : {}),
       ...(liq.ajusteUtilidad ? { utilidadActual: liq.utilidadActual, ajusteUtilidad: liq.ajusteUtilidad } : {}) };
     if (o.es_venta_propia) {
@@ -335,7 +351,7 @@ export const calcularPagoVendedor = ({ vendedorId, ocs, anio, mes, ivaMensual = 
   const { sinIva, ivaMes, impIva, retenciones, descuentoF29 } = tribut;
   // Comisión ordinaria: su parte del período (regla común) o, antes de COMISION_PERIODO_DESDE, la fórmula anterior.
   const reglaPeriodo = aplicaComisionPeriodo(anio, mes);
-  const per = reglaPeriodo ? comisionOrdinariaPeriodo({ ocs, anio, mes, ivaMensual }) : null;
+  const per = reglaPeriodo ? comisionOrdinariaPeriodo({ ocs, anio, mes, ivaMensual, pagosVendedor }) : null;
   const comisionOrdinaria = per ? per.partes.get(String(vendedorId)) || 0 : Math.max(0, Math.round(sumaUtilidad / 2 - descuentoF29 / 2));
   const periodo = per ? { vendedores: per.vendedores, utilidadTotal: per.utilidadTotal, descuentoF29: per.descuentoF29, total: per.total, metodo: per.metodo,
     pesoTotal: per.pesoTotal, peso: per.pesos.find((p) => String(p.id) === String(vendedorId))?.peso || 0 } : null;
@@ -367,6 +383,7 @@ export const calcularPagoVendedor = ({ vendedorId, ocs, anio, mes, ivaMensual = 
     ...(porRevisar.length ? { porRevisar } : {}),
     ...(ajustes.length ? { ajustesUtilidad: ajustes, ajusteUtilidadTotal: ajustes.reduce((s2, a) => s2 + a.diferencia, 0) } : {}),
     ...(refacturadasFuera.length ? { refacturadasFuera } : {}),
+    ...(liquidadasAqui.length ? { liquidadasAqui } : {}),
   };
 };
 

@@ -209,9 +209,14 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, gastos=[], pagosV
                         <b style={{color:C.ink}}>Ajuste por revisar (aparte de la comisión):</b> la utilidad de {d.ajustesUtilidad.length} OC cambió después de liquidarla · diferencia de utilidad {d.ajusteUtilidadTotal>0?"+":"−"}{fmt.money(Math.abs(d.ajusteUtilidadTotal))} ({d.ajustesUtilidad.map(a=>`${a.numero_oc}: ${fmt.money(a.utilidadLiquidada)} → ${fmt.money(a.utilidadActual)}`).join("; ")}). No cambia el saldo ni se paga automáticamente.
                       </div>
                     ):null}
+                    {(d.liquidadasAqui||[]).length>0&&(
+                      <div data-liquidadas-aqui style={{fontSize:12,color:C.inkMuted,margin:"4px 0",lineHeight:1.45}}>
+                        Pagadas en esta liquidación y refacturadas después (conservan este pago; no generan nueva comisión): {d.liquidadasAqui.map(x=>`${x.numero_oc}${x.facturaVigenteMes?` (factura vigente ${fmt.monthYear(x.facturaVigenteMes.mes,x.facturaVigenteMes.anio)})`:""}`).join(", ")}
+                      </div>
+                    )}
                     {(d.refacturadasFuera||[]).length>0&&(
                       <div data-refacturadas-fuera style={{fontSize:12,color:C.inkFaint,margin:"4px 0",lineHeight:1.45}}>
-                        No incluidas en este mes (factura vigente de este mes, comisión en su liquidación original): {d.refacturadasFuera.map(x=>`${x.numero_oc} → ${fmt.monthYear(x.liquidacion.mes,x.liquidacion.anio)}${x.pagada?" (pagada)":""}`).join(", ")}
+                        No incluidas en este mes (factura vigente de este mes; su comisión es de su liquidación original): {d.refacturadasFuera.map(x=>`${x.numero_oc} → ${x.liquidacion?fmt.monthYear(x.liquidacion.mes,x.liquidacion.anio):"—"}${x.pagada?" (ya pagada)":""}`).join(", ")}
                       </div>
                     )}
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
@@ -332,7 +337,7 @@ export function FormPagoVendedorSimple({ vendedores, ocs, ivaMensual, pagosVende
         <Linea k="Comisión ya pagada" v={ev.pagadoAntes} dato="pagada" />
         <Linea k="Saldo pendiente" v={ev.pendienteAntes} fuerte dato="pendiente" />
         {ev.porRevisar.length>0&&<div data-aviso-por-revisar style={{color:C.warnText,fontWeight:600,marginTop:4}}><Ic n="⚠"/> {ev.porRevisar.length} OC por revisar en {labelMes} ({ev.porRevisar.map(r=>r.numero_oc).join(", ")}): {ev.porRevisar.some(r=>!r.incluida)?"no se incluyen en este pago ni se marcan pagadas hasta revisarlas.":"ya están en un pago histórico; no se vuelven a pagar."}</div>}
-        {ev.refacturadasFuera.length>0&&<div data-aviso-refacturadas style={{color:C.inkFaint,marginTop:4}}>No se incluyen aquí (refacturadas, comisión en su liquidación original): {ev.refacturadasFuera.map(x=>`${x.numero_oc} → ${fmt.monthYear(x.liquidacion.mes,x.liquidacion.anio)}`).join(", ")}</div>}
+        {ev.refacturadasFuera.length>0&&<div data-aviso-refacturadas style={{color:C.inkFaint,marginTop:4}}>No se incluyen aquí (refacturadas, comisión en su liquidación original): {ev.refacturadasFuera.map(x=>`${x.numero_oc} → ${x.liquidacion?fmt.monthYear(x.liquidacion.mes,x.liquidacion.anio):"—"}${x.pagada?" (ya pagada)":""}`).join(", ")}</div>}
         {ev.ajusteUtilidadTotal?<div data-aviso-ajuste style={{color:C.inkFaint,marginTop:4}}>Ajuste de utilidad por revisar (aparte, no incluido en este pago): {ev.ajusteUtilidadTotal>0?"+":"−"}{fmt.money(Math.abs(ev.ajusteUtilidadTotal))}</div>:null}
         {ev.enCurso&&<div data-aviso-en-curso style={{color:C.warnText,fontWeight:600,marginTop:4}}><Ic n="⚠"/> {labelMes} es el mes en curso: su comisión todavía no es exigible y seguirá cambiando con las ventas del mes.</div>}
         {ev.provisoria&&<div data-aviso-provisoria style={{color:C.warnText,fontWeight:600,marginTop:4}}><Ic n="⚠"/> Comisión provisoria: {ev.sinIvaRegistrado?`el IVA de ${labelMes} no está registrado`:`falta el total del F29 (IVA + PPM) de ${labelMes}`}. Puede cambiar al registrarlo; si baja, la diferencia quedará como saldo por regularizar (el pago no se reclasifica solo).</div>}

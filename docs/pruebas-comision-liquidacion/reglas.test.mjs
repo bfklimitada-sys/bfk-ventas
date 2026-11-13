@@ -1,128 +1,123 @@
-// Pruebas: la comisión queda ligada a la OC y a su liquidación original (13/11/2026).
-// Casos pedidos por Kevin: OC pagada en junio y refacturada dos veces (sigue en junio, sin comisión en los meses de las
-// nuevas facturas, cobranza con la factura nueva), OC con pago parcial (se reconoce lo abonado, queda el saldo) y OC aún
-// no pagada. Más: «Por revisar», ajuste de utilidad aparte, reparto del período con varios vendedores, y la misma regla en
-// Comisiones (calcularPagoVendedor), pago manual (registrarPagoVendedor) y cartola (prepararPagoVendedor, la fila que
-// recibe la función de la base).
+// Pruebas: comisión ligada a la OC y a su liquidación original, VIGENTE DESDE OCTUBRE 2026 (13/11/2026, condiciones de Kevin).
+//  1. Antes de octubre 2026 nada se recalcula: cada mes anterior da EXACTAMENTE lo mismo que la versión publicada (3ac3a64).
+//  2. OC pagada antes de octubre y refacturada (dos veces) hacia octubre o después: conserva su pago, sigue apareciendo en su
+//     liquidación como referencia y no genera comisión en los meses de las nuevas facturas.
+//  3. Desde octubre: la refacturación no mueve la comisión (no pagada, pago parcial con saldo, pagada); la cobranza sigue a la
+//     factura vigente.
+//  4. «Por revisar»: guardadas (1398-624 / 564162-290) sin cambios de monto ni pagos nuevos; derivadas, fuera de todo pago.
+//  5. Misma regla en Comisiones (calcularPagoVendedor), pago manual (registrarPagoVendedor) y cartola (prepararPagoVendedor).
 import { calcularPagoVendedor, mesesConFactura, periodoComision, liquidacionComision, facturaVigente, comisionOrdinariaPeriodo } from "../../src/lib/calculos.js";
 import { evaluarPagoVendedor, prepararPagoVendedor, registrarPagoVendedor } from "../../src/lib/pagosVendedor.js";
 import { ocsConSaldo } from "../../src/lib/cobranza.js";
+import * as ANT from "@anterior/calculos.js";
 
 let ok = 0, fallas = 0;
 const eq = (n, real, esp) => { const b = JSON.stringify(real) === JSON.stringify(esp); b ? ok++ : fallas++;
   console.log((b ? "OK    " : "FALLA ") + n + (b ? "" : ` :: esperado ${JSON.stringify(esp)} obtenido ${JSON.stringify(real)}`)); };
 const fac = (id, numero, fecha, monto, anula = null) => ({ id, numero_factura: numero, fecha, monto, factura_anulada_numero: anula });
-const nc = (id, numero, fecha, monto, refFolio) => ({ id, numero_factura: numero, fecha, monto: 0, tipo_dte: 61, ref_folio: refFolio, ref_codigo: 1 });
+const nc = (id, numero, fecha, refFolio) => ({ id, numero_factura: numero, fecha, monto: 0, tipo_dte: 61, ref_folio: refFolio, ref_codigo: 1 });
 const oc = (id, vendedor, venta, costo, facturas, extra = {}) => ({ id, numero_oc: id, vendedor_id: vendedor, tipo_registro: "venta", estado_factura_propia: "emitida",
   monto_total: venta, costo_total: costo, monto_facturado: venta, monto_cobrado: 0, estado_pago_cliente: "pendiente", eventos_factura: facturas, eventos_pago_cliente: [], ...extra });
-// Escritor simulado: lo que hacen la app y la base (incluido el disparador: al marcar pagada ancla la liquidación y
-// guarda la utilidad liquidada).
+// Escritor simulado (app + disparador de la base: al marcar pagada ancla la liquidación y guarda la utilidad).
 const base = (ocs, pagos = []) => ({ ocs: ocs.map((o) => ({ ...o })), pagos: [...pagos] });
 const escritor = (db) => ({
-  ins: async (tabla, _t, fila) => { if (db.pagos.some((p) => p.id === fila.id)) throw new Error("duplicate key 23505"); db.pagos.push({ ...fila, creadoEn: "2026-11-13T12:00:00Z" }); },
-  upd: async (tabla, _t, id, cambios) => { db.ocs = db.ocs.map((o) => { if (o.id !== id) return o;
-    const n = { ...o, ...cambios };
+  ins: async (_t, _k, fila) => { if (db.pagos.some((p) => p.id === fila.id)) throw new Error("duplicate key 23505"); db.pagos.push({ ...fila }); },
+  upd: async (_t, _k, id, cambios) => { db.ocs = db.ocs.map((o) => { if (o.id !== id) return o; const n = { ...o, ...cambios };
     if (cambios.vendedor_pagado === true && !o.vendedor_pagado) { const p = periodoComision(o); n.comision_anio ??= p.anio; n.comision_mes ??= p.mes; n.comision_utilidad = n.monto_total - n.costo_total; }
     if (cambios.vendedor_pagado === false && o.vendedor_pagado) n.comision_utilidad = null;
     return n; }); },
 });
-const pagar = async (db, { vendedorId, mes, anio, monto, id }) => { const w = escritor(db);
-  return registrarPagoVendedor({ ...w, token: "t", id, vendedorId, monto, fecha: "2026-11-13", mes, anio, ocs: db.ocs, ivaMensual: [], pagosVendedor: db.pagos }); };
-const refacturar = (db, ocId, nueva) => { db.ocs = db.ocs.map((o) => (o.id === ocId ? { ...o, eventos_factura: [...o.eventos_factura, ...nueva] } : o)); };
-const c = (db, v, anio, mes) => calcularPagoVendedor({ vendedorId: v, ocs: db.ocs, anio, mes, ivaMensual: [], pagosVendedor: db.pagos });
+const pagar = (db, { vendedorId = "m", mes, anio, monto, id }) => registrarPagoVendedor({ ...escritor(db), token: "t", id, vendedorId, monto, fecha: "2026-11-13", mes, anio, ocs: db.ocs, ivaMensual: [], pagosVendedor: db.pagos });
+const refacturar = (db, ocId, nuevas) => { db.ocs = db.ocs.map((o) => (o.id === ocId ? { ...o, eventos_factura: [...o.eventos_factura, ...nuevas] } : o)); };
+const c = (db, anio, mes, v = "m") => calcularPagoVendedor({ vendedorId: v, ocs: db.ocs, anio, mes, ivaMensual: [], pagosVendedor: db.pagos });
+const cAnt = (db, anio, mes, v = "m") => ANT.calcularPagoVendedor({ vendedorId: v, ocs: db.ocs, anio, mes, ivaMensual: [], pagosVendedor: db.pagos });
 const n = (x) => (x ? { calculado: x.pagoCalculado, pagado: x.pagado, deuda: x.deuda, ocs: x.detalle.map((l) => l.numero_oc).sort() } : null);
+const numerico = (x) => (x ? { pagoCalculado: x.pagoCalculado, pagado: x.pagado, deuda: x.deuda, porRegularizar: x.porRegularizar, sumaUtilidad: x.sumaUtilidad, comisionOrdinaria: x.comisionOrdinaria, detalle: x.detalle.map((l) => [l.numero_oc, l.utilidad]) } : null);
 
-// ── 1. OC pagada en junio y refacturada dos veces ───────────────────────────────────────────────────
-// Junio 2026 (antes de la regla del período): comisión = (utilidad − IVA neto 0) / 2.
+// ── 1. OC pagada en junio y refacturada dos veces (agosto y octubre) ─────────────────────────────────
 let db = base([oc("J", "m", 300000, 200000, [fac("j1", "100", "2026-06-10", 300000)]), oc("H", "m", 100000, 60000, [fac("h1", "110", "2026-06-20", 100000)])]);
-const junioAntes = n(c(db, "m", 2026, 6));
-eq("junio antes de pagar: J y H, comisión (100.000 + 40.000)/2", junioAntes, { calculado: 70000, pagado: 0, deuda: 70000, ocs: ["H", "J"] });
-let r = await pagar(db, { vendedorId: "m", mes: 6, anio: 2026, monto: 70000, id: "p-jun" });
-eq("pago manual de junio completo: marca J y H pagadas", [r.ocIds.sort(), db.ocs.filter((o) => o.vendedor_pagado).map((o) => o.id).sort()], [["H", "J"], ["H", "J"]]);
-eq("al quedar pagada: liquidación junio y utilidad liquidada guardadas", ["comision_anio", "comision_mes", "comision_utilidad"].map((k) => db.ocs.find((o) => o.id === "J")[k]), [2026, 6, 100000]);
-refacturar(db, "J", [fac("j2", "150", "2026-08-05", 300000, "100")]);                    // 1ª refacturación (agosto)
-refacturar(db, "J", [nc("j3", "60", "2026-10-07", 0, "150"), fac("j4", "190", "2026-10-07", 300000)]);   // 2ª (octubre, NC código 1)
-db.ocs.push(oc("K", "m", 200000, 150000, [fac("k1", "191", "2026-10-09", 200000)]));     // otra venta de octubre
+eq("junio antes de pagar: (100.000 + 40.000)/2", n(c(db, 2026, 6)), { calculado: 70000, pagado: 0, deuda: 70000, ocs: ["H", "J"] });
+let r = await pagar(db, { mes: 6, anio: 2026, monto: 70000, id: "p-jun" });
+eq("pago manual de junio: marca J y H; ancla junio", [r.ocIds.sort(), db.ocs.find((o) => o.id === "J").comision_mes], [["H", "J"], 6]);
+refacturar(db, "J", [fac("j2", "150", "2026-08-05", 300000, "100")]);
+refacturar(db, "J", [nc("j3", "60", "2026-10-07", "150"), fac("j4", "190", "2026-10-07", 300000)]);
+db.ocs.push(oc("K", "m", 200000, 150000, [fac("k1", "191", "2026-10-09", 200000)]));
 const J = db.ocs.find((o) => o.id === "J");
-eq("J: la cobranza sigue a la factura nueva (N° 190, octubre)", [facturaVigente(J)?.numero_factura, ocsConSaldo(db.ocs).find((x) => x.oc.id === "J")?.fechaFactura], ["190", "2026-10-07"]);
-eq("J: su comisión sigue en junio", periodoComision(J), { anio: 2026, mes: 6 });
-eq("junio después de refacturar dos veces: mismo cálculo, pagado, sin deuda", n(c(db, "m", 2026, 6)), { calculado: 70000, pagado: 70000, deuda: 0, ocs: ["H", "J"] });
-eq("J aparece en junio marcada como refacturada en octubre", c(db, "m", 2026, 6).detalle.find((l) => l.numero_oc === "J")?.facturaVigenteMes, { anio: 2026, mes: 10 });
-eq("agosto (1ª nueva factura): sin comisión", c(db, "m", 2026, 8), null);
-eq("octubre (2ª nueva factura): solo K; J no genera comisión", n(c(db, "m", 2026, 10)), { calculado: 25000, pagado: 0, deuda: 25000, ocs: ["K"] });
-eq("octubre informa J como no incluida (liquidada y pagada en junio)", c(db, "m", 2026, 10).refacturadasFuera, [{ ocId: "J", numero_oc: "J", liquidacion: { anio: 2026, mes: 6 }, pagada: true }]);
-eq("meses con comisión: junio y octubre (agosto no)", mesesConFactura("m", db.ocs).map((x) => `${x.anio}-${x.mes}`), ["2026-10", "2026-6"]);
+eq("J: la cobranza sigue a la factura vigente (N° 190, octubre)", [facturaVigente(J)?.numero_factura, ocsConSaldo(db.ocs).find((x) => x.oc.id === "J")?.fechaFactura], ["190", "2026-10-07"]);
+eq("J: liquidación junio; no cuenta en ningún mes nuevo (ya pagada)", [liquidacionComision(J).liquidacion, liquidacionComision(J).periodo], [{ anio: 2026, mes: 6 }, null]);
+eq("junio conserva su pago ($70.000) y su cálculo es el de la versión publicada (sin recalcular)", [c(db, 2026, 6).pagado, JSON.stringify(numerico(c(db, 2026, 6))) === JSON.stringify(numerico(cAnt(db, 2026, 6)))], [70000, true]);
+eq("J sigue apareciendo en junio (pagada en esa liquidación, factura vigente de octubre)", c(db, 2026, 6).liquidadasAqui, [{ ocId: "J", numero_oc: "J", facturaVigenteMes: { anio: 2026, mes: 10 }, utilidad: 100000 }]);
+eq("agosto (1ª nueva factura): sin comisión", c(db, 2026, 8), null);
+eq("octubre (2ª nueva factura): solo K; J no genera comisión", n(c(db, 2026, 10)), { calculado: 25000, pagado: 0, deuda: 25000, ocs: ["K"] });
+eq("versión publicada (para comparar): octubre SÍ contaba J otra vez (duplicado)", n(cAnt(db, 2026, 10)).ocs, ["J", "K"]);
+eq("octubre informa J como ya pagada en junio", c(db, 2026, 10).refacturadasFuera, [{ ocId: "J", numero_oc: "J", liquidacion: { anio: 2026, mes: 6 }, pagada: true }]);
 let ev = evaluarPagoVendedor({ vendedorId: "m", mes: 10, anio: 2026, monto: 25000, ocs: db.ocs, ivaMensual: [], pagosVendedor: db.pagos });
 eq("pago manual de octubre: $25.000, marca solo K", [ev.comision, ev.ocIds], [25000, ["K"]]);
-const cartola = prepararPagoVendedor({ userId: "u", id: "p-cart", vendedorId: "m", monto: 25000, fecha: "2026-11-13", mes: 10, anio: 2026, ocs: db.ocs, ivaMensual: [], pagosVendedor: db.pagos });
-eq("cartola (fila para la base): misma comisión y solo K", [cartola.fila.monto_pagado, cartola.fila.monto_extra_gestion, cartola.ocIds], [25000, 0, ["K"]]);
-ev = evaluarPagoVendedor({ vendedorId: "m", mes: 8, anio: 2026, monto: 10000, ocs: db.ocs, ivaMensual: [], pagosVendedor: db.pagos });
-eq("un pago imputado a agosto no encuentra comisión: todo es extra y no marca J", [ev.comision, ev.pagoComision, ev.extraGestion, ev.ocIds], [0, 0, 10000, []]);
-// Cambio de utilidad después de liquidada (la refacturación cambió el monto): ajuste aparte.
-db.ocs = db.ocs.map((o) => (o.id === "J" ? { ...o, monto_total: 320000 } : o));
-const jun2 = c(db, "m", 2026, 6);
-eq("utilidad cambiada: junio sigue con la utilidad liquidada y sin deuda", [jun2.pagoCalculado, jun2.deuda, jun2.sumaUtilidad], [70000, 0, 140000]);
-eq("utilidad cambiada: diferencia aparte para revisar (+20.000), no entra al saldo", [jun2.ajusteUtilidadTotal, jun2.ajustesUtilidad[0].utilidadLiquidada, jun2.ajustesUtilidad[0].utilidadActual], [20000, 100000, 120000]);
+const cart = prepararPagoVendedor({ userId: "u", id: "p-c", vendedorId: "m", monto: 25000, fecha: "2026-11-13", mes: 10, anio: 2026, ocs: db.ocs, ivaMensual: [], pagosVendedor: db.pagos });
+eq("cartola (fila para la base): misma comisión, solo K", [cart.fila.monto_pagado, cart.fila.monto_extra_gestion, cart.ocIds], [25000, 0, ["K"]]);
 
-// ── 2. OC con pago parcial ──────────────────────────────────────────────────────────────────────────
-db = base([oc("P", "m", 500000, 300000, [fac("p1", "200", "2026-07-15", 500000)]), oc("Q", "m", 100000, 50000, [fac("q1", "201", "2026-07-20", 100000)])]);
-eq("julio: comisión (200.000 + 50.000)/2 = 125.000", c(db, "m", 2026, 7).pagoCalculado, 125000);
-r = await pagar(db, { vendedorId: "m", mes: 7, anio: 2026, monto: 50000, id: "p-jul-1" });
-eq("abono parcial de $50.000: no marca OC (julio no queda cubierto)", [r.pagoComision, r.ocIds, db.ocs.some((o) => o.vendedor_pagado)], [50000, [], false]);
-refacturar(db, "P", [nc("p2", "70", "2026-09-03", 0, "200"), fac("p3", "230", "2026-09-03", 500000)]);
-eq("P refacturada en septiembre: su comisión sigue en julio", periodoComision(db.ocs.find((o) => o.id === "P")), { anio: 2026, mes: 7 });
-eq("julio reconoce lo abonado y conserva solo el saldo", n(c(db, "m", 2026, 7)), { calculado: 125000, pagado: 50000, deuda: 75000, ocs: ["P", "Q"] });
-eq("septiembre: P no genera comisión", c(db, "m", 2026, 9), null);
-ev = evaluarPagoVendedor({ vendedorId: "m", mes: 7, anio: 2026, monto: 75000, ocs: db.ocs, ivaMensual: [], pagosVendedor: db.pagos });
-eq("pagar el saldo de julio ($75.000) cubre el mes y marca P y Q en julio", [ev.pendienteAntes, ev.pagoComision, ev.extraGestion, ev.ocIds.sort()], [75000, 75000, 0, ["P", "Q"]]);
-r = await pagar(db, { vendedorId: "m", mes: 7, anio: 2026, monto: 75000, id: "p-jul-2" });
-eq("después del saldo: julio pagado, P liquidada en julio", [c(db, "m", 2026, 7).deuda, db.ocs.find((o) => o.id === "P").comision_mes], [0, 7]);
-await pagar(db, { vendedorId: "m", mes: 7, anio: 2026, monto: 75000, id: "p-jul-2" }).then(() => eq("doble envío del mismo pago", "registrado", "rechazado"), () => eq("doble envío del mismo pago: rechazado (sin duplicar)", db.pagos.length, 2));
+// ── 2. Pagos parciales ──────────────────────────────────────────────────────────────────────────────
+// 2a. Desde octubre: P liquidada en octubre, abono parcial, refacturada en diciembre → octubre conserva lo abonado y el saldo.
+db = base([oc("P", "m", 500000, 300000, [fac("p1", "200", "2026-10-15", 500000)]), oc("Q", "m", 100000, 50000, [fac("q1", "201", "2026-10-20", 100000)])]);
+r = await pagar(db, { mes: 10, anio: 2026, monto: 50000, id: "p-oct-1" });
+eq("octubre: abono parcial $50.000 de $125.000, no marca OC", [r.pagoComision, r.ocIds], [50000, []]);
+refacturar(db, "P", [nc("p2", "70", "2026-12-03", "200"), fac("p3", "230", "2026-12-03", 500000)]);
+eq("P refacturada en diciembre: cuenta en octubre", periodoComision(db.ocs.find((o) => o.id === "P")), { anio: 2026, mes: 10 });
+eq("octubre reconoce lo abonado y conserva solo el saldo", n(c(db, 2026, 10)), { calculado: 125000, pagado: 50000, deuda: 75000, ocs: ["P", "Q"] });
+eq("diciembre: P no genera comisión", c(db, 2026, 12), null);
+r = await pagar(db, { mes: 10, anio: 2026, monto: 75000, id: "p-oct-2" });
+eq("pagar el saldo completa octubre y marca P y Q en octubre", [c(db, 2026, 10).deuda, r.ocIds.sort(), db.ocs.find((o) => o.id === "P").comision_mes], [0, ["P", "Q"], 10]);
+// 2b. Antes de octubre: septiembre con abono parcial; S refacturada en noviembre → por revisar, fuera de noviembre y de todo pago.
+db = base([oc("S", "m", 400000, 200000, [fac("s1", "300", "2026-09-10", 400000)]), oc("T", "m", 200000, 100000, [fac("t1", "320", "2026-11-05", 200000)])],
+  [{ id: "pv9", vendedor_id: "m", anio: 2026, mes: 9, monto_pagado: 40000 }]);
+refacturar(db, "S", [nc("s2", "80", "2026-11-12", "300"), fac("s3", "330", "2026-11-12", 400000)]);
+const liqS = liquidacionComision(db.ocs.find((o) => o.id === "S"), db.pagos);
+eq("S (liquidación septiembre con abono parcial, refacturada en noviembre): por revisar y excluida", [liqS.porRevisar, liqS.excluida], [true, true]);
+eq("noviembre: solo T; S listada por revisar", [n(c(db, 2026, 11)).ocs, c(db, 2026, 11).porRevisar.map((x) => [x.numero_oc, x.incluida])], [["T"], [["S", false]]]);
+ev = evaluarPagoVendedor({ vendedorId: "m", mes: 11, anio: 2026, monto: 50000, ocs: db.ocs, ivaMensual: [], pagosVendedor: db.pagos });
+eq("pago de noviembre: no incluye ni marca S", [ev.comision, ev.ocIds], [50000, ["T"]]);
+eq("septiembre (anterior a octubre): igual a la versión publicada", JSON.stringify(numerico(c(db, 2026, 9))) === JSON.stringify(numerico(cAnt(db, 2026, 9))), true);
+eq("revisada «no estaba pagada»: S vuelve a contar en noviembre", n(calcularPagoVendedor({ vendedorId: "m", ocs: db.ocs.map((o) => (o.id === "S" ? { ...o, comision_revision: "revisada" } : o)), anio: 2026, mes: 11, pagosVendedor: db.pagos })).ocs, ["S", "T"]);
 
 // ── 3. OC aún no pagada ─────────────────────────────────────────────────────────────────────────────
 db = base([oc("U", "m", 400000, 300000, [fac("u1", "300", "2026-10-20", 400000)]), oc("N", "m", 200000, 100000, [fac("n1", "320", "2026-11-05", 200000)])]);
-refacturar(db, "U", [nc("u2", "80", "2026-11-13", 0, "300"), fac("u3", "330", "2026-11-13", 400000)]);
-eq("U no pagada y refacturada en noviembre: se liquida en octubre (su liquidación original)", periodoComision(db.ocs.find((o) => o.id === "U")), { anio: 2026, mes: 10 });
-eq("octubre: U pendiente", n(c(db, "m", 2026, 10)), { calculado: 50000, pagado: 0, deuda: 50000, ocs: ["U"] });
-eq("noviembre: solo N (U no entra)", n(c(db, "m", 2026, 11)), { calculado: 50000, pagado: 0, deuda: 50000, ocs: ["N"] });
-ev = evaluarPagoVendedor({ vendedorId: "m", mes: 11, anio: 2026, monto: 50000, ocs: db.ocs, ivaMensual: [], pagosVendedor: db.pagos });
-eq("pago de noviembre: marca solo N", ev.ocIds, ["N"]);
-eq("cobranza de U con la factura nueva (N° 330)", facturaVigente(db.ocs.find((o) => o.id === "U"))?.numero_factura, "330");
+refacturar(db, "U", [nc("u2", "80", "2026-11-13", "300"), fac("u3", "330", "2026-11-13", 400000)]);
+eq("U (octubre, no pagada) refacturada en noviembre: cuenta en octubre", [n(c(db, 2026, 10)).ocs, n(c(db, 2026, 11)).ocs], [["U"], ["N"]]);
+eq("pago de noviembre marca solo N; cobranza de U con la factura 330", [evaluarPagoVendedor({ vendedorId: "m", mes: 11, anio: 2026, monto: 50000, ocs: db.ocs, ivaMensual: [], pagosVendedor: db.pagos }).ocIds, facturaVigente(db.ocs.find((o) => o.id === "U"))?.numero_factura], [["N"], "330"]);
+// No pagada, liquidación anterior SIN pagos en ese mes, refacturada hacia la vigencia: cuenta donde hoy (mes de la factura vigente).
+db = base([oc("W", "m", 300000, 200000, [fac("w1", "400", "2026-09-20", 300000), fac("w2", "410", "2026-10-03", 300000, "400")])]);
+eq("no pagada sin pagos en su mes original (septiembre): cuenta en octubre, como hoy", [periodoComision(db.ocs[0]), n(c(db, 2026, 10)).ocs, n(cAnt(db, 2026, 10)).ocs], [{ anio: 2026, mes: 10 }, ["W"], ["W"]]);
 
-// ── 4. Varios vendedores (regla del período desde octubre 2026): la refacturada no altera el reparto del mes nuevo ──
-db = base([oc("A1", "a", 300000, 100000, [fac("a1", "400", "2026-10-02", 300000)]), oc("B1", "b", 300000, 200000, [fac("b1", "401", "2026-11-04", 300000)]),
-  oc("A2", "a", 100000, 0, [fac("a2", "402", "2026-11-06", 100000)])]);
-refacturar(db, "A1", [fac("a3", "410", "2026-11-10", 300000, "400")]);
+// ── 4. Varios vendedores en un mes nuevo: la refacturada pagada no altera el reparto ──────────────────
+db = base([oc("A1", "a", 300000, 100000, [fac("a1", "500", "2026-10-02", 300000), fac("a3", "510", "2026-11-10", 300000, "500")], { vendedor_pagado: true, comision_anio: 2026, comision_mes: 10 }),
+  oc("B1", "b", 300000, 200000, [fac("b1", "501", "2026-11-04", 300000)]), oc("A2", "a", 100000, 0, [fac("a2", "502", "2026-11-06", 100000)])]);
 const per = comisionOrdinariaPeriodo({ ocs: db.ocs, anio: 2026, mes: 11, ivaMensual: [] });
-eq("noviembre (2 vendedores): utilidades sin la OC refacturada de octubre", [per.utilidades.get("a"), per.utilidades.get("b"), per.total], [100000, 100000, 100000]);
-eq("octubre conserva la OC refacturada del vendedor a", comisionOrdinariaPeriodo({ ocs: db.ocs, anio: 2026, mes: 10, ivaMensual: [] }).utilidades.get("a"), 200000);
+eq("noviembre (2 vendedores): utilidades sin la OC de octubre ya pagada", [per.utilidades.get("a"), per.utilidades.get("b"), per.total], [100000, 100000, 100000]);
+eq("octubre conserva la OC del vendedor a", comisionOrdinariaPeriodo({ ocs: db.ocs, anio: 2026, mes: 10, ivaMensual: [] }).utilidades.get("a"), 200000);
 
-// ── 5. «Por revisar» ────────────────────────────────────────────────────────────────────────────────
-// Liquidación original verificada (planilla sin detalle por OC) y OC no marcada: no se puede comprobar si quedó cubierta.
-db = base([oc("R", "m", 200000, 100000, [fac("r1", "500", "2026-05-12", 200000)]), oc("S", "m", 300000, 200000, [fac("s1", "520", "2026-08-08", 300000)])],
-  [{ id: "pv5", vendedor_id: "m", anio: 2026, mes: 5, monto_pagado: 450000, monto_verificado: 450000, fecha: "2026-05-31" }]);
-refacturar(db, "R", [fac("r2", "510", "2026-08-02", 200000, "500")]);
-const liqR = liquidacionComision(db.ocs.find((o) => o.id === "R"));
-eq("R: por revisar (liquidación original verificada sin detalle), excluida", [liqR.porRevisar, liqR.excluida, liqR.periodo], [true, true, { anio: 2026, mes: 5 }]);
-eq("agosto: R no entra; solo S", n(c(db, "m", 2026, 8)), { calculado: 50000, pagado: 0, deuda: 0 + 50000, ocs: ["S"] });
-const may = c(db, "m", 2026, 5);
-eq("mayo: R listada por revisar, fuera del cálculo; el monto verificado no cambia", [may.porRevisar.map((x) => [x.numero_oc, x.incluida]), may.pagoCalculado, may.detalle.length], [[["R", false]], 450000, 0]);
-ev = evaluarPagoVendedor({ vendedorId: "m", mes: 5, anio: 2026, monto: 1, ocs: db.ocs, ivaMensual: [], pagosVendedor: db.pagos });
-eq("pago a mayo: no marca R (por revisar)", [ev.ocIds, ev.porRevisar.map((x) => x.numero_oc)], [[], ["R"]]);
-// Revisada: «no estaba pagada» → vuelve al cálculo de su liquidación original; «ya estaba pagada» → se marca pagada allí.
-eq("revisada (no estaba pagada): deja de estar por revisar", liquidacionComision({ ...db.ocs.find((o) => o.id === "R"), comision_revision: "revisada" }).porRevisar, false);
-// Marcada por revisar en la base (posible pago en dos liquidaciones) y ya pagada: se conserva donde se pagó, con aviso.
+// ── 5. «Por revisar» guardadas (como 1398-624 y 564162-290): sin cambios de monto, sin pagos nuevos ───
 const doble = oc("D", "m", 311999, 239960, [fac("d1", "204", "2026-06-04", 311999), fac("d2", "205", "2026-08-14", 311999, "204")],
   { vendedor_pagado: true, comision_anio: 2026, comision_mes: 8, comision_revision: "por_revisar", comision_revision_motivo: "Posible pago en dos liquidaciones: 06/2026 y 08/2026" });
-const ago = calcularPagoVendedor({ vendedorId: "m", ocs: [doble], anio: 2026, mes: 8 });
-eq("doble posible: se conserva en agosto (pagada), con aviso, incluida", [ago.detalle.map((l) => l.numero_oc), ago.porRevisar.map((x) => [x.numero_oc, x.incluida])], [["D"], [["D", true]]]);
-eq("doble posible: junio no la recupera", calcularPagoVendedor({ vendedorId: "m", ocs: [doble], anio: 2026, mes: 6 }), null);
+const otraAgo = oc("E", "m", 100000, 50000, [fac("e1", "206", "2026-08-20", 100000)]);
+db = base([doble, otraAgo], [{ id: "pv8", vendedor_id: "m", anio: 2026, mes: 8, monto_pagado: 61020 }]);
+eq("agosto con la OC por revisar: montos idénticos a la versión publicada", JSON.stringify(numerico(c(db, 2026, 8))) === JSON.stringify(numerico(cAnt(db, 2026, 8))), true);
+eq("agosto: aviso por revisar (incluida, ya pagada); junio no la recupera", [c(db, 2026, 8).porRevisar.map((x) => [x.numero_oc, x.incluida]), c(db, 2026, 6)], [[["D", true]], null]);
+ev = evaluarPagoVendedor({ vendedorId: "m", mes: 8, anio: 2026, monto: 100000, ocs: db.ocs, ivaMensual: [], pagosVendedor: db.pagos });
+eq("un pago adicional a agosto no marca la OC por revisar", ev.ocIds.includes("D"), false);
 
-// ── 6. Sin refacturación nada cambia ────────────────────────────────────────────────────────────────
-const parcial2 = oc("Z", "m", 187200, 150960, [fac("z1", "163", "2026-05-04", 124800), fac("z2", "164", "2026-05-04", 62400)]);
-eq("facturas parciales sin anulación: mes de la vigente más reciente (sin cambios)", [periodoComision(parcial2), liquidacionComision(parcial2).refacturada], [{ anio: 2026, mes: 5 }, false]);
-const dosVig = oc("Y", "m", 10, 5, [fac("y1", "1", "2026-06-30", 10), fac("y2", "2", "2026-07-30", 10)]);
-eq("dos facturas vigentes en meses distintos: mes de la más reciente (sin cambios)", periodoComision(dosVig), { anio: 2026, mes: 7 });
+// ── 6. Antes de octubre, ningún mes cambia (conjunto mixto, comparado con la versión publicada) ──────
+const mix = base([
+  oc("M1", "m", 239200, 222970, [fac("m1", "257", "2026-07-22", 239200), fac("m2", "295", "2026-08-13", 239200, "257")], { vendedor_pagado: true, comision_anio: 2026, comision_mes: 8 }),
+  oc("M2", "m", 183302, 139770, [fac("m3", "267", "2026-07-25", 183302), nc("m4", "59", "2026-10-15", "267"), fac("m5", "349", "2026-10-15", 183302)], { vendedor_pagado: true, comision_anio: 2026, comision_mes: 7 }),
+  oc("M3", "m", 200000, 100000, [fac("m6", "10", "2026-07-10", 200000)], { vendedor_pagado: true }),
+  oc("M4", "m", 187200, 150960, [fac("m7", "163", "2026-05-04", 124800), fac("m8", "164", "2026-05-04", 62400)]),
+  oc("M5", "m", 172900, 143960, [fac("m9", "227", "2026-06-30", 172900), fac("m10", "227", "2026-07-30", 172900, "225")], { vendedor_pagado: true }),
+], [{ id: "x7", vendedor_id: "m", anio: 2026, mes: 7, monto_pagado: 90000 }, { id: "x5", vendedor_id: "m", anio: 2026, mes: 5, monto_pagado: 1000, monto_verificado: 18120 }]);
+let iguales = 0; const distintos = [];
+for (let m = 1; m <= 9; m++) { JSON.stringify(numerico(c(mix, 2026, m))) === JSON.stringify(numerico(cAnt(mix, 2026, m))) ? iguales++ : distintos.push(m); }
+eq("enero–septiembre 2026: los 9 meses idénticos a la versión publicada", [iguales, distintos], [9, []]);
+eq("meses con comisión anteriores a octubre: los mismos que antes", mesesConFactura("m", mix.ocs).filter((x) => x.anio * 12 + x.mes < 2026 * 12 + 10), ANT.mesesConFactura("m", mix.ocs).filter((x) => x.anio * 12 + x.mes < 2026 * 12 + 10));
+eq("octubre: la OC pagada en julio (M2, refacturada en octubre) ya no genera comisión", [n(c(mix, 2026, 10)), n(cAnt(mix, 2026, 10))?.ocs], [null, ["M2"]]);
 
 console.log(`RESUMEN comisión ligada a la liquidación de la OC: ${ok} OK, ${fallas} FALLA(S)`);
 if (fallas) process.exitCode = 1;

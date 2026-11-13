@@ -4,16 +4,18 @@ import { calcularPagoVendedor, comisionProvisoria, esMesEnCurso, liquidacionComi
 // comisión (13/11/2026: liquidacionComision; una OC refacturada en otro mes sigue en su liquidación original y nunca se
 // marca desde el mes de la nueva factura). Las OC «Por revisar» no se marcan en ningún pago hasta revisarlas.
 const enMes = (liq, mes, anio) => !!liq.periodo && liq.periodo.mes === Number(mes) && liq.periodo.anio === Number(anio);
-export const ocsPagablesDelMes = (ocs, vendedorId, mes, anio) =>
+export const ocsPagablesDelMes = (ocs, vendedorId, mes, anio, pagosVendedor = null) =>
   (ocs || []).filter((o) => {
     if (o.vendedor_id !== vendedorId || o.estado_factura_propia !== "emitida" || o.vendedor_pagado) return false;
-    const liq = liquidacionComision(o);
+    const liq = liquidacionComision(o, pagosVendedor);
     return enMes(liq, mes, anio) && !liq.porRevisar;
   });
 
 // OC del período ya marcadas como pagadas (para desmarcarlas si una anulación deja la comisión impaga).
 const ocsMarcadasDelMes = (ocs, vendedorId, mes, anio) =>
-  (ocs || []).filter((o) => o.vendedor_id === vendedorId && o.vendedor_pagado && enMes(liquidacionComision(o), mes, anio));
+  (ocs || []).filter((o) => { if (o.vendedor_id !== vendedorId || !o.vendedor_pagado) return false;
+    const liq = liquidacionComision(o);   // la del período en que cuenta o la de su liquidación (pagada y refacturada después)
+    return enMes(liq, mes, anio) || (!!liq.liquidacion && liq.liquidacion.mes === Number(mes) && liq.liquidacion.anio === Number(anio)); });
 
 // Reparto de UNA transferencia (08/10/2026):
 //   pago de comisión  = mínimo(monto transferido, comisión pendiente del período)
@@ -49,7 +51,7 @@ export const evaluarPagoVendedor = ({ vendedorId, mes, anio, monto, ocs, ivaMens
     provisoria: comisionProvisoria(calc),
     enCurso: esMesEnCurso(anio, mes, hoy),
     sinIvaRegistrado: !!calc && !calc.ivaRegistrado, f29Incompleto: !!calc?.f29Incompleto,
-    ocIds: completo && r.total > 0 ? ocsPagablesDelMes(ocs, vendedorId, mes, anio).map((o) => o.id) : [],
+    ocIds: completo && r.total > 0 ? ocsPagablesDelMes(ocs, vendedorId, mes, anio, pagosVendedor).map((o) => o.id) : [],
     // 13/11/2026: avisos para el pago manual y la cartola (no cambian el monto).
     porRevisar: calc?.porRevisar || [], refacturadasFuera: calc?.refacturadasFuera || [],
     ajusteUtilidadTotal: calc?.ajusteUtilidadTotal || 0,

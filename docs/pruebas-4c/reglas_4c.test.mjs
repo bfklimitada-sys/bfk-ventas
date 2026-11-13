@@ -100,14 +100,12 @@ const ocsCom = [
   { id: "c3", numero_oc: "A-3", vendedor_id: "m", estado_factura_propia: "emitida", monto_total: 40000, costo_total: 20000, es_venta_propia: true,
     eventos_factura: [{ id: "d", numero_factura: "40", fecha: "2026-08-15", monto: 40000 }] },
 ];
-// 13/11/2026 (Kevin): la OC refacturada se queda en su liquidación ORIGINAL (julio); agosto (nueva factura) no la cuenta.
-eq("comisión: el mes es el de la liquidación original (primera factura)", periodoComision(ocsCom[0]), { anio: 2026, mes: 7 });
-eq("comisión: julio sigue apareciendo; agosto por las otras OC", mesesConFactura("m", ocsCom), [{ anio: 2026, mes: 8 }, { anio: 2026, mes: 7 }]);
+eq("comisión: el mes es el de la factura vigente", periodoComision(ocsCom[0]), { anio: 2026, mes: 8 });
+eq("comisión: julio ya no aparece (su factura está anulada)", mesesConFactura("m", ocsCom), [{ anio: 2026, mes: 8 }]);
 const ago = calcularPagoVendedor({ vendedorId: "m", ocs: ocsCom, anio: 2026, mes: 8 });
-eq("comisión: detalle con las OCs del cálculo (sin la refacturada)", ago.detalle.map((l) => [l.numero_oc, l.factura, l.utilidad, l.ventaPropia]), [["A-2", "30", 20000, false], ["A-3", "40", 20000, true]]);
-eq("comisión: agosto informa la OC con factura vigente que se liquida en julio", ago.refacturadasFuera.map((x) => [x.numero_oc, x.liquidacion]), [["A-1", { anio: 2026, mes: 7 }]]);
-eq("comisión: desglose (utilidad sin ventas propias / ventas propias)", [ago.sumaUtilidad, ago.pagoVentasPropias], [20000, Math.round(20000 - (40000 - 40000 / 1.19))]);
-eq("comisión: julio conserva la OC", calcularPagoVendedor({ vendedorId: "m", ocs: ocsCom, anio: 2026, mes: 7 }).detalle.map((l) => [l.numero_oc, l.factura, l.utilidad, l.refacturada]), [["A-1", "20", 40000, true]]);
+eq("comisión: detalle con las OCs del cálculo", ago.detalle.map((l) => [l.numero_oc, l.factura, l.utilidad, l.ventaPropia]), [["A-1", "20", 40000, false], ["A-2", "30", 20000, false], ["A-3", "40", 20000, true]]);
+eq("comisión: desglose (utilidad sin ventas propias / ventas propias)", [ago.sumaUtilidad, ago.pagoVentasPropias], [60000, Math.round(20000 - (40000 - 40000 / 1.19))]);
+eq("comisión: julio no tiene cálculo", calcularPagoVendedor({ vendedorId: "m", ocs: ocsCom, anio: 2026, mes: 7 }), null);
 eq("factura vigente: si todas están anuladas no hay vigente", facturaVigente({ eventos_factura: [{ id: "x", numero_factura: "1", factura_anulada_numero: "2" }, { id: "y", numero_factura: "2", factura_anulada_numero: "1" }] }), null);
 
 // ── 7. Cobranza y cartola ──
