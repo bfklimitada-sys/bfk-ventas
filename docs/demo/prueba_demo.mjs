@@ -2,6 +2,7 @@
 // responde es la propia página. Bloquea y registra toda solicitud que salga del equipo para comprobar el aislamiento.
 // Recorre las pantallas en computador, tableta y celular y ejecuta acciones reales en Mercado Público, Ventas privadas y Proyectos.
 // Uso: CHROME=… node docs/demo/prueba_demo.mjs http://127.0.0.1:4190/ [carpeta-de-capturas]
+//      CHROME=… node docs/demo/prueba_demo.mjs file:///ruta/BFK-Ventas-demo.html     (versión de un solo archivo, sin servidor)
 import { chromium } from "playwright-core";
 import path from "node:path";
 const [URL_DEMO = "http://127.0.0.1:4190/", CARPETA = ""] = process.argv.slice(2);
@@ -9,14 +10,16 @@ const CHROME = process.env.CHROME || "/opt/pw-browsers/chromium-1243/chrome-linu
 const F = []; let nOk = 0;
 const ok = (k, v, d) => { if (!v) { F.push(k); console.log("FALLA " + k + (d !== undefined ? " :: " + JSON.stringify(d).slice(0, 500) : "")); } else { nOk++; console.log("OK    " + k); } };
 const PERMITIDAS = /^(fonts\.googleapis\.com|fonts\.gstatic\.com|cdn\.jsdelivr\.net)$/;   // fuentes y Chart.js (como la app real); nada de datos
+const LOCAL = URL_DEMO.startsWith("file:");   // un solo archivo: diálogos y descargas del navegador, ningún recurso de internet
 const RUTAS = ["panel", "alertas", "agenda", "compras", "cotizaciones", "clientes", "cotizaciones-privadas", "ordenes-venta", "proyectos", "finanzas", "financiamiento", "vendedores", "gastos", "impuestos", "banco", "administracion"];
 const browser = await chromium.launch({ executablePath: CHROME, args: ["--no-sandbox"] });
 
 async function abrir({ ancho, alto, movil }) {
-  const ctx = await browser.newContext({ viewport: { width: ancho, height: alto }, isMobile: movil, hasTouch: movil, timezoneId: "America/Santiago", deviceScaleFactor: 1 });
+  const ctx = await browser.newContext({ acceptDownloads: true, viewport: { width: ancho, height: alto }, isMobile: movil, hasTouch: movil, timezoneId: "America/Santiago", deviceScaleFactor: 1 });
   const p = await ctx.newPage(); p.setDefaultTimeout(9000); const errs = []; const fuera = [];
   p.on("pageerror", (e) => errs.push(e.message));
-  await p.route("**/*", (r) => { const u = new URL(r.request().url()); if (u.hostname === "127.0.0.1") return r.continue(); fuera.push(u.hostname); return r.abort(); });
+  await p.route("**/*", (r) => { const u = new URL(r.request().url()); if (u.hostname === "127.0.0.1" || ["file:", "data:", "blob:"].includes(u.protocol)) return r.continue(); fuera.push(u.hostname); return r.abort(); });
+  if (LOCAL) p.on("dialog", (d) => d.accept(d.type() === "prompt" ? "Motivo de prueba" : undefined));   // como una persona que confirma
   const t0 = Date.now(); await p.goto(URL_DEMO, { waitUntil: "load" });
   await p.locator("[data-demo-espera]").waitFor({ state: "detached", timeout: 90000 }).catch(() => {});
   const ms = Date.now() - t0; await p.waitForTimeout(2500);
@@ -141,16 +144,23 @@ for (const [nombre, ancho, alto, movil] of [["pc", 1440, 900, false], ["tableta"
   // ── Documento generado: se muestra en el visor de la demostración (el alojamiento no permite descargas) ──
   if (nombre === "pc") await paso(`${N}_21_pdf`, async () => {
     await ir("compras"); await p.locator('[data-oc="2002-102-SE26"] > div').first().click(); await p.waitForTimeout(1300);
-    await p.locator("[data-ficha-pdf]").first().click(); await p.locator("[data-demo-visor] canvas").first().waitFor({ timeout: 30000 });
-    ok(`${N}_21_pdf_de_la_ficha_visible_en_el_visor`, (await p.locator("[data-demo-visor] canvas").count()) >= 1);
-    if (CARPETA) await p.screenshot({ path: path.join(CARPETA, `${nombre}-visor-pdf.png`) });
-    await p.locator("[data-demo-visor-cerrar]").click();
+    if (LOCAL) {   // fuera del alojamiento la descarga es real, como en la app
+      const [d] = await Promise.all([p.waitForEvent("download", { timeout: 30000 }), p.locator("[data-ficha-pdf]").first().click()]);
+      const ruta = await d.path(); const { readFileSync } = await import("node:fs"); const b = readFileSync(ruta);
+      ok(`${N}_21_pdf_de_la_ficha_descargado`, /\.pdf$/i.test(d.suggestedFilename()) && b.slice(0, 5).toString() === "%PDF-" && b.length > 3000, { nombre: d.suggestedFilename(), bytes: b.length });
+    } else {
+      await p.locator("[data-ficha-pdf]").first().click(); await p.locator("[data-demo-visor] canvas").first().waitFor({ timeout: 30000 });
+      ok(`${N}_21_pdf_de_la_ficha_visible_en_el_visor`, (await p.locator("[data-demo-visor] canvas").count()) >= 1);
+      if (CARPETA) await p.screenshot({ path: path.join(CARPETA, `${nombre}-visor-pdf.png`) });
+      await p.locator("[data-demo-visor-cerrar]").click();
+    }
   });
   await cerrar();
 
   // ── Aislamiento y estabilidad ──
   const otras = [...new Set(fuera)].filter((h) => !PERMITIDAS.test(h));
   ok(`${N}_22_ninguna_solicitud_de_datos_sale_del_equipo`, otras.length === 0 && !fuera.some((h) => /supabase/.test(h)), [...new Set(fuera)]);
+  if (LOCAL) ok(`${N}_22b_un_solo_archivo_no_pide_nada_a_internet`, fuera.length === 0, [...new Set(fuera)]);
   ok(`${N}_23_la_pagina_no_intento_llegar_a_servidores_externos`, (await p.evaluate(() => window.__bfkDemo.estado.bloqueadas)).length === 0, await p.evaluate(() => window.__bfkDemo.estado.bloqueadas));
   ok(`${N}_24_sin_errores_de_pagina`, errs.length === 0, [...new Set(errs)].slice(0, 5));
   // Al recargar, la demostración vuelve a su estado inicial (nada queda guardado).

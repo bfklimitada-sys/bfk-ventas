@@ -1,0 +1,40 @@
+BFK VENTAS - DEMOSTRACIÓN CON DATOS FICTICIOS
+Versión de la rama orden-visual, commit @COMMIT@ (@FECHA@)
+
+QUÉ ES
+Una copia completa de la app (Mercado Público, Ventas privadas, Proyectos, Cotizaciones y
+Finanzas) dentro de un solo archivo: BFK-Ventas-demo.html.
+- Los datos son ficticios: instituciones, clientes, vendedores, financiadores y proyectos.
+- No se conecta a la base de BFK ni a ningún servidor. Funciona sin internet.
+- Se entra directamente con el usuario «Administrador Demo».
+- Puedes registrar compras, entregas, facturas, pagos, gastos, clientes, ventas y proyectos.
+  Todo queda solo en esa pestaña: al recargar o cerrar, la demostración vuelve a su estado
+  inicial. Nada se guarda ni se envía.
+
+CÓMO ABRIRLA (EN UN COMPUTADOR)
+1. Descomprime el ZIP (en Windows: clic derecho > «Extraer todo»; en Mac: doble clic).
+2. Abre BFK-Ventas-demo.html con doble clic. Si se abre en otro programa, usa clic derecho >
+   «Abrir con» > Google Chrome o Microsoft Edge (recomendados).
+3. Espera unos segundos: aparece «Preparando la demostración» mientras se carga la base.
+4. Para volver a empezar desde cero, recarga la página (F5, o Cmd+R en Mac).
+
+Sirve para ver el formato de celular y tableta en el computador: en Chrome o Edge, presiona
+F12 y luego el ícono de teléfono/tableta (o Ctrl+Shift+M) y elige un modelo.
+
+EN IPHONE O ANDROID
+La vista previa de archivos del teléfono (app Archivos, WhatsApp, correo) muestra el HTML
+pero no ejecuta la app, así que no funciona desde ahí. Para revisarla en un teléfono hay que
+subir el archivo a un sitio de páginas estáticas y abrir su enlace. Esa publicación queda
+visible para cualquiera que tenga el enlace.
+
+PARA PROBAR
+- Mercado Público, consultar OC: «+ Nuevo» > OC de Mercado Público. Existen 4005-5-SE26 y
+  3001-1-SE26; 4001-1-SE26 no existe; 4002-2-SE26 simula una caída del servicio.
+- Las confirmaciones («¿Seguro que…?») y las descargas (PDF, Excel) son las del navegador,
+  igual que en la app real.
+- Correos, SII y la sincronización con Mercado Público no salen del archivo: responden
+  «no disponible en la demostración».
+
+REQUISITOS
+Un navegador actualizado. Fue probada con Chrome (equivalente a Edge) en computador, tableta
+y celular simulados; en Safari y Firefox todavía no se ha probado.

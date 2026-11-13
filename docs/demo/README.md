@@ -1,5 +1,11 @@
 # Demostración aislada de BFK Ventas (12/11/2026)
 
+Dos formatos, con el mismo código y los mismos datos:
+- **Un solo archivo** (`dist-archivo/BFK-Ventas-demo.zip` → `BFK-Ventas-demo.html` + `LEEME.txt`): se abre con doble clic en un
+  computador, sin servidor, sin sesión y sin internet (código, base y fuentes van dentro, ≈ 27 MB). Diálogos y descargas son los
+  del navegador, como en la app real. Para compartirla fuera de Claude.
+- **Alojada en Claude** (`dist/`): requiere iniciar sesión en Claude; ahí diálogos y descargas se resuelven dentro de la página.
+
 Una copia de la app de la rama `orden-visual` que funciona **sin servidor y sin conexión con la base real**, para revisar las
 pantallas y probar sus acciones con datos ficticios. No es la app publicada: se compila aparte con `docs/demo/vite.config.mjs`;
 la compilación de producción (`vite.config.js` de la raíz) no cambia.
@@ -21,6 +27,11 @@ la compilación de producción (`vite.config.js` de la raíz) no cambia.
 
 ## Limitaciones propias de la demostración
 
+En el archivo único: la vista previa de archivos de un teléfono no ejecuta la app (hay que abrirla en un computador o subirla a un
+sitio de páginas estáticas); probado en Chrome/Chromium, no en Safari ni Firefox.
+
+En la versión alojada en Claude:
+
 - El alojamiento no permite descargas, impresión ni ventanas emergentes del navegador. Los PDF generados (ficha de OC,
   cotización, EETT) se muestran en un visor dentro de la página; Excel y otros archivos solo avisan que se generaron.
 - Las confirmaciones del navegador («¿Seguro que…?») se aceptan solas y se avisa en pantalla; las preguntas con texto se
@@ -36,6 +47,7 @@ export PGHOST=/var/tmp/pgl PGPORT=5499 POSTGREST=…   # base desechable local, 
 bash docs/demo/construir.sh                           # genera la base ficticia y compila en docs/demo/dist
 npx vite preview --config docs/demo/vite.config.mjs --outDir docs/demo/dist --port 4190
 node docs/demo/prueba_demo.mjs http://127.0.0.1:4190/ /tmp/capturas   # computador, tableta y celular
+node docs/demo/prueba_demo.mjs file:///…/docs/demo/dist-archivo/BFK-Ventas-demo.html   # el archivo único, sin servidor
 node docs/pruebas-orden-visual/tableta.mjs http://127.0.0.1:4190/ /tmp/tableta
 ```
 

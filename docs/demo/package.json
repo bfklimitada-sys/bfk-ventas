@@ -3,5 +3,10 @@
   "private": true,
   "type": "module",
   "description": "Dependencias SOLO de la demostración aislada (no forman parte de la app publicada).",
-  "dependencies": { "@electric-sql/pglite": "0.5.16" }
+  "dependencies": {
+    "@electric-sql/pglite": "0.5.16",
+    "@fontsource/inter": "^5.3.0",
+    "@fontsource/jetbrains-mono": "^5.3.0",
+    "vite-plugin-singlefile": "^2.3.4"
+  }
 }
