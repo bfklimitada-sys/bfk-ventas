@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Field } from "../ui/Basicos";
 import { C, btnP, fmt, iMono, iStyle, selStyle } from "../../lib/theme";
+import CampoNumeroCL from "../ui/CampoNumeroCL";
+import { esInvalido } from "../../lib/numeroCL";
 import { FormIngresarCompra } from "./FormIngresarCompra";
 import { cotizacionesVinculadas, baseCotizacion, compradoEnOC, estadoLineas, filasIniciales, filaDesde, cambiosFila, armarPedidos, comparar, validarCompra, nuevoPedido } from "../../lib/compraCotizacion";
 
@@ -85,12 +87,16 @@ export function CompraDesdeCotizacion({ oc, cot, financiadores, perfil, onCompra
 
   const elegir = (o) => { setOpcion(o); setErrores([]); if (o === "A") { setFilas(filasIniciales(base, lineas)); setDespReal({}); setExtras({}); } };
   const setF = (rid, k, v) => setFilas((fs) => fs.map((f) => (f.rid === rid ? { ...f, [k]: v } : f)));
+  // Formato chileno (13/11/2026): un campo con formato incorrecto conserva el último valor válido y bloquea el registro.
+  const [invalidos, setInvalidos] = useState({});
+  const numero = (clave, aplicar) => (v) => { setInvalidos((x) => ({ ...x, [clave]: esInvalido(v) })); if (!esInvalido(v)) aplicar(v); };
   const dividir = (f) => { const l = lineas.find((x) => x.key === f.itemKey); if (l) setFilas((fs) => { const i = fs.findIndex((x) => x.rid === f.rid); const n = [...fs]; n.splice(i + 1, 0, filaDesde({ ...l, pendiente: 0 }, base, { proveedor: "", enlace: "" })); return n; }); };
 
   const registrar = async () => {
     if (enCurso.current) return;
     if (avisoBloqueo) { setErrores([avisoBloqueo]); return; }
     const faltan = [...val.errores];
+    if (Object.values(invalidos).some(Boolean)) faltan.unshift("Corrige los montos o cantidades con formato incorrecto (punto para miles, coma para decimales; ej.: 1.250.000,75).");
     if (!tieneCompras && !financiadorId && !oc.es_venta_propia) faltan.push("Selecciona el financiador.");
     if (modoNuevaOC && !conf.compraEfectiva) faltan.push("Confirma que la compra se realizó efectivamente: solo así se registra el costo real.");
     if (faltan.length) { setErrores(faltan); return; }
@@ -155,8 +161,8 @@ export function CompraDesdeCotizacion({ oc, cot, financiadores, perfil, onCompra
                   <Field label="Modelo"><input data-campo-compra="modelo" style={{ ...iStyle, ...marcado(c.modelo) }} value={f.modelo} onChange={(e) => setF(f.rid, "modelo", e.target.value)} />{ref(c.modelo, l?.modelo)}</Field>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                  <Field label="Cantidad a comprar"><input data-campo-compra="cantidad" type="number" min="0" step="1" style={{ ...iMono, ...marcado(c.cantidad) }} value={f.cantidad} onChange={(e) => setF(f.rid, "cantidad", e.target.value === "" ? "" : Number(e.target.value))} /></Field>
-                  <Field label="P. compra unit. con IVA ($)"><input data-campo-compra="unitario" type="number" min="0" style={{ ...iMono, ...marcado(c.unitario) }} value={f.unitario} onChange={(e) => setF(f.rid, "unitario", e.target.value === "" ? "" : Number(e.target.value))} />{ref(c.unitario, l ? m(l.unitario) : "")}</Field>
+                  <Field label="Cantidad a comprar"><CampoNumeroCL data-campo-compra="cantidad" decimales={0} style={{ ...iMono, ...marcado(c.cantidad) }} valor={f.cantidad} onCambiar={numero(`c-${f.rid}`, (v) => setF(f.rid, "cantidad", v))} /></Field>
+                  <Field label="P. compra unit. con IVA ($)"><CampoNumeroCL data-campo-compra="unitario" decimales={2} style={{ ...iMono, ...marcado(c.unitario) }} valor={f.unitario} onCambiar={numero(`u-${f.rid}`, (v) => setF(f.rid, "unitario", v))} />{ref(c.unitario, l ? m(l.unitario) : "")}</Field>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                   <Field label="Proveedor"><input data-campo-compra="proveedor" style={{ ...iStyle, ...marcado(c.proveedor) }} value={f.proveedor} onChange={(e) => setF(f.rid, "proveedor", e.target.value)} />{ref(c.proveedor, l?.proveedor)}</Field>
@@ -180,14 +186,14 @@ export function CompraDesdeCotizacion({ oc, cot, financiadores, perfil, onCompra
                 <div key={d.envioSan} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
                   <span style={{ flex: "1 1 160px", color: C.inkMuted }}>{d.yaRegistrado ? "Despacho cotizado: ya registrado en una compra anterior" : `Despacho cotizado ${m(d.original)}`}</span>
                   {opcion === "B" && !d.yaRegistrado
-                    ? <input data-despacho-real={d.envioKey} type="number" min="0" style={{ ...iMono, width: 120, ...marcado(Number(despReal[d.envioKey] ?? d.original) !== d.original) }} value={despReal[d.envioKey] ?? d.original} onChange={(e) => setDespReal((x) => ({ ...x, [d.envioKey]: e.target.value }))} />
+                    ? <CampoNumeroCL data-despacho-real={d.envioKey} decimales={0} style={{ ...iMono, width: 120, ...marcado(Number(despReal[d.envioKey] ?? d.original) !== d.original) }} contenedor={{ display: "inline-block" }} valor={despReal[d.envioKey] ?? d.original} onCambiar={numero(`d-${d.envioKey}`, (v) => setDespReal((x) => ({ ...x, [d.envioKey]: v })))} />
                     : <b>{m(d.real)}</b>}
                 </div>
               ))}
               {opcion === "B" && (
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
                   <span style={{ flex: 1, color: C.inkMuted }}>Despacho adicional de este pedido</span>
-                  <input data-despacho-extra={g.n} type="number" min="0" style={{ ...iMono, width: 120 }} value={extras[g.clave] ?? ""} placeholder="0" onChange={(e) => setExtras((x) => ({ ...x, [g.clave]: e.target.value }))} />
+                  <CampoNumeroCL data-despacho-extra={g.n} decimales={0} style={{ ...iMono, width: 120 }} contenedor={{ display: "inline-block" }} valor={extras[g.clave] ?? ""} placeholder="0" onCambiar={numero(`e-${g.clave}`, (v) => setExtras((x) => ({ ...x, [g.clave]: v })))} />
                 </div>
               )}
               <div style={{ textAlign: "right", marginTop: 4 }}>Costo del pedido: <b data-costo-pedido={g.n}>{m(g.costo)}</b></div>

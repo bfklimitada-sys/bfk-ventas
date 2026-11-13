@@ -70,7 +70,7 @@ async function ingresarProducto(p, d) {
   ok("01_compra_agil_codigo_al_servidor", M.api.length === 1 && /3390-246-COT26/.test(decodeURIComponent(M.api[0])), M.api);
   await vista.locator("[data-aplicar-compra-agil]").click(); await espera(p, 500);
   const val = async (c) => H(p).locator(`[data-campo="${c}"]`).inputValue();
-  ok("01_compra_agil_campos_aplicados", (await val("institucion")) === "Ejército de Chile" && (await val("rut")) === "61.962.500-5" && (await val("plazo")) === "15 DÍAS" && (await val("direccion")) === "Av. General Velásquez 1750, Arica" && (await val("id_externo")) === "3390-246-COT26" && (await val("unidad_compra")) === "Brigada Motorizada N.º 4 Rancagua" && (await val("presupuesto")) === "6000000");
+  ok("01_compra_agil_campos_aplicados", (await val("institucion")) === "Ejército de Chile" && (await val("rut")) === "61.962.500-5" && (await val("plazo")) === "15 DÍAS" && (await val("direccion")) === "Av. General Velásquez 1750, Arica" && (await val("id_externo")) === "3390-246-COT26" && (await val("unidad_compra")) === "Brigada Motorizada N.º 4 Rancagua" && (await val("presupuesto")) === "6.000.000");
   ok("01_compra_agil_no_toca_fecha_ni_estado", (await val("fecha")) === hoy && (await val("estado")) === "borrador");
   ok("01_compra_agil_requerimientos_del_comprador", (await H(p).locator("[data-requerimiento]").count()) === 2);
   // Confirmar antes de sobrescribir: un dato distinto ya escrito queda sin marcar.
@@ -287,7 +287,7 @@ async function ingresarProducto(p, d) {
   await llenar(f.locator('[data-campo="monto-despacho"]'), 5000);
   ok("D05_direccion_dentro_de_la_ficha", (await f.locator("[data-direccion-en-ficha]").count()) === 1);
   await f.locator('[data-campo="direccion-ficha"]').fill("Av. Siempre Viva 742"); await f.locator('[data-campo="comuna-ficha"]').fill("Laja"); await f.locator('[data-campo="region-ficha"]').fill("Biobío"); await espera(p, 300);
-  ok("D06_no_pierde_lo_escrito", (await f.locator('[data-campo="nombre"]').inputValue()) === "Mesa B" && /Aluminio/.test(await f.locator('[data-campo="especificaciones"]').inputValue()) && (await f.locator('[data-campo="precio"]').inputValue()) === "20000" && (await f.locator('[data-campo="monto-despacho"]').inputValue()) === "5000");
+  ok("D06_no_pierde_lo_escrito", (await f.locator('[data-campo="nombre"]').inputValue()) === "Mesa B" && /Aluminio/.test(await f.locator('[data-campo="especificaciones"]').inputValue()) && (await f.locator('[data-campo="precio"]').inputValue()) === "20.000" && (await f.locator('[data-campo="monto-despacho"]').inputValue()) === "5.000");
   await f.locator('[data-campo="estado-despacho"]').selectOption("confirmado");
   await f.locator("[data-guardar-ficha]").click(); await espera(p, 300);
   ok("D07_confirmar_exige_verificacion_real", (await fichaModal(p).count()) === 1 && /cómo se verificó/i.test(await f.locator('[data-aviso-linea="error-ficha"]').innerText()));

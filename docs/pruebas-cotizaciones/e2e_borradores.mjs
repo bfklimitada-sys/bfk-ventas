@@ -83,7 +83,7 @@ const valoresFicha = async (p) => { const f = fichaModal(p); return {
   enlace: await f.locator('[data-campo="enlace"]').inputValue(), proveedor: await f.locator('[data-campo="proveedor"]').inputValue(),
   cantidad: await f.locator('[data-campo="cantidad"]').inputValue(), precio: await f.locator('[data-campo="precio"]').inputValue(),
   fotos: await f.locator("img").count() }; };
-const fichaCompleta = (v) => v.nombre === "TALADRO PERCUTOR 750W" && /Mandril: 13 mm/.test(v.esp) && /sodimac\.cl/.test(v.enlace) && v.proveedor === "Sodimac" && v.cantidad === "3" && v.precio === "45990" && v.fotos >= 1;
+const fichaCompleta = (v) => v.nombre === "TALADRO PERCUTOR 750W" && /Mandril: 13 mm/.test(v.esp) && /sodimac\.cl/.test(v.enlace) && v.proveedor === "Sodimac" && v.cantidad === "3" && ["45990", "45.990"].includes(v.precio)   /* tal como se escribió o, al salir del campo, en formato chileno (13/11/2026); lo guardado es 45990 (A11) */ && v.fotos >= 1;
 
 // ═════ A. Escritorio ═════
 {

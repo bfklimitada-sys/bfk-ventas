@@ -6,6 +6,8 @@ import { revisarFicha, paresDeTexto, textoDePares, ESTADOS_ENVIO, proveedorDeEnl
 import { normalizarImagen, traerImagen, rutaConocida } from "../../lib/cotizacionesDatos";
 
 import { hoyChile } from "../../lib/fechaChile";
+import CampoNumeroCL from "../ui/CampoNumeroCL";
+import { esInvalido } from "../../lib/numeroCL";
 const m = (x) => fmt.money(Math.round(Number(x) || 0));
 // En cotizaciones privadas todo el contenido va en un fieldset (una revisión enviada se muestra deshabilitada); en Mercado
 // Público no se agrega ningún elemento.
@@ -98,6 +100,9 @@ export function EditorFicha({ inicial, envios = [], items = [], destino = "", de
     setError("");
     if (!ficha.nombre?.trim()) { setError(servicio ? "Falta el nombre del servicio." : "Falta el nombre exacto del producto."); return; }
     if (vp && !String(it.unidad || "").trim()) { setError("Indica la unidad (UN, M, KG, GL…)."); return; }
+    // Formato chileno (13/11/2026): un número con formato incorrecto nunca se guarda (ni se interpreta a medias).
+    const malos = [[it.cantidad, "la cantidad"], [it.precio_origen, servicio ? "el costo unitario" : "el precio de compra"], [servicio ? null : desp.monto, "el costo del despacho"]].filter(([v]) => esInvalido(v)).map(([, n]) => n);
+    if (malos.length) { setError(`Corrige el formato de ${malos.join(", ")}: punto para miles y coma para decimales (ej.: 1.250.000,75).`); return; }
     if (modo === "item" && !protegido && !servicio) {
       if (!(Number(it.cantidad) > 0)) { setError("La cantidad debe ser mayor que cero."); return; }
       if (despMod === "existente" && !desp.key) { setError("Elige el despacho ya registrado que comparte este producto."); return; }
@@ -188,7 +193,7 @@ export function EditorFicha({ inicial, envios = [], items = [], destino = "", de
             </Field>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
               <Field label="Proveedor"><input data-campo="proveedor" value={it.proveedor || ""} onChange={(e) => set("proveedor", e.target.value)} style={iStyle} /></Field>
-              <Field label="Cantidad" required><input data-campo="cantidad" type="number" inputMode={vp ? "decimal" : "numeric"} min={vp ? "0" : "1"} step={vp ? "any" : undefined} value={it.cantidad} onChange={(e) => set("cantidad", e.target.value)} style={iMono} {...bloq} /></Field>
+              <Field label="Cantidad" required><CampoNumeroCL data-campo="cantidad" decimales={vp ? 3 : 0} valor={it.cantidad} onCambiar={(v) => set("cantidad", v)} style={iMono} {...bloq} /></Field>
             </div>
             {vp && (
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
@@ -197,7 +202,7 @@ export function EditorFicha({ inicial, envios = [], items = [], destino = "", de
               </div>
             )}
             <Field label={servicio ? "Costo unitario del servicio (compra o subcontrato)" : "Precio unitario de compra"} hint={it.precio_origen ? `${m(it.precio_origen)} ${it.precio_incluye_iva === false ? "+ IVA" : "con IVA incluido"}` : servicio ? "Lo que cuesta a BFK por unidad (vacío si aún no se conoce)." : "Precio por unidad publicado por el proveedor."}>
-              <input data-campo="precio" type="number" inputMode="decimal" min="0" value={it.precio_origen ?? ""} onChange={(e) => set("precio_origen", e.target.value)} style={iMono} {...bloq} />
+              <CampoNumeroCL data-campo="precio" decimales={2} valor={it.precio_origen} onCambiar={(v) => set("precio_origen", v)} style={iMono} {...bloq} placeholder="Ej.: 25.990" />
             </Field>
             <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: T.sm, marginBottom: 6, minHeight: 32 }}><input type="checkbox" disabled={protegido} checked={it.precio_incluye_iva !== false} onChange={(e) => set("precio_incluye_iva", e.target.checked)} /> El precio publicado incluye IVA</label>
             <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: T.sm, marginBottom: 12, minHeight: 32 }}><input type="checkbox" disabled={protegido} checked={it.con_factura !== false} onChange={(e) => set("con_factura", e.target.checked)} /> Se compra con factura</label>
@@ -229,7 +234,7 @@ export function EditorFicha({ inicial, envios = [], items = [], destino = "", de
               )}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                 <Field label={despMod === "existente" ? "Costo total del despacho compartido" : "Costo del despacho (pagado)"}>
-                  <input data-campo="monto-despacho" type="number" inputMode="numeric" min="0" value={desp.monto ?? ""} onChange={(e) => setD("monto", e.target.value)} style={iMono} disabled={protegido} placeholder="0" />
+                  <CampoNumeroCL data-campo="monto-despacho" decimales={0} valor={desp.monto} onCambiar={(v) => setD("monto", v)} style={iMono} disabled={protegido} placeholder="0" />
                 </Field>
                 <Field label="Verificación">
                   <select data-campo="estado-despacho" value={desp.estado} disabled={protegido} onChange={(e) => cambiarEstado(e.target.value)} style={selStyle}>{Object.entries(ESTADOS_ENVIO).map(([k, v]) => { const req = !destinoValido && envioConfirmado({ estado: k }); return <option key={k} value={k} disabled={req}>{v.label}{req ? " (requiere dirección)" : ""}</option>; })}</select>

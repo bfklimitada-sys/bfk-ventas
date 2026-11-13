@@ -68,9 +68,9 @@ try {
 
   // B: precio de proveedor MENOR al cotizado (49.990 c/u con IVA).
   await W(p).locator('[data-opcion="B"]').click(); await espera(p, 300);
-  ok("P05 opción B precarga los mismos datos para editarlos", (await W(p).locator('[data-campo-compra="unitario"]').inputValue()) === "59990" && (await W(p).locator('[data-campo-compra="cantidad"]').inputValue()) === "2"
+  ok("P05 opción B precarga los mismos datos para editarlos", (await W(p).locator('[data-campo-compra="unitario"]').inputValue()) === "59.990" && (await W(p).locator('[data-campo-compra="cantidad"]').inputValue()) === "2"
     && (await W(p).locator('[data-campo-compra="proveedor"]').inputValue()) === "Ferretería Sur" && (await W(p).locator('[data-campo-compra="enlace"]').inputValue()) === "https://ferreteria.example/taladro"
-    && (await W(p).locator('[data-despacho-real]').inputValue()) === "5990");
+    && (await W(p).locator('[data-despacho-real]').inputValue()) === "5.990");
   await W(p).locator('[data-campo-compra="unitario"]').fill("49990"); await espera(p, 300);
   const totalReal = $(await txt(W(p).locator("[data-total-real]"))); const costoCompra = $(await txt(W(p).locator("[data-costo-esta-compra]")));
   const utilAct = $(await txt(W(p).locator("[data-utilidad-actualizada]"))); const utilOrig = $(await txt(W(p).locator("[data-utilidad-original]")));

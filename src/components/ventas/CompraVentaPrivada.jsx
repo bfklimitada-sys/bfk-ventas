@@ -5,6 +5,9 @@
 // existente siguen disponibles (onManual).
 import { useMemo, useRef, useState } from "react";
 import { C, MONO, R, T } from "../../lib/theme";
+import { iStyle } from "../../lib/theme";
+import CampoNumeroCL from "../ui/CampoNumeroCL";
+import { esInvalido } from "../../lib/numeroCL";
 import { Ventana, Campo, Rejilla, Entrada, Selector, ErrorForm } from "../proyectos/Comunes";
 import { estiloBoton } from "./Comunes";
 import { pesos, hoyISO, cantidadTxt, mensajeVP } from "../../lib/ventasPrivadas";
@@ -39,11 +42,15 @@ export function CompraVentaPrivada({ token, v, d, vp, showToast, onCerrar, onLis
 
   const elegir = (o) => { setOpcion(o); setErrores([]); if (o === "A") { setFilas(filasIniciales(base, lineas)); setDespReal({}); setExtras({}); setDocs({}); } };
   const setF = (rid, k, val2) => setFilas((fs) => fs.map((f) => (f.rid === rid ? { ...f, [k]: val2 } : f)));
+  // Formato chileno (13/11/2026): un campo con formato incorrecto conserva el último valor válido y bloquea el registro.
+  const [invalidos, setInvalidos] = useState({});
+  const numero = (clave, aplicar) => (v) => { setInvalidos((x) => ({ ...x, [clave]: esInvalido(v) })); if (!esInvalido(v)) aplicar(v); };
   const dividir = (f) => { const l = lineas.find((x) => x.key === f.itemKey); if (l) setFilas((fs) => { const i = fs.findIndex((x) => x.rid === f.rid); const n = [...fs]; n.splice(i + 1, 0, filaDesde({ ...l, pendiente: 0 }, base, { proveedor: "", enlace: "" })); return n; }); };
 
   const registrar = async () => {
     if (enCurso.current) return;
     const faltan = [...val.errores];
+    if (Object.values(invalidos).some(Boolean)) faltan.unshift("Corrige los montos o cantidades con formato incorrecto (punto para miles, coma para decimales; ej.: 1.250.000,75).");
     if (!fecha || fecha > hoyISO()) faltan.push("Indica la fecha de la compra (no futura).");
     if (conFin && finActivo) faltan.push(...validarAportes(finFilas, { disponible: comp.totalReal }).errores);
     if (faltan.length) { setErrores(faltan); return; }
@@ -118,8 +125,8 @@ export function CompraVentaPrivada({ token, v, d, vp, showToast, onCerrar, onLis
                 <div style={{ fontSize: T.small, fontWeight: 600, color: C.tealDark, marginBottom: 6 }}>{l?.nombre || "Producto"} <span style={{ color: C.inkMuted, fontWeight: 400 }}>· pendientes {cantidadTxt(lp?.pendiente ?? 0)}</span></div>
                 <Campo etiqueta="Producto adquirido"><Entrada data-campo-compra="producto" style={marcado(c.producto)} value={f.producto} onChange={(e) => setF(f.rid, "producto", e.target.value)} />{ref(c.producto, l?.nombre)}</Campo>
                 <Rejilla>
-                  <Campo etiqueta="Cantidad a comprar"><Entrada data-campo-compra="cantidad" type="number" min="0" step="any" style={marcado(c.cantidad)} value={f.cantidad} onChange={(e) => setF(f.rid, "cantidad", n0(e.target.value))} /></Campo>
-                  <Campo etiqueta="P. compra unit. con IVA ($)"><Entrada data-campo-compra="unitario" type="number" min="0" style={marcado(c.unitario)} value={f.unitario} onChange={(e) => setF(f.rid, "unitario", n0(e.target.value))} />{ref(c.unitario, l ? pesos(l.unitario) : "")}</Campo>
+                  <Campo etiqueta="Cantidad a comprar"><CampoNumeroCL data-campo-compra="cantidad" decimales={3} style={{ ...iStyle, ...marcado(c.cantidad) }} valor={f.cantidad} onCambiar={numero(`c-${f.rid}`, (v) => setF(f.rid, "cantidad", v))} /></Campo>
+                  <Campo etiqueta="P. compra unit. con IVA ($)"><CampoNumeroCL data-campo-compra="unitario" decimales={2} style={{ ...iStyle, ...marcado(c.unitario) }} valor={f.unitario} onCambiar={numero(`u-${f.rid}`, (v) => setF(f.rid, "unitario", v))} />{ref(c.unitario, l ? pesos(l.unitario) : "")}</Campo>
                   <Campo etiqueta="Proveedor"><Entrada data-campo-compra="proveedor" style={marcado(c.proveedor)} value={f.proveedor} onChange={(e) => setF(f.rid, "proveedor", e.target.value)} />{ref(c.proveedor, l?.proveedor)}</Campo>
                   <Campo etiqueta="Enlace"><Entrada data-campo-compra="enlace" style={marcado(c.enlace)} value={f.enlace} onChange={(e) => setF(f.rid, "enlace", e.target.value)} placeholder="https://…" />{ref(c.enlace, l?.enlace)}</Campo>
                   <Campo etiqueta="Marca"><Entrada data-campo-compra="marca" style={marcado(c.marca)} value={f.marca} onChange={(e) => setF(f.rid, "marca", e.target.value)} />{ref(c.marca, l?.marca)}</Campo>
@@ -148,13 +155,13 @@ export function CompraVentaPrivada({ token, v, d, vp, showToast, onCerrar, onLis
                 <div key={x.envioSan} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
                   <span style={{ flex: "1 1 160px", color: C.inkMuted }}>{x.yaRegistrado ? "Despacho cotizado: ya registrado en una compra anterior" : `Despacho cotizado ${pesos(x.original)}`}</span>
                   {B && !x.yaRegistrado
-                    ? <Entrada data-despacho-real={x.envioSan} type="number" min="0" style={{ width: 130, fontFamily: MONO, ...marcado(Number(despReal[x.envioKey] ?? x.original) !== x.original) }} value={despReal[x.envioKey] ?? x.original} onChange={(e) => setDespReal((y) => ({ ...y, [x.envioKey]: e.target.value }))} />
+                    ? <CampoNumeroCL data-despacho-real={x.envioSan} decimales={0} style={{ ...iStyle, width: 130, fontFamily: MONO, ...marcado(Number(despReal[x.envioKey] ?? x.original) !== x.original) }} contenedor={{ display: "inline-block" }} valor={despReal[x.envioKey] ?? x.original} onCambiar={numero(`d-${x.envioKey}`, (v) => setDespReal((y) => ({ ...y, [x.envioKey]: v })))} />
                     : <b>{pesos(x.real)}</b>}
                 </div>
               ))}
               {B && <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
                 <span style={{ flex: 1, color: C.inkMuted }}>Despacho adicional de este pedido</span>
-                <Entrada data-despacho-extra={g.n} type="number" min="0" style={{ width: 130, fontFamily: MONO }} value={extras[g.clave] ?? ""} placeholder="0" onChange={(e) => setExtras((y) => ({ ...y, [g.clave]: e.target.value }))} />
+                <CampoNumeroCL data-despacho-extra={g.n} decimales={0} style={{ ...iStyle, width: 130, fontFamily: MONO }} contenedor={{ display: "inline-block" }} valor={extras[g.clave] ?? ""} placeholder="0" onCambiar={numero(`e-${g.clave}`, (v) => setExtras((y) => ({ ...y, [g.clave]: v })))} />
               </div>}
               <div style={{ textAlign: "right", marginTop: 4 }}>Total del pedido (con IVA): <b data-costo-pedido={g.n}>{pesos(g.costo)}</b></div>
             </div>

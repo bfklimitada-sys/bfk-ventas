@@ -7,6 +7,7 @@
 // Además toma capturas comparativas del editor de Mercado Público (simulado, el de siempre) y del editor privado (CAPTURAS=carpeta).
 // Uso: (entorno.sh instalar) → PGRST_URL, JWT_SECRET, VP_DB_URL · node docs/pruebas-ventas-privadas/e2e_cotizacion_como_mp.mjs http://127.0.0.1:4330/
 import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { leerNumeroCL } from "../../src/lib/numeroCL.js";   // el campo muestra formato chileno (324.326)
 import { abrir, chromium, CHROME, U, psql, comoUsuario, sinDesborde, calma, marca, escriturasMP } from "./arnes_vp.mjs";
 import { crearBase, abrir as abrirMP } from "../pruebas-oc/mock_estado.mjs";
 import { crearDatos } from "../pruebas-oc/datos_oc.mjs";
@@ -88,7 +89,7 @@ async function recorrido(browser, { pref, ancho, alto, movil }) {
     ok(`${pref}05b «Cantidad» y «Precio unitario de compra» con el mismo estilo que los demás campos`, ec === em && ep === em, `${ec} / ${ep} / ${em}`); }
   await ui.guardarFicha(p);
   ok(`${pref}06 producto agregado (tarjeta con foto, proveedor, despacho confirmado)`, (await h.locator("[data-item-cotizacion]").count()) === 1 && /Ferretería Sur/.test(await h.locator('[data-item-cotizacion="1"]').innerText()) && /Confirmado/.test(await h.locator('[data-item-cotizacion="1"] [data-despacho-item]').innerText()) && (await h.locator('[data-item-cotizacion="1"] img').count()) === 1);
-  await ui.desdeBiblioteca(p, "Manguera 1 pulgada (prueba)", { cantidad: "12.5", unidad: "M", proveedor: "Ferretería Sur", enlace: "https://tienda.invalid/manguera", precio: 2500, despacho: { modo: "existente" } });
+  await ui.desdeBiblioteca(p, "Manguera 1 pulgada (prueba)", { cantidad: "12,5", unidad: "M", proveedor: "Ferretería Sur", enlace: "https://tienda.invalid/manguera", precio: 2500, despacho: { modo: "existente" } });
   ok(`${pref}07 desde la biblioteca: ficha precargada y despacho compartido`, (await h.locator("[data-item-cotizacion]").count()) === 2 && /Flexi · PVC-1/.test(await h.locator('[data-item-cotizacion="2"]').innerText()) && /compartido/.test(await h.locator('[data-item-cotizacion="2"] [data-despacho-item]').innerText()));
   await h.locator("[data-ingreso-manual]").click(); await ui.ventanaFicha(p).locator('[data-tipo="servicio"]').click(); await espera(p, 200);
   ok(`${pref}08 servicio: sin marca, modelo ni despacho`, !(await ui.ventanaFicha(p).locator('[data-campo="marca"]').count()) && (await ui.ventanaFicha(p).locator("[data-despacho-no-aplica]").count()) === 1);
@@ -103,7 +104,7 @@ async function recorrido(browser, { pref, ancho, alto, movil }) {
   const esperadoCU = calcularCotizacionVP({ items: [{ key: "a", cantidad: 2, precio_origen: 285600, precio_incluye_iva: true, con_factura: true, envio_key: "e" }, { key: "b", cantidad: 12.5, precio_origen: 2500, precio_incluye_iva: true, con_factura: true, envio_key: "e" }], envios: [{ key: "e", monto: 23800, con_factura: true }], afecta_iva: true }).lineas[0].costo_unitario;
   ok(`${pref}10 costo unitario (compra + despacho prorrateado, neto) = fórmula de Mercado Público`, cu1 === Math.round(esperadoCU), `${cu1} vs ${esperadoCU}`);
   await h.locator('[data-campo="recargo-producto-1"]').fill("30"); await h.locator('[data-campo="recargo-producto-1"]').blur(); await espera(p, 200);
-  ok(`${pref}11 el recargo sobre costo escribe el precio (redondeado hacia arriba)`, Number(await h.locator('[data-precio-unitario="1"]').inputValue()) === precioConRecargo(esperadoCU, 0.3), await h.locator('[data-precio-unitario="1"]').inputValue());
+  ok(`${pref}11 el recargo sobre costo escribe el precio (redondeado hacia arriba)`, leerNumeroCL(await h.locator('[data-precio-unitario="1"]').inputValue()).valor === precioConRecargo(esperadoCU, 0.3), await h.locator('[data-precio-unitario="1"]').inputValue());
   await ui.fijarPrecio(p, 1, 350000, 5); await ui.fijarPrecio(p, 2, 3990); await ui.fijarPrecio(p, 3, 180000, 10); await espera(p, 300);
   const tot = { neto: await ui.dinero(ui.fila(p, "neto")), iva: await ui.dinero(ui.fila(p, "iva")), total: await ui.dinero(ui.fila(p, "total")) };
   ok(`${pref}12 totales (fórmula de ventas privadas): neto 876.875 · IVA 166.606 · total 1.043.481`, tot.neto === 876875 && tot.iva === 166606 && tot.total === 1043481, JSON.stringify(tot));
@@ -130,7 +131,7 @@ async function recorrido(browser, { pref, ancho, alto, movil }) {
   ok(`${pref}19 al reabrir: datos, tres ítems con su ficha y despacho`, reab.plazo === LARGO && /Despacho incluido/.test(reab.cond) && (await h.locator("[data-item-cotizacion]").count()) === 3 && /Bomba centrífuga 2 HP/.test(await h.locator('[data-item-cotizacion="1"]').innerText()) && /Confirmado/.test(await h.locator('[data-item-cotizacion="1"]').innerText()));
   { await ui.pestana(p, "datos"); await captura(p, `${nombre}-vp-1-datos`); await ui.pestana(p, "productos"); await captura(p, `${nombre}-vp-2-productos`); await ui.pestana(p, "precios"); await captura(p, `${nombre}-vp-3-precios`); await ui.pestana(p, "eett"); await captura(p, `${nombre}-vp-4-eett`); await ui.pestana(p, "productos"); }
   await ui.pestana(p, "precios");
-  ok(`${pref}20 al reabrir: precios y descuentos`, (await h.locator('[data-precio-unitario="1"]').inputValue()) === "350000" && (await h.locator('[data-campo="descuento-1"]').inputValue()) === "5" && (await ui.dinero(ui.fila(p, "total"))) === 1043481);
+  ok(`${pref}20 al reabrir: precios y descuentos`, (await h.locator('[data-precio-unitario="1"]').inputValue()) === "350.000" && (await h.locator('[data-campo="descuento-1"]').inputValue()) === "5" && (await ui.dinero(ui.fila(p, "total"))) === 1043481);
   await ui.pestana(p, "productos");
   await h.locator('[data-item-cotizacion="1"] [data-editar-item]').click();
   ok(`${pref}21 la ventana muestra la ficha guardada (foto incluida)`, (await ui.ventanaFicha(p).locator('[data-campo="marca"]').inputValue()) === "Pedrollo" && /Caudal máximo/.test(await ui.ventanaFicha(p).locator('[data-campo="especificaciones"]').inputValue()) && (await ui.ventanaFicha(p).locator("[data-imagen-ficha]").count()) === 1);

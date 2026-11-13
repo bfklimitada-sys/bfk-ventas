@@ -68,7 +68,7 @@ try {
   await ui.pestana(p, "productos");
   await ui.ingresarManual(p, { nombre: "Bomba centrífuga 2 HP", marca: "Pedrollo", modelo: "CPm 680", especificaciones: "Potencia: 2 HP", cantidad: 2, unidad: "UN", precio: 240000, incluyeIva: false,
     despacho: { modo: "propio", monto: 0, estado: "sin_costo_confirmado", evidencia: "Retiro en tienda del proveedor" }, biblioteca: false });
-  await ui.ingresarManual(p, { nombre: "Manguera 1 pulgada", cantidad: "12.5", unidad: "M", precio: "2100.5", incluyeIva: false, despacho: { modo: "existente" }, biblioteca: false });
+  await ui.ingresarManual(p, { nombre: "Manguera 1 pulgada", cantidad: "12,5", unidad: "M", precio: "2100,5", incluyeIva: false, despacho: { modo: "existente" }, biblioteca: false });
   await h.locator("[data-ingreso-manual]").click(); await ui.llenarFicha(p, { tipo: "servicio", nombre: "Instalación y puesta en marcha", cantidad: 1, unidad: "GL", biblioteca: false }); await ui.guardarFicha(p);
   await ui.pestana(p, "precios");
   await ui.fijarPrecio(p, 1, 350000, 5); await ui.fijarPrecio(p, 2, 3990); await ui.fijarPrecio(p, 3, 180000, 10); await espera(p, 300);

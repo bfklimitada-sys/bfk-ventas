@@ -37,12 +37,14 @@ import { asignarVendedor } from "../../lib/ventasPrivadasDatos";
 import { leerCotizacion, guardarCotizacion, cambiarEstadoCotizacion, nuevaRevision, duplicarCotizacion, historialCotizacion, anular, esquemaFichaVP, leerEETT, listarEETT, guardarEETT, emitirEETT, ocClienteDeVenta } from "../../lib/ventasPrivadasDatos";
 import { accionesCotizacion, ESTADOS_COTIZACION, fechaTxt, hoyISO, sumarDias, folioRevision, mensajeVP, documentoDesdeEditor, cantidadTxt } from "../../lib/ventasPrivadas";
 import { itemVacioVP, cotizacionParaEditor, calcularCotizacionVP, precioConRecargo, lineaParaGuardarVP, validarItemsVP, descripcionDeFicha } from "../../lib/vpCotizacion";
-import { ESTADOS_ENVIO, envioConfirmado, envioVacio, nuevaClave, proveedorDeEnlace, invalidarDespachosPorDireccion, revisarFicha } from "../../lib/cotizaciones";
+import { ESTADOS_ENVIO, envioConfirmado, envioVacio, nuevaClave, proveedorDeEnlace, invalidarDespachosPorDireccion, revisarFicha, camposNumericosInvalidos } from "../../lib/cotizaciones";
 import { crearAlmacen, logoBFK, subirImagenesFicha } from "../../lib/cotizacionesDatos";
 import { generarPdfCotizacion } from "../../lib/vpPdf";
 import { generarPdfEETTVP, contenidoEETTVP, normalizarFichaEETT, mismoContenidoEETT } from "../../lib/vpEETT";
 import { descargarBlob } from "../../lib/eettPdf";
 import { guardarBorrador, borrarBorrador, leerBorrador } from "../../lib/borradoresCotizacion";
+import CampoNumeroCL from "../ui/CampoNumeroCL";
+import { esInvalido } from "../../lib/numeroCL";
 import logoUrl from "../../assets/bfk-logo.jpg";
 
 const m = (x) => fmt.money(Math.round(Number(x) || 0));
@@ -70,16 +72,9 @@ const cotDesde = (x) => { const { rev, items, envios } = cotizacionParaEditor(x,
   return { cliente_id: x.cab.cliente_id, ...Object.fromEntries(CAMPOS_CAB.map((k) => [k, rev[k] ?? ""])), afecta_iva: rev.afecta_iva !== false, items, envios,
     ...(x.cab._vendedorInstalado ? { vendedor: claveVendedor(x.cab) } : {}) }; };
 
-// Campo de porcentaje (igual al de Mercado Público): muestra % y entrega fracción; conserva el texto mientras se escribe.
+// Campo de porcentaje (igual al de Mercado Público), en formato chileno: «32,5» → 0,325; «32.5» se rechaza con aviso (13/11/2026).
 function CampoPorcentaje({ id, dato, valor, onCambiar, disabled, ancho = 80 }) {
-  const aTexto = (v) => (v === "" || v == null || Number.isNaN(Number(v)) ? "" : String(Math.round(Number(v) * 10000) / 100));
-  const [txt, setTxt] = useState(() => aTexto(valor)); const enfocado = useRef(false);
-  useEffect(() => { if (!enfocado.current) setTxt(aTexto(valor)); }, [valor]);
-  return <input id={id} data-campo={dato} type="text" inputMode="decimal" disabled={disabled} value={txt}
-    onFocus={() => { enfocado.current = true; }} onBlur={() => { enfocado.current = false; setTxt(aTexto(valor)); }}
-    onChange={(e) => { const t = e.target.value.replace(",", "."); if (!/^-?\d*\.?\d*$/.test(t)) return; setTxt(e.target.value);
-      if (t === "") onCambiar(""); else if (!Number.isNaN(Number(t)) && t !== "-" && t !== ".") onCambiar(Math.round(Number(t) * 100) / 10000); }}
-    style={{ ...iMono, width: ancho }} />;
+  return <CampoNumeroCL id={id} data-campo={dato} porcentaje negativo decimales={2} disabled={disabled} valor={valor} onCambiar={onCambiar} style={{ ...iMono, width: ancho }} contenedor={{ display: "inline-block" }} />;
 }
 
 // Revisión de la ficha para la EETT (reglas de Mercado Público), sobre lo que irá al PDF (ficha normalizada: pares como
@@ -268,6 +263,8 @@ export function EditorCotizacionPrivada({ token, perfil, vp, id, showToast, onCe
   const guardarInterno = async () => {
     if (esquema === false) throw new Error("Falta instalar la actualización de la base de cotizaciones privadas (fichas técnicas y datos de compra por ítem). No se guardó nada para no perder datos.");
     if (!cot.cliente_id) { setPestana("datos"); throw new Error("Selecciona el cliente."); }
+    const malos = camposNumericosInvalidos(cot);
+    if (malos.length) { setPestana("precios"); throw new Error(`Corrige el formato de ${malos.join(", ")} (punto para miles, coma para decimales; ej.: 1.250.000,75).`); }
     const errores = validarItemsVP(cot.items); if (errores.length) { setPestana(/precio unitario de venta/.test(errores[0]) ? "precios" : "productos"); throw new Error(errores[0]); }
     if (cot.vigencia_hasta < cot.fecha_emision) { setPestana("datos"); throw new Error("La vigencia no puede ser anterior a la emisión."); }
     const ca = calcularCotizacionVP(cot);
@@ -576,13 +573,13 @@ export function EditorCotizacionPrivada({ token, perfil, vp, id, showToast, onCe
                 <div style={{ fontSize: T.small, fontWeight: 700, color: C.tealDark, letterSpacing: 0.4, marginTop: 10 }}>{calc.exenta ? "PRECIO UNITARIO EXENTO DE VENTA" : "PRECIO UNITARIO NETO DE VENTA"}</div>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginTop: 2 }}>
                   {editable
-                    ? <input data-campo={`precio-${i + 1}`} data-precio-unitario={i + 1} type="number" inputMode="decimal" min="0" value={it.precio_unitario ?? ""} onChange={(e) => setItem(it.key, "precio_unitario", e.target.value)} placeholder="0"
-                        style={{ ...iMono, fontSize: 26, fontWeight: 700, maxWidth: 240, minHeight: 50 }} />
+                    ? <CampoNumeroCL data-campo={`precio-${i + 1}`} data-precio-unitario={i + 1} decimales={2} valor={it.precio_unitario} onCambiar={(v) => setItem(it.key, "precio_unitario", v)} placeholder="0"
+                        style={{ ...iMono, fontSize: 26, fontWeight: 700, maxWidth: 240, minHeight: 50 }} contenedor={{ maxWidth: 260 }} />
                     : <span data-unitario={i + 1} style={{ fontSize: 34, fontWeight: 700, color: C.ink, fontFamily: MONO, letterSpacing: -0.5 }}>{l.precio_unitario == null ? "—" : m(l.precio_unitario)}</span>}
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
                   <label htmlFor={`vp-desc-${it.key}`} style={{ fontSize: T.sm, color: C.inkMuted }}>Descuento (%)</label>
-                  <input id={`vp-desc-${it.key}`} data-campo={`descuento-${i + 1}`} type="number" inputMode="decimal" min="0" max="100" disabled={ro} value={it.descuento_pct ?? 0} onChange={(e) => setItem(it.key, "descuento_pct", e.target.value)} style={{ ...iMono, width: 80 }} />
+                  <CampoNumeroCL id={`vp-desc-${it.key}`} data-campo={`descuento-${i + 1}`} decimales={2} min={0} max={100} vacio={0} disabled={ro} valor={it.descuento_pct ?? 0} onCambiar={(v) => setItem(it.key, "descuento_pct", v)} style={{ ...iMono, width: 80 }} contenedor={{ display: "inline-block" }} />
                 </div>
                 <div style={{ fontSize: T.sm, color: C.inkMuted, marginTop: 6, lineHeight: 1.6 }}>
                   Cantidad: <b style={{ color: C.ink }}>{cantidadTxt(l.cantidad)} {it.unidad}</b> · {calc.exenta ? "Subtotal exento" : "Subtotal neto"}: <b data-subtotal={i + 1} style={{ color: C.ink, fontFamily: MONO }}>{m(l.neto)}</b>{l.descuento ? <> (descuento {m(l.descuento)})</> : null}
@@ -609,7 +606,7 @@ export function EditorCotizacionPrivada({ token, perfil, vp, id, showToast, onCe
                   <label htmlFor="vp-recargo-todos" style={{ fontSize: T.sm, color: C.inkMuted, flex: 1 }}>Recargo sobre costo <span style={{ fontSize: T.small }}>(escribe el precio de todos los ítems con costo)</span></label>
                   <CampoPorcentaje id="vp-recargo-todos" dato="recargo" valor={recargoTodos} onCambiar={setRecargoTodos} />
                   <span style={{ fontSize: T.sm }}>%</span>
-                  <BotonSecundario data-aplicar-recargo onClick={aplicarRecargoTodos} disabled={recargoTodos === "" || !calc.lineas.some((l) => l.costo_unitario != null)} style={{ minHeight: 34 }}>Aplicar a todos</BotonSecundario>
+                  <BotonSecundario data-aplicar-recargo onClick={aplicarRecargoTodos} disabled={recargoTodos === "" || esInvalido(recargoTodos) || !calc.lineas.some((l) => l.costo_unitario != null)} style={{ minHeight: 34 }}>Aplicar a todos</BotonSecundario>
                 </div>}
                 <FilaDato k="Subtotal" v={m(calc.totales.bruto)} dato="bruto" />
                 {calc.totales.descuento > 0 && <FilaDato k="Descuentos" v={`− ${m(calc.totales.descuento)}`} dato="descuento" />}

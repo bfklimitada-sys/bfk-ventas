@@ -22,6 +22,9 @@ import { calcularLinea, calcularTotales, redondear, aNumero, TASA_IVA } from "./
 const num = (v) => { const n = Number(String(v ?? "").replace(",", ".")); return Number.isFinite(n) ? n : 0; };
 const txt = (v) => String(v ?? "").trim();
 const vacio = (v) => v === "" || v == null;
+// Valor ingresado en formato chileno con formato incorrecto (el campo entrega NaN): nunca se calcula ni se guarda (13/11/2026).
+const esInvalido = (v) => typeof v === "number" && Number.isNaN(v);
+const sinInvalido = (v, reemplazo = "") => (esInvalido(v) ? reemplazo : v);
 const EPS = 1e-9;
 const plano = (s) => txt(s).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
@@ -87,7 +90,10 @@ export function calcularCotizacionVP(cot) {
   const items = cot?.items || []; const envios = cot?.envios || []; const exenta = cot?.afecta_iva === false;
   const asignado = repartirEnvios(items, envios);
   const destino = txt(cot?.direccion_entrega); const pendientes = [];
-  const lineas = items.map((it, idx) => {
+  const lineas = items.map((itOriginal, idx) => {
+    // Los campos con formato incorrecto se calculan como vacíos (nunca como un número mal leído) y dejan la línea pendiente.
+    const it = { ...itOriginal, cantidad: sinInvalido(itOriginal.cantidad), precio_origen: sinInvalido(itOriginal.precio_origen),
+      precio_unitario: sinInvalido(itOriginal.precio_unitario), descuento_pct: sinInvalido(itOriginal.descuento_pct, 0) };
     const n = idx + 1; const q = num(it.cantidad); const servicio = it.tipo === "servicio";
     const env = envios.find((e) => e.key === it.envio_key) || null;
     const conPrecio = !vacio(it.precio_origen) && num(it.precio_origen) >= 0;
@@ -103,8 +109,11 @@ export function calcularCotizacionVP(cot) {
     const precio = vacio(it.precio_unitario) ? null : num(it.precio_unitario);
     const recargo = costoUnit > 0 && precio != null ? precio / costoUnit - 1 : null;
     const avisos = [];
-    if (q <= 0) avisos.push(`Ítem ${n}: falta la cantidad.`);
-    if (!conPrecio) avisos.push(`Ítem ${n}: falta el precio de compra (el margen no se puede calcular).`);
+    const mal = [[itOriginal.cantidad, "la cantidad"], [itOriginal.precio_origen, "el precio de compra"], [itOriginal.precio_unitario, "el precio unitario de venta"],
+      [itOriginal.descuento_pct, "el descuento"], [env?.monto, "el costo del despacho"]].filter(([v]) => esInvalido(v)).map(([, x]) => x);
+    if (mal.length) avisos.push(`Ítem ${n}: ${mal.join(", ")} tiene${mal.length > 1 ? "n" : ""} formato incorrecto (punto para miles, coma para decimales).`);
+    if (q <= 0 && !esInvalido(itOriginal.cantidad)) avisos.push(`Ítem ${n}: falta la cantidad.`);
+    if (!conPrecio && !esInvalido(itOriginal.precio_origen)) avisos.push(`Ítem ${n}: falta el precio de compra (el margen no se puede calcular).`);
     if (!servicio) {
       if (!env) avisos.push(`Ítem ${n}: sin despacho registrado. Nunca se asume despacho gratis: verifícalo a la dirección del cliente.`);
       else if (!envioConfirmado(env)) avisos.push(`Ítem ${n}: el despacho de ${env.proveedor || "proveedor"} está ${ESTADOS_ENVIO[env.estado]?.label.toLowerCase() || "por verificar"}.`);
@@ -112,14 +121,14 @@ export function calcularCotizacionVP(cot) {
       else if (!mismoDestino(env.destino, destino)) avisos.push(`Ítem ${n}: el despacho de ${env.proveedor || "proveedor"} se verificó para ${env.destino ? `"${env.destino}"` : "otra dirección"}, no para "${destino}". Vuelve a verificarlo.`);
       else if (!txt(env.evidencia)) avisos.push(`Ítem ${n}: registra cómo se verificó el despacho de ${env.proveedor || "proveedor"}.`);
     }
-    if (precio == null) avisos.push(`Ítem ${n}: falta el precio unitario de venta.`);
+    if (precio == null && !esInvalido(itOriginal.precio_unitario)) avisos.push(`Ítem ${n}: falta el precio unitario de venta.`);
     else if (costoUnit != null && venta.neto < venta.costo) avisos.push(`Ítem ${n}: el precio de venta (con descuento) queda bajo el costo.`);
     pendientes.push(...avisos);
     return { key: it.key, cantidad: q, costo_producto_bruto: prodBruto, envio_asignado: envBruto, costo_bruto: costoBruto, costo_neto: costoNeto, costo_real: costoReal,
       iva_credito: exenta ? 0 : costoBruto - costoNeto, iva_no_recuperable: exenta ? costoBruto - costoNeto : 0,
       costo_unitario: costoUnit, precio_unitario: precio, recargo, ...venta, avisos };
   });
-  const tot = calcularTotales(items.map((it, i) => ({ cantidad: it.cantidad, precio_unitario: it.precio_unitario, descuento_pct: it.descuento_pct, costo_unitario: lineas[i].costo_unitario })),
+  const tot = calcularTotales(items.map((it, i) => ({ cantidad: sinInvalido(it.cantidad), precio_unitario: sinInvalido(it.precio_unitario), descuento_pct: sinInvalido(it.descuento_pct, 0), costo_unitario: lineas[i].costo_unitario })),
     { afecta_iva: !exenta, tasa_iva: TASA_IVA });
   const s = (k) => lineas.reduce((a, l) => a + l[k], 0);
   for (const e of envios.filter((e) => !items.some((it) => it.envio_key === e.key) && num(e.monto) > 0)) pendientes.push(`El despacho de ${e.proveedor || "proveedor"} no está asignado a ningún ítem.`);
@@ -151,6 +160,8 @@ export function validarItemsVP(items) {
   (items || []).forEach((it, i) => {
     const n = i + 1; const c = aNumero(it.cantidad), pr = aNumero(it.precio_unitario), d = aNumero(it.descuento_pct) ?? 0, co = aNumero(it.precio_origen);
     if (!txt(it.ficha?.nombre)) errores.push(`Ítem ${n}: falta el nombre.`);
+    const mal = [[it.cantidad, "la cantidad"], [it.precio_unitario, "el precio unitario de venta"], [it.descuento_pct, "el descuento"], [it.precio_origen, "el precio de compra"]].filter(([v]) => esInvalido(v)).map(([, x]) => x);
+    if (mal.length) { errores.push(`Ítem ${n}: corrige el formato de ${mal.join(", ")} (punto para miles, coma para decimales; ej.: 1.250.000,75).`); return; }
     if (!(c > 0)) errores.push(`Ítem ${n}: la cantidad debe ser mayor que cero.`);
     if (pr == null || !(pr >= 0)) errores.push(`Ítem ${n}: falta el precio unitario de venta (pestaña Precios).`);
     if (!(d >= 0 && d <= 100)) errores.push(`Ítem ${n}: el descuento debe estar entre 0 y 100 %.`);

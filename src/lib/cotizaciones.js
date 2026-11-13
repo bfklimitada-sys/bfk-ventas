@@ -34,6 +34,24 @@ export const ESTADOS_ENVIO = {
 };
 
 const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+const esInvalido = (v) => typeof v === "number" && Number.isNaN(v);
+
+// Valores numéricos con formato incorrecto (ingresados en formato chileno y no válidos): la cotización no se guarda así.
+export function camposNumericosInvalidos(cot) {
+  const out = [];
+  if (esInvalido(cot?.recargo)) out.push("el recargo general");
+  if (esInvalido(cot?.presupuesto_estimado)) out.push("el presupuesto del comprador");
+  (cot?.items || []).forEach((it, i) => {
+    if (esInvalido(it.cantidad)) out.push(`la cantidad del producto ${i + 1}`);
+    if (esInvalido(it.precio_origen)) out.push(`el precio de compra del producto ${i + 1}`);
+    if (esInvalido(it.recargo)) out.push(`el recargo del producto ${i + 1}`);
+    if (esInvalido(it.precio_unitario)) out.push(`el precio de venta del ítem ${i + 1}`);
+    if (esInvalido(it.descuento_pct)) out.push(`el descuento del ítem ${i + 1}`);
+    if (esInvalido(it.costo_unitario)) out.push(`el costo del ítem ${i + 1}`);
+  });
+  (cot?.envios || []).forEach((e) => { if (esInvalido(e.monto)) out.push(`el costo del despacho de ${e.proveedor || "proveedor"}`); });
+  return out;
+}
 
 // Dirección real del cliente a la que debe verificarse cada envío (dirección + comuna de la cotización).
 export const destinoDe = (cot) => [cot?.direccion_entrega, cot?.comuna].map((x) => String(x || "").trim()).filter(Boolean).join(", ");
@@ -125,8 +143,13 @@ export function calcularCotizacion(cot, formula = FORMULA) {
     const unitarioNeto = q > 0 ? redondear(ventaNetaTeorica / q, formula.redondeo) : 0;
     const netoLinea = unitarioNeto * q;
     const avisos = [];
-    if (q <= 0) avisos.push(`Producto ${n}: falta la cantidad.`);
-    if (num(it.precio_origen) <= 0) avisos.push(`Producto ${n}: falta el precio de compra.`);
+    // Formato chileno (13/11/2026): un valor con formato incorrecto (NaN) nunca se calcula como 0: deja la línea pendiente.
+    if (esInvalido(it.cantidad)) avisos.push(`Producto ${n}: la cantidad tiene formato incorrecto.`);
+    else if (q <= 0) avisos.push(`Producto ${n}: falta la cantidad.`);
+    if (esInvalido(it.precio_origen)) avisos.push(`Producto ${n}: el precio de compra tiene formato incorrecto (punto para miles, coma para decimales).`);
+    else if (num(it.precio_origen) <= 0) avisos.push(`Producto ${n}: falta el precio de compra.`);
+    if (esInvalido(it.recargo) || ((it.recargo == null || it.recargo === "") && esInvalido(cot?.recargo))) avisos.push(`Producto ${n}: el recargo tiene formato incorrecto.`);
+    if (env && esInvalido(env.monto)) avisos.push(`Producto ${n}: el costo del despacho de ${env.proveedor || "proveedor"} tiene formato incorrecto.`);
     if (!env) avisos.push(`Producto ${n}: sin envío asignado. Nunca se asume despacho gratis: verifica el envío a la dirección del cliente.`);
     else if (!envioConfirmado(env)) avisos.push(`Producto ${n}: el envío de ${env.proveedor || "proveedor"} está ${ESTADOS_ENVIO[env.estado]?.label.toLowerCase() || "por verificar"}.`);
     else if (!destino) avisos.push(`Producto ${n}: falta la dirección de entrega del cliente; el envío de ${env.proveedor || "proveedor"} no puede darse por verificado.`);

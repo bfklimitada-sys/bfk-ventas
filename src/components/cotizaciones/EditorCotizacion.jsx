@@ -3,7 +3,9 @@ import { C, T, R, iStyle, iMono, selStyle, fmt, MONO } from "../../lib/theme";
 import { Field, Modal } from "../ui/Basicos";
 import { NavegacionCotizacion } from "./PasosCotizacion";
 import { HojaLateral, Pestanas, PanelPestana, Tarjeta, Badge, AvisoLinea, BotonPrincipal, BotonSecundario, FilaDato, Desplegable, Seccion, Ayuda } from "../ui/Sistema";
-import { calcularCotizacion, formulaParaGuardar, formulaGuardadaExenta, esExentaAprobada, estadoParaPDF, destinoDe, direccionValida, invalidarDespachosPorDireccion, envioConfirmado, textoParaMercadoPublico, aplicarRecargoGeneral, aplicarRecargoProducto, itemVacio, envioVacio, nuevaClave, hoyISO, digitosValor, proveedorDeEnlace, ESTADOS_COTIZACION, ESTADOS_ENVIO, RECARGO_SUGERIDO } from "../../lib/cotizaciones";
+import CampoNumeroCL from "../ui/CampoNumeroCL";
+import { esInvalido } from "../../lib/numeroCL";
+import { camposNumericosInvalidos, calcularCotizacion, formulaParaGuardar, formulaGuardadaExenta, esExentaAprobada, estadoParaPDF, destinoDe, direccionValida, invalidarDespachosPorDireccion, envioConfirmado, textoParaMercadoPublico, aplicarRecargoGeneral, aplicarRecargoProducto, itemVacio, envioVacio, nuevaClave, hoyISO, digitosValor, proveedorDeEnlace, ESTADOS_COTIZACION, ESTADOS_ENVIO, RECARGO_SUGERIDO } from "../../lib/cotizaciones";
 import { logoBFK } from "../../lib/cotizacionesDatos";
 import { generarPdfEETT, descargarBlob, huellaPDF } from "../../lib/eettPdf";
 import { EditorFicha } from "./EditorFicha";
@@ -29,17 +31,10 @@ async function copiarTexto(t) {
   try { const a = document.createElement("textarea"); a.value = t; a.setAttribute("readonly", ""); a.style.position = "fixed"; a.style.opacity = "0"; document.body.appendChild(a); a.select(); const ok = document.execCommand("copy"); a.remove(); return ok; } catch { return false; }
 }
 
-// Campo de porcentaje: muestra % (0,30 → 30) y entrega fracción. Conserva el texto mientras se escribe
-// (permite «32,5» o «32.») y solo informa valores válidos; vacío = "".
+// Campo de porcentaje en formato chileno: muestra % (0,30 → 30; 32,5) y entrega la fracción; «32.5» se rechaza con aviso
+// (el punto nunca es decimal) y entrega NaN, que bloquea copiar valores y guardar (13/11/2026).
 function CampoPorcentaje({ id, dato, valor, onCambiar, disabled }) {
-  const aTexto = (v) => (v === "" || v == null || Number.isNaN(Number(v)) ? "" : String(Math.round(Number(v) * 10000) / 100));
-  const [txt, setTxt] = useState(() => aTexto(valor)); const enfocado = useRef(false);
-  useEffect(() => { if (!enfocado.current) setTxt(aTexto(valor)); }, [valor]);
-  return <input id={id} data-campo={dato} type="text" inputMode="decimal" disabled={disabled} value={txt}
-    onFocus={() => { enfocado.current = true; }} onBlur={() => { enfocado.current = false; setTxt(aTexto(valor)); }}
-    onChange={(e) => { const t = e.target.value.replace(",", "."); if (!/^-?\d*\.?\d*$/.test(t)) return; setTxt(e.target.value);
-      if (t === "") onCambiar(""); else if (!Number.isNaN(Number(t)) && t !== "-" && t !== ".") onCambiar(Math.round(Number(t) * 100) / 10000); }}
-    style={{ ...iMono, width: 80 }} />;
+  return <CampoNumeroCL id={id} data-campo={dato} porcentaje negativo decimales={2} disabled={disabled} valor={valor} onCambiar={onCambiar} style={{ ...iMono, width: 80 }} contenedor={{ display: "inline-block" }} />;
 }
 
 // Campos que se comparan si otra pestaña o persona guardó una versión más nueva (lib/conflictoVersion.js). Solo lectura de
@@ -183,6 +178,8 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
 
   // ── Guardar ──
   const guardarInterno = async () => {
+    const malos = camposNumericosInvalidos(cot);
+    if (malos.length) throw new Error(`corrige el formato de ${malos.join(", ")} (punto para miles, coma para decimales; ej.: 1.250.000,75).`);
     const bloqueo = bloqueoPorVendedor(cot, guardada);
     if (bloqueo) { setPestana("datos"); throw Object.assign(new Error(bloqueo), { vendedor: true }); }
     const enviada = cot; const { _idLocal, ...paraBFK } = { ...enviada, ...cotTrib, items: enviada.items, envios: enviada.envios }; // eslint-disable-line no-unused-vars
@@ -271,6 +268,8 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
   // ── Precios ──
   // Recargo general: se aplica a TODOS los productos (reemplaza los ajustes individuales). Nunca se suman recargos.
   const cambiarRecargoGeneral = (v) => {
+    // Con formato incorrecto solo se marca el recargo general: los ajustes de cada producto se conservan.
+    if (esInvalido(v)) { cambiar((c) => { c.recargo = v; return c; }); return; }
     const ajustados = cot.items.filter((x) => !(x.recargo == null || x.recargo === "")).length;
     cambiar((c) => aplicarRecargoGeneral(c, v));
     if (ajustados && v !== "" && v != null) showToast?.(`Recargo general aplicado a todos los productos (${ajustados} tenía${ajustados === 1 ? "" : "n"} un recargo propio).`);
@@ -394,7 +393,7 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             <Field label="Plazo de entrega"><input data-campo="plazo" value={cot.plazo} onChange={(e) => setCampo("plazo", e.target.value)} style={iStyle} placeholder="15 DÍAS" /></Field>
-            <Field label="Presupuesto del comprador" hint="Referencial. No es el precio de BFK."><input data-campo="presupuesto" type="number" inputMode="numeric" value={cot.presupuesto_estimado ?? ""} onChange={(e) => setCampo("presupuesto_estimado", e.target.value === "" ? null : Number(e.target.value))} style={iMono} /></Field>
+            <Field label="Presupuesto del comprador" hint="Referencial. No es el precio de BFK."><CampoNumeroCL data-campo="presupuesto" decimales={2} vacio={null} valor={cot.presupuesto_estimado} onCambiar={(v) => setCampo("presupuesto_estimado", v)} style={iMono} /></Field>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             <Field label="Publicación"><input data-campo="fecha_publicacion" type="datetime-local" value={String(cot.fecha_publicacion || "").slice(0, 16)} onChange={(e) => setCampo("fecha_publicacion", e.target.value || null)} style={iStyle} /></Field>
@@ -505,7 +504,7 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
                 </div>
                 <div data-recargo-producto={i + 1} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.border}` }}>
                   <label htmlFor={`cz-recargo-${it.key}`} style={{ fontSize: T.sm, color: C.inkMuted, flex: "1 1 160px" }}>Recargo de este producto (%)</label>
-                  <CampoPorcentaje id={`cz-recargo-${it.key}`} dato={`recargo-producto-${i + 1}`} disabled={protegido} valor={l.recargo} onCambiar={(v) => cambiar((c) => aplicarRecargoProducto(c, it.key, v))} />
+                  <CampoPorcentaje id={`cz-recargo-${it.key}`} dato={`recargo-producto-${i + 1}`} disabled={protegido} valor={(it.recargo == null || it.recargo === "") && esInvalido(cot.recargo) ? "" : l.recargo} onCambiar={(v) => cambiar((c) => aplicarRecargoProducto(c, it.key, v))} />
                   <span style={{ fontSize: T.sm }}>%</span>
                   <Badge tono={it.recargo == null || it.recargo === "" ? "neutro" : "info"}>{it.recargo == null || it.recargo === "" ? "General" : "Ajustado"}</Badge>
                   {!(it.recargo == null || it.recargo === "") && !protegido && <button type="button" data-volver-general={i + 1} onClick={() => cambiar((c) => aplicarRecargoProducto(c, it.key, null))} style={{ border: "none", background: "none", color: C.tealDark, textDecoration: "underline", cursor: "pointer", fontSize: T.small, padding: 0, minHeight: 32 }}>Usar el general</button>}
