@@ -53,4 +53,7 @@ const liqs = ocs.filter((o) => N.generaComision(o) && N.liquidacionComision(o).r
 liqs.forEach((x) => console.log("OC_REFACTURADA|" + x));
 console.log(`RESUMEN comparación de comisiones con datos reales: ${iguales + distintos} vendedor-mes, ${iguales} con montos idénticos, ${distintos} distintos (${distintosPrevios.length} anteriores a noviembre 2026)`);
 if (Object.keys(esperado).length) console.log(`OCTUBRE_ESPERADO|${octubreMal.length ? "NO COINCIDE: " + octubreMal.join("; ") : "coincide: " + JSON.stringify(esperado)}`);
+// Mes de comisión de cada OC según la app (para compararlo con fin_periodo_comision de la base): PERIODOS_SALIDA=archivo.
+if (process.env.PERIODOS_SALIDA) { const fs = await import("node:fs");
+  fs.writeFileSync(process.env.PERIODOS_SALIDA, ocs.map((o) => { const x = N.periodoComision(o); return `${o.id}|${x ? per(x) : "-"}`; }).sort().join("\n") + "\n"); }
 if (distintosPrevios.length || dobleN.length || repagoN.length || octubreMal.length) { console.log("FALLA|" + JSON.stringify({ distintosPrevios, dobleN, repagoN, octubreMal })); process.exitCode = 1; }
