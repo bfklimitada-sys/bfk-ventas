@@ -393,7 +393,8 @@ await escenario("S11", async () => {
   await boton(p, /Crear OC/, m); await espera(p, 1800);
   let ws = desde(b, n);
   const nueva = ws.find((w) => w.metodo === "POST" && w.tabla === "ordenes_compra_v2");
-  ok("S11_crea_con_vendedor_venta_propia_y_fecha", nueva && nueva.cuerpo.vendedor_id === "v2" && nueva.cuerpo.es_venta_propia === true && nueva.cuerpo.fecha_emision_mp === new Date().toISOString().slice(0, 10) && nueva.cuerpo.monto_total === 238000, nueva?.cuerpo);
+  // Fecha propuesta = hoy en Chile (corrección de fechas, 12/11/2026); antes la prueba esperaba el día UTC y fallaba de noche.
+  ok("S11_crea_con_vendedor_venta_propia_y_fecha", nueva && nueva.cuerpo.vendedor_id === "v2" && nueva.cuerpo.es_venta_propia === true && nueva.cuerpo.fecha_emision_mp === new Intl.DateTimeFormat("en-CA", { timeZone: "America/Santiago" }).format(new Date()) && nueva.cuerpo.monto_total === 238000, nueva?.cuerpo);
   ok("S11_venta_propia_no_suma_deuda", cuenta(ws, "PATCH", "financiadores") === 0 && cuenta(ws, "RPC", "registrar_compra_oc") === 1 && cuenta(ws, "POST", "eventos_compra") === 0
     && b.db.financiadores[0].saldo_deuda === 2500000 && b.db.ordenes_compra_v2.find((o) => o.numero_oc === "VD-NUEVA-1").estado_pago_financiamiento === "no_aplica");
   ok("S11_historial_oc_creada", cuenta(ws, "POST", "historial_cambios", (w) => /OC creada/.test(w.cuerpo.accion)) === 1);
