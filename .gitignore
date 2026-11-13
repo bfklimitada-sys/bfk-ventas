@@ -1,2 +1,7 @@
 dist/
 node_modules/
+
+# Archivos generados por docs/pruebas-ventas-privadas/entorno.sh (base local desechable)
+docs/pruebas-ventas-privadas/.cz-v1-sin-storage.sql
+docs/pruebas-ventas-privadas/.pgrst-*
+docs/pruebas-ventas-privadas/.plantilla.err

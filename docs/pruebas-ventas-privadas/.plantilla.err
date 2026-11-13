@@ -1,2 +1,0 @@
-psql:/home/claude/bfk-ventas/docs/migraciones/BORRADOR-2026-10-22-proyectos-industriales.sql:49: WARNING:  there is already a transaction in progress
-WARNING:  there is no transaction in progress
