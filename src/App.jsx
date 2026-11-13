@@ -24,7 +24,7 @@ import { bloqueoOC, fijarProveedorToken } from "./lib/bloqueoOCUso";
 import { PanelDashboard } from "./components/panels/PanelDashboard";
 import { PanelFinanciamiento } from "./components/panels/PanelFinanciamiento";
 import { PanelGastos } from "./components/panels/PanelGastos";
-import { planGuardarIva } from "./lib/ivaUnificado";
+import { planGuardarIva, planPagoF29 } from "./lib/ivaUnificado";
 import { PanelUsuarios } from "./components/panels/PanelUsuarios";
 import { PanelVendedores } from "./components/panels/PanelVendedores";
 import { Modal, Toast } from "./components/ui/Basicos";
@@ -1435,16 +1435,25 @@ export default function App() {
     const r=await anularPagoVendedor({upd,token:session.access_token,pago,motivo,ocs,ivaMensual,pagosVendedor});
     showToast(`Pago anulado · queda guardado con su motivo${r.desmarcadas?` · ${r.desmarcadas} OC vuelven a comisión pendiente`:""}`); await cargarTodo();
   };
-  // IVA del mes — registro único (lib/ivaUnificado.js): guarda débito/crédito en
-  // iva_mensual (comisión) y el pago al SII como gasto "Impuesto SII" (caja).
+  // F29 del período — declaración (lib/ivaUnificado.js): guarda iva_mensual (comisión y F29). 13/11/2026: NO crea ni
+  // modifica gastos; el pago al SII se registra aparte con handlePagoF29 (salida de caja «Impuesto SII»).
   const handleGuardarIva=async(data)=>{
     const t=session.access_token;
     const plan=planGuardarIva({data,gastos,ivaMensual});
     if(plan.iva.accion==="actualizar") await upd("iva_mensual",t,plan.iva.id,plan.iva.fila);
     else await ins("iva_mensual",t,{id:genId("iva"),...plan.iva.fila});
-    if(plan.gasto.accion==="insertar") await ins("gastos_indirectos",t,{id:genId("gas"),...plan.gasto.fila,creado_por:session.user.id});
-    else if(plan.gasto.accion==="actualizar") await upd("gastos_indirectos",t,plan.gasto.id,plan.gasto.fila);
-    showToast(plan.aviso?`IVA guardado · ${plan.aviso}`:plan.gasto.accion==="ninguna"?"IVA guardado":"IVA guardado · pago al SII registrado en Gastos");
+    showToast("F29 guardado · el pago se registra aparte, cuando esté hecho");
+    await cargarTodo();
+  };
+  // Pago realizado del F29: un gasto «Impuesto SII» del período, con monto y fecha reales. El id lo fija el formulario
+  // al abrirse: un segundo envío choca con la clave primaria y no se registra dos veces.
+  const handlePagoF29=async({id,anio,mes,monto,fecha})=>{
+    const t=session.access_token;
+    const plan=planPagoF29({id,anio,mes,monto,fecha,gastos,ivaMensual,hoy:hoyChile()});
+    if(plan.error){ if(plan.duplicado){ showToast(plan.error); await cargarTodo(); return; } throw new Error(plan.error); }
+    try{ await ins("gastos_indirectos",t,{...plan.fila,creado_por:session.user.id}); }
+    catch(e){ if(esPagoDuplicado(e)){ showToast("Este pago ya estaba registrado: no se guardó dos veces"); await cargarTodo(); return; } throw e; }
+    showToast(`Pago del F29 registrado en Gastos › Impuesto SII · saldo pendiente ${fmt.money(plan.pendienteDespues)}`);
     await cargarTodo();
   };
   const handleChangeRol=async(uid,rol)=>{ try{ await updRol(session.access_token,uid,rol); showToast("Rol actualizado"); }catch(e){ showToast(e.message,"error"); } await cargarTodo(); };
@@ -2020,7 +2029,7 @@ export default function App() {
       {(tab==="financiamiento"||todo)&&hoja("financiamiento",<PanelFinanciamiento difsHistoricas={difsHistoricas} financiadores={financiadores} ocs={ocs} ajustes={ajustesSaldo} perfiles={perfiles} onAjustar={handleAjusteSaldo} aportes={aportes} onGuardarAporte={handleGuardarAporte} onEliminarAporte={perfil?.rol==="admin"?handleEliminarAporte:undefined} onAbonar={(finId)=>{setAbonoFinId(typeof finId==="string"||typeof finId==="number"?finId:null);setAccion("abono_fin");}} pagoFinSueltos={pagoFinSueltos} extraVP={<FinanciamientoVentasPrivadas vp={vp} financiadores={financiadores} onAbrirVenta={(id)=>abrirVP("vp_ordenes",id)} />} />)}
       {(tab==="gastos"||todo)&&hoja("gastos",<PanelGastos gastos={gastos} categorias={categoriasGasto} ivaMensual={ivaMensual} pagosVendedor={pagosVendedor} vendedores={vendedores} onNuevoGasto={handleNuevoGasto} onGuardarIva={handleGuardarIva} onIrImpuestos={()=>irA("impuestos")} />)}
       {(tab==="finanzas"||todo)&&hoja("finanzas",<>{!todo&&<CanalFiltro valor={canal} onCambiar={setCanal} dato="finanzas" />}<FinanzasPorCanal canal={todo?"mp":canal} ocs={ocs} vp={vp} onIr={irA}><PanelResumenFinanzas ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} aportes={aportes} ajustes={ajustesSaldo} categorias={categoriasGasto} onIrImpuestos={()=>irA("impuestos")} /></FinanzasPorCanal></>)}
-      {(tab==="impuestos"||todo)&&hoja("impuestos",<PanelImpuestos ivaMensual={ivaMensual} gastos={gastos} onGuardarIva={handleGuardarIva} periodoInicial={ivaPeriodoInicial} onPeriodoInicialUsado={()=>setIvaPeriodoInicial(null)} />)}
+      {(tab==="impuestos"||todo)&&hoja("impuestos",<PanelImpuestos ivaMensual={ivaMensual} gastos={gastos} onGuardarIva={handleGuardarIva} onPagoF29={handlePagoF29} periodoInicial={ivaPeriodoInicial} onPeriodoInicialUsado={()=>setIvaPeriodoInicial(null)} />)}
       {(tab==="banco"||todo)&&hoja("banco",<PanelBanco ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} aportes={aportes} saldoBanco={saldoBanco} ultimaCartola={ultimaCartola} bancoMensual={bancoMensual} onEditarSaldo={()=>setAccion("saldo_banco")} onImportarCartola={()=>setAccion("cartola")} onQuitarAlertaCartola={handleQuitarAlertaCartola} />)}
       {(tab==="vendedores"||todo)&&hoja("vendedores",<PanelVendedores vendedores={vendedores} ocs={ocs} ivaMensual={ivaMensual} gastos={gastos} pagosVendedor={pagosVendedor} onGuardarIva={handleGuardarIva} onPagoVendedor={handlePagoVendedorSimple} onAnularPago={handleAnularPagoVendedor} esAdmin={perfil?.rol==="admin"} onIrImpuestos={(p)=>{ setIvaPeriodoInicial(p&&Number.isInteger(p.anio)&&Number.isInteger(p.mes)?{anio:p.anio,mes:p.mes}:null); irA("impuestos"); }} onVerOCs={(filtro)=>{setFiltroCompras(filtro);setOcFoco(null);setVolverA(null);setTab("compras");}} onAbrirOC={(ocId)=>{setFiltroCompras(null);setOcFoco(ocId);setVolverA(null);setTab("compras");}} />)}
       {(tab==="usuarios"||todo)&&perfil?.rol==="admin"&&hoja("usuarios",<PanelUsuarios perfilPropio={perfil} onRecargar={cargarTodo} onEliminarOC={setEliminandoOC} eliminacionesVersion={eliminacionesVersion} difsHistoricas={difsHistoricas} perfiles={perfiles} ocs={ocs} ocsArchivadas={ocsArchivadas} onRestaurarOC={handleRestaurarOC} onChangeRol={handleChangeRol} session={session} showToast={showToast} entidadesCatalogo={entidadesCatalogo} onEntidadesImportadas={handleEntidadesImportadas} usoMP={usoMP} sincronizando={sincronizando} validandoTodo={validandoTodo} exportando={exportando} onCorregirFechas={corregirFechasTodas} onValidarTodo={validarTodoContraMP} onExportarTodo={handleExportarTodo} configVP={todo?null:<ConfigVentasPrivadas key={vp.instalado?"vp-cfg":"vp-cfg-0"} token={session?.access_token} vp={vp} onRecargar={cargarVP} showToast={showToast} />} />)}

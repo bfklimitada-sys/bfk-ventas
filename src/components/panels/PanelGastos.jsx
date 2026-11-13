@@ -113,11 +113,11 @@ export function PanelGastos({ gastos, categorias, ivaMensual=[], pagosVendedor=[
       {showForm&&tipoForm==="gasto"&&(
         <Modal title="Registrar gasto" onClose={()=>setShowForm(false)}>
           <FormNuevoGasto categorias={actuales} onSave={async(d)=>{await onNuevoGasto(d);setShowForm(false);}}
-            onIva={onGuardarIva?()=>{setShowForm(false);setIvaPeriodo(null);}:null} />
+            onIva={onIrImpuestos?()=>{setShowForm(false);onIrImpuestos();}:onGuardarIva?()=>{setShowForm(false);setIvaPeriodo(null);}:null} irAImpuestos={!!onIrImpuestos} />
         </Modal>
       )}
       {ivaPeriodo!==undefined&&onGuardarIva&&(
-        <Modal title="IVA del mes" onClose={()=>setIvaPeriodo(undefined)}>
+        <Modal title="IVA mensual · F29 del período" onClose={()=>setIvaPeriodo(undefined)}>
           <FormIvaMensual ivaMensual={ivaMensual} gastos={gastos} periodo={ivaPeriodo} onSave={async(d)=>{await onGuardarIva(d);setIvaPeriodo(undefined);}} />
         </Modal>
       )}
@@ -125,7 +125,7 @@ export function PanelGastos({ gastos, categorias, ivaMensual=[], pagosVendedor=[
   );
 }
 
-export function FormNuevoGasto({ categorias, onSave, onIva }) {
+export function FormNuevoGasto({ categorias, onSave, onIva, irAImpuestos=false }) {
   const [catId,setCatId]=useState(categorias[0]?.id||""); const [sub,setSub]=useState(""); const [monto,setMonto]=useState("");
   const [mes,setMes]=useState(new Date().getMonth()+1); const [anio,setAnio]=useState(new Date().getFullYear());
   const [fecha,setFecha]=useState(hoyChile()); const [detalle,setDetalle]=useState("");
@@ -147,8 +147,8 @@ export function FormNuevoGasto({ categorias, onSave, onIva }) {
       {subs.length>0&&<Field label="Subcategoría"><select style={selStyle} value={sub} onChange={e=>handleSubChange(e.target.value)}><option value="">Selecciona…</option>{subs.map(s=><option key={s.nombre} value={s.nombre}>{s.nombre}{s.monto_sugerido?` (${fmt.money(s.monto_sugerido)})`:"" }</option>)}</select></Field>}
       {esImpuesto&&(
         <div style={{background:C.tealLight,borderRadius:8,padding:"10px 12px",fontSize:13,color:C.tealDark,marginBottom:12}}>
-          El impuesto del mes se registra junto con su débito y crédito, en un solo paso: así queda en caja y en la comisión.
-          <button onClick={onIva} style={{...btnP(C.info),marginTop:10}}>Registrar IVA del mes</button>
+          El F29 se declara y se paga en Finanzas › Impuestos: guarda el F29 del período y, en su detalle, usa «Registrar pago realizado» con el monto y la fecha reales. Así el pago queda ligado a su período y no se duplica.
+          <button data-gasto-ir-impuestos onClick={onIva} style={{...btnP(C.info),marginTop:10}}>{irAImpuestos?"Ir a Impuestos":"Registrar F29 del mes"}</button>
         </div>
       )}
       {!esImpuesto&&<>

@@ -1,4 +1,5 @@
 import { registroIvaDe, ivaAPagarPeriodo, retencionesPeriodo, aplicaRetenciones, f29TotalRegistrado } from "./calculos.js";
+import { tieneDesgloseF29, desgloseRegistroF29 } from "./f29Desglose.js";
 
 // ═══════════════════════════════════════════════════════════════
 // F29 / IVA por período — solo para mostrar el Panel.
@@ -22,21 +23,30 @@ const clave = (anio, mes) => anio * 12 + (mes - 1);
 export const periodoVigenteF29 = (anio, mes) => clave(anio, mes) >= clave(F29_DESDE.anio, F29_DESDE.mes);
 
 // Desglose del período: IVA, PPM/retenciones, determinado (IVA + PPM), pagado y pendiente.
+// 13/11/2026 — período con el desglose del informe (desglose_f29): determinado = Total a pagar F29 = IVA a pagar
+// (descontado el remanente anterior reajustado) + PPM + otras retenciones, todos registrados explícitamente. Los datos
+// pendientes cuentan $0 y el período se marca faltaTotalF29. Los registros anteriores (sin desglose) no cambian.
 export const desgloseF29 = (ivaMensual, gastos, anio, mes) => {
   const registro = registroIvaDe(ivaMensual, anio, mes);
-  const iva = ivaAPagarPeriodo(registro);
-  const ppm = retencionesPeriodo(registro);   // 0 antes de agosto 2026: los períodos antiguos no cambian
-  const det = iva + ppm;
   const pag = (gastos || [])
     .filter((g) => g.categoria_id === "cat_impuesto" && Number(g.mes) === mes && Number(g.anio) === anio)
     .reduce((s, g) => s + (Number(g.monto) || 0), 0);
+  if (tieneDesgloseF29(registro)) {
+    const d = desgloseRegistroF29(registro);
+    const iva = d.ivaAPagar ?? 0, ppm = (d.ppm ?? 0) + (d.otras ?? 0), det = d.totalConocido;
+    return { anio, mes, iva, ppm, det, pag, pend: Math.max(0, det - pag), faltaTotalF29: !d.completo, conDesglose: true, desglose: d, declarado: true };
+  }
+  const iva = ivaAPagarPeriodo(registro);
+  const ppm = retencionesPeriodo(registro);   // 0 antes de agosto 2026: los períodos antiguos no cambian
+  const det = iva + ppm;
   const faltaTotalF29 = !!registro && aplicaRetenciones(anio, mes) && !f29TotalRegistrado(registro);
-  return { anio, mes, iva, ppm, det, pag, pend: Math.max(0, det - pag), faltaTotalF29 };
+  // Misma forma que antes del 13/11/2026 (declarado no es enumerable: no altera comparaciones ni exportaciones).
+  return Object.defineProperty({ anio, mes, iva, ppm, det, pag, pend: Math.max(0, det - pag), faltaTotalF29 }, "declarado", { value: !!registro, enumerable: false });
 };
 
 export const periodoF29 = (ivaMensual, gastos, anio, mes) => {
-  const { det, pag, pend } = desgloseF29(ivaMensual, gastos, anio, mes);
-  return { anio, mes, det, pag, pend };
+  const { det, pag, pend, conDesglose } = desgloseF29(ivaMensual, gastos, anio, mes);
+  return conDesglose ? { anio, mes, det, pag, pend, conDesglose } : { anio, mes, det, pag, pend };
 };
 
 // Todos los períodos con datos desde F29_DESDE, más el desglose del Panel

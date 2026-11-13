@@ -5,6 +5,7 @@
 // ═══════════════════════════════════════════════════════════════
 import { C, fmt } from "./theme.js";
 import { facturasVigentesDe, montoTributarioVigente, ivaDeDocumento } from "./tributario.js";
+import { tieneDesgloseF29, desgloseRegistroF29 } from "./f29Desglose.js";
 
 // ── Facturas vigentes (regla 4, Fase 4B · modelo tributario SII) ──
 // La regla vive en lib/tributario.js (misma que la base, fin_facturas_vigentes):
@@ -126,13 +127,18 @@ export const aplicaRetenciones = (anio, mes) =>
 //  · Registrado ⇔ total > 0 y total ≥ IVA a pagar (un total menor que su propio IVA es incoherente).
 //  · iva_pagado es NOT NULL DEFAULT 0 en producción: 0 significa «total no registrado». Un F29 declarado
 //    legítimamente en $0 no se puede distinguir sin un cambio de esquema (propuesta aparte): queda provisorio.
+//  · 13/11/2026: un período registrado con el desglose del informe (desglose_f29) usa el PPM y las otras retenciones
+//    registrados explícitamente: la comisión es definitiva cuando ambos están ingresados (un $0 explícito cuenta).
 export const f29TotalRegistrado = (registro) => {
   if (!registro) return false;
+  if (tieneDesgloseF29(registro)) return desgloseRegistroF29(registro).retenciones !== null;
   const total = Number(registro.iva_pagado);
   return Number.isFinite(total) && total > 0 && total >= ivaAPagarPeriodo(registro);
 };
 export const retencionesPeriodo = (registro) => {
   if (!registro || !aplicaRetenciones(registro.anio, registro.mes)) return 0;
+  // Con el desglose del informe: PPM + otras retenciones registrados (pendientes cuentan $0 y la comisión queda provisoria).
+  if (tieneDesgloseF29(registro)) { const d = desgloseRegistroF29(registro); return (d.ppm ?? 0) + (d.otras ?? 0); }
   return Math.max(0, Math.round((Number(registro.iva_pagado) || 0) - ivaAPagarPeriodo(registro)));
 };
 

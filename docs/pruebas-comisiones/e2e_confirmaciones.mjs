@@ -48,26 +48,27 @@ ok("transferencia_real_se_registra", pv.length === 1 && pv[0].monto_transferido 
 ok("nota_deja_constancia", /Pagado sobre comisión provisoria \(IVA sin registrar\): confirmado por el usuario/.test(pv[0]?.notas || ""), pv[0]?.notas);
 ok("calculo_del_pago_sin_cambios", pv[0]?.monto_pagado === 300000 && pv[0]?.monto_extra_gestion === 0, pv[0]);
 
-// ── 2. Total del F29 escrito a mano (desde agosto 2026) ── (rediseño 2026-10: el IVA se registra en Finanzas › Impuestos)
+// ── 2. F29 sin datos presumidos (13/11/2026: formulario con el desglose del informe; antes «total del F29 escrito a mano»)
+// Igual intención: PPM y retenciones no se presumen. Vacío = pendiente (NULL), comisión provisoria; nunca crea gastos.
 await irA("impuestos");
 const abrirIva = async () => { await p.getByRole("button", { name: /Registrar IVA de otro mes/ }).first().click(); await espera(p, 400);
   const dlg = p.locator("[role=dialog]").last();
   await dlg.locator("select").first().selectOption(String(m1.mes)); await dlg.locator('input[type="number"]').first().fill(String(m1.anio)); await espera(p, 200);
-  const nums = dlg.locator('input[type="number"]');   // año, ventas netas, IVA débito, compras netas, IVA crédito, total F29
-  await nums.nth(2).fill("50000"); await nums.nth(4).fill("10000"); await espera(p, 200); return { dlg, nums }; };
-let { dlg, nums } = await abrirIva();
-ok("total_no_se_precarga_con_el_iva", (await nums.nth(5).inputValue()) === "" && (await dlg.locator("[data-f29-sin-total]").count()) === 1);
-await dlg.getByRole("button", { name: /Guardar IVA del mes/ }).click(); await espera(p, 1200);
+  const campo = (k) => dlg.locator(`[data-f29-campo="${k}"]`);
+  if (!(await campo("vN").inputValue())) { await campo("vN").fill("0"); await campo("cN").fill("0"); }
+  await campo("iV").fill("50000"); await campo("iC").fill("10000"); await espera(p, 200); return { dlg, campo }; };
+let { dlg, campo } = await abrirIva();
+ok("total_no_se_precarga_con_el_iva", (await campo("ppm").inputValue()) === "" && /Pendiente/.test(await dlg.locator('[data-desglose="total-f29"]').innerText()) && (await dlg.locator("[data-f29-pendientes]").count()) === 1);
+await dlg.locator("[data-f29-guardar]").click(); await espera(p, 1200);
 let iv = escrituras("iva_mensual");
-ok("sin_total_guarda_0_nunca_null", iv.length === 1 && iv[0].iva_pagado === 0 && iv[0].iva_ventas === 50000 && iv[0].iva_compras === 10000, iv);
+ok("sin_total_guarda_0_nunca_null", iv.length === 1 && iv[0].iva_pagado === 0 && iv[0].ppm === null && iv[0].otras_retenciones === null && iv[0].iva_ventas === 50000 && iv[0].iva_compras === 10000, iv);
 ok("sin_total_no_crea_gasto", escrituras("gastos_indirectos").length === 0);
-({ dlg, nums } = await abrirIva());
-await nums.nth(5).fill("30000"); await espera(p, 150);
-ok("avisa_total_menor_que_iva", (await dlg.locator("[data-f29-total-menor]").count()) === 1);
-await nums.nth(5).fill("45000"); await espera(p, 150);
-await dlg.getByRole("button", { name: /Guardar IVA del mes/ }).click(); await espera(p, 1200);
+({ dlg, campo } = await abrirIva());
+await campo("rem").fill("0"); await campo("ppm").fill("5.000"); await campo("otras").fill("0"); await espera(p, 150);
+ok("desglose_calcula_total", /\$45\.000/.test(await dlg.locator('[data-desglose="total-f29"]').innerText()));
+await dlg.locator("[data-f29-guardar]").click(); await espera(p, 1200);
 iv = escrituras("iva_mensual");
-ok("total_escrito_se_guarda", iv.length === 2 && iv[1].iva_pagado === 45000, iv);
+ok("total_escrito_se_guarda", iv.length === 2 && iv[1].iva_pagado === 45000 && iv[1].ppm === 5000 && iv[1].desglose_f29 === true && escrituras("gastos_indirectos").length === 0, iv);
 ok("sin_errores", errs.length === 0, errs);
 await browser.close();
 console.log(`\nRESUMEN e2e confirmaciones (pago provisorio y total del F29): ${nOk} OK, ${F.length} FALLA(S)`);

@@ -1,3 +1,6 @@
+// REEMPLAZADA el 13/11/2026 por docs/pruebas-f29-desglose/e2e_ui.mjs: este guion prueba el flujo anterior en que guardar el
+// IVA del mes también creaba o actualizaba el gasto «Impuesto SII». Desde el F29 con desglose, declaración y pago van separados.
+// Se conserva como registro de la versión anterior (válida hasta 9a7adcb).
 // Prueba de interfaz del registro único "IVA del mes" con Supabase simulado (sin datos reales).
 // Requiere: npx vite build && npx vite preview --port 4177 ; playwright-core.
 import { chromium } from "playwright-core";

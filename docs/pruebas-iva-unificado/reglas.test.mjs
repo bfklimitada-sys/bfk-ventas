@@ -32,14 +32,15 @@ eq("agosto sin fecha: no cambia gasto", p.gasto, { accion: "ninguna" });
 // Mes nuevo: inserta ambos.
 p = planGuardarIva({ data: { anio: 2026, mes: 9, ventasNetas: "1000000", ivaVentas: "190000", comprasNetas: "", ivaCompras: "50000", pagadoSii: 140000, fechaPago: "2026-10-20" }, gastos, ivaMensual });
 eq("septiembre: inserta iva", [p.iva.accion, p.iva.fila], ["insertar", { anio: 2026, mes: 9, ventas_netas: 1000000, iva_ventas: 190000, compras_netas: 0, iva_compras: 50000, iva_pagado: 140000 }]);
-eq("septiembre: inserta gasto Impuesto SII", p.gasto, { accion: "insertar", fila: { categoria_id: "cat_impuesto", subcategoria: "IVA Mensual", monto: 140000, mes: 9, anio: 2026, fecha: "2026-10-20", detalle: null } });
+// 13/11/2026: declaración y pago separados — guardar el F29 ya no crea gastos (antes: insertaba el gasto Impuesto SII).
+eq("septiembre: guardar el F29 NO crea gasto (pago aparte, 13/11/2026)", p.gasto, { accion: "ninguna" });
 
 // Edición: actualiza iva y gasto si cambió.
 p = planGuardarIva({ data: { anio: 2026, mes: 7, ivaVentas: 700000, ivaCompras: 50403, pagadoSii: 649597, fechaPago: "2026-08-20" }, gastos, ivaMensual });
 eq("julio: actualiza iva existente", [p.iva.accion, p.iva.id], ["actualizar", "i7"]);
 eq("julio: gasto igual → nada", p.gasto, { accion: "ninguna" });
 p = planGuardarIva({ data: { anio: 2026, mes: 7, ivaVentas: 700000, ivaCompras: 0, pagadoSii: 700000, fechaPago: "2026-08-21" }, gastos, ivaMensual });
-eq("julio: gasto distinto → actualiza monto y fecha", p.gasto, { accion: "actualizar", id: "g7", fila: { monto: 700000, fecha: "2026-08-21" } });
+eq("julio: guardar el F29 NO modifica el pago existente (13/11/2026; antes lo actualizaba)", p.gasto, { accion: "ninguna" });
 
 // Neto negativo / sin pago: no crea gasto.
 p = planGuardarIva({ data: { anio: 2026, mes: 9, ivaVentas: 10000, ivaCompras: 50000, pagadoSii: 0 }, gastos, ivaMensual });
@@ -48,7 +49,7 @@ eq("neto negativo sin pago: iva_pagado 0 y sin gasto", [p.iva.fila.iva_pagado, p
 // Varios pagos del período: no se tocan; avisa si no cuadra.
 const varios = [...gastos, gasto("g8b", 2026, 8, 10000)];
 p = planGuardarIva({ data: { anio: 2026, mes: 8, ivaVentas: 609830, ivaCompras: 0, pagadoSii: 609830 }, gastos: varios, ivaMensual });
-eq("varios pagos: no se modifican y avisa", [p.gasto.accion, !!p.aviso], ["ninguna", true]);
+eq("varios pagos: no se modifican (13/11/2026: sin aviso, guardar nunca toca pagos)", [p.gasto.accion, !!p.aviso], ["ninguna", false]);
 p = planGuardarIva({ data: { anio: 2026, mes: 8, ivaVentas: 619830, ivaCompras: 0, pagadoSii: 619830 }, gastos: varios, ivaMensual });
 eq("varios pagos que cuadran: sin aviso", p.aviso, null);
 eq("pagadoSiiDe suma pagos", pagadoSiiDe(varios, 2026, 8), 619830);
