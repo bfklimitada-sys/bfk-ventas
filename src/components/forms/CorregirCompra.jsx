@@ -16,7 +16,7 @@ export function CorregirCompra({ oc, evento, perfil, onCorregir, onAnular }) {
   const esAdmin = perfil?.rol === "admin";
   const [filas, setFilas] = useState(() => (pedido ? [...pedido.productos, ...pedido.despachos].map((l) => {
     const desp = !!leerIdCompra(l.id)?.envio; const q = Number(l.cantidad) || 0;
-    return { id: l.id, desp, nombre: l.descripcion, descripcion: l.descripcion || "", url: l.url && l.url !== "sin-link" ? l.url : "", direccion_entrega: l.direccion_entrega || "",
+    return { id: l.id, desp, nombre: l.descripcion, descripcion: l.descripcion || "", url: l.url && l.url !== "sin-link" ? l.url : "", urlPendiente: l.url === undefined, direccion_entrega: l.direccion_entrega || "",
       cantidad: desp ? 1 : q, unitario: desp ? 0 : (q ? Math.round((Number(l.precio_compra) || 0) / q) : 0), monto: desp ? Number(l.precio_compra) || 0 : 0, cantidadAntes: q };
   }) : []));
   const [proveedor, setProveedor] = useState(evento?.proveedor || "");
@@ -73,7 +73,7 @@ export function CorregirCompra({ oc, evento, perfil, onCorregir, onAnular }) {
           <div key={f.id} data-corr-fila={f.id} style={{ borderTop: `1px solid ${C.border}`, paddingTop: 6, marginTop: 4 }}>
             <Field label="Producto"><input data-corr="descripcion" style={iStyle} value={f.descripcion} onChange={(e) => set(f.id, "descripcion", e.target.value)} /></Field>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-              <Field label="Enlace"><input data-corr="url" style={iStyle} value={f.url} onChange={(e) => set(f.id, "url", e.target.value)} placeholder="https://…" /></Field>
+              <Field label="Enlace"><input data-corr="url" style={iStyle} disabled={f.urlPendiente} placeholder={f.urlPendiente ? "Enlace extenso: se carga al abrir la OC" : "https://…"} value={f.url} onChange={(e) => set(f.id, "url", e.target.value)} /></Field>
               <Field label="Dirección de entrega"><input data-corr="direccion" style={iStyle} value={f.direccion_entrega} onChange={(e) => set(f.id, "direccion_entrega", e.target.value)} /></Field>
             </div>
           </div>

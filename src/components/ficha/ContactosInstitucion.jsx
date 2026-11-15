@@ -1,6 +1,6 @@
 // Contactos institucionales (21/10/2026): ver, reutilizar, añadir y corregir los contactos de la institución de una OC.
 // Los datos los guarda y valida Supabase (RPC). El contacto que vino en cada OC se muestra tal cual y NUNCA se modifica.
-import { createContext, useContext, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { C, btnG, iStyle } from "../../lib/theme";
 import { Badge } from "../ui/Sistema";
 import { Field } from "../ui/Basicos";
@@ -10,6 +10,8 @@ import { claveInstitucion, contactosDeInstitucion, correoSugerido, mensajeErrorC
 // valor: { disponible, contactos, vinculos, guardar({id,rut,datos,ocId}), resolver(id,decision,motivo), obsoleto(id,motivo), cargarHistorial(id) }
 export const ContactosContext = createContext(null);
 export const useContactos = () => useContext(ContactosContext);
+// Consumo (fase 1, 15/11/2026): los contactos institucionales se descargan la primera vez que algo los muestra.
+const useContactosCargados = () => { const ctx = useContext(ContactosContext); const a = ctx?.asegurar; useEffect(() => { a?.(); }, [a]); return ctx; };
 
 const chico = { ...btnG, minHeight: 36, padding: "6px 10px", fontSize: 12 };
 const fmtFecha = (v) => { const d = v ? new Date(v) : null; return d && !isNaN(d) ? d.toLocaleDateString("es-CL") : ""; };
@@ -141,7 +143,7 @@ function TarjetaContacto({ c, ocId, nOCs, numerosOC, todos }) {
 
 // Lista de contactos de UNA institución (por RUT). ocId: la OC desde la que se mira (null = catálogo).
 export function ContactosLista({ rut, ocId = null, nombreInstitucion = "" }) {
-  const ctx = useContactos();
+  const ctx = useContactosCargados();
   const [agregando, setAgregando] = useState(false); const [verObsoletos, setVerObsoletos] = useState(false);
   const lista = useMemo(() => contactosDeInstitucion(ctx?.contactos, rut, ocId), [ctx?.contactos, rut, ocId]);
   const porContacto = useMemo(() => { const m = {}; for (const v of (ctx?.vinculos || [])) (m[v.contacto_id] ||= []).push(v.oc_id); return m; }, [ctx?.vinculos]);
@@ -171,7 +173,7 @@ export function ContactosLista({ rut, ocId = null, nombreInstitucion = "" }) {
 
 // Bloque de la ficha de la OC: contacto tal como vino en la OC (histórico) + contactos de la institución.
 export function ContactosOC({ oc }) {
-  const ctx = useContactos();
+  const ctx = useContactosCargados();
   const sug = useMemo(() => correoSugerido(ctx?.contactos, oc), [ctx?.contactos, oc]);
   if (!ctx?.disponible) return null;
   return (
@@ -192,7 +194,7 @@ export function ContactosOC({ oc }) {
 
 // Selector para reutilizar un contacto guardado en un formulario de correo.
 export function ElegirContacto({ oc, valor, onElegir }) {
-  const ctx = useContactos();
+  const ctx = useContactosCargados();
   const lista = useMemo(() => contactosDeInstitucion(ctx?.contactos, oc?.rut_cliente, oc?.id).filter(c => c.estado === "vigente" && c.correo), [ctx?.contactos, oc]);
   if (!ctx?.disponible || !lista.length) return null;
   return (
@@ -208,7 +210,7 @@ export function ElegirContacto({ oc, valor, onElegir }) {
 
 // Catálogo (Administración): buscar una institución y gestionar sus contactos; lista de instituciones con pendientes.
 export function ContactosCatalogo({ entidades }) {
-  const ctx = useContactos();
+  const ctx = useContactosCargados();
   const [q, setQ] = useState(""); const [rut, setRut] = useState("");
   const conPendientes = useMemo(() => {
     const m = {}; for (const c of (ctx?.contactos || [])) if (c.estado === "pendiente" || c.propuesta) m[c.rut_clave] = (m[c.rut_clave] || 0) + 1; return m;

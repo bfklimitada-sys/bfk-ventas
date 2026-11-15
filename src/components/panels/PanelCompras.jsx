@@ -290,7 +290,8 @@ export function DetalleOC({ oc, perfil, parte, onEditarLink, onEliminarLink, onG
       cantidad:dCant?Number(dCant):null,
       precio_compra:dCompra?Number(dCompra):null,
       precio_venta:dVenta?Number(dVenta):null,
-      url:dUrl.trim()||"sin-link",
+      // Enlace extenso aún no descargado (consumo, fase 1): no se envía, así no se puede borrar sin haberlo visto.
+      ...(l.url===undefined?{}:{url:dUrl.trim()||"sin-link"}),
       direccion_entrega:dDir.trim()||null,
     },oc);
     setEditando(null);
@@ -561,7 +562,9 @@ export function DetalleOC({ oc, perfil, parte, onEditarLink, onEliminarLink, onG
                       <Field label="Costo"><input style={iMono} type="number" value={dCompra} onChange={e=>setDCompra(e.target.value)} /></Field>
                       <Field label="Venta"><input style={iMono} type="number" value={dVenta} onChange={e=>setDVenta(e.target.value)} /></Field>
                     </div>
-                    <Field label="Link de compra"><input style={iStyle} value={dUrl} onChange={e=>setDUrl(e.target.value)} placeholder="https://…" /></Field>
+                    <Field label="Link de compra">{editando&&todos.find(x=>x.id===editando)?.url===undefined
+                      ?<input style={iStyle} value="" disabled placeholder="Enlace extenso: se carga al abrir la OC" data-url-pendiente />
+                      :<input style={iStyle} value={dUrl} onChange={e=>setDUrl(e.target.value)} placeholder="https://…" />}</Field>
                     <Field label="Dirección de despacho" hint="Solo si va a otra dirección">
                       <input style={iStyle} value={dDir} onChange={e=>setDDir(e.target.value)} placeholder={oc.direccion_entrega||"Misma que la OC"} />
                     </Field>
@@ -1310,11 +1313,13 @@ export function FilaOC({ tributario, notaVista, onCrearSeguimiento, onActualizar
 }
 
 
-export function PanelCompras({ tributario, onCrearSeguimiento, onActualizarSeguimiento, onEliminarSeguimiento, onCorregirCompra, onAnularCompra, onCompraDesdeCotizacion, onBuscarCotizacionOC, onCargarCotizacionOC, pagosVendedor, onAsignarVendedor, onAsignarFinanciador, correosBfk, onMarcarCorreo, onRegistrarNC, difsHistoricas, onCambiarFinanciamiento, ocs, perfiles, filtroInicial, busquedaInicial, ocFoco, onFocoUsado, onSincronizarFecha, contactos, onEnviarReclamo, onCorreoOC, onRegistrarRespuestaReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, onRepartirInversion, buscarDuplicadoOC, perfil, historialCambios, onAgregarComentario, onEliminarComentario, onArchivarOC, onEliminarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa }) {
+export function PanelCompras({ onAbrirOC, tributario, onCrearSeguimiento, onActualizarSeguimiento, onEliminarSeguimiento, onCorregirCompra, onAnularCompra, onCompraDesdeCotizacion, onBuscarCotizacionOC, onCargarCotizacionOC, pagosVendedor, onAsignarVendedor, onAsignarFinanciador, correosBfk, onMarcarCorreo, onRegistrarNC, difsHistoricas, onCambiarFinanciamiento, ocs, perfiles, filtroInicial, busquedaInicial, ocFoco, onFocoUsado, onSincronizarFecha, contactos, onEnviarReclamo, onCorreoOC, onRegistrarRespuestaReclamo, onGuardarContacto, onGuardarDatosOC, onEditarEvento, financiadores, onConfirmarEntrega, onEmitirFactura, onPagoCliente, onPagoFinanciamiento, entidadesCatalogo, onGuardarLink, onEliminarLink, onEditarLink, onRepartirInversion, buscarDuplicadoOC, perfil, historialCambios, onAgregarComentario, onEliminarComentario, onArchivarOC, onEliminarOC, onEliminarFactura, onEliminarEvento, vendedores, onIngresarCompra, onAsignarResponsable, onGuardarPostventa }) {
   const correosPorOC=useMemo(()=>{ const m=new Map(); for(const c of (correosBfk||[])) if(c.oc_id){ if(!m.has(c.oc_id)) m.set(c.oc_id,[]); m.get(c.oc_id).push(c); } for(const [k,v] of m) m.set(k,ordenarCorreos(v)); return m; },[correosBfk]);
   const [filtros,setFiltros]=useState({}); const [busq,setBusq]=useState(""); const [expId,setExpId]=useState(null);
   const escritorio=useEscritorio();
   const bloqueoEstado=useBloqueoOC(expId); // un solo ciclo de bloqueo para la OC expandida, venga de donde venga
+  // Consumo (fase 1): al abrir una OC se relee solo esa OC (cambios de otros usuarios), sus enlaces extensos y los contactos.
+  useEffect(()=>{ if(expId) onAbrirOC?.(expId); },[expId]); // eslint-disable-line react-hooks/exhaustive-deps
   const [reclamandoBanner,setReclamandoBanner]=useState(null); const [comunaSel,setComunaSel]=useState("");
   const [bannerAbierto,setBannerAbierto]=useState(false);
   const [vista,setVista]=useState("todas");

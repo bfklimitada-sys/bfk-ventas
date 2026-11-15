@@ -68,7 +68,7 @@ export function BarraInferior({ visibles, tab, onIr, menuAbierto, onAlternarMenu
 }
 
 // ── Celular: hoja "Más" con las demás pantallas (agrupadas) y la cuenta ─────
-export function MenuMas({ abierto, onCerrar, visibles, tab, onIr, perfil, onImprimir, onSalir }) {
+export function MenuMas({ abierto, onCerrar, visibles, tab, onIr, perfil, onImprimir, onSalir, onActualizar, actualizadoEn }) {
   const caja = useRef(null);
   useEffect(() => {
     if (!abierto) return;
@@ -113,6 +113,15 @@ export function MenuMas({ abierto, onCerrar, visibles, tab, onIr, perfil, onImpr
             <button aria-label="Imprimir o guardar como PDF todas las pantallas" onClick={onImprimir} style={fila(false)}>
               <span style={{ width: 38, height: 38, borderRadius: 12, background: C.paper, color: C.inkMuted, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}><Ic n="printer" /></span>
               <span style={{ fontSize: 14, fontWeight: 600, color: C.ink }}>Imprimir o guardar PDF de todas las pantallas</span>
+            </button>
+          )}
+          {onActualizar && (
+            <button data-nav="actualizar" onClick={onActualizar} style={fila(false)}>
+              <span style={{ width: 38, height: 38, borderRadius: 12, background: C.paper, color: C.inkMuted, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}><Ic n="actualizar" /></span>
+              <span style={{ minWidth: 0 }}>
+                <span style={{ display: "block", fontSize: 14, fontWeight: 600, color: C.ink }}>Actualizar datos</span>
+                <span style={{ display: "block", fontSize: 12, color: C.inkMuted }}>{actualizadoEn ? `Última actualización ${horaCorta(actualizadoEn)}` : "Vuelve a leer todos los datos"}</span>
+              </span>
             </button>
           )}
           <button data-nav="salir" onClick={onSalir} style={fila(false)}>
@@ -171,7 +180,9 @@ export function MenuNuevo({ onElegir, oscuro, compacto, alinear = "izquierda" })
 }
 
 // ── Escritorio: barra lateral con todas las pantallas agrupadas ────────────
-export function BarraLateral({ visibles, tab, onIr, nAlertas, perfil, onNuevo, onImprimir, onSalir }) {
+const horaCorta = (d) => { try { return new Date(d).toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }); } catch { return ""; } };
+
+export function BarraLateral({ visibles, tab, onIr, nAlertas, perfil, onNuevo, onImprimir, onSalir, onActualizar, actualizadoEn }) {
   const grupos = GRUPOS.map((g) => ({ ...g, items: visibles.filter((p) => p.grupo === g.key) })).filter((g) => g.items.length);
   const esAdmin = perfil?.rol === "admin";
   const sec = { width: "100%", display: "flex", alignItems: "center", gap: 10, background: "transparent", border: "1px solid rgba(255,255,255,0.10)", borderRadius: 12, padding: "8px 10px", color: "#B8C4D9", fontSize: 13, fontWeight: 500, cursor: "pointer", textAlign: "left", minHeight: 40 };
@@ -210,6 +221,11 @@ export function BarraLateral({ visibles, tab, onIr, nAlertas, perfil, onNuevo, o
         </div>
         {esAdmin && onImprimir && (
           <button aria-label="Imprimir o guardar como PDF todas las pantallas" onClick={onImprimir} style={sec}><Ic n="printer" /> Imprimir / PDF</button>
+        )}
+        {onActualizar && (
+          <button data-nav="actualizar" onClick={onActualizar} style={sec} title="Vuelve a leer todos los datos (se actualizan solos al volver a la app después de 15 min)">
+            <Ic n="actualizar" /> Actualizar datos{actualizadoEn ? <span style={{ marginLeft: "auto", fontSize: 11, color: "#8B9AB5" }}>{horaCorta(actualizadoEn)}</span> : null}
+          </button>
         )}
         <button data-nav="salir" onClick={onSalir} style={sec}><Ic n="salir" /> Cerrar sesión</button>
       </div>

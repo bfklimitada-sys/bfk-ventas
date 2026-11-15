@@ -210,9 +210,27 @@ export async function selAutorizaciones(t) {
   return r.json();
 }
 
-export async function selOCs(t) {
-  const r=await fetch(`${SUPABASE_URL}/rest/v1/ordenes_compra_v2?select=*,vendedores(nombre),financiadores(nombre),eventos_compra(*),eventos_entrega(*),eventos_factura(*),eventos_pago_cliente(*),eventos_pago_financiamiento(*),oc_productos_link(*),oc_comentarios(*)&order=creadoEn.desc`,{headers:hdrs(t)});
+// Consumo de Supabase (fase 1, 15/11/2026): las líneas de producto se leen con todas sus columnas MENOS el enlace (url);
+// los enlaces se leen aparte y solo los de largo normal (< URL_EXTENSA caracteres). Un enlace extenso (hoy uno de 317 kB)
+// se descarga recién cuando se abre su OC (leerUrlsLinks). La lista de columnas debe incluir toda columna nueva de la tabla.
+export const COLS_LINK="id,oc_id,descripcion,orden,creadoEn,creado_por,direccion_entrega,cantidad,precio_compra,precio_venta,categoria,proveedor,origen";
+export const URL_EXTENSA=2000;
+const PATRON_EXTENSA="_".repeat(URL_EXTENSA)+"*";   // LIKE: URL_EXTENSA caracteres o más
+// filtro: condición adicional de PostgREST (p. ej. `&id=in.("oc1","oc2")` para releer solo esas OCs).
+export async function selOCs(t, filtro="") {
+  const r=await fetch(`${SUPABASE_URL}/rest/v1/ordenes_compra_v2?select=*,vendedores(nombre),financiadores(nombre),eventos_compra(*),eventos_entrega(*),eventos_factura(*),eventos_pago_cliente(*),eventos_pago_financiamiento(*),oc_productos_link(${COLS_LINK}),oc_comentarios(*)${filtro}&order=creadoEn.desc`,{headers:hdrs(t)});
   if(!r.ok) throw await errorLectura(r,"Error leyendo OCs"); return r.json();
+}
+// Enlaces de largo normal (o vacíos) de las líneas de producto; filtro opcional (p. ej. `&oc_id=in.(...)`).
+export async function selUrlsLinks(t, filtro="") {
+  const r=await fetch(`${SUPABASE_URL}/rest/v1/oc_productos_link?select=id,url&or=(url.is.null,url.not.like.${PATRON_EXTENSA})${filtro}`,{headers:hdrs(t)});
+  if(!r.ok) throw await errorLectura(r,"Error leyendo enlaces de productos"); return r.json();
+}
+// Enlaces completos (incluidos los extensos) de las líneas indicadas: solo al abrir la OC que los tiene.
+export async function leerUrlsLinks(t, ids) {
+  if(!ids?.length) return [];
+  const r=await fetch(`${SUPABASE_URL}/rest/v1/oc_productos_link?select=id,url&id=in.(${ids.map(x=>`"${encodeURIComponent(x)}"`).join(",")})`,{headers:hdrs(t)});
+  if(!r.ok) throw await errorLectura(r,"Error leyendo enlaces de productos"); return r.json();
 }
 
 export const storageGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
@@ -228,6 +246,10 @@ export const TABLAS_EXPORT = HOJAS_RESPALDO.filter(h=>h.importable).map(({hoja,t
 // Solo lectura de la tabla; el estado se cambia con la RPC (el correo original en Gmail no se toca).
 export async function cargarCorreosBfk(t, desdeIso) {
   return sel("correos_bfk", t, `&or=(estado.eq.pendiente,fecha.gte.${encodeURIComponent(desdeIso)})&order=fecha.desc&limit=500`);
+}
+// Consumo (fase 1): solo los correos sincronizados o gestionados después del punto de corte (lo último que ya se tiene).
+export async function cargarCorreosNuevos(t, { sincronizado, gestionado }) {
+  return sel("correos_bfk", t, `&or=(sincronizado_en.gt.${encodeURIComponent(sincronizado)},gestionado_en.gt.${encodeURIComponent(gestionado)})&order=fecha.desc&limit=500`);
 }
 export async function rpcMarcarCorreo(t, id, estado) {
   const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/correo_bfk_marcar`, { method:"POST", headers:hdrs(t), body:JSON.stringify({ p_id: id, p_estado: estado }) });
