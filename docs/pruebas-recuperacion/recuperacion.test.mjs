@@ -52,7 +52,8 @@ eq("misma contraseña", mensajeErrorAuth(422, { code: 422, error_code: "same_pas
 eq("contraseña débil", mensajeErrorAuth(422, { error_code: "weak_password", msg: "Password should be at least 6 characters." }, "x").includes("requisitos"), true);
 eq("token vencido 401", mensajeErrorAuth(401, { msg: "invalid JWT: token is expired" }, "x").includes("expiró"), true);
 eq("sesión inexistente 403", mensajeErrorAuth(403, { error_code: "session_not_found" }, "x").includes("expiró"), true);
-eq("error desconocido → por defecto", mensajeErrorAuth(500, { msg: "boom" }, "por defecto"), "por defecto");
+eq("error 5xx → servidor no disponible (15/11/2026: antes caía al mensaje por defecto)", mensajeErrorAuth(500, { msg: "boom" }, "por defecto"), "El servidor de BFK Datos no responde en este momento. Intenta en unos minutos; si persiste, avisa al administrador de BFK.");
+eq("error desconocido (418) → por defecto", mensajeErrorAuth(418, { msg: "boom" }, "por defecto"), "por defecto");
 
 console.log(`\n${ok} correctas, ${fallas} fallas`);
 process.exit(fallas ? 1 : 0);

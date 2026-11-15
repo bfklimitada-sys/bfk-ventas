@@ -1,5 +1,6 @@
 import { HOJAS_RESPALDO } from "./hojasRespaldo.js";
 import { URL_RETORNO_RECUPERACION, mensajeErrorAuth } from "./recuperacion.js";
+import { pedir, cuerpoJson, mensajeIngreso, mensajeErrorServicio } from "./errorServicio.js";
 
 export const SUPABASE_URL = "https://gypywxaugwuxbgmcqntp.supabase.co";
 
@@ -8,8 +9,9 @@ export const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiO
 export const SESSION_KEY = "bfk_supabase_session_v2";
 
 export async function supaSignIn(email, password) {
-  const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, { method:"POST", headers:{"Content-Type":"application/json", apikey:SUPABASE_ANON_KEY}, body:JSON.stringify({email,password}) });
-  const d = await r.json(); if(!r.ok) throw new Error(d.error_description||"Error al ingresar"); return d;
+  // 15/11/2026: distingue credenciales incorrectas, sin conexión, servicio restringido (402) y servidor no disponible.
+  const r = await pedir(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, { method:"POST", headers:{"Content-Type":"application/json", apikey:SUPABASE_ANON_KEY}, body:JSON.stringify({email,password}) });
+  const d = await cuerpoJson(r); if(!r.ok||!d.access_token) throw Object.assign(new Error(mensajeIngreso(r.ok?0:r.status,d)),{status:r.status}); return d;
 }
 
 export async function supaSignUp(email, password, nombre) {
@@ -22,13 +24,13 @@ export async function supaSignOut(token) { try { await fetch(`${SUPABASE_URL}/au
 // Recuperación de contraseña: el enlace del correo vuelve SIEMPRE a la dirección de producción
 // (redirect_to), nunca a localhost. Supabase responde igual exista o no el correo.
 export async function supaResetPassword(email) {
-  const r = await fetch(`${SUPABASE_URL}/auth/v1/recover?redirect_to=${encodeURIComponent(URL_RETORNO_RECUPERACION)}`, { method:"POST", headers:{"Content-Type":"application/json", apikey:SUPABASE_ANON_KEY}, body:JSON.stringify({email}) });
+  const r = await pedir(`${SUPABASE_URL}/auth/v1/recover?redirect_to=${encodeURIComponent(URL_RETORNO_RECUPERACION)}`, { method:"POST", headers:{"Content-Type":"application/json", apikey:SUPABASE_ANON_KEY}, body:JSON.stringify({email}) });
   if(!r.ok) { const d=await r.json().catch(()=>({})); throw new Error(mensajeErrorAuth(r.status,d,"No se pudo enviar el correo de recuperación. Intenta nuevamente.")); }
 }
 
 // Usuario dueño de un token (valida que la sesión de recuperación siga vigente).
 export async function supaGetUser(token) {
-  const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, { headers:{apikey:SUPABASE_ANON_KEY, Authorization:`Bearer ${token}`} });
+  const r = await pedir(`${SUPABASE_URL}/auth/v1/user`, { headers:{apikey:SUPABASE_ANON_KEY, Authorization:`Bearer ${token}`} });
   const d = await r.json().catch(()=>({}));
   if(!r.ok) throw Object.assign(new Error(mensajeErrorAuth(r.status,d,"No se pudo validar el enlace de recuperación.")),{status:r.status});
   return d;
@@ -36,7 +38,7 @@ export async function supaGetUser(token) {
 
 // Fija la nueva contraseña con la sesión de recuperación.
 export async function supaUpdatePassword(token, password) {
-  const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, { method:"PUT", headers:{"Content-Type":"application/json", apikey:SUPABASE_ANON_KEY, Authorization:`Bearer ${token}`}, body:JSON.stringify({password}) });
+  const r = await pedir(`${SUPABASE_URL}/auth/v1/user`, { method:"PUT", headers:{"Content-Type":"application/json", apikey:SUPABASE_ANON_KEY, Authorization:`Bearer ${token}`}, body:JSON.stringify({password}) });
   const d = await r.json().catch(()=>({}));
   if(!r.ok) throw Object.assign(new Error(mensajeErrorAuth(r.status,d,"No se pudo actualizar la contraseña. Intenta nuevamente.")),{status:r.status});
   return d;
@@ -44,7 +46,7 @@ export async function supaUpdatePassword(token, password) {
 
 // Enlace con token_hash (plantilla de correo alternativa): se canjea por una sesión de recuperación.
 export async function supaVerifyRecoveryHash(tokenHash) {
-  const r = await fetch(`${SUPABASE_URL}/auth/v1/verify`, { method:"POST", headers:{"Content-Type":"application/json", apikey:SUPABASE_ANON_KEY}, body:JSON.stringify({type:"recovery", token_hash:tokenHash}) });
+  const r = await pedir(`${SUPABASE_URL}/auth/v1/verify`, { method:"POST", headers:{"Content-Type":"application/json", apikey:SUPABASE_ANON_KEY}, body:JSON.stringify({type:"recovery", token_hash:tokenHash}) });
   const d = await r.json().catch(()=>({}));
   if(!r.ok||!d.access_token) throw Object.assign(new Error(mensajeErrorAuth(r.status||401,d,"El enlace de recuperación no es válido o expiró.")),{status:r.status});
   return d;
@@ -54,13 +56,15 @@ export async function supaVerifyRecoveryHash(tokenHash) {
 export async function supaSignOutGlobal(token) { try { await fetch(`${SUPABASE_URL}/auth/v1/logout?scope=global`, {method:"POST", headers:{apikey:SUPABASE_ANON_KEY, Authorization:`Bearer ${token}`}}); } catch {} }
 
 export async function supaRefresh(rt) {
-  const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, { method:"POST", headers:{"Content-Type":"application/json", apikey:SUPABASE_ANON_KEY}, body:JSON.stringify({refresh_token:rt}) });
-  const d = await r.json(); if(!r.ok) throw new Error("Sesión expirada"); return d;
+  const r = await pedir(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, { method:"POST", headers:{"Content-Type":"application/json", apikey:SUPABASE_ANON_KEY}, body:JSON.stringify({refresh_token:rt}) });
+  const d = await cuerpoJson(r); if(!r.ok) throw Object.assign(new Error(mensajeErrorServicio(r.status,d)||"Sesión expirada"),{status:r.status}); return d;
 }
 
 export const hdrs = (t) => ({"Content-Type":"application/json", apikey:SUPABASE_ANON_KEY, Authorization:`Bearer ${t}`, Prefer:"return=representation"});
 
-export async function sel(table, t, q="") { const r=await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=*${q}`,{headers:hdrs(t)}); if(!r.ok) throw new Error(`Error leyendo ${table}`); return r.json(); }
+// Error de lectura: si el servicio está restringido o caído se dice eso (no «Error leyendo …»).
+const errorLectura = async (r, texto) => Object.assign(new Error(mensajeErrorServicio(r.status, await cuerpoJson(r)) || texto), { status: r.status });
+export async function sel(table, t, q="") { const r=await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=*${q}`,{headers:hdrs(t)}); if(!r.ok) throw await errorLectura(r,`Error leyendo ${table}`); return r.json(); }
 
 export async function ins(table, t, row) { const r=await fetch(`${SUPABASE_URL}/rest/v1/${table}`,{method:"POST",headers:hdrs(t),body:JSON.stringify(row)}); if(!r.ok){const e=await r.json().catch(()=>({})); throw new Error(e.message||`Error insertando en ${table}`);} return r.json(); }
 
@@ -174,7 +178,7 @@ export async function updRol(t, uid, rol) {
 export async function leerPerfil(t, uid) {
   try{
     const r=await fetch(`${SUPABASE_URL}/rest/v1/perfiles?id=eq.${encodeURIComponent(uid)}&select=*`,{headers:hdrs(t)});
-    if(!r.ok) return { estado:"error", mensaje:`No se pudo comprobar el acceso (HTTP ${r.status})` };
+    if(!r.ok) return { estado:"error", mensaje: mensajeErrorServicio(r.status, await cuerpoJson(r)) || `No se pudo comprobar el acceso (HTTP ${r.status})` };
     const a=await r.json();
     const p=Array.isArray(a)?a[0]:null;
     return p&&p.id===uid ? { estado:"ok", perfil:p } : { estado:"sin_perfil" };
@@ -208,7 +212,7 @@ export async function selAutorizaciones(t) {
 
 export async function selOCs(t) {
   const r=await fetch(`${SUPABASE_URL}/rest/v1/ordenes_compra_v2?select=*,vendedores(nombre),financiadores(nombre),eventos_compra(*),eventos_entrega(*),eventos_factura(*),eventos_pago_cliente(*),eventos_pago_financiamiento(*),oc_productos_link(*),oc_comentarios(*)&order=creadoEn.desc`,{headers:hdrs(t)});
-  if(!r.ok) throw new Error("Error leyendo OCs"); return r.json();
+  if(!r.ok) throw await errorLectura(r,"Error leyendo OCs"); return r.json();
 }
 
 export const storageGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };

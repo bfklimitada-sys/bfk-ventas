@@ -1,3 +1,4 @@
+import { mensajeErrorServicio } from "./errorServicio.js";
 // Recuperación de contraseña (Supabase Auth). Funciones puras: sin red, sin React.
 // El enlace del correo pasa por Supabase y vuelve a la app con los datos en la dirección:
 //   éxito:   https://bfk-ventas.vercel.app/?flujo=recuperacion#access_token=…&refresh_token=…&type=recovery
@@ -70,6 +71,8 @@ export const correoValido = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(e ||
 
 // Traduce las respuestas de error de Supabase Auth a mensajes para el usuario.
 export function mensajeErrorAuth(status, cuerpo, porDefecto) {
+  // 15/11/2026: servicio restringido (402) o caído (5xx) se informa como tal, no como enlace vencido.
+  const servicio = mensajeErrorServicio(status, cuerpo); if (servicio) return servicio;
   const codigo = cuerpo?.error_code || cuerpo?.code || "";
   const texto = String(cuerpo?.msg || cuerpo?.error_description || cuerpo?.message || "");
   if (status === 429 || codigo === "over_email_send_rate_limit" || codigo === "over_request_rate_limit") {

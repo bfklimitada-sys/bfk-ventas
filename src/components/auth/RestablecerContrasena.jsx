@@ -29,10 +29,10 @@ export function RestablecerContrasena({ retorno, onSalir }) {
         try{ u=await supaGetUser(s.access_token); }
         catch(e){
           if(!s.refresh_token||!(e.status===401||e.status===403)) throw e;
-          s={...s,...await supaRefresh(s.refresh_token).catch(()=>{ throw Object.assign(new Error(MSG_EXPIRADA),{status:401}); })}; u=await supaGetUser(s.access_token);
+          s={...s,...await supaRefresh(s.refresh_token).catch((e)=>{ if(e?.red||e?.status===402||e?.status>=500) throw e; throw Object.assign(new Error(MSG_EXPIRADA),{status:401}); })}; u=await supaGetUser(s.access_token);
         }
         sesion.current=s; usuarioId.current=u.id||null; setEmail(u.email||""); setFase("formulario");
-      }catch(e){ invalido(e?.status>=500||e?.name==="TypeError"?"No se pudo validar el enlace (sin conexión con el servidor). Revisa tu conexión y abre el enlace nuevamente.":(e.message||MSG_EXPIRADA)); }
+      }catch(e){ invalido(e?.status>=500||e?.red||e?.name==="TypeError"?"No se pudo validar el enlace (sin conexión con el servidor). Revisa tu conexión y abre el enlace nuevamente.":(e.message||MSG_EXPIRADA)); }
     })();
   },[]);
 
@@ -46,7 +46,7 @@ export function RestablecerContrasena({ retorno, onSalir }) {
       try{ await supaUpdatePassword(s.access_token,pass); }
       catch(e){
         if(!(e.status===401||e.status===403)||!s.refresh_token) throw e;
-        s={...s,...await supaRefresh(s.refresh_token).catch(()=>{ throw Object.assign(new Error(MSG_EXPIRADA),{status:401}); })};
+        s={...s,...await supaRefresh(s.refresh_token).catch((e)=>{ if(e?.red||e?.status===402||e?.status>=500) throw e; throw Object.assign(new Error(MSG_EXPIRADA),{status:401}); })};
         sesion.current=s; await supaUpdatePassword(s.access_token,pass);
       }
       // Contraseña cambiada: se cierran todas las sesiones de esta cuenta (incluida la de recuperación).

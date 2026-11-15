@@ -14,6 +14,7 @@
 // · Si la renovación es rechazada (no por falta de conexión), queda «vencida»: la app pide volver a ingresar con la MISMA cuenta
 //   sin cerrar la pantalla, así nada de lo escrito se pierde (y la copia de recuperación local se conserva).
 import { SUPABASE_URL, SUPABASE_ANON_KEY, SESSION_KEY, supaSignIn } from "./supabase";
+import { mensajeErrorServicio } from "./errorServicio.js";
 
 const MARGEN_RENOVAR = 5 * 60 * 1000;   // renovar cuando falte menos que esto
 const MARGEN_ENVIO = 30 * 1000;         // antes de enviar: si falta menos que esto, renovar primero
@@ -77,7 +78,8 @@ async function pedirRenovacion(rt) {
   catch { throw Object.assign(new Error("Sin conexión para renovar la sesión"), { red: true }); }
   const d = await r.json().catch(() => ({}));
   if (!r.ok || !d?.access_token) {
-    if (r.status >= 500 || r.status === 429) throw Object.assign(new Error("El servicio de sesión no respondió"), { red: true });
+    // 15/11/2026: 402 (servicio restringido por el proveedor) tampoco invalida la sesión: es temporal; se reintentará.
+    if (r.status >= 500 || r.status === 429 || r.status === 402) throw Object.assign(new Error(mensajeErrorServicio(r.status, d) || "El servicio de sesión no respondió"), { red: true, status: r.status });
     throw Object.assign(new Error(d?.error_description || d?.msg || "La sesión no se pudo renovar"), { red: false, status: r.status });
   }
   return d;
