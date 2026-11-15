@@ -16,13 +16,13 @@ const Linea = ({ k, v, signo, fuerte, tono, nota, dato }) => (
   </div>
 );
 
-export function InformeFinanciero({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, aportes, ajustes, categorias, hoy = new Date(), onIrImpuestos }) {
+export function InformeFinanciero({ ocs, financiadores, gastos, pagosVendedor, cierres = null, ivaMensual, vendedores, pagoFinSueltos, aportes, ajustes, categorias, hoy = new Date(), onIrImpuestos }) {
   const escritorio = useEsEscritorio(); // detalles abiertos en escritorio, cerrados en el celular
   const anioA = hoy.getFullYear(), mesA = hoy.getMonth() + 1;
   const anioP = mesA === 1 ? anioA - 1 : anioA, mesP = mesA === 1 ? 12 : mesA - 1;
   const [periodo, setPeriodo] = useState({ anio: anioP, mes: mesP });
-  const datos = { ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, aportes, categorias };
-  const res = useMemo(() => resultadoMes(datos, periodo.anio, periodo.mes), [ocs, gastos, pagosVendedor, ivaMensual, vendedores, categorias, periodo]);
+  const datos = { ocs, financiadores, gastos, pagosVendedor, cierres, ivaMensual, vendedores, pagoFinSueltos, aportes, categorias };
+  const res = useMemo(() => resultadoMes(datos, periodo.anio, periodo.mes), [ocs, gastos, pagosVendedor, cierres, ivaMensual, vendedores, categorias, periodo]);
   const f29 = useMemo(() => calcularF29({ ivaMensual, gastos, anioActual: anioA, mesActual: mesA }), [ivaMensual, gastos, anioA, mesA]);
   const cajaInf = useMemo(() => cajaYFueraDelBanco(datos), [ocs, financiadores, gastos, pagosVendedor, pagoFinSueltos, aportes]);
   const fins = useMemo(() => resumenFinanciadores({ ocs, financiadores, pagoFinSueltos, ajustes }), [ocs, financiadores, pagoFinSueltos, ajustes]);

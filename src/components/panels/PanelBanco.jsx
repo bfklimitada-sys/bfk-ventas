@@ -10,10 +10,10 @@ import { AlertasCartola } from "./AlertasCartola";
 // Solo presentación: usa la misma caja y conciliación del Panel (lib/caja.js) y abre la misma ventana de cartola.
 const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
-export function PanelBanco({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, aportes, saldoBanco, ultimaCartola, bancoMensual = [], onEditarSaldo, onImportarCartola, onQuitarAlertaCartola }) {
+export function PanelBanco({ ocs, financiadores, gastos, pagosVendedor, cierres = null, ivaMensual, vendedores, pagoFinSueltos, aportes, saldoBanco, ultimaCartola, bancoMensual = [], onEditarSaldo, onImportarCartola, onQuitarAlertaCartola }) {
   const [pestana, setPestana] = useState("conciliacion");
-  const r = useMemo(() => resumenCaja({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, aportes, saldoBanco }),
-    [ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, aportes, saldoBanco]);
+  const r = useMemo(() => resumenCaja({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, aportes, saldoBanco, cierres }),
+    [ocs, financiadores, gastos, pagosVendedor, cierres, ivaMensual, vendedores, pagoFinSueltos, aportes, saldoBanco]);
   const nAlertas = registrosConAlerta({ ocs, gastos, pagosVendedor, pagoFinSueltos, aportes }).length;
   const conciliado = Math.abs(r.diferenciaBancoCaja) <= 0.5;
   return (

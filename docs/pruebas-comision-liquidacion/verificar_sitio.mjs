@@ -64,7 +64,7 @@ for (const v of vend) {
   const m = oct.match(/= Comisión del mes: (\$[\d.]+)/); const d = oct.match(/Descuento tributario total: (\$[\d.]+)/);
   if (oct) console.log(`OCTUBRE_EN_PANTALLA|${v.id}|comisión ${m?.[1]}|descuento ${d?.[1]}|${/No incluidas en este mes[^\n]*/.exec(oct)?.[0] || "sin refacturadas fuera"}`);
   if (esperado[v.id]) ok(`octubre_${v.id}_${esperado[v.id]}`, m && Number(m[1].replace(/[$.]/g, "")) === Number(esperado[v.id]) && d?.[1] === "$31.656", oct.slice(0, 400));
-  for (const mes of ["Jul/2026", "Ago/2026", "Sep/2026", "Nov/2026"]) { const b = bloque(bt, mes); if (b) console.log(`MES_EN_PANTALLA|${v.id}|${mes}|${(b.match(/= Comisión del mes: \$[\d.]+/) || b.match(/Comisión del mes: \$[\d.]+/) || [""])[0]}|${(b.match(/Comisión pagada: \$[\d.]+/) || [""])[0]}|${/Por revisar · OC [^ ]+/.exec(b)?.[0] || ""}|${/Pagadas en esta liquidación[^\n]*/.exec(b)?.[0] || ""}`); }
+  for (const mes of ["Jul/2026", "Ago/2026", "Sep/2026", "Nov/2026"]) { const b = bloque(bt, mes); if (b) console.log(`MES_EN_PANTALLA|${v.id}|${mes}|${(b.match(/= Comisión del mes: \$[\d.]+/) || b.match(/Comisión del mes: \$[\d.]+/) || [""])[0]}|${(b.match(/Comisión pagada: \$[\d.]+/) || [""])[0]}|${/Por revisar · OC [^ ]+/.exec(b)?.[0] || ""}|${/Pagadas en esta liquidación[^\n]*/.exec(b)?.[0] || ""}|${/Liquidación cerrada/.test(b) ? "LIQUIDACIÓN CERRADA" : "abierta"}${/Ajuste por revisar/.test(b) ? " · CON AJUSTES POR REVISAR" : ""}`); }
   await el.click().catch(() => {}); await page.waitForTimeout(500);
 }
 ok("sin_errores_de_pagina", errs.length === 0, errs.join(" | "));

@@ -83,9 +83,11 @@ export const calcMargen = (venta, costo) => {
 // cierre del mes: figura con su vendedor, pero no altera la comisión ya cerrada de ese mes).
 export const generaComision = (o) => (o?.tipo_registro || "venta") === "venta" && o?.estado_factura_propia === "emitida"
   && !o?.capitalizacion_bfk && !o?.comision_excluida;
-export const mesesConFactura = (vendedorId, ocs) => {
+export const mesesConFactura = (vendedorId, ocs, cierres = null) => {
   const set = new Set();
-  ocs.filter((o) => o.vendedor_id === vendedorId && generaComision(o)).forEach((o) => {
+  // Un mes con liquidación cerrada sigue apareciendo aunque hoy ninguna OC calce en él (15/11/2026).
+  (cierres?.liquidaciones || []).filter((l) => l.vendedor_id === vendedorId).forEach((l) => set.add(`${l.anio}-${String(l.mes).padStart(2, "0")}`));
+  ocsParaComision(ocs, cierres).filter((o) => o.vendedor_id === vendedorId && generaComision(o)).forEach((o) => {
     const p = periodoComision(o);
     if (p) set.add(`${p.anio}-${String(p.mes).padStart(2, "0")}`);
   });
@@ -157,7 +159,9 @@ export const liquidacionComision = (oc, pagosVendedor = null) => {
   return {
     periodo, liquidacion, actual, original, anclada: !!anclada, cerrada: !!cierre, motivoPeriodo, refacturada, pagada, porRevisar, motivoRevision, revisionDerivada: derivada,
     // Fuera de todo cálculo y pago: solo desde la vigencia y si no estaba pagada (lo anterior a octubre no se toca).
-    excluida: porRevisar && !pagada && desdeVigencia,
+    // 15/11/2026: una OC sin período cerrado marcada «Por revisar» (p. ej. vendedor asignado después del cierre a una OC con
+    // factura hasta octubre 2026) tampoco entra en ningún mes ni pago hasta que un administrador decida.
+    excluida: porRevisar && !pagada && (desdeVigencia || (!cierre && oc?.comision_revision === "por_revisar")),
     utilidad: utilidadLiquidada ?? utilidadActual, utilidadActual, utilidadLiquidada,
     ajusteUtilidad: utilidadLiquidada != null ? utilidadActual - utilidadLiquidada : 0,
     // La factura vigente cae (desde octubre 2026) en otro mes que el que cuenta: ese mes no la incluye.
@@ -327,7 +331,7 @@ export const comisionOrdinariaPeriodo = ({ ocs, anio, mes, ivaMensual = [], pago
 //  · Las OC "venta propia" se pagan aparte: 100% de su utilidad menos el IVA de su factura.
 //  · Si el mes está verificado (planilla o cartola), se usa ese monto.
 // Devuelve null si el vendedor no tiene facturas ese mes.
-export const calcularPagoVendedor = ({ vendedorId, ocs, anio, mes, ivaMensual = [], pagosVendedor = [] }) => {
+const calcularPagoVendedorActual = ({ vendedorId, ocs, anio, mes, ivaMensual = [], pagosVendedor = [] }) => {
   let sumaFacts = 0, sumaUtilidad = 0, pagoVentasPropias = 0, hayFacturas = false;
   const detalle = [];   // las OCs que forman el cálculo del mes (Fase 4C)
   const porRevisar = [], ajustes = [], refacturadasFuera = [], liquidadasAqui = [];   // 13/11/2026: avisos, fuera del cálculo
@@ -408,6 +412,146 @@ export const calcularPagoVendedor = ({ vendedorId, ocs, anio, mes, ivaMensual = 
     ...(refacturadasFuera.length ? { refacturadasFuera } : {}),
     ...(liquidadasAqui.length ? { liquidadasAqui } : {}),
   };
+};
+
+// ══ Liquidaciones CERRADAS (15/11/2026, Kevin; rige desde noviembre 2026) ════════════════════════════════════════════
+// Una liquidación cerrada (comision_liquidaciones, por vendedor y mes) conserva para siempre su período, las OC
+// consideradas con la utilidad usada, el descuento F29 aplicado y la comisión reconocida. Cambios posteriores en una OC
+// (venta, costo, despacho, vendedor, una OC que llega o sale del mes) NO la recalculan: se muestran como «Ajuste por
+// revisar» (OC, vendedor, período, utilidad anterior y nueva, efecto propuesto). Un administrador los aprueba o rechaza
+// con motivo y respaldo (comision_decisiones); el aprobado suma como línea aparte del mes original (decisión de Kevin).
+// Saldo = max(0, comisión reconocida + ajustes aprobados − pagos válidos del mes). Cierran: las 17 liquidaciones con
+// evidencia hasta octubre 2026 (13 verificadas + 4 pagadas completas, registradas por la migración tal como se calculaban)
+// y, desde noviembre 2026, cada mes ya terminado que queda pagado completo con su comisión definitiva.
+// cierres = { liquidaciones: [{ id, vendedor_id, anio, mes, origen, comision_reconocida, …, ocs: [{ oc_id, numero_oc,
+// utilidad, venta_propia, pago_venta_propia }] }], decisiones: [{ tipo, resultado, liquidacion_id, oc_id, monto, … }] }.
+export const CIERRE_AUTOMATICO_DESDE = { anio: 2026, mes: 11 };
+export const ORIGENES_CIERRE = { historica_verificada: "Verificada (planilla o cartola)", historica_pagada: "Pagada completa (registrada al 15/11/2026)",
+  verificada: "Verificada", pagada: "Pagada completa" };
+const DIF_MINIMA = 0.5;   // diferencias de utilidad menores a medio peso no son ajustes
+// Una OC registrada en una liquidación cerrada cuenta SOLO allí: si hoy calzaría con otro vendedor u otro mes (p. ej. se
+// cambió el vendedor), queda fuera de ese otro cálculo (sin comisión duplicada) y su liquidación cerrada la informa como
+// ajuste por revisar.
+export const ocsParaComision = (ocs, cierres) => {
+  const liqs = cierres?.liquidaciones || []; if (!liqs.length) return ocs || [];
+  const donde = new Map(); for (const l of liqs) for (const r of l.ocs || []) donde.set(r.oc_id, l);
+  return (ocs || []).filter((o) => { const l = donde.get(o.id); if (!l) return true;
+    const p = periodoComision(o); return o.vendedor_id === l.vendedor_id && !!p && p.anio === Number(l.anio) && p.mes === Number(l.mes); });
+};
+export const liquidacionCerrada = (cierres, vendedorId, anio, mes) =>
+  (cierres?.liquidaciones || []).find((l) => l.vendedor_id === vendedorId && Number(l.anio) === Number(anio) && Number(l.mes) === Number(mes)) || null;
+
+// Efecto en la comisión del vendedor de un cambio de utilidad (delta) en una liquidación cerrada, con los datos que se
+// usaron al cerrarla (propuesta para el administrador; nada se aplica solo).
+export function efectoAjuste(liq, { delta, ventaPropia = false }) {
+  const d = Number(delta) || 0;
+  if (ventaPropia) return Math.round(d);
+  const D = Number(liq.descuento_f29) || 0; const base = Number(liq.comision_ordinaria) || 0;
+  if (liq.regla_periodo) {
+    const U = Number(liq.utilidad_periodo) || 0; const w = Math.max(0, Math.round(Number(liq.peso) || 0)); const W = Number(liq.peso_total) || 0;
+    const total = Math.max(0, Math.round((U + d) / 2 - D / 2));
+    const wNuevo = Math.max(0, Math.round((Number(liq.utilidad_vendedor) || 0) + d)); const otros = Math.max(0, W - w);
+    const partes = repartirComision(total, [{ id: "v", peso: wNuevo }, { id: "o", peso: otros }]);
+    return (partes.get("v") || 0) - base;
+  }
+  return Math.max(0, Math.round(((Number(liq.utilidad_vendedor) || 0) + d) / 2 - D / 2)) - base;
+}
+
+function resultadoCerrado({ actual, liq, vendedorId, ocs, anio, mes, ivaMensual, pagosVendedor, decisiones }) {
+  const porId = new Map((ocs || []).map((o) => [o.id, o]));
+  const linActual = new Map((actual?.detalle || []).map((l) => [l.ocId, l]));
+  const lineaDe = (r) => { const l = linActual.get(r.oc_id); const o = porId.get(r.oc_id);
+    const fv = o ? facturaVigente(o) : null;
+    return { ...(l || { ocId: r.oc_id, numero_oc: r.numero_oc, cliente: o?.cliente || o?.entidad || "", factura: o ? facturasVigentes(o).map((f) => f.numero_factura).join(", ") : "",
+      fechaFactura: fv?.fecha || null, montoFacturas: 0, venta: Number(o?.monto_total) || 0, costo: Number(o?.costo_total) || 0, ventaPropia: !!r.venta_propia }),
+      utilidad: Number(r.utilidad), ventaPropia: !!r.venta_propia, pagoVentaPropia: Number(r.pago_venta_propia) || 0, enLiquidacionCerrada: true }; };
+  const detalle = (liq.ocs || []).map(lineaDe).sort((a, b) => String(a.fechaFactura || "").localeCompare(String(b.fechaFactura || "")) || String(a.numero_oc).localeCompare(String(b.numero_oc)));
+  const decs = (decisiones || []).filter((x) => x.liquidacion_id === liq.id && x.tipo === "ajuste_utilidad");
+  const aprobados = decs.filter((x) => x.resultado === "aprobado").map((x) => ({ id: x.id, ocId: x.oc_id, numero_oc: x.numero_oc, monto: Number(x.monto) || 0,
+    utilidadAnterior: Number(x.utilidad_anterior), utilidadNueva: Number(x.utilidad_nueva), decididoEn: x.decidido_en, motivo: x.motivo }));
+  // Ajustes por revisar: utilidad actual de cada OC frente a la registrada (o a la última decidida); OC que hoy entran al
+  // mes y no estaban; OC registradas que hoy ya no corresponden al mes o al vendedor.
+  const ultimaDecidida = (ocId) => { const ds = decs.filter((x) => x.oc_id === ocId).sort((a, b) => String(a.decidido_en).localeCompare(String(b.decidido_en))); return ds.length ? Number(ds[ds.length - 1].utilidad_nueva) : null; };
+  const pendientes = [];
+  const registradas = new Set((liq.ocs || []).map((r) => r.oc_id));
+  const evaluar = (ocId, numero_oc, registrada, nueva, ventaPropia, motivo) => {
+    const decidida = ultimaDecidida(ocId); const anterior = decidida ?? registrada;
+    if (Math.abs(nueva - anterior) < DIF_MINIMA) return;
+    const delta = nueva - anterior;
+    pendientes.push({ ocId, numero_oc, vendedorId, periodo: { anio, mes }, motivo, utilidadAnterior: anterior, utilidadNueva: nueva, diferencia: delta,
+      efecto: efectoAjuste(liq, { delta, ventaPropia }), ventaPropia: !!ventaPropia });
+  };
+  for (const r of liq.ocs || []) {
+    const o = porId.get(r.oc_id);
+    const enEsteMes = o && o.vendedor_id === vendedorId && generaComision(o) && (() => { const p = periodoComision(o); return p && p.anio === anio && p.mes === mes; })();
+    if (!enEsteMes) { evaluar(r.oc_id, r.numero_oc, Number(r.utilidad), 0, r.venta_propia, o ? "ya no corresponde a este mes o vendedor" : "la OC ya no existe"); continue; }
+    evaluar(r.oc_id, r.numero_oc, Number(r.utilidad), liquidacionComision(o).utilidadActual, r.venta_propia, "cambió la utilidad (venta, costo o despacho)");
+  }
+  for (const l of actual?.detalle || []) {
+    if (registradas.has(l.ocId)) continue;
+    const o = porId.get(l.ocId); evaluar(l.ocId, l.numero_oc, 0, o ? liquidacionComision(o).utilidadActual : Number(l.utilidad), l.ventaPropia, "OC nueva en un mes ya liquidado");
+  }
+  const tribut = actual ? { impIva: actual.impIva, retenciones: actual.retenciones, sinIva: actual.sinIva, ivaRegistrado: actual.ivaRegistrado, ivaVentas: actual.ivaVentas, ivaCompras: actual.ivaCompras }
+    : (() => { const t = descuentoTributarioPeriodo(ivaMensual, anio, mes); return { impIva: t.impIva, retenciones: t.retenciones, sinIva: t.sinIva, ivaRegistrado: !!t.ivaMes,
+      ivaVentas: t.ivaMes ? Number(t.ivaMes.iva_ventas) || 0 : 0, ivaCompras: t.ivaMes ? Number(t.ivaMes.iva_compras) || 0 : 0 }; })();
+  const pagosDelMes = (pagosVendedor || []).filter((x) => pagoVigente(x) && x.vendedor_id === vendedorId && Number(x.mes) === mes && Number(x.anio) === anio);
+  const pagado = pagosDelMes.reduce((a, x) => a + (Number(x.monto_pagado) || 0), 0);
+  const verificado = pagosDelMes.find((x) => x.monto_verificado != null)?.monto_verificado;
+  const reconocida = Number(liq.comision_reconocida) || 0; const totalAprobado = aprobados.reduce((a, x) => a + x.monto, 0);
+  const pagoCalculado = reconocida + totalAprobado;
+  const descuentoActual = actual ? actual.descuentoF29 : descuentoTributarioPeriodo(ivaMensual, anio, mes).descuentoF29;
+  return {
+    ...(actual || {}), mes, anio, label: fmt.monthYear(mes, anio),
+    sumaFacts: detalle.filter((l) => !l.ventaPropia).reduce((a, l) => a + (Number(l.montoFacturas) || 0), 0),
+    sumaUtilidad: Number(liq.utilidad_vendedor) || 0, pagoVentasPropias: Number(liq.ventas_propias) || 0, comisionOrdinaria: Number(liq.comision_ordinaria) || 0,
+    reglaPeriodo: !!liq.regla_periodo, periodo: liq.regla_periodo ? { vendedores: actual?.periodo?.vendedores ?? null, utilidadTotal: Number(liq.utilidad_periodo) || 0,
+      descuentoF29: Number(liq.descuento_f29) || 0, total: null, metodo: actual?.periodo?.metodo ?? null, pesoTotal: Number(liq.peso_total) || 0, peso: Number(liq.peso) || 0 } : null,
+    ...tribut, descuentoF29: Number(liq.descuento_f29) || 0, f29Incompleto: false,
+    pagoCalculado, pagado, esVerificado: verificado != null, estado: pagado >= pagoCalculado ? "pagado" : "pendiente",
+    extraGestion: pagosDelMes.reduce((a, x) => a + extraGestion(x), 0), transferido: pagosDelMes.reduce((a, x) => a + totalTransferido(x), 0), pagos: pagosDelMes,
+    deuda: Math.max(0, pagoCalculado - pagado), porRegularizar: Math.max(0, pagado - pagoCalculado),
+    detalle,
+    cerrada: { id: liq.id, origen: liq.origen, origenTexto: ORIGENES_CIERRE[liq.origen] || liq.origen, cerradaEn: liq.cerrada_en || null, nota: liq.nota || "",
+      comisionReconocida: reconocida, pagadoAlCierre: Number(liq.pagado_al_cierre) || 0, ...(Math.abs(descuentoActual - (Number(liq.descuento_f29) || 0)) >= DIF_MINIMA ? { f29Cambio: { registrado: Number(liq.descuento_f29) || 0, actual: descuentoActual } } : {}) },
+    ...(aprobados.length ? { ajustesAprobados: aprobados, ajusteAprobadoTotal: totalAprobado } : {}),
+    ...(pendientes.length ? { ajustesPorRevisar: pendientes } : {}),
+    // En un mes cerrado no rigen los ajustes de utilidad de la regla anterior (los reemplazan los «Ajustes por revisar»).
+    ajustesUtilidad: undefined, ajusteUtilidadTotal: undefined,
+  };
+}
+
+// Pago de un vendedor en un mes (regla única). Si el mes tiene una liquidación cerrada, la conserva (ver arriba).
+export const calcularPagoVendedor = ({ vendedorId, ocs, anio, mes, ivaMensual = [], pagosVendedor = [], cierres = null }) => {
+  anio = Number(anio); mes = Number(mes);
+  const actual = calcularPagoVendedorActual({ vendedorId, ocs: ocsParaComision(ocs, cierres), anio, mes, ivaMensual, pagosVendedor });
+  const liq = liquidacionCerrada(cierres, vendedorId, anio, mes);
+  if (!liq) return actual;
+  const r = resultadoCerrado({ actual, liq, vendedorId, ocs, anio, mes, ivaMensual, pagosVendedor, decisiones: cierres?.decisiones });
+  for (const k of ["ajustesUtilidad", "ajusteUtilidadTotal"]) if (r[k] === undefined) delete r[k];
+  return r;
+};
+
+// Datos de una liquidación por cerrar (lo que se registra, tal como se calcula en ese momento).
+export const datosCierre = (c, vendedorId, origen) => ({
+  vendedor_id: vendedorId, anio: c.anio, mes: c.mes, origen, comision_reconocida: c.pagoCalculado, comision_ordinaria: c.comisionOrdinaria, ventas_propias: c.pagoVentasPropias,
+  utilidad_vendedor: c.sumaUtilidad, utilidad_periodo: c.periodo ? c.periodo.utilidadTotal : null, descuento_f29: c.descuentoF29, regla_periodo: !!c.reglaPeriodo,
+  peso: c.periodo ? c.periodo.peso : null, peso_total: c.periodo ? c.periodo.pesoTotal : null, pagado_al_cierre: c.pagado,
+  ocs: c.detalle.map((l) => ({ oc_id: l.ocId, numero_oc: l.numero_oc, utilidad: l.utilidad, venta_propia: !!l.ventaPropia, pago_venta_propia: l.pagoVentaPropia || 0 })) });
+
+// Desde noviembre 2026: meses YA TERMINADOS, pagados completos (comisión definitiva, nada «Por revisar» fuera del cálculo)
+// y aún sin cerrar → datos para cerrarlos. No cierra nada por sí misma.
+export const liquidacionesPorCerrar = ({ vendedores, ocs, ivaMensual = [], pagosVendedor = [], cierres = null, hoy = new Date() }) => {
+  const out = [];
+  for (const v of vendedores || []) {
+    for (const { anio, mes } of mesesConFactura(v.id, ocs || [], cierres)) {
+      if (anio * 12 + mes < CIERRE_AUTOMATICO_DESDE.anio * 12 + CIERRE_AUTOMATICO_DESDE.mes || esMesEnCurso(anio, mes, hoy)) continue;
+      if (liquidacionCerrada(cierres, v.id, anio, mes)) continue;
+      const c = calcularPagoVendedor({ vendedorId: v.id, ocs, anio, mes, ivaMensual, pagosVendedor, cierres });
+      if (!c || !(c.pagado > 0) || c.deuda > 0 || comisionProvisoria(c) || (c.porRevisar || []).some((x) => !x.incluida)) continue;
+      out.push(datosCierre(c, v.id, c.esVerificado ? "verificada" : "pagada"));
+    }
+  }
+  return out;
 };
 
 // ── Estado de la comisión de un mes (regla única: Vendedores, Panel, informes y pagos; 09/10/2026) ──

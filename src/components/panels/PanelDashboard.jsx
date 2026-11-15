@@ -58,7 +58,7 @@ function VerMasAvisoMP({n}){
   return <div style={{fontSize:12,color:C.inkFaint,marginTop:6,textAlign:"center"}}>y {n} más</div>;
 }
 
-export function PanelDashboard({ franjaCanales, avisoCanales, ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, aportes: aportesLista, ajustes = [], categorias = [], perfil, onExportarTodo, exportando, onNavigate, onAccion, onSincronizar, onCorregirFechas, sincronizando, porAceptar, onActualizarPorAceptar, verificandoPorAceptar, aceptadasSinCargar, onCargarOC, onCargarTodasAceptadas, cargandoAceptadas, onActualizarAceptadas, verificandoAceptadas, canceladasEnMP, onArchivarCancelada, onActualizarCanceladas, verificandoCanceladas, onValidarTodo, validandoTodo, usoMP, actMP, esCodigoMP, ultimaCartola, saldoBanco, bancoMensual, onEditarSaldo, onBuscarCompras , onQuitarAlertaCartola, tokenSesion }) {
+export function PanelDashboard({ franjaCanales, avisoCanales, ocs, financiadores, gastos, pagosVendedor, cierres = null, ivaMensual, vendedores, pagoFinSueltos, aportes: aportesLista, ajustes = [], categorias = [], perfil, onExportarTodo, exportando, onNavigate, onAccion, onSincronizar, onCorregirFechas, sincronizando, porAceptar, onActualizarPorAceptar, verificandoPorAceptar, aceptadasSinCargar, onCargarOC, onCargarTodasAceptadas, cargandoAceptadas, onActualizarAceptadas, verificandoAceptadas, canceladasEnMP, onArchivarCancelada, onActualizarCanceladas, verificandoCanceladas, onValidarTodo, validandoTodo, usoMP, actMP, esCodigoMP, ultimaCartola, saldoBanco, bancoMensual, onEditarSaldo, onBuscarCompras , onQuitarAlertaCartola, tokenSesion }) {
   const [busq,setBusq]=useState("");
   const esAdmin=perfil?.rol==="admin";
   const [verTodasPrior,setVerTodasPrior]=useState(false);
@@ -70,8 +70,8 @@ export function PanelDashboard({ franjaCanales, avisoCanales, ocs, financiadores
 
 
   // Cierre financiero: caja, compromisos y conciliación con un solo universo de movimientos (lib/caja.js).
-  const resumen=useMemo(()=>resumenCaja({ocs,financiadores,gastos,pagosVendedor,ivaMensual,vendedores,pagoFinSueltos,aportes:aportesLista,saldoBanco}),
-    [ocs,financiadores,gastos,pagosVendedor,ivaMensual,vendedores,pagoFinSueltos,aportesLista,saldoBanco]);
+  const resumen=useMemo(()=>resumenCaja({ocs,financiadores,gastos,pagosVendedor,ivaMensual,vendedores,pagoFinSueltos,aportes:aportesLista,saldoBanco,cierres}),
+    [ocs,financiadores,gastos,pagosVendedor,cierres,ivaMensual,vendedores,pagoFinSueltos,aportesLista,saldoBanco]);
 
 
   // ── OCs de MP sin datos de cliente (antes se recalculaba en cada render) ──

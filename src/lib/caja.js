@@ -68,11 +68,11 @@ export function conciliacionBancaria(movs, saldoBanco) {
 //  · enCurso ........................ mes actual: sigue acumulando ventas.
 // total = exigible + porLiquidar + enCurso (el saldo proyectado descuenta las tres, igual que antes).
 // definitivas = exigible; provisorias = porLiquidar + enCurso (no son definitivas).
-export function comisionesPorPagar({ vendedores, ocs, ivaMensual, pagosVendedor, hoy = new Date() }) {
+export function comisionesPorPagar({ vendedores, ocs, ivaMensual, pagosVendedor, cierres = null, hoy = new Date() }) {
   const detalle = [];
   for (const v of vendedores || []) {
-    for (const { anio, mes } of mesesConFactura(v.id, ocs || [])) {
-      const r = calcularPagoVendedor({ vendedorId: v.id, ocs, anio, mes, ivaMensual, pagosVendedor });
+    for (const { anio, mes } of mesesConFactura(v.id, ocs || [], cierres)) {
+      const r = calcularPagoVendedor({ vendedorId: v.id, ocs, anio, mes, ivaMensual, pagosVendedor, cierres });
       if (!r || !(r.deuda > 0)) continue;
       const estado = estadoComisionMes(r, hoy);
       detalle.push({ vendedorId: v.id, vendedor: v.nombre, anio, mes, deuda: r.deuda, estado, provisoria: estado !== "pendiente" });
@@ -101,7 +101,7 @@ export function periodosIvaSinRegistrar({ ocs, ivaMensual, anioActual, mesActual
 }
 
 // Resumen completo del Panel: cada concepto por separado y el saldo proyectado.
-export function resumenCaja({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, aportes, saldoBanco, hoy = new Date() }) {
+export function resumenCaja({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, aportes, saldoBanco, cierres = null, hoy = new Date() }) {
   const anioActual = hoy.getFullYear(), mesActual = hoy.getMonth() + 1;
   const activas = (ocs || []).filter((o) => !o.archivada);
   const movs = movimientosCaja({ ocs: activas, financiadores, gastos, pagosVendedor, pagoFinSueltos, aportes });
@@ -121,7 +121,7 @@ export function resumenCaja({ ocs, financiadores, gastos, pagosVendedor, ivaMens
   }
   const porFinanciador = (financiadores || []).filter((f) => f.tipo !== "propio" && n(f.saldo_deuda) !== 0).map((f) => ({ id: f.id, nombre: f.nombre, saldo: n(f.saldo_deuda) }));
   const deudaFinanciadores = porFinanciador.reduce((s, f) => s + f.saldo, 0);
-  const comisiones = comisionesPorPagar({ vendedores, ocs: activas, ivaMensual, pagosVendedor, hoy });
+  const comisiones = comisionesPorPagar({ vendedores, ocs: activas, ivaMensual, pagosVendedor, cierres, hoy });
   const f29 = calcularF29({ ivaMensual, gastos, anioActual, mesActual });
   const ivaSinRegistrar = periodosIvaSinRegistrar({ ocs: activas, ivaMensual, anioActual, mesActual });
   // Dinero de ventas externas que entró a la cuenta y aún no se liquida a quien corresponde.

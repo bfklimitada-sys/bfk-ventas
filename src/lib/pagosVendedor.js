@@ -1,15 +1,20 @@
-import { calcularPagoVendedor, comisionProvisoria, esMesEnCurso, liquidacionComision, pagoVigente } from "./calculos.js";
+import { calcularPagoVendedor, comisionProvisoria, esMesEnCurso, liquidacionComision, liquidacionCerrada, ocsParaComision, pagoVigente } from "./calculos.js";
 
 // OC del vendedor con factura propia emitida, aún no marcadas como pagadas, cuya LIQUIDACIÓN cae en el mes/año de la
 // comisión (13/11/2026: liquidacionComision; una OC refacturada en otro mes sigue en su liquidación original y nunca se
 // marca desde el mes de la nueva factura). Las OC «Por revisar» no se marcan en ningún pago hasta revisarlas.
 const enMes = (liq, mes, anio) => !!liq.periodo && liq.periodo.mes === Number(mes) && liq.periodo.anio === Number(anio);
-export const ocsPagablesDelMes = (ocs, vendedorId, mes, anio, pagosVendedor = null) =>
-  (ocs || []).filter((o) => {
+// 15/11/2026: en un mes con liquidación cerrada solo se marcan las OC de esa liquidación (una OC nueva en el mes es un
+// «Ajuste por revisar» y no se marca hasta que un administrador lo decida).
+export const ocsPagablesDelMes = (ocs, vendedorId, mes, anio, pagosVendedor = null, cierres = null) => {
+  const liqC = liquidacionCerrada(cierres, vendedorId, anio, mes); const enCierre = liqC ? new Set((liqC.ocs || []).map((r) => r.oc_id)) : null;
+  return ocsParaComision(ocs || [], cierres).filter((o) => {
     if (o.vendedor_id !== vendedorId || o.estado_factura_propia !== "emitida" || o.vendedor_pagado) return false;
+    if (enCierre) return enCierre.has(o.id);
     const liq = liquidacionComision(o, pagosVendedor);
     return enMes(liq, mes, anio) && !liq.porRevisar;
   });
+};
 
 // OC del período ya marcadas como pagadas (para desmarcarlas si una anulación deja la comisión impaga).
 const ocsMarcadasDelMes = (ocs, vendedorId, mes, anio) =>
@@ -32,9 +37,9 @@ export const repartirTransferencia = (monto, pendiente) => {
 //   pendiente = max(0, comisión calculada del período − comisión ya pagada del período)
 // Solo cuentan los pagos vigentes (no anulados) y solo su parte de comisión (monto_pagado).
 // Las OC del período se marcan como pagadas cuando la comisión pagada (incluido este pago) la cubre.
-export const evaluarPagoVendedor = ({ vendedorId, mes, anio, monto, ocs, ivaMensual, pagosVendedor, hoy = new Date() }) => {
+export const evaluarPagoVendedor = ({ vendedorId, mes, anio, monto, ocs, ivaMensual, pagosVendedor, cierres = null, hoy = new Date() }) => {
   mes = Number(mes); anio = Number(anio);
-  const calc = calcularPagoVendedor({ vendedorId, ocs: ocs || [], anio, mes, ivaMensual: ivaMensual || [], pagosVendedor: pagosVendedor || [] });
+  const calc = calcularPagoVendedor({ vendedorId, ocs: ocs || [], anio, mes, ivaMensual: ivaMensual || [], pagosVendedor: pagosVendedor || [], cierres });
   const comision = calc ? Math.round(calc.pagoCalculado) : 0;
   const pagadoAntes = (pagosVendedor || [])
     .filter((p) => pagoVigente(p) && p.vendedor_id === vendedorId && Number(p.mes) === mes && Number(p.anio) === anio)
@@ -51,10 +56,12 @@ export const evaluarPagoVendedor = ({ vendedorId, mes, anio, monto, ocs, ivaMens
     provisoria: comisionProvisoria(calc),
     enCurso: esMesEnCurso(anio, mes, hoy),
     sinIvaRegistrado: !!calc && !calc.ivaRegistrado, f29Incompleto: !!calc?.f29Incompleto,
-    ocIds: completo && r.total > 0 ? ocsPagablesDelMes(ocs, vendedorId, mes, anio, pagosVendedor).map((o) => o.id) : [],
+    ocIds: completo && r.total > 0 ? ocsPagablesDelMes(ocs, vendedorId, mes, anio, pagosVendedor, cierres).map((o) => o.id) : [],
     // 13/11/2026: avisos para el pago manual y la cartola (no cambian el monto).
     porRevisar: calc?.porRevisar || [], refacturadasFuera: calc?.refacturadasFuera || [],
     ajusteUtilidadTotal: calc?.ajusteUtilidadTotal || 0,
+    // 15/11/2026: liquidación cerrada (la comisión reconocida no cambia) y sus ajustes por revisar (no entran en el pago).
+    cerrada: calc?.cerrada || null, ajustesPorRevisar: calc?.ajustesPorRevisar || [],
   };
 };
 
@@ -68,8 +75,8 @@ export const esPagoDuplicado = (e) => /duplicate|unique|23505|already exists/i.t
 
 // Fila de un pago a vendedor (sin escribir): una fila = una transferencia, con sus dos componentes, y las OC del
 // período que quedan pagadas. La usan el registro manual (registrarPagoVendedor) y la cartola (función de la base).
-export function prepararPagoVendedor({ userId, id, vendedorId, monto, fecha, mes, anio, notas, referencia, ocs, ivaMensual, pagosVendedor }) {
-  const ev = evaluarPagoVendedor({ vendedorId, mes, anio, monto, ocs, ivaMensual, pagosVendedor });
+export function prepararPagoVendedor({ userId, id, vendedorId, monto, fecha, mes, anio, notas, referencia, ocs, ivaMensual, pagosVendedor, cierres = null }) {
+  const ev = evaluarPagoVendedor({ vendedorId, mes, anio, monto, ocs, ivaMensual, pagosVendedor, cierres });
   if (!(ev.total > 0)) throw new Error("Indica un monto mayor que $0");
   const fila = {
     ...(id ? { id } : {}), vendedor_id: vendedorId, anio: Number(anio), mes: Number(mes),
@@ -93,7 +100,7 @@ export async function registrarPagoVendedor({ ins, upd, token, ...datos }) {
 // Anulación controlada (solo administrador; la base lo exige): el pago queda completo en la base con fecha, usuario
 // y motivo, y deja de contar en comisión y caja. Si con eso la comisión del período ya no queda cubierta, las OC
 // del período vuelven a "comisión pendiente".
-export async function anularPagoVendedor({ upd, token, pago, motivo, ocs, ivaMensual, pagosVendedor }) {
+export async function anularPagoVendedor({ upd, token, pago, motivo, ocs, ivaMensual, pagosVendedor, cierres = null }) {
   const m = String(motivo || "").trim();
   if (!m) throw new Error("Indica el motivo de la anulación");
   try {
@@ -102,7 +109,7 @@ export async function anularPagoVendedor({ upd, token, pago, motivo, ocs, ivaMen
     throw new Error("No se pudo anular: solo un administrador puede hacerlo y un pago ya anulado no se vuelve a modificar. No se cambió nada.");
   }
   const restantes = (pagosVendedor || []).filter((p) => p.id !== pago.id);
-  const ev = evaluarPagoVendedor({ vendedorId: pago.vendedor_id, mes: pago.mes, anio: pago.anio, monto: 0, ocs, ivaMensual, pagosVendedor: restantes });
+  const ev = evaluarPagoVendedor({ vendedorId: pago.vendedor_id, mes: pago.mes, anio: pago.anio, monto: 0, ocs, ivaMensual, pagosVendedor: restantes, cierres });
   const desmarcar = ev.pagadoAntes >= ev.comision ? [] : ocsMarcadasDelMes(ocs, pago.vendedor_id, pago.mes, pago.anio).map((o) => o.id);
   for (const ocId of desmarcar) await upd("ordenes_compra_v2", token, ocId, { vendedor_pagado: false });
   return { ...ev, desmarcadas: desmarcar.length };

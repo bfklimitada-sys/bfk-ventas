@@ -59,12 +59,12 @@ export function comisionesYApoyo({ pagosVendedor, gastos, vendedores }) {
 
 // Resultado de un mes: margen comercial (venta − costo − postventa, por fecha de la OC, igual que el Panel)
 // − comisiones devengadas (por mes de factura) − apoyo en gestión − gastos operacionales.
-export function resultadoMes({ ocs, gastos, pagosVendedor, ivaMensual, vendedores, categorias }, anio, mes) {
+export function resultadoMes({ ocs, gastos, pagosVendedor, ivaMensual, vendedores, categorias, cierres = null }, anio, mes) {
   const activas = (ocs || []).filter((o) => !o.archivada);
   const m = utilidadPorMes(activas)[clave(anio, mes)] || { venta: 0, costo: 0, util: 0, n: 0, pct: 0 };
   let comisiones = 0, provisoria = false;
   for (const v of vendedores || []) {
-    const c = calcularPagoVendedor({ vendedorId: v.id, ocs: activas, anio, mes, ivaMensual: ivaMensual || [], pagosVendedor: pagosVendedor || [] });
+    const c = calcularPagoVendedor({ vendedorId: v.id, ocs: activas, anio, mes, ivaMensual: ivaMensual || [], pagosVendedor: pagosVendedor || [], cierres });
     if (!c) continue;
     comisiones += n(c.pagoCalculado);
     if (comisionProvisoria(c)) provisoria = true;

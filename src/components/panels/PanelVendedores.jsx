@@ -14,7 +14,27 @@ import { periodosIvaIncompletos } from "../../lib/ivaUnificado";
 const conSigno=(n)=>(n<0?"−":"")+fmt.money(Math.abs(n));
 
 const estiloRevisar={display:"block",marginTop:4,background:"none",border:"none",padding:0,color:C.info,fontWeight:600,fontSize:12,cursor:"pointer",textDecoration:"underline",minHeight:32};
-export function PanelVendedores({ vendedores, ocs, ivaMensual, gastos=[], pagosVendedor, onGuardarIva, onPagoVendedor, onAnularPago, esAdmin, onVerOCs, onAbrirOC, onIrImpuestos, onRevisarOC }) {
+// Decisión de un administrador sobre una comisión (15/11/2026): motivo y respaldo obligatorios; queda quién y cuándo.
+function DecisionComision({ dato, opciones, onConfirmar }) {
+  const [abierta,setAbierta]=useState(false); const [motivo,setMotivo]=useState(""); const [respaldo,setRespaldo]=useState(""); const [enviando,setEnviando]=useState(false); const [error,setError]=useState("");
+  if(!abierta) return <button data-abrir-decision={dato} onClick={()=>setAbierta(true)} style={estiloRevisar}>Decidir (administrador)…</button>;
+  const listo=motivo.trim()&&respaldo.trim()&&!enviando;
+  return (
+    <div data-decision={dato} style={{marginTop:6,background:C.card,border:`1px solid ${C.border}`,borderRadius:8,padding:"8px 10px"}}>
+      <label style={{display:"block",fontSize:12,color:C.inkMuted}}>Motivo<input data-decision-motivo value={motivo} onChange={e=>setMotivo(e.target.value)} style={{...iStyle,minHeight:36,marginTop:2}} /></label>
+      <label style={{display:"block",fontSize:12,color:C.inkMuted,marginTop:6}}>Respaldo (documento, planilla, correo, conversación…)<input data-decision-respaldo value={respaldo} onChange={e=>setRespaldo(e.target.value)} style={{...iStyle,minHeight:36,marginTop:2}} /></label>
+      {error&&<div style={{fontSize:12,color:C.dangerText,marginTop:4}}>{error}</div>}
+      <div style={{display:"flex",gap:12,flexWrap:"wrap",marginTop:6}}>
+        {opciones.map(o=><button key={o.v} data-decidir={o.v} disabled={!listo} onClick={async()=>{ setEnviando(true); setError(""); try{ await onConfirmar({resultado:o.v,motivo:motivo.trim(),respaldo:respaldo.trim()}); setAbierta(false); }catch(e){ setError(e.message||String(e)); } finally{ setEnviando(false); } }}
+          style={{...estiloRevisar,marginTop:0,opacity:listo?1:0.5}}>{o.l}</button>)}
+        <button onClick={()=>setAbierta(false)} style={{...estiloRevisar,marginTop:0,color:C.inkMuted}}>Cancelar</button>
+      </div>
+    </div>
+  );
+}
+const conSignoMonto=(n)=>(n>0?"+":n<0?"−":"")+fmt.money(Math.abs(n));
+
+export function PanelVendedores({ vendedores, ocs, ivaMensual, gastos=[], pagosVendedor, cierres=null, onGuardarIva, onPagoVendedor, onAnularPago, esAdmin, onVerOCs, onAbrirOC, onIrImpuestos, onRevisarOC, onDecidirComision }) {
   const [anulando,setAnulando]=useState(null); // pago a anular (solo administrador)
   const [detalleMes,setDetalleMes]=useState(null); // "vendedor|anio|mes" con las OCs del cálculo desplegadas (Fase 4C)
   // Fase 4A: OCs sin vendedor no entran en ninguna comisión; se advierte para que no pase inadvertido.
@@ -28,8 +48,8 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, gastos=[], pagosV
 
   // La regla de comisión vive en lib/calculos.js (una sola para toda la app).
   // Estado de cada mes (regla única, lib/calculos.js): solo «pendiente» es deuda exigible.
-  const datosVendedor=(v)=>mesesConFactura(v.id,ocs).map(({anio,mes})=>{
-    const c=calcularPagoVendedor({vendedorId:v.id,ocs,anio,mes,ivaMensual,pagosVendedor});
+  const datosVendedor=(v)=>mesesConFactura(v.id,ocs,cierres).map(({anio,mes})=>{
+    const c=calcularPagoVendedor({vendedorId:v.id,ocs,anio,mes,ivaMensual,pagosVendedor,cierres});
     return {...c,estadoComision:estadoComisionMes(c,hoy),provisoria:comisionProvisoria(c)};
   });
   // Por qué no se puede pagar todavía un mes no exigible (botón deshabilitado).
@@ -193,11 +213,32 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, gastos=[], pagosV
                         </div>
                       )}
                     </>); })()}
+                    {/* 15/11/2026: liquidación cerrada (su comisión reconocida no cambia) y ajustes por revisar */}
+                    {d.cerrada&&(
+                      <div data-liquidacion-cerrada={d.cerrada.origen} style={{background:C.relleno,borderRadius:8,padding:"7px 10px",margin:"4px 0",fontSize:12,color:C.inkMuted,lineHeight:1.45}}>
+                        <b style={{color:C.ink}}>🔒 Liquidación cerrada</b> · {d.cerrada.origenTexto}{d.cerrada.cerradaEn?` · ${fmt.date(String(d.cerrada.cerradaEn).slice(0,10))}`:""}: comisión reconocida <b style={{color:C.ink}}>{fmt.money(d.cerrada.comisionReconocida)}</b>. Los cambios posteriores en sus OC no la recalculan: se muestran como ajustes por revisar.
+                        {d.cerrada.f29Cambio&&<div data-f29-cambio style={{marginTop:3}}>El descuento F29 registrado hoy ({conSigno(d.cerrada.f29Cambio.actual)}) es distinto al aplicado al cerrar ({conSigno(d.cerrada.f29Cambio.registrado)}): esta liquidación conserva el aplicado.</div>}
+                      </div>
+                    )}
+                    {(d.ajustesAprobados||[]).map(a=>(
+                      <div key={a.id} data-ajuste-aprobado={a.ocId} style={{fontSize:12,color:C.ink,margin:"3px 0",lineHeight:1.45}}>
+                        Ajuste aprobado · OC {a.numero_oc}: utilidad {fmt.money(a.utilidadAnterior)} → {fmt.money(a.utilidadNueva)} · comisión <b>{conSignoMonto(a.monto)}</b>{a.decididoEn?` (${fmt.date(String(a.decididoEn).slice(0,10))})`:""} · {a.motivo}
+                      </div>
+                    ))}
+                    {(d.ajustesPorRevisar||[]).map(a=>(
+                      <div key={a.ocId} data-ajuste-por-revisar={a.ocId} style={{background:C.warnLight,borderRadius:8,padding:"7px 10px",margin:"4px 0",fontSize:12,color:C.warnText,lineHeight:1.45}}>
+                        <b><Ic n="⚠"/> Ajuste por revisar · OC {a.numero_oc}</b> · {v.nombre} · {d.label}: {a.motivo}. Utilidad anterior {fmt.money(a.utilidadAnterior)} → nueva {fmt.money(a.utilidadNueva)} (diferencia {conSignoMonto(a.diferencia)}); efecto propuesto en la comisión <b>{conSignoMonto(a.efecto)}</b>. No cambia la comisión, los pagos ni el saldo hasta que un administrador lo apruebe.
+                        {esAdmin&&onDecidirComision&&<DecisionComision dato={a.ocId} opciones={[{v:"aprobado",l:`Aprobar (${conSignoMonto(a.efecto)} en ${d.label})`},{v:"rechazado",l:"Rechazar (sin cambio)"}]}
+                          onConfirmar={(x)=>onDecidirComision({tipo:"ajuste_utilidad",liquidacion_id:d.cerrada.id,oc_id:a.ocId,numero_oc:a.numero_oc,utilidad_anterior:a.utilidadAnterior,utilidad_nueva:a.utilidadNueva,monto:a.efecto,...x})} />}
+                      </div>
+                    ))}
                     {/* 13/11/2026: comisión ligada a la OC y a su liquidación original */}
                     {(d.porRevisar||[]).map(r=>(
                       <div key={r.ocId} data-por-revisar={r.ocId} style={{background:C.warnLight,borderRadius:8,padding:"7px 10px",margin:"4px 0",fontSize:12,color:C.warnText,lineHeight:1.45}}>
                         <b><Ic n="⚠"/> Por revisar · OC {r.numero_oc}</b> (utilidad {fmt.money(r.utilidad)}): {r.motivo}. {r.incluida?"Se conserva en esta liquidación ya pagada; no se vuelve a incluir en otro pago.":"No se incluye en esta comisión ni en ningún pago hasta revisarla."}
-                        {esAdmin&&onRevisarOC&&(r.incluida
+                        {esAdmin&&onDecidirComision&&!r.incluida&&/^Vendedor asignado/.test(r.motivo||"")&&<DecisionComision dato={r.ocId} opciones={[{v:"reconocer",l:"Corresponde reconocer la obligación"},{v:"no_corresponde",l:"No corresponde comisión"}]}
+                          onConfirmar={(x)=>onDecidirComision({tipo:"oc_por_revisar",oc_id:r.ocId,numero_oc:r.numero_oc,...x})} />}
+                        {esAdmin&&onRevisarOC&&!/^Vendedor asignado/.test(r.motivo||"")&&(r.incluida
                           ?<button data-marcar-revisada={r.ocId} onClick={()=>onRevisarOC({ocId:r.ocId,numero_oc:r.numero_oc,resultado:"conservar",mes:d.mes,anio:d.anio})} style={estiloRevisar}>Marcar revisada (se mantiene en esta liquidación)</button>
                           :<div style={{display:"flex",gap:12,flexWrap:"wrap",marginTop:4}}>
                             <button data-revisada-pagada={r.ocId} onClick={()=>onRevisarOC({ocId:r.ocId,numero_oc:r.numero_oc,resultado:"pagada",mes:d.mes,anio:d.anio})} style={estiloRevisar}>Revisada: ya estaba pagada</button>
@@ -270,7 +311,7 @@ export function PanelVendedores({ vendedores, ocs, ivaMensual, gastos=[], pagosV
 
       {pagando&&(
         <Modal title="Pago a vendedor" onClose={()=>{setPagando(false);setPagoInicial(null);}}>
-          <FormPagoVendedorSimple vendedores={vendedores} ocs={ocs} ivaMensual={ivaMensual} pagosVendedor={pagosVendedor} inicial={pagoInicial} onSave={async(d)=>{await onPagoVendedor(d);setPagando(false);setPagoInicial(null);}} />
+          <FormPagoVendedorSimple vendedores={vendedores} ocs={ocs} ivaMensual={ivaMensual} pagosVendedor={pagosVendedor} cierres={cierres} inicial={pagoInicial} onSave={async(d)=>{await onPagoVendedor(d);setPagando(false);setPagoInicial(null);}} />
         </Modal>
       )}
       {anulando&&(
@@ -288,10 +329,10 @@ export { FormIvaMensual };
 // Pago a vendedor (08/10/2026): se ingresa el TOTAL realmente transferido y el sistema lo reparte en
 // pago de comisión (hasta la comisión pendiente del período) y extra por gestión (el excedente, del mismo período).
 const nuevoIdPago=()=>"pv_"+Date.now().toString(36)+Math.random().toString(36).slice(2,8);
-export function FormPagoVendedorSimple({ vendedores, ocs, ivaMensual, pagosVendedor, onSave, inicial }) {
+export function FormPagoVendedorSimple({ vendedores, ocs, ivaMensual, pagosVendedor, cierres=null, onSave, inicial }) {
   const [vendedorId,setVendedorId]=useState(inicial?.vendedorId||vendedores[0]?.id||"");
   const [mes,setMes]=useState(Number(inicial?.mes)||new Date().getMonth()+1); const [anio,setAnio]=useState(Number(inicial?.anio)||new Date().getFullYear());
-  const evInicial=evaluarPagoVendedor({vendedorId,mes,anio,monto:0,ocs,ivaMensual,pagosVendedor});
+  const evInicial=evaluarPagoVendedor({vendedorId,mes,anio,monto:0,ocs,ivaMensual,pagosVendedor,cierres});
   const [monto,setMonto]=useState(String(inicial?.monto??evInicial.pendienteAntes??""));
   const [fecha,setFecha]=useState(new Date().toLocaleDateString("sv-SE"));
   const [referencia,setReferencia]=useState(""); const [observacion,setObservacion]=useState("");
@@ -302,9 +343,9 @@ export function FormPagoVendedorSimple({ vendedores, ocs, ivaMensual, pagosVende
   const MESES=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
   const vend=vendedores.find(v=>v.id===vendedorId);
   const labelMes=`${MESES[mes-1]}/${anio}`;
-  const ev=evaluarPagoVendedor({vendedorId,mes,anio,monto:Number(monto)||0,ocs,ivaMensual,pagosVendedor});
+  const ev=evaluarPagoVendedor({vendedorId,mes,anio,monto:Number(monto)||0,ocs,ivaMensual,pagosVendedor,cierres});
   const parecido=pagoParecido({pagosVendedor,vendedorId,mes,anio,fecha,monto});
-  const cambiarPeriodo=(v,m,a)=>{ setRevisar(false); setConfirmaProvisoria(false); const e=evaluarPagoVendedor({vendedorId:v,mes:Number(m),anio:Number(a),monto:0,ocs,ivaMensual,pagosVendedor}); setMonto(String(e.pendienteAntes)); };
+  const cambiarPeriodo=(v,m,a)=>{ setRevisar(false); setConfirmaProvisoria(false); const e=evaluarPagoVendedor({vendedorId:v,mes:Number(m),anio:Number(a),monto:0,ocs,ivaMensual,pagosVendedor,cierres}); setMonto(String(e.pendienteAntes)); };
   const pedirRevision=()=>{
     if(!(Number(monto)>0)){setErr("Indica el monto total transferido");return;}
     if(!fecha){setErr("Indica la fecha de la transferencia");return;}
@@ -338,6 +379,8 @@ export function FormPagoVendedorSimple({ vendedores, ocs, ivaMensual, pagosVende
         <Linea k="Comisión ya pagada" v={ev.pagadoAntes} dato="pagada" />
         <Linea k="Saldo pendiente" v={ev.pendienteAntes} fuerte dato="pendiente" />
         {ev.porRevisar.length>0&&<div data-aviso-por-revisar style={{color:C.warnText,fontWeight:600,marginTop:4}}><Ic n="⚠"/> {ev.porRevisar.length} OC por revisar en {labelMes} ({ev.porRevisar.map(r=>r.numero_oc).join(", ")}): {ev.porRevisar.some(r=>!r.incluida)?"no se incluyen en este pago ni se marcan pagadas hasta revisarlas.":"ya están en un pago histórico; no se vuelven a pagar."}</div>}
+        {ev.cerrada&&<div data-aviso-cerrada style={{color:C.inkMuted,marginTop:4}}>🔒 Liquidación cerrada: comisión reconocida {fmt.money(ev.comision)}. Lo que exceda lo pendiente se registra como extra de gestión (la base no acepta más comisión que la reconocida).</div>}
+        {(ev.ajustesPorRevisar||[]).length>0&&<div data-aviso-ajustes-pago style={{color:C.warnText,marginTop:4}}>{ev.ajustesPorRevisar.length} ajuste{ev.ajustesPorRevisar.length>1?"s":""} por revisar en este mes: no se incluye{ev.ajustesPorRevisar.length>1?"n":""} en este pago hasta que un administrador lo{ev.ajustesPorRevisar.length>1?"s":""} apruebe.</div>}
         {ev.refacturadasFuera.length>0&&<div data-aviso-refacturadas style={{color:C.inkFaint,marginTop:4}}>No se incluyen aquí (refacturadas; su comisión no se repite): {ev.refacturadasFuera.map(textoNoIncluida).join(" · ")}</div>}
         {ev.ajusteUtilidadTotal?<div data-aviso-ajuste style={{color:C.inkFaint,marginTop:4}}>Ajuste de utilidad por revisar (aparte, no incluido en este pago): {ev.ajusteUtilidadTotal>0?"+":"−"}{fmt.money(Math.abs(ev.ajusteUtilidadTotal))}</div>:null}
         {ev.enCurso&&<div data-aviso-en-curso style={{color:C.warnText,fontWeight:600,marginTop:4}}><Ic n="⚠"/> {labelMes} es el mes en curso: su comisión todavía no es exigible y seguirá cambiando con las ventas del mes.</div>}

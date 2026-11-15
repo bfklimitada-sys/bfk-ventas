@@ -94,6 +94,9 @@ async function rpcSimple(t, fn, body) {
 // Registro desde la cartola (funciones de la base con la garantía atómica). El error conserva el código
 // (23505 = ya registrado; BFK01 = posible duplicado de un registro manual; PGRST202 = función aún no instalada).
 export const rpcCartola = (t, fn, body) => rpcSimple(t, fn, body);
+// Liquidaciones de comisiones cerradas (15/11/2026): cierre de un mes pagado completo y decisiones de un administrador.
+export const rpcCerrarLiquidacion = (t, datos) => rpcSimple(t, "cerrar_liquidacion_comision", { p: datos });
+export const rpcDecidirComision = (t, datos) => rpcSimple(t, "decidir_comision", { p: datos });
 // Eliminación definitiva de OC (23/10/2026): la base valida todo (solo admin, bloqueos, equivalencias, auditoría).
 export const rpcRevisarEliminacionOC = (t, ocId, originalId = null) => rpcSimple(t, "oc_eliminacion_revisar", { p_oc_id: ocId, p_original_id: originalId || null });
 export const rpcEliminarOC = (t, { ocId, confirmacion, motivo, originalId = null }) =>
