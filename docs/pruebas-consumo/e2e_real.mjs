@@ -102,7 +102,10 @@ const enModal = (p) => p.locator("[role=dialog]").last();
 
 // ── 1. Apertura y consultas ──
 const A = await abrirApp(ADM);
-ok(`[${VERSION}] la app abre con los datos reales de la copia`, (await A.p.locator("[data-nav]").count()) > 0 && (await A.p.locator("[data-oc]").count()) > 0);
+await A.p.locator('aside [data-nav="compras"]').click().catch(() => {}); await espera(A.p, 1500);
+const pantallaInicial = (await A.p.locator("body").innerText().catch(() => "")).slice(0, 160).replace(/\s+/g, " ");
+ok(`[${VERSION}] la app abre con los datos reales de la copia`, (await A.p.locator("[data-nav]").count()) > 0 && (await A.p.locator("[data-oc]").count()) > 0,
+  { pantalla: pantallaInicial, consultas: A.R.log.length, errores: OUT.errores4xx.slice(0, 5), pagina: A.R.errs.slice(0, 3) });
 const nuevas = { enlaces_cortos: (x) => x.ruta === "oc_productos_link" && /url\.not\.like/.test(x.q), contactos_sonda: (x) => x.ruta === "contactos_institucionales" && /limit=1/.test(x.q) };
 for (const [k, f] of Object.entries(nuevas)) { const l = A.R.log.filter(f); OUT.consultasNuevas[k] = l.map((x) => x.status); if (OPT) ok(`[${VERSION}] consulta nueva «${k}» responde 200 en PostgREST real`, l.length > 0 && l.every((x) => x.status === 200), l); }
 if (OPT) {   // los enlaces de largo normal llegan completos; los extensos (≥ 2000) quedan para cuando se abra su OC
