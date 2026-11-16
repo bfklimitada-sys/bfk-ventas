@@ -73,7 +73,17 @@ async function abrirApp(uid, { escritorio = true } = {}) {
 async function quieto(p, R, max = 40000) { const t0 = Date.now(); let n = -1; while (Date.now() - t0 < max) { await p.waitForTimeout(1500); if (R.log.length === n) return; n = R.log.length; } }
 const estado = (p) => p.evaluate(() => window.__bfkDatos ? window.__bfkDatos() : null);
 const normal = (d) => { const o = {}; for (const [k, v] of Object.entries(d || {})) { if (["contactosInst", "vinculosInst"].includes(k)) continue; o[k] = Array.isArray(v) ? v.slice().sort((a, c) => String(a.id).localeCompare(String(c.id))) : v; } return JSON.stringify(o); };
-const difEstado = (a, c) => { const A = JSON.parse(a), B = JSON.parse(c); return Object.keys({ ...A, ...B }).filter((k) => JSON.stringify(A[k]) !== JSON.stringify(B[k])); };
+// Diferencias (solo nombres de listas, cuántos registros y qué campos; sin valores ni identificadores).
+const difEstado = (a, c) => { const A = JSON.parse(a), B = JSON.parse(c);
+  return Object.keys({ ...A, ...B }).filter((k) => JSON.stringify(A[k]) !== JSON.stringify(B[k])).map((k) => {
+    if (!Array.isArray(A[k]) || !Array.isArray(B[k])) return k;
+    const mb = new Map(B[k].map((x) => [x.id, x])); const campos = {}; let n = 0, soloA = 0;
+    for (const x of A[k]) { const y = mb.get(x.id); if (!y) { soloA++; continue; } if (JSON.stringify(x) === JSON.stringify(y)) continue; n++;
+      for (const f of Object.keys({ ...x, ...y })) if (JSON.stringify(x[f]) !== JSON.stringify(y[f])) {
+        if (Array.isArray(x[f]) && Array.isArray(y[f])) { const my = new Map(y[f].map((z) => [z.id, z])); for (const z of x[f]) { const w = my.get(z.id); if (!w) { campos[f + "[+parcial]"] = (campos[f + "[+parcial]"] || 0) + 1; continue; } for (const g of Object.keys({ ...z, ...w })) if (JSON.stringify(z[g]) !== JSON.stringify(w[g])) campos[f + "." + g] = (campos[f + "." + g] || 0) + 1; } if (y[f].length > x[f].length) campos[f + "[+completa]"] = (campos[f + "[+completa]"] || 0) + 1; }
+        else campos[f] = (campos[f] || 0) + 1; } }
+    return `${k}: ${n} registros distintos, ${soloA} solo en la parcial, ${B[k].length - A[k].length + soloA} solo en la completa; campos ${JSON.stringify(campos)}`;
+  }); };
 const textoFinanzas = async (p) => {
   const T = {};
   for (const k of ["vendedores", "impuestos", "financiamiento", "banco", "gastos"]) {
