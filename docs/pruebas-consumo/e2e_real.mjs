@@ -72,7 +72,13 @@ async function abrirApp(uid, { escritorio = true } = {}) {
 }
 async function quieto(p, R, max = 40000) { const t0 = Date.now(); let n = -1; while (Date.now() - t0 < max) { await p.waitForTimeout(1500); if (R.log.length === n) return; n = R.log.length; } }
 const estado = (p) => p.evaluate(() => window.__bfkDatos ? window.__bfkDatos() : null);
-const normal = (d) => { const o = {}; for (const [k, v] of Object.entries(d || {})) { if (["contactosInst", "vinculosInst"].includes(k)) continue; o[k] = Array.isArray(v) ? v.slice().sort((a, c) => String(a.id).localeCompare(String(c.id))) : v; } return JSON.stringify(o); };
+// Forma canónica para comparar CONTENIDO: toda lista ordenada por id (o por su contenido) y claves ordenadas, a cualquier
+// profundidad. El orden de las listas embebidas que entrega PostgreSQL no está definido (p. ej. lecturas en paralelo) y
+// cambia entre dos cargas completas cualesquiera; se informa aparte.
+const canon = (v) => Array.isArray(v) ? v.map(canon).sort((a, c) => { const x = a && a.id !== undefined ? String(a.id) : JSON.stringify(a), y = c && c.id !== undefined ? String(c.id) : JSON.stringify(c); return x < y ? -1 : x > y ? 1 : 0; })
+  : v && typeof v === "object" ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, canon(v[k])])) : v;
+const normal = (d) => { const o = {}; for (const [k, v] of Object.entries(d || {})) { if (["contactosInst", "vinculosInst"].includes(k)) continue; o[k] = canon(v); } return JSON.stringify(o); };
+const normalOrden = (d) => { const o = {}; for (const [k, v] of Object.entries(d || {})) { if (["contactosInst", "vinculosInst"].includes(k)) continue; o[k] = Array.isArray(v) ? v.slice().sort((a, c) => String(a.id).localeCompare(String(c.id))) : v; } return JSON.stringify(o); };
 // Diferencias (solo nombres de listas, cuántos registros y qué campos; sin valores ni identificadores).
 const difEstado = (a, c) => { const A = JSON.parse(a), B = JSON.parse(c);
   return Object.keys({ ...A, ...B }).filter((k) => JSON.stringify(A[k]) !== JSON.stringify(B[k])).map((k) => {
@@ -161,10 +167,12 @@ const operar = async (nombre, num, accion, verificar) => {
   if (OPT) {
     ok(`[${VERSION}] ${nombre}: toda tabla cargada que cambió la base se vuelve a leer en la recarga parcial`, fuera.length === 0, fuera);
     ok(`[${VERSION}] ${nombre}: sin carga completa`, OUT.operaciones.at(-1).completas === 0, OUT.operaciones.at(-1));
-    const parcial = normal(await estado(A.p)); A.R.fase = "_verif";
+    const eP = await estado(A.p); A.R.fase = "_verif";
     await A.p.locator('aside [data-nav="actualizar"]').click(); await quieto(A.p, A.R);
-    const completo = normal(await estado(A.p));
-    ok(`[${VERSION}] ${nombre}: estado tras la recarga parcial = carga completa (datos reales)`, parcial === completo, difEstado(parcial, completo));
+    const eC = await estado(A.p);
+    const parcial = normal(eP), completo = normal(eC);
+    ok(`[${VERSION}] ${nombre}: estado tras la recarga parcial = carga completa (contenido, datos reales)`, parcial === completo, difEstado(parcial, completo));
+    if (normalOrden(eP) !== normalOrden(eC)) console.log(`  ${nombre}: mismo contenido, distinto orden en listas embebidas (${difEstado(normalOrden(eP), normalOrden(eC)).join(" · ").slice(0, 200)})`);
   }
 };
 if (OC1) await operar("pago_financiador", OC1, async () => {
