@@ -370,7 +370,9 @@ export function CobranzaFicha({ oc }) {
 }
 
 // ── Comunicaciones / pendientes ────────────────────────────────
+// correos = null: módulo «Correos de BFK» retirado (lib/modulos.js) → no se muestra «Correos recibidos».
 export function ComunicacionesFicha({ oc, pendientes, correos = [], onMarcarCorreo }) {
+  const conRecibidos = Array.isArray(correos); correos = correos || [];
   const correosPend = correos.filter((c) => c.estado === "pendiente"), correosGest = correos.filter((c) => c.estado !== "pendiente");
   const reclamos = (oc.oc_reclamos || []).slice().sort((a, b) => String(b.fecha || "").localeCompare(String(a.fecha || "")));
   return (
@@ -387,7 +389,7 @@ export function ComunicacionesFicha({ oc, pendientes, correos = [], onMarcarCorr
             {r.fecha ? fmt.date(String(r.fecha).slice(0, 10)) : "—"} · {r.tipo || "reclamo de pago"} · {r.correo || "—"}{r.respuesta ? ` · respuesta: ${r.respuesta}` : ""}
           </div>
         ))}
-      <div data-correos-oc={correos.length} style={{ marginTop: 10 }}>
+      {conRecibidos && <div data-correos-oc={correos.length} style={{ marginTop: 10 }}>
         <div style={{ ...titulo, marginBottom: 4 }}>Correos recibidos{correosPend.length ? ` · ${correosPend.length} pendiente${correosPend.length > 1 ? "s" : ""}` : ""}</div>
         {correos.length === 0
           ? <div style={{ fontSize: 12, color: C.inkFaint, lineHeight: 1.5 }}><Ic n="📧" /> Ningún correo del buzón de BFK asociado a esta OC en los últimos 30 días.</div>
@@ -400,7 +402,7 @@ export function ComunicacionesFicha({ oc, pendientes, correos = [], onMarcarCorr
                 </details>
               )}
             </>}
-      </div>
+      </div>}
     </div>
   );
 }

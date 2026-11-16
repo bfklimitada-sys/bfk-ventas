@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { contarCorreosPendientes, ordenarCorreos } from "../../lib/correosBfk";
+import { MODULO_CORREOS_BFK } from "../../lib/modulos";
 import { FormIngresarCompra } from "../forms/FormIngresarCompra";
 import { RegistrarCompraOC } from "../forms/CompraDesdeCotizacion";
 import { CorregirCompra } from "../forms/CorregirCompra";
@@ -1193,7 +1194,7 @@ export function FilaOC({ tributario, notaVista, onCrearSeguimiento, onActualizar
           {sec("seguimiento",<SeguimientoEspecial oc={oc} perfil={perfil} perfiles={perfiles} soloLectura={soloLectura} solicitud={solicitudSub} onSolicitudUsada={()=>setSolicitudSub(null)}
             onCrear={onCrearSeguimiento} onActualizar={onActualizarSeguimiento} onEliminar={onEliminarSeguimiento} />)}
 
-          {sec("comunicaciones",<ComunicacionesFicha oc={oc} pendientes={pendientes} correos={correosOC} onMarcarCorreo={onMarcarCorreo} />)}
+          {sec("comunicaciones",<ComunicacionesFicha oc={oc} pendientes={pendientes} correos={MODULO_CORREOS_BFK?correosOC:null} onMarcarCorreo={onMarcarCorreo} />)}
           </div>
 
           {sec("historial",<>

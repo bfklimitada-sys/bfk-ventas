@@ -13,6 +13,10 @@ import { datosProduccion } from "./datos_produccion.mjs";
 // Clave de institución como lib/contactosInstitucionales.js (RUT válido: dígitos + verificador, sin ceros a la izquierda).
 const claveInstitucion = (rut) => String(rut || "").replace(/[^0-9kK]/g, "").toUpperCase().replace(/^0+(?=.)/, "");
 
+// RETIRO_CORREOS=1: la versión «después» tiene retirado el módulo «Correos de BFK» (lib/modulos.js, 16/11/2026): se
+// comprueba que NO consulta correos_bfk en ningún momento (ingreso, actualizar, cada 5 min, guardados) en vez de la
+// consulta incremental. Todo lo demás se comprueba igual.
+const RETIRO = process.env.RETIRO_CORREOS === "1";
 const VERSIONES = { antes: process.argv[2] || "http://127.0.0.1:4401/", despues: process.argv[3] || "http://127.0.0.1:4402/" };
 const browser = await chromium.launch({ executablePath: CHROME, args: ["--no-sandbox"] });
 let nOk = 0; const F = [];
@@ -149,7 +153,8 @@ for (const [ver, url] of Object.entries(VERSIONES)) {
   // Correos: llega uno nuevo a la base; a los 5 minutos la app (visible) lo consulta
   b.db.correos_bfk.push({ id: 99999, message_id: "<nuevo@bfk>", buzon: "INBOX", remitente_nombre: "Nuevo", remitente_correo: "n@cliente.cl", asunto: "Correo nuevo de prueba", fecha: new Date(Date.now() + 17 * 60000).toISOString(), resumen: "nuevo", categoria: "consulta", prioridad: 2, oc_id: "oc2", asociacion: "oc", estado: "pendiente", gestionado_en: null, sincronizado_en: new Date(Date.now() + 17 * 60000).toISOString() });
   await fase("correos_5min", async () => { await p.clock.fastForward("05:01"); });
-  if (opt) ok(`[${ver}] correos: el nuevo llega por la consulta incremental`, (await estado()).correosBfk.some((c) => c.id === 99999));
+  if (opt && !RETIRO) ok(`[${ver}] correos: el nuevo llega por la consulta incremental`, (await estado()).correosBfk.some((c) => c.id === 99999));
+  if (opt && RETIRO) ok(`[${ver}] correos retirados: a los 5 min no se consulta nada (ni correos ni otra tabla)`, R.log.filter((x) => x.fase === "correos_5min").length === 0, R.log.filter((x) => x.fase === "correos_5min").map((x) => x.ruta));
   // Mercado Público según su programación (cada 30 min con la app visible), sin depender de una recarga completa
   await fase("mp_30min", async () => { await p.clock.fastForward("30:30"); }, 1500);
   if (opt) { const l = R.log.filter((x) => x.fase === "mp_30min");
@@ -218,6 +223,8 @@ for (const [ver, url] of Object.entries(VERSIONES)) {
   // Comisiones, liquidaciones cerradas, F29, financiamiento, banco y gastos tras todos los cambios
   FIN[ver].final = await textoFinanzas(p);
   MED[ver] = Object.fromEntries(["apertura", "renovacion_x3", "pestana_x10", "pestana_tras_16min", "correos_5min", "mp_30min", "abrir_oc", "abrir_oc_enlace_extenso", "guardar_pago_financiador", "refacturacion", "cambio_vendedor", "guardar_pago_cliente"].map((f) => [f, resumen(R, f)]));
+  if (opt && RETIRO) ok(`[${ver}] correos retirados: ninguna solicitud a correos_bfk ni correo_bfk_marcar en toda la sesión`, !R.log.some((x) => /correos?_bfk/.test(x.ruta)), R.log.filter((x) => /correos?_bfk/.test(x.ruta)).map((x) => x.fase + ":" + x.ruta));
+  if (!opt || !RETIRO) console.log(`  [${ver}] solicitudes a correos_bfk en la sesión: ${R.log.filter((x) => /correos?_bfk/.test(x.ruta)).length} (${(R.log.filter((x) => /correos?_bfk/.test(x.ruta)).reduce((a, x) => a + x.bytes, 0) / 1024).toFixed(1)} KB)`);
   ok(`[${ver}] sin errores de página`, R.errs.length === 0, R.errs);
   await ctx.close();
 }

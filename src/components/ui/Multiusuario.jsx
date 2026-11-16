@@ -306,7 +306,7 @@ export function PanelNotificaciones({ notificaciones, ocs, onMarcarLeidas, onNav
 
   return (
     <div style={{fontFamily:SANS}}>
-      <Pestanas etiqueta="Alertas y correos" activa={pestana} onCambiar={setPestana} items={[
+      <Pestanas etiqueta={correos ? "Alertas y correos" : "Alertas"} activa={pestana} onCambiar={setPestana} items={[
         { key: "alertas", label: "Alertas de OC", n: alertas.length || null, tono: conteo.alto ? "danger" : null },
         ...(correos ? [{ key: "correos", label: "Correos", n: nCorreos || null, tono: nCorreos ? "warn" : null }] : []),
         ...(noLeidas.length ? [{ key: "parati", label: "Para ti", n: noLeidas.length }] : []),

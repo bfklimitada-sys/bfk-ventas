@@ -15,6 +15,8 @@ import { writeFileSync } from "node:fs";
 const URL_APP = process.argv[2].replace(/\/$/, "") + "/";
 const { PGRST_URL, JWT_SECRET, ADM, USR2, USR3, PSQL_URL, VERSION = "?", SALIDA } = process.env;
 const OPT = VERSION === "despues";
+// RETIRO_CORREOS=1: versión con el módulo «Correos de BFK» retirado (lib/modulos.js): no debe consultar correos_bfk nunca.
+const RETIRO = process.env.RETIRO_CORREOS === "1";
 let nOk = 0; const F = []; const OUT = { version: VERSION, pantallas: {}, operaciones: [], errores4xx: [], consultasNuevas: {}, consumo: {} };
 const ok = (k, v, d) => { if (v) { nOk++; console.log("OK    " + k); } else { F.push(k); console.log("FALLA " + k + (d !== undefined ? " :: " + JSON.stringify(d).slice(0, 700) : "")); } };
 const psql = (sql) => execFileSync("psql", [PSQL_URL, "-X", "-q", "-At", "-v", "ON_ERROR_STOP=1", "-c", sql], { encoding: "utf8" }).trim();
@@ -143,7 +145,8 @@ if (OPT) {
   ok(`[${VERSION}] renovación: solo confirma el perfil (sin carga completa)`, cuenta("renovacion").every((x) => x.ruta === "perfiles") && cuenta("renovacion").length > 0, cuenta("renovacion").map((x) => x.ruta));
   ok(`[${VERSION}] regreso a la pestaña: solo confirma el perfil`, cuenta("pestana").every((x) => x.ruta === "perfiles"), cuenta("pestana").map((x) => x.ruta));
   const c = cuenta("correos").filter((x) => x.ruta === "correos_bfk"); OUT.consultasNuevas.correos_incremental = c.map((x) => x.status);
-  ok(`[${VERSION}] correos incrementales (or/gt) responden 200`, c.length > 0 && c.every((x) => x.status === 200 && /sincronizado_en\.gt/.test(x.q)), c);
+  if (!RETIRO) ok(`[${VERSION}] correos incrementales (or/gt) responden 200`, c.length > 0 && c.every((x) => x.status === 200 && /sincronizado_en\.gt/.test(x.q)), c);
+  else ok(`[${VERSION}] correos retirados: a los 5 min no se consulta nada`, cuenta("correos").length === 0, cuenta("correos").map((x) => x.ruta));
 }
 
 // ── 3. Operaciones reales sobre OCs elegidas en la copia ──
@@ -238,6 +241,9 @@ OUT.pantallas.final = await textoFinanzas(A.p);
 const err = OUT.errores4xx.filter((x) => !/^4(01|03) .* perfiles/.test(x));
 ok(`[${VERSION}] ninguna consulta de la app falló en PostgREST real`, err.length === 0, err.slice(0, 8));
 ok(`[${VERSION}] sin errores de página`, A.R.errs.length === 0, A.R.errs);
+{ const cb = A.R.log.filter((x) => /correos?_bfk/.test(x.ruta)); OUT.consumo.correos = { solicitudes: cb.length, bytes: cb.reduce((a, x) => a + x.bytes, 0) };
+  console.log(`  correos_bfk en la sesión (datos reales): ${cb.length} solicitudes, ${(OUT.consumo.correos.bytes / 1024).toFixed(1)} KB`);
+  if (RETIRO) ok(`[${VERSION}] correos retirados: ninguna solicitud a correos_bfk en toda la sesión (ingreso, guardados, actualizar)`, cb.length === 0, cb.map((x) => x.fase)); }
 OUT.consumo.total = { solicitudes: A.R.log.length, bytes: A.R.log.reduce((a, x) => a + x.bytes, 0), completas: A.R.log.filter((x) => x.ruta === "ordenes_compra_v2" && x.metodo === "GET" && !x.parcial).length };
 await browser.close();
 if (SALIDA) writeFileSync(SALIDA, JSON.stringify(OUT, null, 1));

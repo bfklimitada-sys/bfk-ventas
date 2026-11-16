@@ -12,7 +12,7 @@
 // Proyectos industriales · Finanzas · Sistema. Las claves internas y las direcciones anteriores no cambian.
 export const PANTALLAS = [
   { key: "panel",          ruta: "panel",          label: "Inicio",         icono: "📊", grupo: "general",   desc: "Resumen del día, caja y compromisos" },
-  { key: "notif",          ruta: "alertas",        label: "Alertas",        icono: "🔔", grupo: "general",   desc: "Alertas de OC, ventas privadas y correos de BFK" },
+  { key: "notif",          ruta: "alertas",        label: "Alertas",        icono: "🔔", grupo: "general",   desc: "Alertas de OC y ventas privadas" },
   { key: "agenda",         ruta: "agenda",         label: "Agenda",         icono: "📅", grupo: "general",   desc: "Entregas y vencimientos por fecha" },
   { key: "compras",        ruta: "compras",        label: "Compras",        icono: "📦", grupo: "mp",        desc: "Órdenes de compra de Mercado Público y su avance" },
   { key: "cotizaciones",   ruta: "cotizaciones",   label: "Cotizaciones MP", icono: "📋", grupo: "mp",       desc: "Cotizaciones de Mercado Público, EETT y biblioteca de productos" },
