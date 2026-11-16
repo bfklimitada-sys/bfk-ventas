@@ -30,7 +30,7 @@ import { PanelVendedores } from "./components/panels/PanelVendedores";
 import { Modal, Toast } from "./components/ui/Basicos";
 import { PanelNotificaciones, calcularAlertas } from "./components/ui/Multiusuario";
 import { SUPABASE_URL, crearNotificacion, del, delConfirmado, genId, hdrs, ins, leerPerfil, registrarCambio, sel, selOCs, selPerfiles, supaSignOut, upd, updRol, selUrlsLinks, leerUrlsLinks, cargarCorreosNuevos } from "./lib/supabase";
-import { INTERVALO_CORREOS_MS, componerOCs, cursorCorreos, debeRecargar, filtroIn, fotosPorOC, lineasSinUrl, mezclarCorreos, mezclarHistorial, mezclarOCs, ultimoHistorial } from "./lib/recargaParcial";
+import { INTERVALO_CORREOS_MS, INTERVALO_MP_MS, componerOCs, cursorCorreos, debeRecargar, filtroIn, fotosPorOC, lineasSinUrl, mezclarCorreos, mezclarHistorial, mezclarOCs, ultimoHistorial } from "./lib/recargaParcial";
 import { buscarOCPorCodigo, esCodigoMP, esErrorDuplicado, estadoMP, fechaOCEditable, mensajeDuplicado, normalizarCodigoOC, resultadoConsultaMP } from "./lib/ocs";
 import { cambiosProducto } from "./lib/productosOC";
 import { CLAVE_REVISION_AUTO, LIMITE_USO_DIARIO, PREFIJO_FOTO_MP, cambiosOCDesdeMP, claveFotoMP, elegirRevisionAutomatica, fotoMP, lineaVentaDesdeMP, mpCancelada, planProductosVenta, toca } from "./lib/mercadoPublico";
@@ -581,9 +581,24 @@ export default function App() {
     document.addEventListener("visibilitychange",handleVisible);
     return()=>document.removeEventListener("visibilitychange",handleVisible);
   },[autorizado,session?.user?.id]);
+  // Mercado Público según su programación, sin depender de las recargas completas (consumo, fase 1): cada 30 minutos con la
+  // app visible se completan las OCs pendientes de datos (las no intentadas en esta sesión, como siempre) o se hace la revisión
+  // automática, que conserva su marca compartida (como mucho cada 6 horas entre todos los usuarios) y el tope diario.
+  const tareaMP=()=>{
+    if(cargaEnCurso.current||!perfilRef.current) return;
+    const activas=(datosRef.current.ocs||[]).filter(o=>!o.archivada); if(!activas.length) return;
+    const faltan=activas.some(o=>esCodigoMP(o.numero_oc)&&!o.no_en_mp&&(o.sync_pendiente||!o.rut_cliente||!o.fecha_emision_mp||String(o.cliente||"").toUpperCase().includes("POR COMPLETAR")));
+    if(faltan) sincronizarPendientes(activas).then(n=>{ if(n>0){ showToast(`${n} OC${n>1?"s":""} completada${n>1?"s":""} desde Mercado Público`); cargarTodo(); } }).catch(()=>{});
+    else revisionAutomaticaMP(activas,Object.fromEntries(activas.filter(o=>o.mp).map(o=>[o.id,o.mp]))).catch(()=>{});
+  };
+  useEffect(()=>{
+    if(!autorizado) return;
+    const id=setInterval(()=>{ if(document.visibilityState==="visible") accionesRef.current.tareaMP(); },INTERVALO_MP_MS);
+    return()=>clearInterval(id);
+  },[autorizado,session?.user?.id]);
   // «Actualizar datos» (menú): recarga completa a pedido.
   const actualizarAhora=async()=>{ setMenuMas(false); await Promise.all([cargarTodo(),cargarVP()]); showToast("Datos actualizados"); };
-  accionesRef.current={cargarTodo,cargarTodoCompleto,cargarVP,correosNuevos,verificarPermisos};
+  accionesRef.current={cargarTodo,cargarTodoCompleto,cargarVP,correosNuevos,verificarPermisos,tareaMP};
 
 
   // ─── HANDLERS ─────────────────────────────────

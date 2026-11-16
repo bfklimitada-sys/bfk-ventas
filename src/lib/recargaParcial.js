@@ -7,6 +7,7 @@
 
 export const INTERVALO_RECARGA_MS = 15 * 60 * 1000;   // al volver a la pestaña: recarga completa solo si pasaron 15 min
 export const INTERVALO_CORREOS_MS = 5 * 60 * 1000;    // correos: solo los nuevos o gestionados, cada 5 min y con la app visible
+export const INTERVALO_MP_MS = 30 * 60 * 1000;           // Mercado Público: pendientes o revisión automática (con su marca de 6 h)
 export const LIMITE_HISTORIAL = 200;                  // igual que la carga completa (últimos 200 cambios)
 
 // ¿Corresponde recargar? (nunca cargado → sí; si no, solo pasado el intervalo)

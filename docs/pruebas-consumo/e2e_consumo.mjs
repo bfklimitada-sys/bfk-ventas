@@ -77,7 +77,7 @@ async function abrirApp(url, b, { usuario = "u1", escritorio = true } = {}) {
   await p.clock.install({ time: new Date() });
   await p.route("**/*", async (route) => {
     const req = route.request(); const u = new URL(req.url()); const m = req.method();
-    if (u.hostname === "127.0.0.1" && u.pathname.startsWith("/api/oc")) { const r = b.respuestaMP(u); return route.fulfill({ status: r.status, json: r.body }); }
+    if (u.hostname === "127.0.0.1" && u.pathname.startsWith("/api/oc")) { const r = b.respuestaMP(u); R.log.push({ fase: R.fase, metodo: "GET", ruta: "api/oc", consulta: u.search, bytes: 0, gz: 0, t: Date.now() }); return route.fulfill({ status: r.status, json: r.body }); }
     if (u.hostname === "127.0.0.1") return route.continue();
     if (!u.hostname.endsWith("supabase.co")) return route.abort();
     if (u.pathname.includes("/auth/v1/token")) return responder(route, 200, { access_token: `t${usuario}.${++nTok}`, refresh_token: "r" + nTok, expires_in: 3600, token_type: "bearer", user: { id: usuario, email: usuario + "@prueba.cl" } });
@@ -150,6 +150,10 @@ for (const [ver, url] of Object.entries(VERSIONES)) {
   b.db.correos_bfk.push({ id: 99999, message_id: "<nuevo@bfk>", buzon: "INBOX", remitente_nombre: "Nuevo", remitente_correo: "n@cliente.cl", asunto: "Correo nuevo de prueba", fecha: new Date(Date.now() + 17 * 60000).toISOString(), resumen: "nuevo", categoria: "consulta", prioridad: 2, oc_id: "oc2", asociacion: "oc", estado: "pendiente", gestionado_en: null, sincronizado_en: new Date(Date.now() + 17 * 60000).toISOString() });
   await fase("correos_5min", async () => { await p.clock.fastForward("05:01"); });
   if (opt) ok(`[${ver}] correos: el nuevo llega por la consulta incremental`, (await estado()).correosBfk.some((c) => c.id === 99999));
+  // Mercado Público según su programación (cada 30 min con la app visible), sin depender de una recarga completa
+  await fase("mp_30min", async () => { await p.clock.fastForward("30:30"); }, 1500);
+  if (opt) { const l = R.log.filter((x) => x.fase === "mp_30min");
+    ok(`[${ver}] Mercado Público: a los 30 min se ejecuta su tarea (pendientes o revisión con marca de 6 h)`, l.some((x) => x.ruta === "api/oc" || /mp_cache_avisos/.test(x.ruta)), l.map((x) => x.ruta)); }
   await p.locator('aside [data-nav="compras"]').click(); await espera(p, 900);
   FIN[ver] = { inicio: await textoFinanzas(p) };
   if (opt) ok(`[${ver}] contactos institucionales no se descargan al abrir la app`, (await estado()).contactosInst === null);
@@ -213,7 +217,7 @@ for (const [ver, url] of Object.entries(VERSIONES)) {
   await U2.ctx.close();
   // Comisiones, liquidaciones cerradas, F29, financiamiento, banco y gastos tras todos los cambios
   FIN[ver].final = await textoFinanzas(p);
-  MED[ver] = Object.fromEntries(["apertura", "renovacion_x3", "pestana_x10", "pestana_tras_16min", "correos_5min", "abrir_oc", "abrir_oc_enlace_extenso", "guardar_pago_financiador", "refacturacion", "cambio_vendedor", "guardar_pago_cliente"].map((f) => [f, resumen(R, f)]));
+  MED[ver] = Object.fromEntries(["apertura", "renovacion_x3", "pestana_x10", "pestana_tras_16min", "correos_5min", "mp_30min", "abrir_oc", "abrir_oc_enlace_extenso", "guardar_pago_financiador", "refacturacion", "cambio_vendedor", "guardar_pago_cliente"].map((f) => [f, resumen(R, f)]));
   ok(`[${ver}] sin errores de página`, R.errs.length === 0, R.errs);
   await ctx.close();
 }

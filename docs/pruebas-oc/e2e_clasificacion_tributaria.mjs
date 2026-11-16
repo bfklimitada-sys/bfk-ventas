@@ -35,7 +35,10 @@ const TRIB_COLS = ["tratamiento_iva", "fundamento_iva", "respaldo_iva", "tratami
 // Payload de guardado de cotizaciones: nunca lleva la clasificación.
 {
   const viejo = globalThis.fetch; let cuerpo = null;
-  globalThis.fetch = async (url, op) => { if (String(url).includes("/rpc/")) cuerpo = JSON.parse(op.body); return { ok: true, status: 200, json: async () => ({ id: "c1", version: 2 }), text: async () => "", clone() { return this; } }; };
+  // Lecturas (comprobación de versión vigente antes de guardar, desde 10/11/2026) → la cotización con su versión; RPC → se captura el cuerpo.
+  globalThis.fetch = async (url, op) => { const esRpc = String(url).includes("/rpc/"); if (esRpc) cuerpo = JSON.parse(op.body);
+    const r = esRpc ? { id: "c1", version: 2 } : [{ id: "c1", version: 1 }];
+    return { ok: true, status: 200, headers: new Headers({ "content-range": "0-0/1" }), json: async () => r, text: async () => JSON.stringify(r), clone() { return this; } }; };
   try {
     // cotizacionesDatos importa supabase.jsx: se empaqueta con esbuild (como docs/pruebas-*/ejecutar.mjs).
     const { build } = await import("esbuild"); const { fileURLToPath } = await import("node:url");
