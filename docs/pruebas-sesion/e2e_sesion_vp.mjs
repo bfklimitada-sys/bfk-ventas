@@ -83,7 +83,12 @@ try {
     await campo(p, "observaciones").fill("guardado con sesión vencida"); await espera(p, 600);
     // Token vencido DE VERDAD para PostgREST (por fecha) que el navegador cree vigente: lo rechaza PostgREST real y la app se recupera.
     let ia = A.pedidos.length; let ra = A.renovaciones(); await ponerSesion(S.aux, vencidaEnServidor(A, U.ana)); await espera(p, 2500);
-    const reales = A.pedidos.slice(ia).filter((x) => x.obj.startsWith("vp_") || x.obj.startsWith("rpc/vp_"));
+    // Desde la fase 1 de consumo (15/11/2026) adoptar un token nuevo de la misma cuenta ya NO recarga todos los datos; las
+    // lecturas que lo usan se hacen con «Actualizar datos» (en la versión anterior la adopción misma recargaba).
+    const btAct = p.locator('[data-nav="actualizar"]');
+    if (await btAct.count()) { if (!(await btAct.first().isVisible())) await p.locator('[data-nav="mas"]').first().click(); await p.locator('[data-nav="actualizar"]').first().click(); await espera(p, 2500); }
+    // Incluye «perfiles»: desde la fase 1 de consumo, la primera lectura con el token adoptado es la confirmación del perfil.
+    const reales = A.pedidos.slice(ia).filter((x) => x.obj.startsWith("vp_") || x.obj.startsWith("rpc/vp_") || x.obj === "perfiles");
     ok("A01 PostgREST real rechaza el token vencido («JWT expired»); la app renueva UNA vez y repite cada lectura una vez", reales.some((x) => x.status === 401) && A.renovaciones() === ra + 1
       && [...new Set(reales.filter((x) => x.status === 401).map((x) => x.obj))].every((o) => reales.filter((x) => x.obj === o && x.status === 200).length >= 1) && (await est(p)).estado === "vigente" && A.renovaciones("reuso") === 0, reales.map((x) => `${x.obj}:${x.status}`).join(" "));
     // Desde aquí el servidor de prueba da por vencido el token justo antes de cada operación (el navegador lo cree vigente).
