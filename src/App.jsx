@@ -42,7 +42,7 @@ import { iniciarSesion, fijarSesion, cerrarSesionLocal, suscribirSesion, estadoS
 import { avisosConciliacion } from "./lib/contactosInstitucionales";
 import { rpcTransferirVendedor } from "./lib/supabase";
 import { rpcConciliarContactosOC, rpcGuardarContacto, rpcResolverContacto, rpcContactoObsoleto, rpcResolverPropuesta, rpcFusionarContactos, rpcCorreoCobranza } from "./lib/supabase";
-import { rpcCartola, rpcCerrarLiquidacion, rpcDecidirComision, rpcArchivarOC, rpcRestaurarOC, cargarCorreosBfk, rpcMarcarCorreo, rpcAsignarVendedor, rpcAsignarFinanciador } from "./lib/supabase";
+import { rpcAcciones, rpcCartola, rpcCerrarLiquidacion, rpcDecidirComision, rpcArchivarOC, rpcRestaurarOC, cargarCorreosBfk, rpcMarcarCorreo, rpcAsignarVendedor, rpcAsignarFinanciador } from "./lib/supabase";
 import { contarCorreosAccion, desdeCorreos, reemplazarCorreo } from "./lib/correosBfk";
 import { MODULO_CORREOS_BFK } from "./lib/modulos";
 import { C, MONO, SANS, fmt } from "./lib/theme";
@@ -58,6 +58,9 @@ import { PanelProyectos } from "./components/proyectos/PanelProyectos";
 import { listarBorradores } from "./lib/borradoresCotizacion";
 import { buscarCotizacionesDeOC, cargarCotizacionLectura, cotizacionesCandidatasOC, buscarCotizacionesTexto, vincularCotizacionOC } from "./lib/cotizacionesDatos";
 import { etiquetaCategoria, etiquetaPrioridad, etiquetaEstado, etiquetaSeguimiento } from "./lib/seguimientos";
+import { armarAcciones, mezclarAcciones, corteAcciones, alertasAccionesSinOC } from "./lib/acciones";
+import { CentroAcciones } from "./components/acciones/CentroAcciones";
+import { AccionesContext } from "./components/acciones/contexto";
 import { idFilaCompra, idFilaDespacho, marcaPedido, filaProtegida, esEventoDePedido } from "./lib/compraCotizacion";
 import { BarraInferior, BarraLateral, MenuMas, MenuNuevo, contarAlertas, useEsEscritorio } from "./components/ui/Navegacion";
 // Ventas privadas (06/11/2026): línea VP fuera de Mercado Público (clientes, cotizaciones, órdenes de venta, EETT).
@@ -120,6 +123,11 @@ export default function App() {
   const [notificaciones,setNotificaciones]=useState([]);
   const [correosBfk,setCorreosBfk]=useState([]); // Fase Correos: correos del buzón de BFK como notificaciones (solo lectura)
   const [historialCambios,setHistorialCambios]=useState([]);
+  // Centro de Acciones (17/11/2026): acciones SIN OC (las de una OC viven en oc.oc_seguimientos) y catálogo de categorías.
+  // categoriasAcc=null → migración del 17/11/2026 no instalada: el Centro no se muestra y la ficha de OC funciona como antes.
+  const [accionesSueltas,setAccionesSueltas]=useState([]); const [categoriasAcc,setCategoriasAcc]=useState(null); const [accionFoco,setAccionFoco]=useState(null);
+  const accionesBD=useRef(false); const [recargandoAcc,setRecargandoAcc]=useState(false);
+  const ctxAcciones=useMemo(()=>({categorias:categoriasAcc}),[categoriasAcc]);
   const [aportes,setAportes]=useState([]);
   const [porAceptar,setPorAceptar]=useState([]); // OCs enviadas y sin aceptar en MP
   const [aceptadasSinCargar,setAceptadasSinCargar]=useState([]); // OCs ya aceptadas en MP, pendientes de cargar
@@ -141,7 +149,7 @@ export default function App() {
   const cierresInstalado=useRef(false);                        // migración de liquidaciones cerradas instalada
   const ciCargando=useRef(null);                               // carga a pedido de contactos institucionales en curso
   const [actualizadoEn,setActualizadoEn]=useState(null);
-  const datosRef=useRef({}); datosRef.current={ocs,ocsArchivadas,financiadores,vendedores,ivaMensual,pagosVendedor,cierres,historialCambios,correosBfk,notificaciones,pagoFinSueltos,contactosInst,vinculosInst};
+  const datosRef=useRef({}); datosRef.current={accionesSueltas,ocs,ocsArchivadas,financiadores,vendedores,ivaMensual,pagosVendedor,cierres,historialCambios,correosBfk,notificaciones,pagoFinSueltos,contactosInst,vinculosInst};
   const accionesRef=useRef({});                                // versión vigente de las funciones (para eventos registrados una vez)
   const consumo=useRef({completas:0,parciales:0,vp:0,correos:0,perfil:0});
   if(typeof window!=="undefined"){
@@ -388,7 +396,7 @@ export default function App() {
     if(!session||!perfilRef.current) return;   // sin perfil BFK no se pide ningún dato
     const t=session.access_token; const gen=++genCarga.current;
     try {
-      const [ocsD,urlsD,finD,vendD,catD,gastD,ivaD,pagVD,ajuD,perfD,contD,entD,pagoFinSueltosD,notifD,histD,reclamosD,respD,pvD,aporD,cartD,sbD,bmD,difD,fotosD,correosD,segD,segHistD,tribD,tribCotD,ciD,ciOcD,cotOcD,cierreLiqD,cierreDecD]=await enLotes([
+      const [ocsD,urlsD,finD,vendD,catD,gastD,ivaD,pagVD,ajuD,perfD,contD,entD,pagoFinSueltosD,notifD,histD,reclamosD,respD,pvD,aporD,cartD,sbD,bmD,difD,fotosD,correosD,segD,segHistD,tribD,tribCotD,ciD,ciOcD,cotOcD,cierreLiqD,cierreDecD,catAccD]=await enLotes([
         ()=>conReintento(()=>selOCs(t)),
         ()=>conReintento(()=>selUrlsLinks(t)),   // enlaces de largo normal (los extensos, al abrir su OC)
         ()=>sel("financiadores",t,"&order=nombre").catch(()=>[]),
@@ -425,13 +433,17 @@ export default function App() {
         ()=>sel("cotizaciones",t,"&estado=eq.adjudicada&oc_codigo=not.is.null&limit=1000").catch(()=>[]),   // vendedor responsable de la cotización adjudicada → OC
         ()=>sel("comision_liquidaciones",t,",comision_liquidacion_ocs(*)").catch(()=>[]),   // liquidaciones cerradas (15/11/2026)
         ()=>sel("comision_decisiones",t,"&order=decidido_en").catch(()=>[]),
+        ()=>sel("acciones_categorias",t,"&order=orden").catch(()=>null),   // Centro de Acciones (null = migración no instalada)
       ]);
       if(gen!==genCarga.current) return;   // llegó otra carga más nueva mientras tanto
       // Fase 4C: foto de Mercado Público (caché: neto, IVA, estado, aceptación, recepción e ítems) en oc.mp.
       // Armado común con la recarga parcial (lib/recargaParcial.js): mismos datos para los cálculos.
       const fotos=fotosPorOC(fotosD,PREFIJO_FOTO_MP);
       const ocsConReclamos=componerOCs(ocsD,{reclamos:reclamosD,responsables:respD,postventa:pvD,seguimientos:segD,bitacora:segHistD,fotos,urls:urlsD,urlsExtensas:urlsExtensas.current});
-      setOcs(ocsConReclamos.filter(o=>!o.archivada)); setOcsArchivadas(ocsConReclamos.filter(o=>o.archivada)); setFinanciadores(finD); setVendedores(vendD); setCategoriasGasto(catD);
+      setOcs(ocsConReclamos.filter(o=>!o.archivada)); setOcsArchivadas(ocsConReclamos.filter(o=>o.archivada));
+      // Acciones sin OC (misma tabla y misma bitácora que las de la OC).
+      accionesBD.current=Array.isArray(catAccD); setCategoriasAcc(Array.isArray(catAccD)?catAccD:null);
+      setAccionesSueltas(componerOCs([{id:"__sin_oc__"}],{seguimientos:(segD||[]).filter(s=>!s.oc_id).map(s=>({...s,oc_id:"__sin_oc__"})),bitacora:segHistD})[0].oc_seguimientos.map(s=>({...s,oc_id:null}))); setFinanciadores(finD); setVendedores(vendD); setCategoriasGasto(catD);
       setGastos(gastD); setIvaMensual(ivaD); setPagosVendedor(pagVD); setAjustesSaldo(ajuD); setPerfiles(perfD);
       const cierresD={liquidaciones:(cierreLiqD||[]).map(l=>({...l,ocs:l.comision_liquidacion_ocs||[]})),decisiones:cierreDecD||[]};
       setCierres(cierresD); cierresInstalado.current=Array.isArray(cierreLiqD);
@@ -576,7 +588,7 @@ export default function App() {
     const handleVisible=()=>{
       if(document.visibilityState!=="visible") return;
       // Antes de 15 min no se recarga, pero SÍ se confirma el perfil (≈ 0,3 kB): una cuenta desautorizada sale al volver (como antes).
-      if(debeRecargar(ultimaCarga.current)) accionesRef.current.cargarTodo(); else accionesRef.current.verificarPermisos();
+      if(debeRecargar(ultimaCarga.current)) accionesRef.current.cargarTodo(); else { accionesRef.current.verificarPermisos(); accionesRef.current.sincronizarAcciones?.(); }
       if(debeRecargar(ultimaVP.current)) accionesRef.current.cargarVP();
     };
     document.addEventListener("visibilitychange",handleVisible);
@@ -600,6 +612,14 @@ export default function App() {
   // «Actualizar datos» (menú): recarga completa a pedido.
   const actualizarAhora=async()=>{ setMenuMas(false); await Promise.all([cargarTodo(),cargarVP()]); showToast("Datos actualizados"); };
   accionesRef.current={cargarTodo,cargarTodoCompleto,cargarVP,correosNuevos,verificarPermisos,tareaMP};
+  // Centro de Acciones: con la app visible, cada 2 minutos se piden SOLO las acciones y registros de historial nuevos o
+  // modificados desde lo último que se tiene (normalmente una respuesta vacía). Así lo que registra otro usuario aparece
+  // sin recargar todo.
+  useEffect(()=>{
+    if(!autorizado) return;
+    const id=setInterval(()=>{ if(document.visibilityState==="visible") accionesRef.current.sincronizarAcciones?.(); },120000);
+    return()=>clearInterval(id);
+  },[autorizado,session?.user?.id]);
 
 
   // ─── HANDLERS ─────────────────────────────────
@@ -671,43 +691,91 @@ export default function App() {
     }
     showToast("OC creada correctamente"); setAccion(null); await cargarTodo();
   };
-  // ─── SEGUIMIENTO ESPECIAL (15/10/2026) ───────────
-  // Tabla oc_seguimientos (la base fija autor y fechas, exige solución para resolver y protege lo resuelto).
-  // Cada cambio queda además en historial_cambios. El sobrecosto estimado es solo informativo: no toca compras,
-  // costos, utilidad ni deuda.
+  // ─── SEGUIMIENTO ESPECIAL (15/10/2026) y CENTRO DE ACCIONES (17/11/2026) ───────────
+  // Tabla oc_seguimientos (la base fija autor y fechas, exige solución para resolver y protege lo resuelto). Desde el
+  // 17/11/2026 la base también escribe el historial de cada cambio (con fecha y usuario) y avisa al responsable asignado;
+  // la app solo agrega los comentarios/avances. Si esa migración no está instalada se registra como antes (desde la app).
+  // El sobrecosto estimado es solo informativo: no toca compras, costos, utilidad ni deuda. Resolver una acción no cambia la OC.
+  const sincronizarAcciones=async()=>{
+    const s=sesionRef.current; if(!s||!perfilRef.current||!accionesBD.current||cargaEnCurso.current) return false;
+    const d=datosRef.current; const corte=corteAcciones(d.ocs,d.accionesSueltas);
+    const c=encodeURIComponent(corte||"1970-01-01T00:00:00Z");
+    try{
+      const [filas,bit]=await Promise.all([
+        sel("oc_seguimientos",s.access_token,`&or=(creado_en.gte.${c},actualizado_en.gte.${c})&order=creado_en.desc&limit=500`),
+        sel("historial_cambios",s.access_token,`&campo=like.seguimiento%3A*&creadoEn=gte.${c}&order=creadoEn.desc&limit=500`),
+      ]);
+      consumo.current.acciones=(consumo.current.acciones||0)+1;
+      if(cargaEnCurso.current) return false;
+      // Una acción nueva de una OC que esta sesión no tiene cargada (OC recién creada por otro usuario): carga completa.
+      const ids=new Set(d.ocs.map(o=>o.id)); const arch=new Set(d.ocsArchivadas.map(o=>o.id));
+      if((filas||[]).some(f=>f.oc_id&&!ids.has(f.oc_id)&&!arch.has(f.oc_id))){ cargarTodo(); return true; }
+      setOcs(prev=>{ const r=mezclarAcciones({ocs:prev,sueltas:[]},filas,bit); return r.cambio?r.ocs:prev; });
+      setAccionesSueltas(prev=>{ const r=mezclarAcciones({ocs:[],sueltas:prev},filas,bit); return r.cambio?r.sueltas:prev; });
+      return true;
+    }catch{ return false; }
+  };
+  accionesRef.current.sincronizarAcciones=sincronizarAcciones;   // (después de su declaración: el objeto se arma más arriba)
+  // Tras guardar: una acción de OC relee esa OC como siempre (acciones, bitácora e historial de la OC); una sin OC, solo lo nuevo.
+  const tras=async(ocId)=>{ if(ocId) await refrescarOCs([ocId]); else await sincronizarAcciones(); };
   const handleCrearSeguimiento=async(ocId,d)=>{
     const t=session.access_token; const oc=ocs.find(o=>o.id===ocId);
     const fila={id:genId("seg"),oc_id:ocId,categoria:d.categoria,descripcion:d.descripcion.trim(),prioridad:d.prioridad,estado:d.estado||"pendiente",
       responsable_id:d.responsable_id||null,responsable_nombre:d.responsable_nombre||null,fecha_revision:d.fecha_revision||null,
-      sobrecosto_estimado:d.sobrecosto_estimado===""||d.sobrecosto_estimado==null?null:Math.round(Number(d.sobrecosto_estimado))};
+      sobrecosto_estimado:d.sobrecosto_estimado===""||d.sobrecosto_estimado==null?null:Math.round(Number(d.sobrecosto_estimado)),
+      ...(accionesBD.current&&String(d.titulo||"").trim()?{titulo:String(d.titulo).trim()}:{})};
     await ins("oc_seguimientos",t,fila);
-    await registrarCambio(t,{ocId,ocNumero:oc?.numero_oc,usuarioId:perfil?.id,usuarioNombre:perfil?.nombre,accion:`Seguimiento especial creado (${etiquetaSeguimiento(fila)} · prioridad ${etiquetaPrioridad(d.prioridad)})`,
+    if(!accionesBD.current) await registrarCambio(t,{ocId,ocNumero:oc?.numero_oc,usuarioId:perfil?.id,usuarioNombre:perfil?.nombre,accion:`Seguimiento especial creado (${etiquetaSeguimiento(fila)} · prioridad ${etiquetaPrioridad(d.prioridad)})`,
       campo:`seguimiento:${fila.id}`,valorNuevo:fila.descripcion.replace(/\n?⟦subsanacion[^⟧]*⟧\s*$/,"").slice(0,300)}).catch(()=>{});
-    showToast("Seguimiento registrado"); await refrescarOCs([ocId]);
+    showToast("Seguimiento registrado"); await tras(ocId);
   };
-  // patch: campos a cambiar; avance: texto opcional de avance (solo historial).
+  // Nueva acción desde el Centro de Acciones (con o sin OC).
+  const handleCrearAccion=async(d)=>{
+    if(!accionesBD.current) throw new Error("El Centro de Acciones aún no está instalado en la base");
+    const fila={id:genId("acc"),oc_id:d.oc_id||null,titulo:d.titulo,descripcion:d.descripcion,categoria:d.categoria,prioridad:d.prioridad||"media",estado:"pendiente",
+      responsable_id:d.responsable_id||null,fecha_revision:d.fecha_revision||null,cliente:d.oc_id?null:(d.cliente||null)};
+    await ins("oc_seguimientos",session.access_token,fila);
+    showToast("Acción creada"); await tras(d.oc_id||null);
+  };
+  // patch: campos a cambiar; avance: texto opcional de avance o comentario (solo historial).
   const handleActualizarSeguimiento=async(ocId,seg,patch,avance)=>{
-    const t=session.access_token; const oc=ocs.find(o=>o.id===ocId);
-    const cambios=Object.entries(patch||{}).filter(([k,v])=>String(seg[k]??"")!==String(v??""));
+    const t=session.access_token; const oc=ocId?ocs.find(o=>o.id===ocId):null;
+    const cambios=Object.entries(patch||{}).filter(([k,v])=>k!=="responsable_nombre"||!accionesBD.current).filter(([k,v])=>String(seg[k]??"")!==String(v??""));
     if(!cambios.length&&!String(avance||"").trim()){ showToast("Sin cambios"); return; }
-    if(cambios.length) await upd("oc_seguimientos",t,seg.id,Object.fromEntries(cambios));
-    const nombre={prioridad:"prioridad",estado:"estado",responsable_nombre:"responsable",descripcion:"descripción",fecha_revision:"fecha de revisión",sobrecosto_estimado:"sobrecosto estimado",solucion:"solución",categoria:"tipo"};
-    const fmtV=(k,v)=>k==="prioridad"?etiquetaPrioridad(v):k==="estado"?etiquetaEstado(v):k==="categoria"?etiquetaCategoria(v):k==="sobrecosto_estimado"?(v==null||v===""?"—":fmt.money(v)):(v==null||v===""?"—":String(v));
-    for(const [k,v] of cambios){ if(k==="responsable_id") continue;
-      await registrarCambio(t,{ocId,ocNumero:oc?.numero_oc,usuarioId:perfil?.id,usuarioNombre:perfil?.nombre,
-        accion:k==="estado"&&v==="resuelto"?"Seguimiento especial resuelto":`Seguimiento especial: ${nombre[k]||k} cambiado`,campo:`seguimiento:${seg.id}`,
-        valorAnterior:fmtV(k,seg[k]).slice(0,300),valorNuevo:fmtV(k,v).slice(0,300)}).catch(()=>{}); }
-    if(String(avance||"").trim()) await registrarCambio(t,{ocId,ocNumero:oc?.numero_oc,usuarioId:perfil?.id,usuarioNombre:perfil?.nombre,
-      accion:`Seguimiento especial: avance (${etiquetaSeguimiento(seg)})`,campo:`seguimiento:${seg.id}`,valorNuevo:String(avance).trim().slice(0,500)}).catch(()=>{});
-    showToast(patch?.estado==="resuelto"?"Seguimiento resuelto (queda en el historial)":"Seguimiento actualizado"); await refrescarOCs([ocId]);
+    if(cambios.length){
+      const r=await upd("oc_seguimientos",t,seg.id,Object.fromEntries(cambios));
+      if(accionesBD.current&&(!Array.isArray(r)||!r.length)) throw new Error("La base no aplicó el cambio (sin permiso o la acción ya no existe). No se modificó nada.");
+    }
+    if(!accionesBD.current){
+      const nombre={prioridad:"prioridad",estado:"estado",responsable_nombre:"responsable",descripcion:"descripción",fecha_revision:"fecha de revisión",sobrecosto_estimado:"sobrecosto estimado",solucion:"solución",categoria:"tipo"};
+      const fmtV=(k,v)=>k==="prioridad"?etiquetaPrioridad(v):k==="estado"?etiquetaEstado(v):k==="categoria"?etiquetaCategoria(v):k==="sobrecosto_estimado"?(v==null||v===""?"—":fmt.money(v)):(v==null||v===""?"—":String(v));
+      for(const [k,v] of cambios){ if(k==="responsable_id") continue;
+        await registrarCambio(t,{ocId,ocNumero:oc?.numero_oc,usuarioId:perfil?.id,usuarioNombre:perfil?.nombre,
+          accion:k==="estado"&&v==="resuelto"?"Seguimiento especial resuelto":`Seguimiento especial: ${nombre[k]||k} cambiado`,campo:`seguimiento:${seg.id}`,
+          valorAnterior:fmtV(k,seg[k]).slice(0,300),valorNuevo:fmtV(k,v).slice(0,300)}).catch(()=>{}); }
+    }
+    if(String(avance||"").trim()) await registrarCambio(t,{ocId:ocId||null,ocNumero:oc?.numero_oc||null,usuarioId:perfil?.id,usuarioNombre:perfil?.nombre,
+      accion:accionesBD.current?"Acción: comentario / avance":`Seguimiento especial: avance (${etiquetaSeguimiento(seg)})`,campo:`seguimiento:${seg.id}`,valorNuevo:String(avance).trim().slice(0,500)});
+    showToast(patch?.estado==="resuelto"?"Acción resuelta (queda en el historial)":seg.estado==="resuelto"&&patch?.estado&&patch.estado!=="resuelto"?"Acción reabierta":String(avance||"").trim()&&!cambios.length?"Comentario registrado":"Acción actualizada");
+    await tras(ocId);
   };
   const handleEliminarSeguimiento=async(ocId,seg)=>{
-    const t=session.access_token; const oc=ocs.find(o=>o.id===ocId);
+    const t=session.access_token; const oc=ocId?ocs.find(o=>o.id===ocId):null;
     if(perfil?.rol!=="admin") throw new Error("Solo un administrador puede eliminar un seguimiento");
     await delConfirmado("oc_seguimientos",t,seg.id);
-    await registrarCambio(t,{ocId,ocNumero:oc?.numero_oc,usuarioId:perfil?.id,usuarioNombre:perfil?.nombre,accion:"Seguimiento especial eliminado (administrador)",campo:`seguimiento:${seg.id}`,valorAnterior:String(seg.descripcion||"").slice(0,300)}).catch(()=>{});
-    showToast("Seguimiento eliminado"); await refrescarOCs([ocId]);
+    if(!accionesBD.current) await registrarCambio(t,{ocId,ocNumero:oc?.numero_oc,usuarioId:perfil?.id,usuarioNombre:perfil?.nombre,accion:"Seguimiento especial eliminado (administrador)",campo:`seguimiento:${seg.id}`,valorAnterior:String(seg.descripcion||"").slice(0,300)}).catch(()=>{});
+    if(!ocId) setAccionesSueltas(prev=>prev.filter(x=>x.id!==seg.id));
+    showToast("Acción eliminada"); if(ocId) await refrescarOCs([ocId]);
   };
+  // Categorías (solo administradores; la base lo valida). No se borran: se activan o desactivan.
+  const handleGuardarCategoriaAcc=async(d)=>{
+    const t=session.access_token;
+    if(d.nuevo) await ins("acciones_categorias",t,{id:d.id,etiqueta:d.etiqueta,orden:d.orden});
+    else { const r=await upd("acciones_categorias",t,d.id,{activa:!!d.activa}); if(!Array.isArray(r)||!r.length) throw new Error("La base no aplicó el cambio (solo un administrador puede cambiar categorías)"); }
+    const cats=await sel("acciones_categorias",t,"&order=orden"); setCategoriasAcc(cats);
+    showToast(d.nuevo?"Categoría agregada":d.activa?"Categoría activada":"Categoría desactivada");
+  };
+  const recargarAcciones=async()=>{ setRecargandoAcc(true); try{ await sincronizarAcciones(); } finally{ setRecargandoAcc(false); } };
 
   // ─── COMPRA DESDE LA COTIZACIÓN ADJUDICADA (15/10/2026) ───────────
   // Solo lectura de cotizaciones (nunca se modifican). Cada pedido (un proveedor) es UNA compra con la función de
@@ -2079,7 +2147,18 @@ export default function App() {
         accion:`Correo enviado (confirmado por el usuario): ${tipo}${detalle?` · ${detalle}`:""}`,campo:"destinatario",valorNuevo:correo});
     }catch{}
   };
-  const handleCorreoOC=async(data)=>{ await registrarCorreoOC(data); showToast(`Envío registrado (confirmado por el usuario): ${data.tipo}`); await refrescarOCs([data.ocId]); };
+  const handleCorreoOC=async(data)=>{
+    await registrarCorreoOC(data);
+    // Centro de Acciones: una entrega fallida registrada (lugar y motivo reales) genera UNA acción «Reprogramar entrega fallida»
+    // por OC; un nuevo intento se anota en la misma. Se resuelve sola al registrar la entrega.
+    if(data.tipo==="entrega fallida"&&accionesBD.current&&String(data.motivo||"").trim()){
+      try{ const r=await rpcAcciones(session.access_token,"acc_registrar_entrega_fallida",{p_oc_id:data.ocId,p_lugar:data.lugar||null,p_motivo:data.motivo});
+        showToast(r?.nueva?"Envío registrado · acción «Reprogramar entrega fallida» creada":"Envío registrado · anotado en la acción de entrega fallida ya abierta"); }
+      catch(e){ showToast(`Envío registrado, pero no se creó la acción: ${e.message}`,"error"); }
+      await refrescarOCs([data.ocId]); await sincronizarAcciones(); return;
+    }
+    showToast(`Envío registrado (confirmado por el usuario): ${data.tipo}`); await refrescarOCs([data.ocId]);
+  };
   const handleEnviarReclamo=async({correo,cc,asunto,cuerpo,ocId,rut,tipo,detalle})=>{
     const ccLimpio=(cc||"").split(",").map(s=>s.trim()).filter(Boolean).join(",");
     const ahora=new Date().toISOString();
@@ -2132,6 +2211,11 @@ export default function App() {
 
   // Imprimir / guardar como PDF TODAS las pantallas en un solo documento (solo lectura, no toca datos).
   // En iPhone: Compartir > Imprimir, y pellizcar la vista previa para obtener el PDF.
+  // Centro de Acciones (17/11/2026): bandeja de trabajo de Inicio (con o sin OC). No se muestra si la migración no está instalada.
+  const centroAcciones=(categoriasAcc&&!todo)?<CentroAcciones acciones={armarAcciones(ocs,accionesSueltas)} categorias={categoriasAcc} perfiles={perfiles} perfil={perfil} ocs={ocs}
+    foco={accionFoco} onFocoUsado={()=>setAccionFoco(null)} onCrear={handleCrearAccion} onActualizar={(a,patch,avance)=>handleActualizarSeguimiento(a.oc_id||null,a,patch,avance)}
+    onEliminar={(a)=>handleEliminarSeguimiento(a.oc_id||null,a)} onAbrirOC={(ocId)=>{setFiltroCompras(null);setOcFoco(ocId);setVolverA(null);setTab("compras");}}
+    onGuardarCategoria={perfil?.rol==="admin"?handleGuardarCategoriaAcc:undefined} onRecargar={recargarAcciones} recargando={recargandoAcc} />:null;
   const hoja=(k,nodo)=>todo?(
     <div key={"hoja_"+k} data-hoja style={{breakBefore:k==="panel"?"auto":"page",pageBreakBefore:k==="panel"?"auto":"always",marginBottom:28}}>
       <div style={{fontWeight:700,fontSize:20,color:C.ink,margin:"4px 0 12px",paddingBottom:6,borderBottom:`2px solid ${C.teal}`}}>{TABS.find(t=>t.key===k)?.label||k}</div>
@@ -2177,7 +2261,7 @@ export default function App() {
   const visibles=entradasPara(esAdminNav);
   const pestanasHub=pantalla.hub?pestanasDe(pantalla.hub,esAdminNav):null;
   const alertasPrivadas=alertasVP(vp);
-  const nAlertas=contarAlertas(notificaciones,alertasUrgentes+alertasPrivadas.filter(a=>a.nivel==="alto").length)+(MODULO_CORREOS_BFK?contarCorreosAccion(correosBfk):0);
+  const nAlertas=contarAlertas(notificaciones,alertasUrgentes+alertasPrivadas.filter(a=>a.nivel==="alto").length+alertasAccionesSinOC(accionesSueltas).length)+(MODULO_CORREOS_BFK?contarCorreosAccion(correosBfk):0);
   const salir=()=>{ setMenuMas(false); handleLogout(); };
   // «+ Nuevo»: cotización privada · venta privada / OC de cliente · OC de Mercado Público (el flujo de siempre).
   const nuevo=(k)=>{ setMenuMas(false);
@@ -2188,11 +2272,11 @@ export default function App() {
   const vpProps={token:session?.access_token,perfil,vp,onRecargar:cargarVP,showToast,onAbrir:abrirVP};
 
   const contenidoPantallas=(
-    <ModoTodoContext.Provider value={todo}><ContactosContext.Provider value={ctxContactos}>
+    <ModoTodoContext.Provider value={todo}><ContactosContext.Provider value={ctxContactos}><AccionesContext.Provider value={ctxAcciones}>
       {pestanasHub&&!todo&&<Pestanas etiqueta={HUBS[pantalla.hub].label} variante="subrayado" activa={tab} onCambiar={irA} items={pestanasHub.map(p=>({key:p.key,label:p.label,attrs:{"data-nav":p.key,"aria-current":tab===p.key?"page":undefined}}))} />}
-      {(tab==="panel"||todo)&&hoja("panel",<>{!todo&&<CanalFiltro valor={canal} onCambiar={setCanal} dato="inicio" />}{canal==="vp"&&!todo&&<ResumenVentasPrivadas vp={vp} periodo="todo" onIr={(t)=>{ if(t==="notif") setFiltroAlertas({nivel:"todas",etapa:null}); irA(t); }} />}{(canal!=="vp"||todo)&&<PanelDashboard franjaCanales={canal==="todos"&&!todo?<ResumenVentasPrivadas vp={vp} periodo="todo" compacto sinAlerta={!esEscritorio} onIr={(t)=>{ if(t==="notif") setFiltroAlertas({nivel:"todas",etapa:null}); irA(t); }} />:null} avisoCanales={canal==="todos"&&!todo?<AvisoAlertasVP vp={vp} onIr={(t)=>{ if(t==="notif") setFiltroAlertas({nivel:"todas",etapa:null}); irA(t); }} />:null} tokenSesion={()=>sesionRef.current?.access_token||null} onQuitarAlertaCartola={handleQuitarAlertaCartola} onBuscarCompras={(q)=>{setBusquedaCompras(q);setFiltroCompras(null);setOcFoco(null);setVolverA(null);setTab("compras");}} ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} cierres={cierres} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} aportes={aportes} ajustes={ajustesSaldo} categorias={categoriasGasto} perfil={perfil} onExportarTodo={handleExportarTodo} exportando={exportando} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setVolverA(null);setTab(t);}} onAccion={(k)=>setAccion(k)} onSincronizar={completarTodasDesdeMP} onCorregirFechas={corregirFechasTodas} sincronizando={sincronizando} porAceptar={porAceptar.filter(a=>!buscarDuplicadoOC(a.numero_oc))} onActualizarPorAceptar={revisarPorAceptar} verificandoPorAceptar={verificandoPorAceptar} aceptadasSinCargar={aceptadasSinCargar.filter(a=>!buscarDuplicadoOC(a.numero_oc))} onCargarOC={(numero)=>{setCodigoOcRapida(numero);setAccion("compra_oc");}} onCargarTodasAceptadas={handleCargarTodasAceptadas} cargandoAceptadas={cargandoAceptadas} onActualizarAceptadas={revisarAceptadasSinCargar} verificandoAceptadas={verificandoAceptadas} canceladasEnMP={canceladasEnMP.filter(c=>ocs.some(o=>o.id===c.id))} onArchivarCancelada={(id)=>handleArchivarOC(id,"Cancelada en Mercado Público")} onActualizarCanceladas={revisarCanceladasEnMP} verificandoCanceladas={verificandoCanceladas} onValidarTodo={validarTodoContraMP} validandoTodo={validandoTodo} usoMP={usoMP} actMP={actMP} esCodigoMP={esCodigoMP} ultimaCartola={ultimaCartola} saldoBanco={saldoBanco} bancoMensual={bancoMensual} onEditarSaldo={()=>setAccion("saldo_banco")} />}</>)}
+      {(tab==="panel"||todo)&&hoja("panel",<>{!todo&&<CanalFiltro valor={canal} onCambiar={setCanal} dato="inicio" />}{canal==="vp"&&!todo&&centroAcciones}{canal==="vp"&&!todo&&<ResumenVentasPrivadas vp={vp} periodo="todo" onIr={(t)=>{ if(t==="notif") setFiltroAlertas({nivel:"todas",etapa:null}); irA(t); }} />}{(canal!=="vp"||todo)&&<PanelDashboard centroAcciones={centroAcciones} franjaCanales={canal==="todos"&&!todo?<ResumenVentasPrivadas vp={vp} periodo="todo" compacto sinAlerta={!esEscritorio} onIr={(t)=>{ if(t==="notif") setFiltroAlertas({nivel:"todas",etapa:null}); irA(t); }} />:null} avisoCanales={canal==="todos"&&!todo?<AvisoAlertasVP vp={vp} onIr={(t)=>{ if(t==="notif") setFiltroAlertas({nivel:"todas",etapa:null}); irA(t); }} />:null} tokenSesion={()=>sesionRef.current?.access_token||null} onQuitarAlertaCartola={handleQuitarAlertaCartola} onBuscarCompras={(q)=>{setBusquedaCompras(q);setFiltroCompras(null);setOcFoco(null);setVolverA(null);setTab("compras");}} ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} cierres={cierres} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} aportes={aportes} ajustes={ajustesSaldo} categorias={categoriasGasto} perfil={perfil} onExportarTodo={handleExportarTodo} exportando={exportando} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setVolverA(null);setTab(t);}} onAccion={(k)=>setAccion(k)} onSincronizar={completarTodasDesdeMP} onCorregirFechas={corregirFechasTodas} sincronizando={sincronizando} porAceptar={porAceptar.filter(a=>!buscarDuplicadoOC(a.numero_oc))} onActualizarPorAceptar={revisarPorAceptar} verificandoPorAceptar={verificandoPorAceptar} aceptadasSinCargar={aceptadasSinCargar.filter(a=>!buscarDuplicadoOC(a.numero_oc))} onCargarOC={(numero)=>{setCodigoOcRapida(numero);setAccion("compra_oc");}} onCargarTodasAceptadas={handleCargarTodasAceptadas} cargandoAceptadas={cargandoAceptadas} onActualizarAceptadas={revisarAceptadasSinCargar} verificandoAceptadas={verificandoAceptadas} canceladasEnMP={canceladasEnMP.filter(c=>ocs.some(o=>o.id===c.id))} onArchivarCancelada={(id)=>handleArchivarOC(id,"Cancelada en Mercado Público")} onActualizarCanceladas={revisarCanceladasEnMP} verificandoCanceladas={verificandoCanceladas} onValidarTodo={validarTodoContraMP} validandoTodo={validandoTodo} usoMP={usoMP} actMP={actMP} esCodigoMP={esCodigoMP} ultimaCartola={ultimaCartola} saldoBanco={saldoBanco} bancoMensual={bancoMensual} onEditarSaldo={()=>setAccion("saldo_banco")} />}</>)}
       {(tab==="compras"||todo)&&hoja("compras",<>{!todo&&volverA==="notif"&&<button onClick={()=>{setVolverA(null);setTab("notif");}} style={{width:"100%",textAlign:"left",background:C.tealLight,color:C.tealDark,border:"none",borderRadius:12,padding:"10px 12px",marginBottom:10,fontWeight:700,fontSize:13,minHeight:44,cursor:"pointer"}}>← Volver a Alertas</button>}<PanelCompras onAbrirOC={alAbrirOC} key={"compras-"+reinicio} pagosVendedor={pagosVendedor} onAsignarVendedor={handleAsignarVendedor} onAsignarFinanciador={handleAsignarFinanciador} correosBfk={MODULO_CORREOS_BFK?correosBfk:[]} onMarcarCorreo={handleMarcarCorreo} difsHistoricas={difsHistoricas} onCambiarFinanciamiento={handleCambiarFinanciamiento} busquedaInicial={busquedaCompras} ocs={ocs} perfiles={perfiles} filtroInicial={filtroCompras} ocFoco={ocFoco} onFocoUsado={()=>setOcFoco(null)} contactos={contactos} onEnviarReclamo={handleEnviarReclamo} onCorreoOC={handleCorreoOC} onRegistrarRespuestaReclamo={handleRegistrarRespuestaReclamo} onGuardarContacto={handleGuardarContacto} onGuardarDatosOC={handleGuardarDatosOC} onEditarEvento={handleEditarEvento} financiadores={financiadores} onConfirmarEntrega={handleEntrega} onEmitirFactura={handleFactura} onPagoCliente={handlePagoCliente} onPagoFinanciamiento={handlePagoFin} entidadesCatalogo={entidadesCatalogo} onGuardarLink={handleGuardarLink} onEliminarLink={handleEliminarLink} onEditarLink={handleEditarLink} onRepartirInversion={handleRepartirInversion} buscarDuplicadoOC={buscarDuplicadoOC} onSincronizarFecha={handleSincronizarFecha} perfil={perfil} historialCambios={historialCambios} onAgregarComentario={handleAgregarComentario} onEliminarComentario={handleEliminarComentario} onArchivarOC={handleArchivarOC} onEliminarOC={perfil?.rol==="admin"?setEliminandoOC:undefined} onEliminarFactura={handleEliminarFactura} onRegistrarNC={handleNotaCredito} onEliminarEvento={handleEliminarEvento} vendedores={vendedores} onIngresarCompra={handleIngresarCompra} onCompraDesdeCotizacion={handleCompraDesdeCotizacion} onCorregirCompra={handleCorregirCompra} onCrearSeguimiento={handleCrearSeguimiento} onActualizarSeguimiento={handleActualizarSeguimiento} onEliminarSeguimiento={handleEliminarSeguimiento} onAnularCompra={handleAnularCompra} onBuscarCotizacionOC={buscarCotizacionOC} onCargarCotizacionOC={cargarCotizacionOC} onAsignarResponsable={handleAsignarResponsable} onGuardarPostventa={handleGuardarPostventa} tributario={tributario} /></>)}
-      {(tab==="notif"||todo)&&hoja("notif",<>{!todo&&<CanalFiltro valor={canal} onCambiar={setCanal} dato="alertas" />}<PanelNotificaciones alertasExtra={canal==="mp"?[]:alertasPrivadas} onAbrirExtra={(d)=>abrirVP(d.tab,d.id)} correos={MODULO_CORREOS_BFK?correosBfk:null} onMarcarCorreo={handleMarcarCorreo} notificaciones={notificaciones} ocs={canal==="vp"?[]:ocs} onMarcarLeidas={handleMarcarNotificacionesLeidas} filtroAlertas={filtroAlertas} onFiltroAlertas={setFiltroAlertas} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setVolverA(ocId?"notif":null);setTab(t);}} /></>)}
+      {(tab==="notif"||todo)&&hoja("notif",<>{!todo&&<CanalFiltro valor={canal} onCambiar={setCanal} dato="alertas" />}<PanelNotificaciones alertasExtra={[...(canal==="mp"?[]:alertasPrivadas),...alertasAccionesSinOC(accionesSueltas)]} onAbrirExtra={(d)=>{ if(d.tab==="acciones"){ setAccionFoco(d.id); setTab("panel"); } else abrirVP(d.tab,d.id); }} correos={MODULO_CORREOS_BFK?correosBfk:null} onMarcarCorreo={handleMarcarCorreo} notificaciones={notificaciones} ocs={canal==="vp"?[]:ocs} onMarcarLeidas={handleMarcarNotificacionesLeidas} filtroAlertas={filtroAlertas} onFiltroAlertas={setFiltroAlertas} onNavigate={(t,filtro,ocId)=>{setFiltroCompras(filtro||null);setOcFoco(ocId||null);setVolverA(ocId?"notif":null);setTab(t);}} /></>)}
       {(tab==="agenda"||todo)&&hoja("agenda",<>{!todo&&<CanalFiltro valor={canal} onCambiar={setCanal} dato="agenda" />}<PanelCalendario ocs={canal==="vp"?[]:ocs} eventosExtra={canal==="mp"?[]:eventosAgendaVP(vp)} onAbrirExtra={(d)=>abrirVP(d.tab,d.id)} onMarcarFecha={handleMarcarFecha} onVerAlertas={(f)=>{setFiltroCompras(null);setOcFoco(null);setVolverA(null);setFiltroAlertas({nivel:(f&&f.nivel)||"todas",etapa:(f&&f.etapa)||null});setTab("notif");}} /></>)}
       {tab==="cotizaciones"&&!todo&&hoja("cotizaciones",<PanelCotizaciones token={session?.access_token} perfil={perfil} tributario={tributario} entidadesCatalogo={entidadesCatalogo} showToast={showToast} />)}
       {tab==="proyectos"&&!todo&&hoja("proyectos",<PanelProyectos token={session?.access_token} perfil={perfil} showToast={showToast} />)}
@@ -2206,7 +2290,7 @@ export default function App() {
       {(tab==="banco"||todo)&&hoja("banco",<PanelBanco ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} cierres={cierres} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} aportes={aportes} saldoBanco={saldoBanco} ultimaCartola={ultimaCartola} bancoMensual={bancoMensual} onEditarSaldo={()=>setAccion("saldo_banco")} onImportarCartola={()=>setAccion("cartola")} onQuitarAlertaCartola={handleQuitarAlertaCartola} />)}
       {(tab==="vendedores"||todo)&&hoja("vendedores",<PanelVendedores vendedores={vendedores} ocs={ocs} ivaMensual={ivaMensual} gastos={gastos} pagosVendedor={pagosVendedor} cierres={cierres} onRevisarOC={handleRevisarOC} onDecidirComision={handleDecidirComision} onGuardarIva={handleGuardarIva} onPagoVendedor={handlePagoVendedorSimple} onAnularPago={handleAnularPagoVendedor} esAdmin={perfil?.rol==="admin"} onIrImpuestos={(p)=>{ setIvaPeriodoInicial(p&&Number.isInteger(p.anio)&&Number.isInteger(p.mes)?{anio:p.anio,mes:p.mes}:null); irA("impuestos"); }} onVerOCs={(filtro)=>{setFiltroCompras(filtro);setOcFoco(null);setVolverA(null);setTab("compras");}} onAbrirOC={(ocId)=>{setFiltroCompras(null);setOcFoco(ocId);setVolverA(null);setTab("compras");}} />)}
       {(tab==="usuarios"||todo)&&perfil?.rol==="admin"&&hoja("usuarios",<PanelUsuarios perfilPropio={perfil} onRecargar={cargarTodo} onEliminarOC={setEliminandoOC} eliminacionesVersion={eliminacionesVersion} difsHistoricas={difsHistoricas} perfiles={perfiles} ocs={ocs} ocsArchivadas={ocsArchivadas} onRestaurarOC={handleRestaurarOC} onChangeRol={handleChangeRol} session={session} showToast={showToast} entidadesCatalogo={entidadesCatalogo} onEntidadesImportadas={handleEntidadesImportadas} usoMP={usoMP} sincronizando={sincronizando} validandoTodo={validandoTodo} exportando={exportando} onCorregirFechas={corregirFechasTodas} onValidarTodo={validarTodoContraMP} onExportarTodo={handleExportarTodo} configVP={todo?null:<ConfigVentasPrivadas key={vp.instalado?"vp-cfg":"vp-cfg-0"} token={session?.access_token} vp={vp} onRecargar={cargarVP} showToast={showToast} />} />)}
-    </ContactosContext.Provider></ModoTodoContext.Provider>
+    </AccionesContext.Provider></ContactosContext.Provider></ModoTodoContext.Provider>
   );
 
   // Contenido + ventanas, igual en celular y escritorio

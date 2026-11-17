@@ -98,6 +98,8 @@ async function rpcSimple(t, fn, body) {
 // Registro desde la cartola (funciones de la base con la garantía atómica). El error conserva el código
 // (23505 = ya registrado; BFK01 = posible duplicado de un registro manual; PGRST202 = función aún no instalada).
 export const rpcCartola = (t, fn, body) => rpcSimple(t, fn, body);
+// Centro de Acciones (17/11/2026): funciones de la base (acc_*) que validan perfil, OC y duplicados.
+export const rpcAcciones = (t, fn, body) => rpcSimple(t, fn, body);
 // Liquidaciones de comisiones cerradas (15/11/2026): cierre de un mes pagado completo y decisiones de un administrador.
 export const rpcCerrarLiquidacion = (t, datos) => rpcSimple(t, "cerrar_liquidacion_comision", { p: datos });
 export const rpcDecidirComision = (t, datos) => rpcSimple(t, "decidir_comision", { p: datos });

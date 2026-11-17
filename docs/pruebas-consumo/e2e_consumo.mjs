@@ -42,6 +42,7 @@ function crearBaseMedida(datos) {
   const leer = b.leer;
   b.leer = (tabla, params) => {
     let filas = leer(tabla, params);
+    if (!Array.isArray(filas)) return filas;   // tabla inexistente en la base simulada (respuesta de error de PostgREST)
     for (const [k, v] of params) {
       if (["select", "order", "limit", "offset"].includes(k)) continue;
       if (k === "or") { const c = partir(v.slice(1, -1)); filas = filas.filter((f) => c.some((x) => { const [campo, ...r] = x.split("."); return cumple(f, campo, r.join(".")); })); continue; }
@@ -90,7 +91,7 @@ async function abrirApp(url, b, { usuario = "u1", escritorio = true } = {}) {
     let c = null; try { c = JSON.parse(req.postData() || "null"); } catch {}
     if (u.pathname.includes("/rest/v1/rpc/")) { const r = b.rpc(u.pathname.split("/").pop(), c || {}, usuario); return responder(route, r.status, r.json); }
     const tabla = u.pathname.split("/").pop();
-    if (m === "GET") return responder(route, 200, b.leer(tabla, u.searchParams));
+    if (m === "GET") { const r = b.leer(tabla, u.searchParams); return r && r.__status ? responder(route, r.__status, r.json) : responder(route, 200, r); }
     const r = b.escribir(m, tabla, u.searchParams, c, usuario); return responder(route, r.status, r.json);
   });
   await p.addInitScript((id) => { localStorage.setItem("bfk_supabase_session_v2", JSON.stringify({ access_token: "t" + id + ".0", refresh_token: "r", expires_in: 3600, expires_at: Math.floor(Date.now() / 1000) + 3600, user: { id, email: id + "@prueba.cl" } }));

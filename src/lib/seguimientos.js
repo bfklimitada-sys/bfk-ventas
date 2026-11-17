@@ -4,19 +4,22 @@
 // El sobrecosto estimado es SOLO informativo: ninguna cuenta financiera lo usa (no es compra, gasto, deuda
 // ni utilidad). Funciones puras: no escriben datos.
 // ═══════════════════════════════════════════════════════════════
+// 17/11/2026: mismos nombres que el catálogo del Centro de Acciones (acciones_categorias). Esta lista fija (los 8 códigos que la
+// base aceptaba antes del 17/11/2026) solo se usa si la migración del Centro de Acciones no está instalada.
 export const CATEGORIAS_SEGUIMIENTO = [
-  { id: "postventa", etiqueta: "Postventa / Garantía" },
+  { id: "postventa", etiqueta: "Postventa, garantías y reclamos" },
   { id: "sobrecosto", etiqueta: "Sobrecosto / Cargo adicional" },
-  { id: "proveedor", etiqueta: "Proveedor" },
+  { id: "proveedor", etiqueta: "Compras y proveedores" },
   { id: "producto", etiqueta: "Producto" },
-  { id: "entrega", etiqueta: "Entrega / Despacho" },
+  { id: "entrega", etiqueta: "Entregas y despachos" },
   { id: "cliente", etiqueta: "Cliente" },
-  { id: "facturacion", etiqueta: "Facturación / Cobranza" },
+  { id: "facturacion", etiqueta: "Facturación" },
   { id: "otro", etiqueta: "Otro" },
 ];
+const OTRAS_ETIQUETAS = { instalacion: "Instalaciones y servicios técnicos", cobranza: "Cobranza", comercial: "Gestiones comerciales", administrativa: "Otras tareas administrativas" };
 export const PRIORIDADES_SEGUIMIENTO = [{ id: "alta", etiqueta: "Alta" }, { id: "media", etiqueta: "Media" }, { id: "baja", etiqueta: "Baja" }];
 export const ESTADOS_SEGUIMIENTO = [{ id: "pendiente", etiqueta: "Pendiente" }, { id: "en_gestion", etiqueta: "En gestión" }, { id: "resuelto", etiqueta: "Resuelto" }];
-export const etiquetaCategoria = (id) => CATEGORIAS_SEGUIMIENTO.find((c) => c.id === id)?.etiqueta || id || "";
+export const etiquetaCategoria = (id) => CATEGORIAS_SEGUIMIENTO.find((c) => c.id === id)?.etiqueta || OTRAS_ETIQUETAS[id] || id || "";
 export const etiquetaPrioridad = (id) => PRIORIDADES_SEGUIMIENTO.find((c) => c.id === id)?.etiqueta || id || "";
 export const etiquetaEstado = (id) => ESTADOS_SEGUIMIENTO.find((c) => c.id === id)?.etiqueta || id || "";
 
@@ -50,7 +53,7 @@ export function leerSubsanacion(s) {
     motivo: (campos.Motivo || "").trim(), solicitante: (campos["Solicitado por"] || "").trim() || null, observaciones: (campos.Observaciones || "").trim() || null };
 }
 export const esSubsanacion = (s) => !!leerSubsanacion(s);
-export const etiquetaSeguimiento = (s) => { const sub = leerSubsanacion(s); return sub ? `Subsanación de factura N.º ${sub.numero || "s/n"}` : etiquetaCategoria(s?.categoria); };
+export const etiquetaSeguimiento = (s) => { const sub = leerSubsanacion(s); return sub ? `Subsanación de factura N.º ${sub.numero || "s/n"}` : s?.titulo || etiquetaCategoria(s?.categoria); };
 export const subsanacionesAbiertas = (oc, facturaId) => seguimientosAbiertos(oc).filter((s) => { const x = leerSubsanacion(s); return x && (facturaId == null || x.facturaId === facturaId); });
 // Evita registrar dos veces la MISMA solicitud (misma factura, misma fecha de solicitud y mismo motivo, aún abierta).
 // Gestiones distintas sobre la misma factura (otro motivo u otra fecha) sí se permiten.

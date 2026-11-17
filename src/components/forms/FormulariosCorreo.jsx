@@ -83,7 +83,7 @@ export function FormEntregaFallida({ oc, onEnviar, entidadesCatalogo }) {
   const cuerpo=`Estimado/a,\n\nJunto con saludar le comento que hoy durante la mañana nos acercamos a ${lugar} para hacer la entrega de los productos asociados a la OC del asunto, siendo esta entrega fallida debido a que ${motivo}.\n\nPor favor avisar a personal de bodega que realizaremos un nuevo intento de entrega entre hoy y el resto de la semana en curso.\n\nAgradezco su ayuda con esa gestión.\n\nSin más que agregar, saludos cordiales,\nBFK Ltda`;
 
   const validar=()=>!correo.trim()?"Indica el correo del destinatario":"";
-  const confirmar=()=>onEnviar({correo:correo.trim(),ocId:oc.id,tipo:"entrega fallida",detalle:`lugar: ${lugar} · motivo: ${motivo}`});
+  const confirmar=()=>onEnviar({correo:correo.trim(),ocId:oc.id,tipo:"entrega fallida",detalle:`lugar: ${lugar} · motivo: ${motivo}`,lugar:String(lugar||"").trim(),motivo:String(motivo||"").trim()});
 
   return (
     <div>

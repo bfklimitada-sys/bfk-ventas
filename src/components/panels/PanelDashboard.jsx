@@ -58,7 +58,7 @@ function VerMasAvisoMP({n}){
   return <div style={{fontSize:12,color:C.inkFaint,marginTop:6,textAlign:"center"}}>y {n} más</div>;
 }
 
-export function PanelDashboard({ franjaCanales, avisoCanales, ocs, financiadores, gastos, pagosVendedor, cierres = null, ivaMensual, vendedores, pagoFinSueltos, aportes: aportesLista, ajustes = [], categorias = [], perfil, onExportarTodo, exportando, onNavigate, onAccion, onSincronizar, onCorregirFechas, sincronizando, porAceptar, onActualizarPorAceptar, verificandoPorAceptar, aceptadasSinCargar, onCargarOC, onCargarTodasAceptadas, cargandoAceptadas, onActualizarAceptadas, verificandoAceptadas, canceladasEnMP, onArchivarCancelada, onActualizarCanceladas, verificandoCanceladas, onValidarTodo, validandoTodo, usoMP, actMP, esCodigoMP, ultimaCartola, saldoBanco, bancoMensual, onEditarSaldo, onBuscarCompras , onQuitarAlertaCartola, tokenSesion }) {
+export function PanelDashboard({ centroAcciones = null, franjaCanales, avisoCanales, ocs, financiadores, gastos, pagosVendedor, cierres = null, ivaMensual, vendedores, pagoFinSueltos, aportes: aportesLista, ajustes = [], categorias = [], perfil, onExportarTodo, exportando, onNavigate, onAccion, onSincronizar, onCorregirFechas, sincronizando, porAceptar, onActualizarPorAceptar, verificandoPorAceptar, aceptadasSinCargar, onCargarOC, onCargarTodasAceptadas, cargandoAceptadas, onActualizarAceptadas, verificandoAceptadas, canceladasEnMP, onArchivarCancelada, onActualizarCanceladas, verificandoCanceladas, onValidarTodo, validandoTodo, usoMP, actMP, esCodigoMP, ultimaCartola, saldoBanco, bancoMensual, onEditarSaldo, onBuscarCompras , onQuitarAlertaCartola, tokenSesion }) {
   const [busq,setBusq]=useState("");
   const esAdmin=perfil?.rol==="admin";
   const [verTodasPrior,setVerTodasPrior]=useState(false);
@@ -201,6 +201,8 @@ export function PanelDashboard({ franjaCanales, avisoCanales, ocs, financiadores
       </Indicadores>}
       {escritorio&&franjaCanales}
       {!escritorio&&avisoCanales}
+      {/* Centro de Acciones (17/11/2026): primero lo que falta hacer, con o sin OC. */}
+      {centroAcciones}
       {nAlertasCartola>0&&<AvisoLinea dato="alertas-cartola" onClick={()=>onNavigate&&onNavigate("banco",null)} accion="Revisar">{nAlertasCartola} posible{nAlertasCartola>1?"s":""} duplicado{nAlertasCartola>1?"s":""} con la cartola del banco</AvisoLinea>}
       <div style={escritorio?{display:"grid",gridTemplateColumns:"minmax(0,1.05fr) minmax(0,1fr)",gap:20,alignItems:"start"}:undefined}>
         <div>

@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
+import { AccionesContext } from "../acciones/contexto";
+import { categoriasActivas, etiquetaCat, ORIGENES } from "../../lib/acciones";
 import { Field } from "../ui/Basicos";
 import { Ic } from "../ui/Iconos";
 import { C, btnP, fmt, iStyle } from "../../lib/theme";
@@ -24,7 +26,7 @@ const chip = (t, tono, extra = {}) => (
 );
 const btnS = (color = C.tealDark) => ({ background: C.card, border: `1px solid ${color}55`, color, borderRadius: 8, padding: "7px 10px", minHeight: 36, fontSize: 13, fontWeight: 600, cursor: "pointer" });
 const hoyISO = () => { const d = new Date(); const z = (n) => String(n).padStart(2, "0"); return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`; };
-const VACIO = { categoria: "", descripcion: "", prioridad: "media", responsable_id: "", fecha_revision: "", sobrecosto_estimado: "", estado: "pendiente",
+const VACIO = { titulo: "", categoria: "", descripcion: "", prioridad: "media", responsable_id: "", fecha_revision: "", sobrecosto_estimado: "", estado: "pendiente",
   factura_id: "", motivo: "", fecha_solicitud: "", solicitante: "" };
 // «Subsanación de factura» se ofrece como tipo propio, pero se guarda con la categoría «facturacion» (ya permitida).
 export const SUBSANACION = "subsanacion";
@@ -32,6 +34,8 @@ export const SUBSANACION = "subsanacion";
 export const facturasDe = (oc) => (oc?.eventos_factura || []).filter((d) => esFactura(d) && !esNotaCredito(d) && String(d.numero_factura || "").trim());
 
 function Formulario({ oc, perfiles, inicial, onGuardar, onCancelar }) {
+  const ctxAcc = useContext(AccionesContext); const conCentro = !!ctxAcc?.categorias;
+  const listaCategorias = conCentro ? categoriasActivas(ctxAcc.categorias) : CATEGORIAS_SEGUIMIENTO;
   const [f, setF] = useState(() => ({ ...VACIO, ...(inicial?.facturaId ? { categoria: SUBSANACION, factura_id: inicial.facturaId, fecha_solicitud: hoyISO() } : {}) }));
   const [errores, setErrores] = useState([]); const [guardando, setGuardando] = useState(false);
   const enCurso = useRef(false);
@@ -57,7 +61,7 @@ function Formulario({ oc, perfiles, inicial, onGuardar, onCancelar }) {
     const datos = esSub
       ? { categoria: "facturacion", descripcion: descripcionSubsanacion({ facturaId: fac.id, numero: fac.numero_factura, motivo: f.motivo, fechaSolicitud: f.fecha_solicitud, solicitante: f.solicitante, observaciones: f.descripcion }),
           prioridad: f.prioridad, estado: f.estado, fecha_revision: f.fecha_revision, sobrecosto_estimado: "" }
-      : { categoria: f.categoria, descripcion: f.descripcion, prioridad: f.prioridad, estado: f.estado, fecha_revision: f.fecha_revision, sobrecosto_estimado: f.sobrecosto_estimado };
+      : { titulo: f.titulo, categoria: f.categoria, descripcion: f.descripcion, prioridad: f.prioridad, estado: f.estado, fecha_revision: f.fecha_revision, sobrecosto_estimado: f.sobrecosto_estimado };
     try { await onGuardar({ ...datos, responsable_id: resp?.id || null, responsable_nombre: resp?.nombre || null }); }
     catch (e) { setErrores([`No se guardó: ${e.message}`]); enCurso.current = false; setGuardando(false); }
   };
@@ -66,10 +70,13 @@ function Formulario({ oc, perfiles, inicial, onGuardar, onCancelar }) {
       <Field label="Categoría" required>
         <select data-seg="categoria" style={iStyle} value={f.categoria} onChange={(e) => set("categoria", e.target.value)}>
           <option value="">Elegir…</option>
-          {CATEGORIAS_SEGUIMIENTO.map((c) => <option key={c.id} value={c.id}>{c.etiqueta}</option>)}
+          {listaCategorias.map((c) => <option key={c.id} value={c.id}>{c.etiqueta}</option>)}
           <option value={SUBSANACION}>Subsanación de factura</option>
         </select>
       </Field>
+      {conCentro && !esSub && <Field label="Acción requerida (opcional)" hint="Título breve que se verá en el Centro de Acciones de Inicio.">
+        <input data-seg="titulo" style={iStyle} maxLength={160} value={f.titulo} onChange={(e) => set("titulo", e.target.value)} placeholder="ej: Pedir nota de crédito al proveedor" />
+      </Field>}
       {esSub && <>
         <Field label="Factura afectada" required hint="La subsanación no anula, modifica ni reemplaza la factura, ni cambia su estado SII.">
           <select data-seg="factura" style={iStyle} value={f.factura_id} onChange={(e) => set("factura_id", e.target.value)}>
@@ -144,7 +151,7 @@ function Bitacora({ s }) {
     <div data-seg-bitacora style={{ marginTop: 8, borderTop: `1px dashed ${C.border}`, paddingTop: 6 }}>
       {ver.map((h) => (
         <div key={h.id} style={{ fontSize: 12, color: C.inkMuted, padding: "2px 0" }}>
-          <b style={{ color: C.ink }}>{h.accion.replace(/^Seguimiento especial:?\s*/, "") || "registro"}</b>
+          <b style={{ color: C.ink }}>{(() => { const t = String(h.accion || "").replace(/^(Seguimiento especial|Acción):?\s*/, ""); return t ? t[0].toUpperCase() + t.slice(1) : "Registro"; })()}</b>
           {h.valor_anterior ? <> · {h.valor_anterior} →</> : null}{h.valor_nuevo ? <> {h.valor_nuevo}</> : null}
           <span style={{ color: C.inkFaint }}> · {h.usuario_nombre || "—"} · {fmt.datetime(h.creadoEn)}</span>
         </div>
@@ -155,6 +162,7 @@ function Bitacora({ s }) {
 }
 
 function Item({ oc, s, perfiles, perfil, soloLectura, onActualizar, onEliminar }) {
+  const ctxAcc = useContext(AccionesContext);
   const sub = leerSubsanacion(s);
   const [modo, setModo] = useState(null); // null | "avance" | "resolver"
   const [texto, setTexto] = useState(""); const [error, setError] = useState(""); const [ocupado, setOcupado] = useState(false);
@@ -183,9 +191,11 @@ function Item({ oc, s, perfiles, perfil, soloLectura, onActualizar, onEliminar }
       <div style={{ display: "flex", flexWrap: "wrap", gap: 5, alignItems: "center", marginBottom: 5 }}>
         {chip(`Prioridad ${etiquetaPrioridad(s.prioridad).toLowerCase()}`, tono)}
         {chip(etiquetaEstado(s.estado), s.estado === "en_gestion" ? { color: C.info, bg: C.infoLight } : { color: C.inkMuted, bg: C.paper })}
-        {sub ? chip("Subsanación de factura", { color: C.purple, bg: C.purpleLight }) : <span style={{ fontSize: 12, fontWeight: 600, color: C.inkMuted }}>{etiquetaCategoria(s.categoria)}</span>}
+        {sub ? chip("Subsanación de factura", { color: C.purple, bg: C.purpleLight }) : <span style={{ fontSize: 12, fontWeight: 600, color: C.inkMuted }}>{ctxAcc?.categorias ? etiquetaCat(ctxAcc.categorias, s.categoria) : etiquetaCategoria(s.categoria)}</span>}
+        {s.origen && <span data-seg-automatica title={ORIGENES[s.origen]}>{chip("Automática", { color: C.inkMuted, bg: C.paper })}</span>}
         {vencida && <span data-seg-atrasado>{chip("⏰ Seguimiento atrasado", { color: C.dangerText, bg: C.dangerLight })}</span>}
       </div>
+      {s.titulo && !sub && <div data-seg-titulo style={{ fontSize: 14, fontWeight: 700, color: C.ink, overflowWrap: "anywhere", marginBottom: 2 }}>{s.titulo}</div>}
       {sub ? <DatosSubsanacion oc={oc} sub={sub} /> : <div style={{ fontSize: 14, color: C.ink, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{s.descripcion}</div>}
       <div style={{ fontSize: 12, color: C.inkMuted, marginTop: 5, display: "flex", flexWrap: "wrap", columnGap: 10, rowGap: 2 }}>
         <span>Responsable: <b style={{ color: s.responsable_nombre ? C.ink : C.warnText }}>{s.responsable_nombre || "sin asignar"}</b></span>
@@ -224,7 +234,29 @@ function Item({ oc, s, perfiles, perfil, soloLectura, onActualizar, onEliminar }
 }
 
 // solicitud: { facturaId, n } — «Registrar subsanación» desde Facturación SII abre el formulario con la factura elegida.
+// Reabrir una acción resuelta (17/11/2026): cualquier usuario BFK, con motivo; la solución anterior queda en el historial.
+function Reabrir({ s, onActualizar }) {
+  const [abierto, setAbierto] = useState(false); const [texto, setTexto] = useState(""); const [error, setError] = useState(""); const [ocupado, setOcupado] = useState(false);
+  const enviar = async () => {
+    if (!texto.trim()) { setError("Indica por qué se reabre."); return; }
+    if (ocupado) return; setOcupado(true); setError("");
+    try { await onActualizar(s, { estado: "pendiente" }, `Reabierta: ${texto.trim()}`); setAbierto(false); setTexto(""); } catch (e) { setError(e.message || String(e)); } finally { setOcupado(false); }
+  };
+  if (!abierto) return <button data-seg-reabrir onClick={() => setAbierto(true)} style={{ ...btnS(C.warnText), marginTop: 6 }}>Reabrir</button>;
+  return (
+    <div data-seg-reabrir-form style={{ marginTop: 6 }}>
+      <textarea data-seg="motivo_reapertura" rows={2} style={{ ...iStyle, resize: "vertical" }} value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Motivo de la reapertura (obligatorio)" />
+      <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+        <button data-seg-reabrir-confirmar disabled={ocupado} onClick={enviar} style={{ ...btnP(ocupado ? C.inkFaint : C.teal), flex: 1 }}>{ocupado ? "Guardando…" : "Reabrir"}</button>
+        <button disabled={ocupado} onClick={() => { setAbierto(false); setError(""); }} style={btnS(C.inkMuted)}>Cancelar</button>
+      </div>
+      {error && <div style={{ color: C.dangerText, fontSize: 13, marginTop: 6 }}>{error}</div>}
+    </div>
+  );
+}
+
 export function SeguimientoEspecial({ oc, perfil, perfiles, soloLectura, onCrear, onActualizar, onEliminar, solicitud, onSolicitudUsada }) {
+  const ctxAcc = useContext(AccionesContext);
   const [creando, setCreando] = useState(false); const [verResueltos, setVerResueltos] = useState(false);
   const [inicial, setInicial] = useState(null);
   useEffect(() => { if (solicitud?.n) { setInicial({ facturaId: solicitud.facturaId, n: solicitud.n }); setCreando(true); if (onSolicitudUsada) onSolicitudUsada(); } }, [solicitud?.n]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -252,8 +284,9 @@ export function SeguimientoEspecial({ oc, perfil, perfiles, soloLectura, onCrear
             <div key={s.id} id={`seg-${s.id}`} data-seg-resuelto={s.id} style={{ background: C.paper, border: `1px solid ${C.border}`, borderRadius: 10, padding: "8px 11px", marginTop: 6, fontSize: 13 }}>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 5, alignItems: "center", marginBottom: 3 }}>
                 {chip("✓ Resuelto", { color: C.okText, bg: C.okLight })}
-                <span style={{ fontSize: 12, fontWeight: 600, color: C.inkMuted }}>{leerSubsanacion(s) ? "Subsanación de factura" : etiquetaCategoria(s.categoria)} · prioridad {etiquetaPrioridad(s.prioridad).toLowerCase()}</span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: C.inkMuted }}>{leerSubsanacion(s) ? "Subsanación de factura" : ctxAcc?.categorias ? etiquetaCat(ctxAcc.categorias, s.categoria) : etiquetaCategoria(s.categoria)} · prioridad {etiquetaPrioridad(s.prioridad).toLowerCase()}</span>
               </div>
+              {s.titulo && !leerSubsanacion(s) && <div style={{ fontWeight: 700, color: C.ink, overflowWrap: "anywhere" }}>{s.titulo}</div>}
               {leerSubsanacion(s) ? <DatosSubsanacion oc={oc} sub={leerSubsanacion(s)} /> : <div style={{ color: C.ink, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{s.descripcion}</div>}
               <div data-seg-solucion style={{ marginTop: 4, color: C.okText, overflowWrap: "anywhere" }}><b>Solución:</b> {s.solucion}</div>
               <div style={{ fontSize: 12, color: C.inkFaint, marginTop: 3 }}>
@@ -261,6 +294,7 @@ export function SeguimientoEspecial({ oc, perfil, perfiles, soloLectura, onCrear
                 {s.sobrecosto_estimado != null ? ` · sobrecosto estimado ${fmt.money(s.sobrecosto_estimado)} (informativo)` : ""}
               </div>
               <Bitacora s={s} />
+              {ctxAcc?.categorias && !soloLectura && onActualizar && <Reabrir s={s} onActualizar={(seg, patch, avance) => onActualizar(oc.id, seg, patch, avance)} />}
             </div>
           ))}
         </div>

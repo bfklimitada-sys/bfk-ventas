@@ -64,7 +64,7 @@ for (const [pref, movil] of [["E", false], ["M", true]]) {
   await irA(p, "notif");
   const tit = await p.locator("[data-alerta-seguimiento]").allInnerTexts();
   ok(`${pref}T04_prioridad_alta_genera_alerta`, tit.some((t) => /Seguimiento prioridad alta · Producto/.test(t) && /2001-101-SE26/.test(t)), tit);
-  ok(`${pref}T05_revision_vencida_seguimiento_atrasado`, tit.some((t) => /Seguimiento atrasado · Proveedor/.test(t)) && tit.some((t) => /Seguimiento atrasado · Postventa/.test(t) && /2003-103-SE26/.test(t)), tit);
+  ok(`${pref}T05_revision_vencida_seguimiento_atrasado`, tit.some((t) => /Seguimiento atrasado · Compras y proveedores/.test(t)) && tit.some((t) => /Seguimiento atrasado · Postventa/.test(t) && /2003-103-SE26/.test(t)), tit);
   ok(`${pref}T06_sin_alertas_duplicadas`, tit.length === 3 && tit.filter((t) => /2003-103-SE26/.test(t)).length === 1 && !tit.some((t) => /2007-107|2004-104/.test(t)), tit);
 
   // T07–T09 · Filtro en Compras: cuenta OC (no seguimientos), indicador discreto, combina con búsqueda.
@@ -93,7 +93,7 @@ for (const [pref, movil] of [["E", false], ["M", true]]) {
   const n0 = b.escr.length;
   await s.locator("[data-seg-guardar]").click(); await espera(p, 400);
   const cats = await s.locator('select[data-seg="categoria"] option').allInnerTexts();
-  ok(`${pref}T02_categorias_predefinidas`, cats.length === 10 && cats.includes("Subsanación de factura") && ["Postventa / Garantía", "Sobrecosto / Cargo adicional", "Proveedor", "Producto", "Entrega / Despacho", "Cliente", "Facturación / Cobranza", "Otro"].every((c) => cats.includes(c)), cats);
+  ok(`${pref}T02_categorias_predefinidas`, cats.length === 10 && cats.includes("Subsanación de factura") && ["Postventa, garantías y reclamos", "Sobrecosto / Cargo adicional", "Compras y proveedores", "Producto", "Entregas y despachos", "Cliente", "Facturación", "Otro"].every((c) => cats.includes(c)), cats);
   ok(`${pref}T03_validacion_categoria_y_descripcion`, /Elige la categoría/.test(await s.locator("[data-seg-errores]").innerText()) && /Describe el seguimiento/.test(await s.locator("[data-seg-errores]").innerText()) && b.escr.length === n0);
   await s.locator('select[data-seg="categoria"]').selectOption("sobrecosto");
   await s.locator('textarea[data-seg="descripcion"]').fill("Proveedor cobra despacho adicional");

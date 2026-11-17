@@ -78,6 +78,9 @@ export function crearBase(inicial, { mp = {}, borrado = {} } = {}) {
     return r;
   };
   const leer = (tabla, params) => {
+    // Centro de Acciones (17/11/2026): sin el catálogo en la base simulada, responde como PostgREST ante una tabla inexistente
+    // (la app trabaja como antes de la migración). docs/pruebas-acciones/mock_acciones.mjs lo agrega con sus reglas.
+    if (tabla === "acciones_categorias" && !db.acciones_categorias) return { __status: 404, json: { code: "42P01", message: 'relation "public.acciones_categorias" does not exist' } };
     if (tabla === "fin_diferencias_historicas") {
       // Igual que la tabla real: una fila por campo congelado (montos con diferencia; estados con su valor registrado).
       const filas = []; let n = 0;
@@ -369,7 +372,7 @@ export async function instalarRutas(page, base, yo) {
       let cuerpo = null; try { cuerpo = JSON.parse(req.postData() || "null"); } catch {}
       if (u.pathname.includes("/rest/v1/rpc/")) { const r = base.rpc(u.pathname.split("/").pop(), cuerpo || {}, yo); return route.fulfill({ status: r.status, json: r.json }); }
       const tabla = u.pathname.split("/").pop();
-      if (m === "GET") return route.fulfill({ json: base.leer(tabla, u.searchParams) });
+      if (m === "GET") { const r = base.leer(tabla, u.searchParams); return r && r.__status ? route.fulfill({ status: r.__status, json: r.json }) : route.fulfill({ json: r }); }
       const r = base.escribir(m, tabla, u.searchParams, cuerpo, yo);
       return route.fulfill({ status: r.status, json: r.json });
     }
