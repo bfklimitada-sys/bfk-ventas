@@ -30,7 +30,7 @@ import { PanelVendedores } from "./components/panels/PanelVendedores";
 import { Modal, Toast } from "./components/ui/Basicos";
 import { PanelNotificaciones, calcularAlertas } from "./components/ui/Multiusuario";
 import { SUPABASE_URL, crearNotificacion, del, delConfirmado, genId, hdrs, ins, leerPerfil, registrarCambio, sel, selOCs, selPerfiles, supaSignOut, upd, updRol, selUrlsLinks, leerUrlsLinks, cargarCorreosNuevos } from "./lib/supabase";
-import { INTERVALO_CORREOS_MS, INTERVALO_MP_MS, componerOCs, cursorCorreos, debeRecargar, filtroIn, fotosPorOC, lineasSinUrl, mezclarCorreos, mezclarHistorial, mezclarOCs, ultimoHistorial } from "./lib/recargaParcial";
+import { INTERVALO_CORREOS_MS, INTERVALO_MP_MS, INACTIVIDAD_MS, decidirRecargaAuto, sumarMotivo, componerOCs, cursorCorreos, debeRecargar, filtroIn, fotosPorOC, lineasSinUrl, mezclarCorreos, mezclarHistorial, mezclarOCs, ultimoHistorial } from "./lib/recargaParcial";
 import { buscarOCPorCodigo, esCodigoMP, esErrorDuplicado, estadoMP, fechaOCEditable, mensajeDuplicado, normalizarCodigoOC, resultadoConsultaMP } from "./lib/ocs";
 import { cambiosProducto } from "./lib/productosOC";
 import { CLAVE_REVISION_AUTO, LIMITE_USO_DIARIO, PREFIJO_FOTO_MP, cambiosOCDesdeMP, claveFotoMP, elegirRevisionAutomatica, fotoMP, lineaVentaDesdeMP, mpCancelada, planProductosVenta, toca } from "./lib/mercadoPublico";
@@ -143,7 +143,9 @@ export default function App() {
   // ── Consumo de Supabase, fase 1 (15/11/2026) ─────────────────────────────────────────────
   // La carga completa (≈ 2,69 MB) ya no se repite al renovar la sesión, en cada regreso a la pestaña (solo si pasaron
   // 15 min) ni tras cada guardado (se releen solo las OCs afectadas). Hay un botón «Actualizar datos».
-  const ultimaCarga=useRef(0), ultimaVP=useRef(0);            // hora de la última carga completa (app y ventas privadas)
+  const ultimaCarga=useRef(0), ultimaVP=useRef(0);
+  // Fase 2 del consumo (18/11/2026): freno de recargas automáticas (lib/recargaParcial.js, decidirRecargaAuto).
+  const ultimaInteraccion=useRef(Date.now()), autoPendiente=useRef({todo:null,vp:false}), autoTimer=useRef(null), uidCargado=useRef(null), accFaltantes=useRef(new Set());            // hora de la última carga completa (app y ventas privadas)
   const cargaEnCurso=useRef(null), cargaPendiente=useRef(false), genCarga=useRef(0);
   const urlsExtensas=useRef({});                               // enlaces extensos de productos ya descargados {lineaId: url}
   const cierresInstalado=useRef(false);                        // migración de liquidaciones cerradas instalada
@@ -151,11 +153,12 @@ export default function App() {
   const [actualizadoEn,setActualizadoEn]=useState(null);
   const datosRef=useRef({}); datosRef.current={accionesSueltas,ocs,ocsArchivadas,financiadores,vendedores,ivaMensual,pagosVendedor,cierres,historialCambios,correosBfk,notificaciones,pagoFinSueltos,contactosInst,vinculosInst};
   const accionesRef=useRef({});                                // versión vigente de las funciones (para eventos registrados una vez)
-  const consumo=useRef({completas:0,parciales:0,vp:0,correos:0,perfil:0});
+  const consumo=useRef({completas:0,parciales:0,vp:0,correos:0,perfil:0,motivos:{},auto:{ya:0,esperar:0,diferir:0}});
   if(typeof window!=="undefined"){
     // Diagnóstico (solo lectura, los mismos datos que muestra la pantalla): pruebas de consumo y de equivalencia.
     window.__bfkConsumo=consumo.current;
     window.__bfkDatos=()=>({...datosRef.current});
+    window.__bfkRecargaAuto=(m)=>accionesRef.current.recargaAuto?.(m||"prueba");   // pruebas del freno (fase 2 del consumo)
   }
 
   const showToast=(msg,type="success")=>{ setToast({msg,type}); setTimeout(()=>setToast(null),3000); };
@@ -465,7 +468,7 @@ export default function App() {
       const faltanDatos=ocsActivasCarga.some(o=>esCodigoMP(o.numero_oc)&&!o.no_en_mp&&(o.sync_pendiente||!o.rut_cliente||!o.fecha_emision_mp||String(o.cliente||"").toUpperCase().includes("POR COMPLETAR")));
       if(faltanDatos){
         sincronizarPendientes(ocsActivasCarga).then(n=>{
-          if(n>0){ showToast(`${n} OC${n>1?"s":""} completada${n>1?"s":""} desde Mercado Público`); cargarTodo(); }
+          if(n>0){ showToast(`${n} OC${n>1?"s":""} completada${n>1?"s":""} desde Mercado Público`); recargaAuto("mp_completadas"); }
         }).catch(()=>{});
       } else if(!revisionAutoHecha.current){
         // Fase 4C: revisión automática y prudente del estado en Mercado Público (una vez por sesión,
@@ -477,8 +480,31 @@ export default function App() {
   };
   const ocDeComentario=(id)=>[...ocs,...ocsArchivadas].find(o=>(o.oc_comentarios||[]).some(c=>c.id===id))?.id||null;
   const ocDeReclamo=(id)=>[...ocs,...ocsArchivadas].find(o=>(o.oc_reclamos||[]).some(r=>r.id===id))?.id||null;
+  // Motivo de cada recarga completa pedida (diagnóstico: window.__bfkConsumo.motivos y, por día, localStorage «bfk_recargas»).
+  const registrarMotivo=(m)=>{
+    consumo.current.motivos[m]=(consumo.current.motivos[m]||0)+1;
+    try{ const hoy=new Date().toISOString().slice(0,10); const prev=JSON.parse(localStorage.getItem("bfk_recargas")||"null"); localStorage.setItem("bfk_recargas",JSON.stringify(sumarMotivo(prev,m,hoy))); }catch{ /* sin almacenamiento: solo en memoria */ }
+  };
+  // Recarga completa AUTOMÁTICA (no pedida por la persona): como mucho una por minuto, nunca con la pestaña oculta ni con
+  // la app sin uso por 30 min (queda pendiente y se hace UNA al volver a usarla). que: "todo" | "vp".
+  const recargaAuto=(motivo,que="todo")=>{
+    if(que==="todo"&&cargaEnCurso.current) return cargaEnCurso.current;   // ya hay una completa en curso: trae lo último
+    const d=decidirRecargaAuto({visible:document.visibilityState==="visible",ultimaInteraccion:ultimaInteraccion.current,ultimaCompleta:que==="vp"?ultimaVP.current:ultimaCarga.current});
+    consumo.current.auto[d.accion]=(consumo.current.auto[d.accion]||0)+1;
+    if(d.accion==="ya") return que==="vp"?accionesRef.current.cargarVP():accionesRef.current.cargarTodo(motivo);
+    if(que==="vp"){ autoPendiente.current.vp=true; } else { autoPendiente.current.todo=motivo; }
+    if(d.accion==="esperar"&&!autoTimer.current) autoTimer.current=setTimeout(()=>{ autoTimer.current=null; accionesRef.current.vaciarAuto(); },d.ms+50);
+    return Promise.resolve();
+  };
+  // Hace lo que quedó pendiente (una vez cada cosa), volviendo a pasar por el freno.
+  const vaciarAuto=()=>{
+    const {todo,vp}=autoPendiente.current; autoPendiente.current={todo:null,vp:false};
+    if(todo) recargaAuto(todo.endsWith("_diferida")?todo:`${todo}_diferida`,"todo");
+    if(vp) recargaAuto("vp","vp");
+  };
   // Una sola carga completa a la vez: si se pide otra mientras corre, se hace UNA más al terminar (trae lo último).
-  const cargarTodo=()=>{
+  const cargarTodo=(motivo="guardado")=>{
+    registrarMotivo(typeof motivo==="string"?motivo:"guardado");
     if(cargaEnCurso.current){ cargaPendiente.current=true; return cargaEnCurso.current; }
     const p=(async()=>{ try{ do{ cargaPendiente.current=false; await accionesRef.current.cargarTodoCompleto(); }while(cargaPendiente.current); } finally{ cargaEnCurso.current=null; } })();
     cargaEnCurso.current=p; return p;
@@ -552,7 +578,7 @@ export default function App() {
     const s=sesionRef.current; if(!s) return;
     const r=await leerPerfil(s.access_token,s.user.id); consumo.current.perfil++;
     if(r.estado==="ok"){ const ant=perfilRef.current;
-      if(!ant||ant.rol!==r.perfil.rol||ant.nombre!==r.perfil.nombre||ant.vendedor_id!==r.perfil.vendedor_id){ setPerfil(r.perfil); if(ant&&ant.rol!==r.perfil.rol) cargarTodo(); } }
+      if(!ant||ant.rol!==r.perfil.rol||ant.nombre!==r.perfil.nombre||ant.vendedor_id!==r.perfil.vendedor_id){ setPerfil(r.perfil); if(ant&&ant.rol!==r.perfil.rol) cargarTodo("cambio_rol"); } }
     else if(r.estado==="sin_perfil") await aplicarAcceso(s);   // cuenta desautorizada: sale de la aplicación (como antes)
   };
   useEffect(()=>{
@@ -560,13 +586,20 @@ export default function App() {
     if(autorizado&&tok&&tokenPrevio.current&&tokenPrevio.current!==tok&&uidPrevio.current===uid) verificarPermisos();
     tokenPrevio.current=tok; uidPrevio.current=uid;
   },[autorizado,session?.access_token]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(()=>{ if(autorizado) cargarTodo(); },[autorizado,session?.user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Ingreso: carga completa. Si la MISMA cuenta vuelve a quedar autorizada con los datos ya cargados (p. ej. tras una
+  // renovación de sesión o una pérdida de conexión), es automática: pasa por el freno (antes recargaba todo cada vez).
+  useEffect(()=>{
+    if(!autorizado) return;
+    const uid=session?.user?.id;
+    if(ultimaCarga.current&&uidCargado.current===uid) recargaAuto("reautorizacion"); else cargarTodo("ingreso");
+    uidCargado.current=uid;
+  },[autorizado,session?.user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   // Ventas privadas: carga independiente (si falla, Mercado Público sigue igual).
   const cargarVP=async()=>{
     const t=sesionRef.current?.access_token; if(!t||!perfilRef.current) return;
     try{ const r=await cargarVentasPrivadas(t); setVp(r); ultimaVP.current=Date.now(); consumo.current.vp++; }catch(e){ showToast(`Ventas privadas: ${e.message}`,"error"); }
   };
-  useEffect(()=>{ if(autorizado) cargarVP(); },[autorizado,session?.user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(()=>{ if(!autorizado) return; if(ultimaVP.current&&uidCargado.current===session?.user?.id) recargaAuto("vp","vp"); else cargarVP(); },[autorizado,session?.user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const abrirVP=(t,id)=>{ setMenuMas(false); setVpFoco({tab:t,id}); setTab(t); };
   // Correos de BFK: cada 5 minutos, con la app visible, se piden SOLO los nuevos o gestionados desde lo último que se tiene
   // (antes se volvían a bajar los últimos 30 días completos). La sincronización con Gmail corre aparte, cada hora.
@@ -588,8 +621,12 @@ export default function App() {
     const handleVisible=()=>{
       if(document.visibilityState!=="visible") return;
       // Antes de 15 min no se recarga, pero SÍ se confirma el perfil (≈ 0,3 kB): una cuenta desautorizada sale al volver (como antes).
-      if(debeRecargar(ultimaCarga.current)) accionesRef.current.cargarTodo(); else { accionesRef.current.verificarPermisos(); accionesRef.current.sincronizarAcciones?.(); }
-      if(debeRecargar(ultimaVP.current)) accionesRef.current.cargarVP();
+      // Pasados 15 min: recarga automática (con freno: si nadie usa la app, p. ej. un equipo que despierta solo, espera al
+      // primer toque). El perfil se confirma SIEMPRE al volver (una cuenta desautorizada sale como antes).
+      accionesRef.current.verificarPermisos();
+      if(autoPendiente.current.todo||autoPendiente.current.vp) accionesRef.current.vaciarAuto();
+      if(debeRecargar(ultimaCarga.current)) accionesRef.current.recargaAuto("regreso"); else accionesRef.current.sincronizarAcciones?.();
+      if(debeRecargar(ultimaVP.current)) accionesRef.current.recargaAuto("vp","vp");
     };
     document.addEventListener("visibilitychange",handleVisible);
     return()=>document.removeEventListener("visibilitychange",handleVisible);
@@ -601,7 +638,7 @@ export default function App() {
     if(cargaEnCurso.current||!perfilRef.current) return;
     const activas=(datosRef.current.ocs||[]).filter(o=>!o.archivada); if(!activas.length) return;
     const faltan=activas.some(o=>esCodigoMP(o.numero_oc)&&!o.no_en_mp&&(o.sync_pendiente||!o.rut_cliente||!o.fecha_emision_mp||String(o.cliente||"").toUpperCase().includes("POR COMPLETAR")));
-    if(faltan) sincronizarPendientes(activas).then(n=>{ if(n>0){ showToast(`${n} OC${n>1?"s":""} completada${n>1?"s":""} desde Mercado Público`); cargarTodo(); } }).catch(()=>{});
+    if(faltan) sincronizarPendientes(activas).then(n=>{ if(n>0){ showToast(`${n} OC${n>1?"s":""} completada${n>1?"s":""} desde Mercado Público`); recargaAuto("mp_completadas"); } }).catch(()=>{});
     else revisionAutomaticaMP(activas,Object.fromEntries(activas.filter(o=>o.mp).map(o=>[o.id,o.mp]))).catch(()=>{});
   };
   useEffect(()=>{
@@ -610,14 +647,22 @@ export default function App() {
     return()=>clearInterval(id);
   },[autorizado,session?.user?.id]);
   // «Actualizar datos» (menú): recarga completa a pedido.
-  const actualizarAhora=async()=>{ setMenuMas(false); await Promise.all([cargarTodo(),cargarVP()]); showToast("Datos actualizados"); };
-  accionesRef.current={cargarTodo,cargarTodoCompleto,cargarVP,correosNuevos,verificarPermisos,tareaMP};
+  const actualizarAhora=async()=>{ setMenuMas(false); await Promise.all([cargarTodo("actualizar"),cargarVP()]); showToast("Datos actualizados"); };
+  accionesRef.current={cargarTodo,cargarTodoCompleto,cargarVP,correosNuevos,verificarPermisos,tareaMP,recargaAuto,vaciarAuto};
+  // Uso real de la app (toque, clic, tecla, rueda): marca la actividad y hace lo que quedó pendiente por el freno.
+  useEffect(()=>{
+    if(!autorizado) return;
+    const alUsar=()=>{ const antes=ultimaInteraccion.current; ultimaInteraccion.current=Date.now();
+      if((autoPendiente.current.todo||autoPendiente.current.vp)&&Date.now()-antes>1000) accionesRef.current.vaciarAuto(); };
+    const ev=["pointerdown","keydown","touchstart","wheel"]; ev.forEach(e=>window.addEventListener(e,alUsar,{passive:true,capture:true}));
+    return()=>ev.forEach(e=>window.removeEventListener(e,alUsar,{capture:true}));
+  },[autorizado]);
   // Centro de Acciones: con la app visible, cada 2 minutos se piden SOLO las acciones y registros de historial nuevos o
   // modificados desde lo último que se tiene (normalmente una respuesta vacía). Así lo que registra otro usuario aparece
   // sin recargar todo.
   useEffect(()=>{
     if(!autorizado) return;
-    const id=setInterval(()=>{ if(document.visibilityState==="visible") accionesRef.current.sincronizarAcciones?.(); },120000);
+    const id=setInterval(()=>{ if(document.visibilityState==="visible"&&Date.now()-ultimaInteraccion.current<=INACTIVIDAD_MS) accionesRef.current.sincronizarAcciones?.(); },120000);   // sin uso por 30 min: no se consulta (fase 2 del consumo)
     return()=>clearInterval(id);
   },[autorizado,session?.user?.id]);
 
@@ -709,7 +754,10 @@ export default function App() {
       if(cargaEnCurso.current) return false;
       // Una acción nueva de una OC que esta sesión no tiene cargada (OC recién creada por otro usuario): carga completa.
       const ids=new Set(d.ocs.map(o=>o.id)); const arch=new Set(d.ocsArchivadas.map(o=>o.id));
-      if((filas||[]).some(f=>f.oc_id&&!ids.has(f.oc_id)&&!arch.has(f.oc_id))){ cargarTodo(); return true; }
+      // (Fase 2 del consumo: una vez por OC faltante en la sesión, y con freno; una OC que esta cuenta no puede ver no
+      // provoca una recarga completa cada 2 minutos.)
+      const nuevas=(filas||[]).filter(f=>f.oc_id&&!ids.has(f.oc_id)&&!arch.has(f.oc_id)&&!accFaltantes.current.has(f.oc_id));
+      if(nuevas.length){ nuevas.forEach(f=>accFaltantes.current.add(f.oc_id)); recargaAuto("acciones_oc_nueva"); return true; }
       setOcs(prev=>{ const r=mezclarAcciones({ocs:prev,sueltas:[]},filas,bit); return r.cambio?r.ocs:prev; });
       setAccionesSueltas(prev=>{ const r=mezclarAcciones({ocs:[],sueltas:prev},filas,bit); return r.cambio?r.sueltas:prev; });
       return true;
@@ -1025,7 +1073,7 @@ export default function App() {
       setCanceladasEnMP(lista); guardarCacheMP("canceladas",lista);
       showToast(`${canceladasNuevas.length} OC cancelada${canceladasNuevas.length>1?"s":""} en Mercado Público: revísala${canceladasNuevas.length>1?"s":""} en el Panel`,"error");
     }
-    await cargarTodo();
+    await recargaAuto("mp_revision");
   };
 
   const sincronizarPendientes=async(listaOcs,forzar=false)=>{

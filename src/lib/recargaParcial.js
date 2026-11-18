@@ -96,3 +96,26 @@ export function mezclarCorreos(actual, nuevas, desdeIso, limite = 500) {
   return [...m.values()].filter((c) => c.estado === "pendiente" || String(c.fecha || "") >= String(desdeIso || ""))
     .sort((a, b) => String(b.fecha || "").localeCompare(String(a.fecha || ""))).slice(0, limite);
 }
+
+// ─── Fase 2 del consumo (18/11/2026): freno de las recargas completas AUTOMÁTICAS ───────────────────────────────
+// Las automáticas son las que no pide la persona: regreso a la pestaña, reautorización de la misma cuenta, Mercado
+// Público (OCs completadas, revisión automática) y Centro de Acciones (acción de una OC que la sesión no tiene).
+// Las que siguen a un guardado, el ingreso y «Actualizar datos» NO pasan por aquí: se hacen al tiro, como siempre.
+export const ESPERA_MIN_AUTO_MS = 60 * 1000;          // como mucho una automática por minuto (las demás se juntan en una)
+export const INACTIVIDAD_MS = 30 * 60 * 1000;         // sin tocar la app 30 min: no se recarga sola; se hace al volver a usarla
+
+// { accion: "ya" } | { accion: "esperar", ms } | { accion: "diferir" } (al próximo uso de la app)
+export function decidirRecargaAuto({ ahora = Date.now(), visible = true, ultimaInteraccion = 0, ultimaCompleta = 0 } = {}) {
+  if (!visible) return { accion: "diferir" };
+  if (ahora - ultimaInteraccion > INACTIVIDAD_MS) return { accion: "diferir" };
+  const desde = ahora - ultimaCompleta;
+  if (ultimaCompleta && desde < ESPERA_MIN_AUTO_MS) return { accion: "esperar", ms: ESPERA_MIN_AUTO_MS - desde };
+  return { accion: "ya" };
+}
+
+// Registro del motivo de cada recarga completa (sin datos personales): totales del día en este navegador.
+export function sumarMotivo(registro, motivo, hoy) {
+  const r = registro && registro.fecha === hoy ? { fecha: hoy, motivos: { ...registro.motivos } } : { fecha: hoy, motivos: {} };
+  r.motivos[motivo] = (r.motivos[motivo] || 0) + 1;
+  return r;
+}

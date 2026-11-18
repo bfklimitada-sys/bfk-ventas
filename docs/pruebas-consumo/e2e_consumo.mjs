@@ -17,6 +17,7 @@ const claveInstitucion = (rut) => String(rut || "").replace(/[^0-9kK]/g, "").toU
 // comprueba que NO consulta correos_bfk en ningún momento (ingreso, actualizar, cada 5 min, guardados) en vez de la
 // consulta incremental. Todo lo demás se comprueba igual.
 const RETIRO = process.env.RETIRO_CORREOS === "1";
+const FASE2 = process.env.FASE2 === "1";   // versión «después» con el freno de recargas automáticas (18/11/2026)
 const VERSIONES = { antes: process.argv[2] || "http://127.0.0.1:4401/", despues: process.argv[3] || "http://127.0.0.1:4402/" };
 const browser = await chromium.launch({ executablePath: CHROME, args: ["--no-sandbox"] });
 let nOk = 0; const F = [];
@@ -135,6 +136,7 @@ const MED = {}; const FIN = {};
 for (const [ver, url] of Object.entries(VERSIONES)) {
   console.log(`\n=== Versión ${ver} (${url}) ===`);
   const b = crearBaseMedida(datosProduccion());
+  if (FASE2 && ver === "despues") { b.db.acciones_categorias = b.db.acciones_categorias || [{ id: "otro", nombre: "Otro", orden: 1, activa: true }]; b.db.oc_seguimientos = b.db.oc_seguimientos || []; }
   const { p, ctx, R } = await abrirApp(url, b);
   const opt = ver === "despues";
   const estado = () => p.evaluate(() => window.__bfkDatos ? window.__bfkDatos() : null);
@@ -155,7 +157,8 @@ for (const [ver, url] of Object.entries(VERSIONES)) {
   b.db.correos_bfk.push({ id: 99999, message_id: "<nuevo@bfk>", buzon: "INBOX", remitente_nombre: "Nuevo", remitente_correo: "n@cliente.cl", asunto: "Correo nuevo de prueba", fecha: new Date(Date.now() + 17 * 60000).toISOString(), resumen: "nuevo", categoria: "consulta", prioridad: 2, oc_id: "oc2", asociacion: "oc", estado: "pendiente", gestionado_en: null, sincronizado_en: new Date(Date.now() + 17 * 60000).toISOString() });
   await fase("correos_5min", async () => { await p.clock.fastForward("05:01"); });
   if (opt && !RETIRO) ok(`[${ver}] correos: el nuevo llega por la consulta incremental`, (await estado()).correosBfk.some((c) => c.id === 99999));
-  if (opt && RETIRO) ok(`[${ver}] correos retirados: a los 5 min no se consulta nada (ni correos ni otra tabla)`, R.log.filter((x) => x.fase === "correos_5min").length === 0, R.log.filter((x) => x.fase === "correos_5min").map((x) => x.ruta));
+  if (opt && RETIRO && FASE2) ok(`[${ver}] correos retirados: a los 5 min no se consulta correos_bfk (sí el Centro de Acciones y lo que dejó pendiente el freno)`, !R.log.some((x) => x.fase === "correos_5min" && /correos?_bfk/.test(x.ruta)));
+  if (opt && RETIRO && !FASE2) ok(`[${ver}] correos retirados: a los 5 min no se consulta nada (ni correos ni otra tabla)`, R.log.filter((x) => x.fase === "correos_5min").length === 0, R.log.filter((x) => x.fase === "correos_5min").map((x) => x.ruta));
   // Mercado Público según su programación (cada 30 min con la app visible), sin depender de una recarga completa
   await fase("mp_30min", async () => { await p.clock.fastForward("30:30"); }, 1500);
   if (opt) { const l = R.log.filter((x) => x.fase === "mp_30min");
@@ -226,6 +229,35 @@ for (const [ver, url] of Object.entries(VERSIONES)) {
   MED[ver] = Object.fromEntries(["apertura", "renovacion_x3", "pestana_x10", "pestana_tras_16min", "correos_5min", "mp_30min", "abrir_oc", "abrir_oc_enlace_extenso", "guardar_pago_financiador", "refacturacion", "cambio_vendedor", "guardar_pago_cliente"].map((f) => [f, resumen(R, f)]));
   if (opt && RETIRO) ok(`[${ver}] correos retirados: ninguna solicitud a correos_bfk ni correo_bfk_marcar en toda la sesión`, !R.log.some((x) => /correos?_bfk/.test(x.ruta)), R.log.filter((x) => /correos?_bfk/.test(x.ruta)).map((x) => x.fase + ":" + x.ruta));
   if (!opt || !RETIRO) console.log(`  [${ver}] solicitudes a correos_bfk en la sesión: ${R.log.filter((x) => /correos?_bfk/.test(x.ruta)).length} (${(R.log.filter((x) => /correos?_bfk/.test(x.ruta)).reduce((a, x) => a + x.bytes, 0) / 1024).toFixed(1)} KB)`);
+  if (opt && FASE2) {
+    // ── Fase 2 del consumo: freno de las recargas completas automáticas ──
+    const completas = (f) => R.log.filter((x) => x.fase === f && x.metodo === "GET" && x.ruta === "ordenes_compra_v2" && !x.parcial).length;
+    const toque = async () => { await p.mouse.click(5, 300); await espera(p, 300); };
+    // 1) Equipo que «despierta» de madrugada (pestaña visible otra vez, nadie la toca): no recarga sola…
+    await fase("madrugada", async () => { await p.evaluate(() => window.__vis("hidden")); await p.clock.fastForward("02:00:00"); await p.evaluate(() => window.__vis("visible")); await espera(p, 1500); await p.clock.fastForward("30:30"); });
+    ok(`[${ver}] fase 2: equipo que despierta sin uso (2 h oculta + 30 min visible) no hace recargas completas`, completas("madrugada") === 0, completas("madrugada"));
+    ok(`[${ver}] fase 2: …pero sí confirma el perfil al volver (una cuenta desautorizada sale igual)`, R.log.some((x) => x.fase === "madrugada" && x.ruta === "perfiles"));
+    // …y al primer toque hace UNA (lo pendiente), no varias
+    await fase("primer_toque", async () => { await toque(); });
+    ok(`[${ver}] fase 2: al primer toque hace una sola recarga completa`, completas("primer_toque") === 1, completas("primer_toque"));
+    // 2) Ráfaga de 10 pedidos automáticos seguidos: una ahora como mucho y una al minuto
+    await fase("rafaga_auto", async () => { await toque(); for (let i = 0; i < 10; i++) await p.evaluate(() => window.__bfkRecargaAuto("prueba")); await espera(p, 1500); await p.clock.fastForward("01:05"); await espera(p, 1500); });
+    ok(`[${ver}] fase 2: 10 pedidos automáticos seguidos → como mucho 1 recarga completa (las demás se juntan en una al minuto)`, completas("rafaga_auto") <= 1, completas("rafaga_auto"));
+    // 3) Un guardado sigue recargando al tiro (no pasa por el freno): «Actualizar datos» inmediatamente después
+    await fase("actualizar_tras_rafaga", async () => { await p.locator('aside [data-nav="actualizar"]').click(); });
+    ok(`[${ver}] fase 2: «Actualizar datos» no pasa por el freno`, completas("actualizar_tras_rafaga") === 1, completas("actualizar_tras_rafaga"));
+    // 4) Centro de Acciones: una acción de una OC que esta cuenta no tiene NO provoca una recarga cada 2 minutos
+    const accOK = await p.evaluate(() => !!window.__bfkDatos().accionesSueltas);
+    if (b.db.acciones_categorias && accOK) {
+      const ahora = new Date(await p.evaluate(() => Date.now())).toISOString();
+      b.db.oc_seguimientos.push({ id: "seg_fantasma", oc_id: "oc_que_no_veo", categoria: "otro", descripcion: "acción de una OC ajena", estado: "abierta", creado_en: ahora, actualizado_en: ahora });
+      await fase("acciones_oc_ajena", async () => { for (let i = 0; i < 5; i++) { await toque(); await p.clock.fastForward("02:05"); await espera(p, 1200); } });
+      ok(`[${ver}] fase 2: acción de una OC que la sesión no tiene → como mucho 1 recarga en 10 min (antes, una cada 2 min)`, completas("acciones_oc_ajena") <= 1, completas("acciones_oc_ajena"));
+    } else console.log("  (acciones: la base simulada no tiene el Centro de Acciones; se omite esa comprobación)");
+    console.log(`  motivos registrados: ${JSON.stringify(await p.evaluate(() => window.__bfkConsumo.motivos))} · freno: ${JSON.stringify(await p.evaluate(() => window.__bfkConsumo.auto))}`);
+    ok(`[${ver}] fase 2: el motivo de cada recarga queda registrado (ingreso, actualizar, diferidas…)`, await p.evaluate(() => { const m = window.__bfkConsumo.motivos || {}; return m.ingreso >= 1 && m.actualizar >= 1 && Object.keys(m).some((k) => k.endsWith("_diferida")); }));
+    ok(`[${ver}] fase 2: totales del día guardados en el navegador`, await p.evaluate(() => { try { const r = JSON.parse(localStorage.getItem("bfk_recargas")); return !!r && r.fecha && Object.keys(r.motivos).length > 0; } catch { return false; } }));
+  }
   ok(`[${ver}] sin errores de página`, R.errs.length === 0, R.errs);
   await ctx.close();
 }
@@ -241,7 +273,7 @@ ok("Cambio de pestaña (<15 min): ya no descarga la base (solo confirma el perfi
 ok("Cambio de pestaña tras 15 min: una carga completa", D.pestana_tras_16min.cargasCompletas === 1, D.pestana_tras_16min);
 ok("Guardados: sin carga completa (recarga parcial)", ["guardar_pago_financiador", "refacturacion", "cambio_vendedor", "guardar_pago_cliente"].every((f) => D[f].cargasCompletas === 0), D);
 ok("Carga completa más liviana (sin enlace extenso ni contactos)", D.apertura.bytes < A.apertura.bytes * 0.85, [A.apertura.bytes, D.apertura.bytes]);
-ok("Correos cada 5 min: mucho menos que la lista completa", D.correos_5min.bytes < A.correos_5min.bytes / 10, [A.correos_5min, D.correos_5min]);
+if (!(RETIRO && FASE2)) ok("Correos cada 5 min: mucho menos que la lista completa", D.correos_5min.bytes < A.correos_5min.bytes / 10, [A.correos_5min, D.correos_5min]);
 const tabla = Object.keys(D).map((f) => ({ escenario: f, antes: A[f] || null, despues: D[f] }));
 console.log("\nEscenario | solicitudes antes→después | cargas completas | KB antes→después | KB gzip antes→después | ms (lecturas) antes→después | ms recarga tras guardar");
 for (const r of tabla) { const a = r.antes || { solicitudes: 0, bytes: 0, gz: 0, ms: 0, cargasCompletas: 0 }, d = r.despues; console.log(`${r.escenario} | ${a.solicitudes}→${d.solicitudes} | ${a.cargasCompletas}→${d.cargasCompletas} | ${(a.bytes / 1024).toFixed(1)}→${(d.bytes / 1024).toFixed(1)} | ${(a.gz / 1024).toFixed(1)}→${(d.gz / 1024).toFixed(1)} | ${a.ms}→${d.ms} | ${a.msRecarga ?? "—"}→${d.msRecarga ?? "—"}`); }

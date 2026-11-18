@@ -146,7 +146,7 @@ if (OPT) {
   ok(`[${VERSION}] regreso a la pestaña: solo confirma el perfil`, cuenta("pestana").every((x) => x.ruta === "perfiles"), cuenta("pestana").map((x) => x.ruta));
   const c = cuenta("correos").filter((x) => x.ruta === "correos_bfk"); OUT.consultasNuevas.correos_incremental = c.map((x) => x.status);
   if (!RETIRO) ok(`[${VERSION}] correos incrementales (or/gt) responden 200`, c.length > 0 && c.every((x) => x.status === 200 && /sincronizado_en\.gt/.test(x.q)), c);
-  else ok(`[${VERSION}] correos retirados: a los 5 min no se consulta nada`, cuenta("correos").length === 0, cuenta("correos").map((x) => x.ruta));
+  else ok(`[${VERSION}] correos retirados: a los 5 min no se consulta correos_bfk`, !cuenta("correos").some((x) => /correos?_bfk/.test(x.ruta)), cuenta("correos").map((x) => x.ruta));
 }
 
 // ── 3. Operaciones reales sobre OCs elegidas en la copia ──

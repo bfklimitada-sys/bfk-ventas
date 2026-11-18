@@ -1,6 +1,6 @@
 // Consumo de Supabase, fase 1 (15/11/2026) — funciones puras de la recarga parcial (lib/recargaParcial.js).
 // Uso: node docs/pruebas-consumo/recarga.test.mjs
-import { componerOCs, mezclarOCs, mezclarHistorial, mezclarCorreos, cursorCorreos, filtroIn, debeRecargar, fotosPorOC, lineasSinUrl, ultimoHistorial, INTERVALO_RECARGA_MS } from "../../src/lib/recargaParcial.js";
+import { componerOCs, mezclarOCs, mezclarHistorial, mezclarCorreos, cursorCorreos, filtroIn, debeRecargar, fotosPorOC, lineasSinUrl, ultimoHistorial, INTERVALO_RECARGA_MS, decidirRecargaAuto, sumarMotivo, ESPERA_MIN_AUTO_MS, INACTIVIDAD_MS } from "../../src/lib/recargaParcial.js";
 let n = 0; const F = [];
 const ok = (t, c, d = "") => { if (c) { n++; console.log("OK   ", t); } else { F.push(t); console.log("FALLA", t, typeof d === "string" ? d : JSON.stringify(d).slice(0, 300)); } };
 const igual = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -62,4 +62,17 @@ ok("mezclarCorreos: gestionado dentro de 30 días se actualiza y queda", mezclar
 // filtros e intervalo
 ok("filtroIn: valores entre comillas y codificados; vacío → null", filtroIn("id", ["a", "b,c", "a"]) === '&id=in.("a","b%2Cc")' && filtroIn("id", [null, ""]) === null);
 ok("debeRecargar: nunca cargado → sí; 14 min → no; 15 min → sí", debeRecargar(0, 1000) && !debeRecargar(1000, 1000 + 14 * 60000) && debeRecargar(1000, 1000 + INTERVALO_RECARGA_MS));
+
+// fase 2: freno de recargas automáticas
+const T = 10_000_000;
+ok("freno: pestaña oculta → diferir", decidirRecargaAuto({ ahora: T, visible: false, ultimaInteraccion: T, ultimaCompleta: 0 }).accion === "diferir");
+ok("freno: 31 min sin tocar la app → diferir (equipo que despierta solo)", decidirRecargaAuto({ ahora: T, visible: true, ultimaInteraccion: T - 31 * 60000, ultimaCompleta: 0 }).accion === "diferir");
+ok("freno: 29 min sin tocar → se permite", decidirRecargaAuto({ ahora: T, visible: true, ultimaInteraccion: T - 29 * 60000, ultimaCompleta: T - 20 * 60000 }).accion === "ya");
+const e = decidirRecargaAuto({ ahora: T, visible: true, ultimaInteraccion: T, ultimaCompleta: T - 20000 });
+ok("freno: otra completa hace 20 s → esperar los 40 s que faltan", e.accion === "esperar" && e.ms === ESPERA_MIN_AUTO_MS - 20000);
+ok("freno: nunca cargado → ya", decidirRecargaAuto({ ahora: T, visible: true, ultimaInteraccion: T, ultimaCompleta: 0 }).accion === "ya");
+ok("freno: exactamente 60 s → ya", decidirRecargaAuto({ ahora: T, visible: true, ultimaInteraccion: T, ultimaCompleta: T - ESPERA_MIN_AUTO_MS }).accion === "ya");
+ok("freno: inactividad = 30 min", INACTIVIDAD_MS === 30 * 60000);
+const r1 = sumarMotivo(null, "ingreso", "2026-11-18"), r2 = sumarMotivo(r1, "ingreso", "2026-11-18"), r3 = sumarMotivo(r2, "regreso", "2026-11-19");
+ok("motivos: suma por día y reinicia al cambiar el día", r2.motivos.ingreso === 2 && igual(r3, { fecha: "2026-11-19", motivos: { regreso: 1 } }) && r1.motivos.ingreso === 1);
 console.log(`\n${n} OK, ${F.length} fallas`); process.exit(F.length ? 1 : 0);
