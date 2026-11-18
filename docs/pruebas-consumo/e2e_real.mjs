@@ -143,7 +143,8 @@ const cuenta = (f) => A.R.log.filter((x) => x.fase === f);
 OUT.consumo.renovacion = cuenta("renovacion").length; OUT.consumo.pestana = cuenta("pestana").length;
 if (OPT) {
   ok(`[${VERSION}] renovación: solo confirma el perfil (sin carga completa)`, cuenta("renovacion").every((x) => x.ruta === "perfiles") && cuenta("renovacion").length > 0, cuenta("renovacion").map((x) => x.ruta));
-  ok(`[${VERSION}] regreso a la pestaña: solo confirma el perfil`, cuenta("pestana").every((x) => x.ruta === "perfiles"), cuenta("pestana").map((x) => x.ruta));
+  // Desde el Centro de Acciones (17/11/2026) el regreso también pide solo las acciones nuevas (oc_seguimientos e historial).
+  ok(`[${VERSION}] regreso a la pestaña: solo confirma el perfil (y lo nuevo del Centro de Acciones), sin recarga completa`, cuenta("pestana").some((x) => x.ruta === "perfiles") && cuenta("pestana").every((x) => ["perfiles", "oc_seguimientos", "historial_cambios"].includes(x.ruta)), cuenta("pestana").map((x) => x.ruta));
   const c = cuenta("correos").filter((x) => x.ruta === "correos_bfk"); OUT.consultasNuevas.correos_incremental = c.map((x) => x.status);
   if (!RETIRO) ok(`[${VERSION}] correos incrementales (or/gt) responden 200`, c.length > 0 && c.every((x) => x.status === 200 && /sincronizado_en\.gt/.test(x.q)), c);
   else ok(`[${VERSION}] correos retirados: a los 5 min no se consulta correos_bfk`, !cuenta("correos").some((x) => /correos?_bfk/.test(x.ruta)), cuenta("correos").map((x) => x.ruta));
