@@ -468,7 +468,7 @@ export default function App() {
       const faltanDatos=ocsActivasCarga.some(o=>esCodigoMP(o.numero_oc)&&!o.no_en_mp&&(o.sync_pendiente||!o.rut_cliente||!o.fecha_emision_mp||String(o.cliente||"").toUpperCase().includes("POR COMPLETAR")));
       if(faltanDatos){
         sincronizarPendientes(ocsActivasCarga).then(n=>{
-          if(n>0){ showToast(`${n} OC${n>1?"s":""} completada${n>1?"s":""} desde Mercado Público`); recargaAuto("mp_completadas"); }
+          if(n>0){ showToast(`${n} OC${n>1?"s":""} completada${n>1?"s":""} desde Mercado Público`); cargarTodo("mp_completadas"); }
         }).catch(()=>{});
       } else if(!revisionAutoHecha.current){
         // Fase 4C: revisión automática y prudente del estado en Mercado Público (una vez por sesión,
@@ -638,7 +638,7 @@ export default function App() {
     if(cargaEnCurso.current||!perfilRef.current) return;
     const activas=(datosRef.current.ocs||[]).filter(o=>!o.archivada); if(!activas.length) return;
     const faltan=activas.some(o=>esCodigoMP(o.numero_oc)&&!o.no_en_mp&&(o.sync_pendiente||!o.rut_cliente||!o.fecha_emision_mp||String(o.cliente||"").toUpperCase().includes("POR COMPLETAR")));
-    if(faltan) sincronizarPendientes(activas).then(n=>{ if(n>0){ showToast(`${n} OC${n>1?"s":""} completada${n>1?"s":""} desde Mercado Público`); recargaAuto("mp_completadas"); } }).catch(()=>{});
+    if(faltan) sincronizarPendientes(activas).then(n=>{ if(n>0){ showToast(`${n} OC${n>1?"s":""} completada${n>1?"s":""} desde Mercado Público`); cargarTodo("mp_completadas"); } }).catch(()=>{});
     else revisionAutomaticaMP(activas,Object.fromEntries(activas.filter(o=>o.mp).map(o=>[o.id,o.mp]))).catch(()=>{});
   };
   useEffect(()=>{
@@ -1073,7 +1073,7 @@ export default function App() {
       setCanceladasEnMP(lista); guardarCacheMP("canceladas",lista);
       showToast(`${canceladasNuevas.length} OC cancelada${canceladasNuevas.length>1?"s":""} en Mercado Público: revísala${canceladasNuevas.length>1?"s":""} en el Panel`,"error");
     }
-    await recargaAuto("mp_revision");
+    await cargarTodo("mp_revision");
   };
 
   const sincronizarPendientes=async(listaOcs,forzar=false)=>{
