@@ -34,17 +34,18 @@ const q = encodeURIComponent;
 // Devuelve {instalado:false} si la migración aún no está aplicada (las pantallas lo informan y no guardan nada).
 export async function cargarVentasPrivadas(t) {
   try {
-    const [config, clientes, cotizaciones, ventas, margenes] = await Promise.all([
+    const [config, clientes, cotizaciones, ventas, margenes, reembolsos] = await Promise.all([
       leer(t, "vp_configuracion?select=clave,valor,motivo,actualizado_en"),
       leer(t, "vp_clientes_vista?select=*&order=razon_social"),
       leer(t, "vp_cotizaciones_vista?select=*&order=creado_en.desc&limit=2000"),
       leer(t, "vp_ventas_vista?select=*&order=creado_en.desc&limit=2000"),
       leer(t, "vp_margen_ventas?select=*"),
+      leerReembolsos(t),   // 24/11/2026: compras anuladas con reembolso (caja y cartola); [] sin la migración
     ]);
     const cfg = Object.fromEntries((config || []).map((c) => [c.clave, c.valor]));
     const fin = await cargarFinanciamientoVendedor(t, cotizaciones || [], ventas || []);
     return { instalado: true, empresa: cfg.empresa || {}, documentosHabilitados: cfg.documentos_habilitados === true, config: config || [],
-      clientes: clientes || [], cotizaciones: fin.cotizaciones, ventas: fin.ventas, margenes: margenes || [],
+      clientes: clientes || [], cotizaciones: fin.cotizaciones, ventas: fin.ventas, margenes: margenes || [], reembolsos: reembolsos || [],
       finInstalado: fin.instalado, vendedores: fin.vendedores, financiadores: fin.financiadores, finResumen: fin.resumen, finAportantes: fin.aportantes };
   } catch (e) {
     if (e.noInstalado) return { instalado: false, clientes: [], cotizaciones: [], ventas: [], margenes: [] };
@@ -228,8 +229,24 @@ export const registrarCompra = (t, p) => rpc(t, "vp_registrar_compra", { p });
 export const registrarComprasCotizacion = (t, p) => rpc(t, "vp_registrar_compras_cotizacion", { p });
 export const anular = (t, tabla, id, motivo) => rpc(t, "vp_anular", { p_tabla: tabla, p_id: id, p_motivo: motivo });
 export const anularVenta = (t, id, motivo) => rpc(t, "vp_anular_venta", { p_id: id, p_motivo: motivo });
-// Gastos ya registrados (solo lectura) para vincularlos como costo real sin duplicarlos.
-export const buscarGastos = (t, texto) => leer(t, `gastos_indirectos?select=id,fecha,monto,descripcion&order=fecha.desc&limit=30${texto ? `&descripcion=ilike.*${q(texto)}*` : ""}`);
+// Gastos ya registrados (solo lectura) para vincularlos como costo real sin duplicarlos. Un gasto anulado (24/11/2026) no se
+// ofrece: se filtra aquí (select=* funciona con y sin la columna anulado_en) y la base lo rechaza igual.
+export const buscarGastos = async (t, texto) => ((await leer(t, `gastos_indirectos?select=*&order=fecha.desc&limit=40${texto ? `&descripcion=ilike.*${q(texto)}*` : ""}`)) || [])
+  .filter((g) => !g.anulado_en).slice(0, 30).map((g) => ({ id: g.id, fecha: g.fecha, monto: g.monto, descripcion: g.descripcion }));
+
+// ── Compra anulada con reembolso del proveedor (24/11/2026; BORRADOR-2026-11-24-vp-compra-reembolso.sql) ─────────────
+// Anular una compra: con reembolso queda «pendiente» y, si venía de Gastos, la base anula ese gasto (no lo borra).
+export const anularCompra = (t, id, motivo, reembolso = false, monto = null) =>
+  rpc(t, "vp_anular_compra", { p_id: id, p_motivo: motivo, p_reembolso: !!reembolso, p_monto: reembolso && monto ? Number(monto) : null });
+// Reembolso recibido: desde la cartola (con la marca del abono) o a mano (sin marca; la marca se puede asignar después).
+export const registrarReembolso = (t, { compraId, fecha = null, monto, marca = null }) =>
+  rpc(t, "vp_registrar_reembolso", { p_compra: compraId, p_fecha: fecha, p_monto: Number(monto), p_marca: marca });
+export const deshacerReembolso = (t, compraId, motivo) => rpc(t, "vp_deshacer_reembolso", { p_compra: compraId, p_motivo: motivo });
+// Reembolsos esperados y recibidos (para la caja y la cartola). Sin la migración aplicada devuelve [] (la app sigue igual).
+export const leerReembolsos = async (t) => {
+  try { return (await leer(t, "vp_compras?select=id,venta_id,origen,gasto_id,proveedor,total,documento_tipo,anulada_en,reembolso_estado,reembolso_monto,reembolso_fecha,reembolso_marca&reembolso_estado=not.is.null&order=anulada_en.desc")) || []; }
+  catch { return []; }
+};
 
 // ── Historial de cotización ────────────────────────────────────────────────────────────────────────
 export const historialCotizacion = (t, id) => leer(t, `vp_historial?select=*&cotizacion_id=eq.${q(id)}&order=fecha.desc,id.desc&limit=300`);

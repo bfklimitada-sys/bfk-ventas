@@ -16,7 +16,7 @@ const Linea = ({ k, v, signo, fuerte, tono, nota, dato }) => (
   </div>
 );
 
-export function InformeFinanciero({ ocs, financiadores, gastos, pagosVendedor, cierres = null, ivaMensual, vendedores, pagoFinSueltos, aportes, ajustes, categorias, hoy = new Date(), onIrImpuestos }) {
+export function InformeFinanciero({ ocs, financiadores, gastos, reembolsos = [], pagosVendedor, cierres = null, ivaMensual, vendedores, pagoFinSueltos, aportes, ajustes, categorias, hoy = new Date(), onIrImpuestos }) {
   const escritorio = useEsEscritorio(); // detalles abiertos en escritorio, cerrados en el celular
   const anioA = hoy.getFullYear(), mesA = hoy.getMonth() + 1;
   const anioP = mesA === 1 ? anioA - 1 : anioA, mesP = mesA === 1 ? 12 : mesA - 1;
@@ -24,7 +24,7 @@ export function InformeFinanciero({ ocs, financiadores, gastos, pagosVendedor, c
   const datos = { ocs, financiadores, gastos, pagosVendedor, cierres, ivaMensual, vendedores, pagoFinSueltos, aportes, categorias };
   const res = useMemo(() => resultadoMes(datos, periodo.anio, periodo.mes), [ocs, gastos, pagosVendedor, cierres, ivaMensual, vendedores, categorias, periodo]);
   const f29 = useMemo(() => calcularF29({ ivaMensual, gastos, anioActual: anioA, mesActual: mesA }), [ivaMensual, gastos, anioA, mesA]);
-  const cajaInf = useMemo(() => cajaYFueraDelBanco(datos), [ocs, financiadores, gastos, pagosVendedor, pagoFinSueltos, aportes]);
+  const cajaInf = useMemo(() => cajaYFueraDelBanco({ ...datos, reembolsos }), [ocs, financiadores, gastos, pagosVendedor, pagoFinSueltos, aportes, reembolsos]);
   const fins = useMemo(() => resumenFinanciadores({ ocs, financiadores, pagoFinSueltos, ajustes }), [ocs, financiadores, pagoFinSueltos, ajustes]);
   const com = useMemo(() => comisionesYApoyo({ pagosVendedor, gastos, vendedores }), [pagosVendedor, gastos, vendedores]);
   const T = cajaInf.porTipo, t = (k) => T[k]?.monto || 0;
@@ -70,6 +70,7 @@ export function InformeFinanciero({ ocs, financiadores, gastos, pagosVendedor, c
         <Linea dato="caja_propios" signo="−" k="Compras con fondos propios (Cuenta BFK)" v={-t("compra_fondos_propios")} />
         <Linea dato="caja_vendedores" signo="−" k="Pagos a vendedores (comisión + apoyo en gestión)" v={-t("pago_vendedor")} />
         <Linea dato="caja_gastos" signo="−" k="Gastos (incluye impuestos pagados)" v={-t("gasto")} />
+        {t("reembolso") > 0 && <Linea dato="caja_reembolsos" signo="+" k="Reembolsos de compras anuladas" v={t("reembolso")} nota="Devolución del proveedor: no es ingreso" />}
         <Linea dato="caja_total" fuerte k="= Caja registrada BFK" v={cajaInf.caja} />
         <div style={{ fontWeight: 700, fontSize: 13, margin: "8px 0 4px" }}>Registrado fuera de BancoEstado (no suma a la caja)</div>
         <Linea dato="fuera_cobros" k={`Cobros fuera del banco y retenciones (${fuera.cobrosFueraBanco.n})`} v={fuera.cobrosFueraBanco.total} />

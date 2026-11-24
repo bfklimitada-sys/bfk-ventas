@@ -13,7 +13,8 @@
 import { CIERRE_CONCILIACION, TABLA_REGISTRO, destinatarioDe, esPagoProveedores } from "./conciliacion.js";
 import { calzarAbonos } from "./cobranza.js";
 
-export const TIPO_REGISTRO = { cobro: "Cobro", pago_financiador: "Devolución a financiador", pago_vendedor: "Pago a vendedor", gasto: "Gasto", retiro_capital: "Retiro de capital", aporte_capital: "Aporte de capital", compra: "Compra con fondos propios" };
+export const TIPO_REGISTRO = { cobro: "Cobro", pago_financiador: "Devolución a financiador", pago_vendedor: "Pago a vendedor", gasto: "Gasto", retiro_capital: "Retiro de capital", aporte_capital: "Aporte de capital", compra: "Compra con fondos propios",
+  reembolso: "Reembolso de compra anulada" };
 const FEMENINO = new Set(["pago_financiador", "compra"]);
 const registradoDe = (tipo) => (FEMENINO.has(tipo) ? "registrada" : "registrado");
 const pesos = (n) => "$" + Math.round(Number(n) || 0).toLocaleString("es-CL");
@@ -35,6 +36,7 @@ const MOTIVO = {
   "persona en la glosa": "el nombre de la persona aparece en el detalle del banco",
   "RUT del pagador": "el RUT del cliente aparece en el detalle del banco",
   "solo monto": "solo coincide el monto (sin otro dato que lo confirme)",
+  "proveedor del reembolso en la glosa": "el nombre del proveedor del reembolso aparece en el detalle del banco",
   "suma exacta de cobros de un mismo cliente": "la suma de cobros de un mismo cliente da exacto",
   "sin RUT ni documento": "sin RUT ni documento que lo confirme",
   "suma exacta de gastos sin persona identificada": "la suma de varios gastos da exacto",

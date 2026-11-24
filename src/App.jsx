@@ -64,7 +64,7 @@ import { AccionesContext } from "./components/acciones/contexto";
 import { idFilaCompra, idFilaDespacho, marcaPedido, filaProtegida, esEventoDePedido } from "./lib/compraCotizacion";
 import { BarraInferior, BarraLateral, MenuMas, MenuNuevo, contarAlertas, useEsEscritorio } from "./components/ui/Navegacion";
 // Ventas privadas (06/11/2026): línea VP fuera de Mercado Público (clientes, cotizaciones, órdenes de venta, EETT).
-import { cargarVentasPrivadas } from "./lib/ventasPrivadasDatos";
+import { cargarVentasPrivadas, leerReembolsos, registrarReembolso } from "./lib/ventasPrivadasDatos";
 import { alertasVP, eventosAgendaVP } from "./lib/ventasPrivadas";
 import { PanelClientes } from "./components/ventas/PanelClientes";
 import { PanelCotizacionesPrivadas } from "./components/ventas/PanelCotizacionesPrivadas";
@@ -1539,7 +1539,8 @@ export default function App() {
       sel("pagos_vendedor",t), sel("eventos_pago_financiamiento",t,"&oc_id=is.null"), sel("aportes_socios",t),
       leerDecisionesConciliacion().catch(()=>null),
     ]);
-    return {ocs:ocsD,financiadores:finD,vendedores:vendD,gastos:gastD,pagosVendedor:pagVD,pagoFinSueltos:pagoFinSueltosD,aportes:aporD,decisiones:decD||[]};
+    const reemD=await leerReembolsos(t);   // [] sin la migración del 24/11/2026
+    return {ocs:ocsD,financiadores:finD,vendedores:vendD,gastos:gastD,pagosVendedor:pagVD,pagoFinSueltos:pagoFinSueltosD,aportes:aporD,decisiones:decD||[],reembolsos:reemD||[]};
   };
 
   // Decisiones de conciliación (21/10/2026): «es este registro» / «no corresponde». Se guardan aparte con una función
@@ -1551,6 +1552,13 @@ export default function App() {
   const decidirConciliacion=async({marca,decision,tabla,ids,operacion,descripcion,silencioso})=>{
     await rpcCartola(session.access_token,"conciliacion_decidir",{p_marca:marca,p_decision:decision,p_tabla:tabla,p_ids:ids,p_operacion:operacion||null,p_descripcion:descripcion||null});
     if(!silencioso) showToast(decision==="vinculado"?"Conciliado con el registro existente (no se creó nada)":"Coincidencia descartada para este movimiento");   // el lote muestra su propio resumen
+  };
+  // Abono del proveedor = reembolso de una compra de venta privada anulada (24/11/2026): se guarda en la compra con la marca del
+  // movimiento (vp_registrar_reembolso); no crea ingresos ni toca otros registros.
+  const reembolsoDesdeCartola=async({compraId,fecha,monto,marca})=>{
+    await registrarReembolso(session.access_token,{compraId,fecha,monto,marca});
+    showToast(`Reembolso registrado · ${fmt.money(monto)} (conciliado con la cartola)`);
+    await cargarVP();
   };
   const anularDecisionConciliacion=async(id,{silencioso}={})=>{
     await rpcCartola(session.access_token,"conciliacion_anular",{p_id:id,p_motivo:"Deshecho desde la cartola"});
@@ -2333,9 +2341,9 @@ export default function App() {
       {tab==="vp_ordenes"&&!todo&&hoja("vp_ordenes",<PanelOrdenesVenta key={"vpo-"+reinicio} {...vpProps} focoId={vpFoco?.tab==="vp_ordenes"?vpFoco.id:null} onFocoUsado={()=>setVpFoco(null)} />)}
       {(tab==="financiamiento"||todo)&&hoja("financiamiento",<PanelFinanciamiento difsHistoricas={difsHistoricas} financiadores={financiadores} ocs={ocs} ajustes={ajustesSaldo} perfiles={perfiles} onAjustar={handleAjusteSaldo} aportes={aportes} onGuardarAporte={handleGuardarAporte} onEliminarAporte={perfil?.rol==="admin"?handleEliminarAporte:undefined} onAbonar={(finId)=>{setAbonoFinId(typeof finId==="string"||typeof finId==="number"?finId:null);setAccion("abono_fin");}} pagoFinSueltos={pagoFinSueltos} extraVP={<FinanciamientoVentasPrivadas vp={vp} financiadores={financiadores} onAbrirVenta={(id)=>abrirVP("vp_ordenes",id)} />} />)}
       {(tab==="gastos"||todo)&&hoja("gastos",<PanelGastos gastos={gastos} categorias={categoriasGasto} ivaMensual={ivaMensual} pagosVendedor={pagosVendedor} vendedores={vendedores} onNuevoGasto={handleNuevoGasto} onGuardarIva={handleGuardarIva} onIrImpuestos={()=>irA("impuestos")} />)}
-      {(tab==="finanzas"||todo)&&hoja("finanzas",<>{!todo&&<CanalFiltro valor={canal} onCambiar={setCanal} dato="finanzas" />}<FinanzasPorCanal canal={todo?"mp":canal} ocs={ocs} vp={vp} onIr={irA}><PanelResumenFinanzas ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} cierres={cierres} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} aportes={aportes} ajustes={ajustesSaldo} categorias={categoriasGasto} onIrImpuestos={()=>irA("impuestos")} /></FinanzasPorCanal></>)}
+      {(tab==="finanzas"||todo)&&hoja("finanzas",<>{!todo&&<CanalFiltro valor={canal} onCambiar={setCanal} dato="finanzas" />}<FinanzasPorCanal canal={todo?"mp":canal} ocs={ocs} vp={vp} onIr={irA}><PanelResumenFinanzas ocs={ocs} financiadores={financiadores} gastos={gastos} reembolsos={vp?.reembolsos||[]} pagosVendedor={pagosVendedor} cierres={cierres} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} aportes={aportes} ajustes={ajustesSaldo} categorias={categoriasGasto} onIrImpuestos={()=>irA("impuestos")} /></FinanzasPorCanal></>)}
       {(tab==="impuestos"||todo)&&hoja("impuestos",<PanelImpuestos ivaMensual={ivaMensual} gastos={gastos} onGuardarIva={handleGuardarIva} onPagoF29={handlePagoF29} periodoInicial={ivaPeriodoInicial} onPeriodoInicialUsado={()=>setIvaPeriodoInicial(null)} />)}
-      {(tab==="banco"||todo)&&hoja("banco",<PanelBanco ocs={ocs} financiadores={financiadores} gastos={gastos} pagosVendedor={pagosVendedor} cierres={cierres} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} aportes={aportes} saldoBanco={saldoBanco} ultimaCartola={ultimaCartola} bancoMensual={bancoMensual} onEditarSaldo={()=>setAccion("saldo_banco")} onImportarCartola={()=>setAccion("cartola")} onQuitarAlertaCartola={handleQuitarAlertaCartola} />)}
+      {(tab==="banco"||todo)&&hoja("banco",<PanelBanco ocs={ocs} financiadores={financiadores} gastos={gastos} reembolsos={vp?.reembolsos||[]} pagosVendedor={pagosVendedor} cierres={cierres} ivaMensual={ivaMensual} vendedores={vendedores} pagoFinSueltos={pagoFinSueltos} aportes={aportes} saldoBanco={saldoBanco} ultimaCartola={ultimaCartola} bancoMensual={bancoMensual} onEditarSaldo={()=>setAccion("saldo_banco")} onImportarCartola={()=>setAccion("cartola")} onQuitarAlertaCartola={handleQuitarAlertaCartola} />)}
       {(tab==="vendedores"||todo)&&hoja("vendedores",<PanelVendedores vendedores={vendedores} ocs={ocs} ivaMensual={ivaMensual} gastos={gastos} pagosVendedor={pagosVendedor} cierres={cierres} onRevisarOC={handleRevisarOC} onDecidirComision={handleDecidirComision} onGuardarIva={handleGuardarIva} onPagoVendedor={handlePagoVendedorSimple} onAnularPago={handleAnularPagoVendedor} esAdmin={perfil?.rol==="admin"} onIrImpuestos={(p)=>{ setIvaPeriodoInicial(p&&Number.isInteger(p.anio)&&Number.isInteger(p.mes)?{anio:p.anio,mes:p.mes}:null); irA("impuestos"); }} onVerOCs={(filtro)=>{setFiltroCompras(filtro);setOcFoco(null);setVolverA(null);setTab("compras");}} onAbrirOC={(ocId)=>{setFiltroCompras(null);setOcFoco(ocId);setVolverA(null);setTab("compras");}} />)}
       {(tab==="usuarios"||todo)&&perfil?.rol==="admin"&&hoja("usuarios",<PanelUsuarios perfilPropio={perfil} onRecargar={cargarTodo} onEliminarOC={setEliminandoOC} eliminacionesVersion={eliminacionesVersion} difsHistoricas={difsHistoricas} perfiles={perfiles} ocs={ocs} ocsArchivadas={ocsArchivadas} onRestaurarOC={handleRestaurarOC} onChangeRol={handleChangeRol} session={session} showToast={showToast} entidadesCatalogo={entidadesCatalogo} onEntidadesImportadas={handleEntidadesImportadas} usoMP={usoMP} sincronizando={sincronizando} validandoTodo={validandoTodo} exportando={exportando} onCorregirFechas={corregirFechasTodas} onValidarTodo={validarTodoContraMP} onExportarTodo={handleExportarTodo} configVP={todo?null:<ConfigVentasPrivadas key={vp.instalado?"vp-cfg":"vp-cfg-0"} token={session?.access_token} vp={vp} onRecargar={cargarVP} showToast={showToast} />} />)}
     </AccionesContext.Provider></ContactosContext.Provider></ModoTodoContext.Provider>
@@ -2369,7 +2377,7 @@ export default function App() {
           <FormSaldoBanco actual={saldoBanco} onSave={handleGuardarSaldoBanco} />
         </Modal>
       )}
-      {accion==="cartola"&&<Modal title="Cartola del banco: conciliar" onClose={()=>setAccion(null)}><ImportarCartola ocs={ocs} financiadores={financiadores} vendedores={vendedores} categorias={categoriasGasto} gastos={gastos} pagosVendedor={pagosVendedor} cierres={cierres} pagoFinSueltos={pagoFinSueltos} aportes={aportes} onRegistrar={handleCobrosDesdeCartola} onRegistrarEgresos={handleEgresosDesdeCartola} onRegistrarRetiro={handleRetiroDesdeCartola} onLeerDatosFrescos={leerDatosConciliacion} onRecargar={cargarTodo} onLeerDecisiones={leerDecisionesConciliacion} onDecidir={decidirConciliacion} onAnularDecision={anularDecisionConciliacion} /></Modal>}
+      {accion==="cartola"&&<Modal title="Cartola del banco: conciliar" onClose={()=>setAccion(null)}><ImportarCartola ocs={ocs} financiadores={financiadores} vendedores={vendedores} categorias={categoriasGasto} gastos={gastos} pagosVendedor={pagosVendedor} cierres={cierres} pagoFinSueltos={pagoFinSueltos} aportes={aportes} onRegistrar={handleCobrosDesdeCartola} onRegistrarEgresos={handleEgresosDesdeCartola} onRegistrarRetiro={handleRetiroDesdeCartola} onLeerDatosFrescos={leerDatosConciliacion} onRecargar={cargarTodo} onLeerDecisiones={leerDecisionesConciliacion} onDecidir={decidirConciliacion} onAnularDecision={anularDecisionConciliacion} reembolsos={vp?.reembolsos||[]} onReembolso={reembolsoDesdeCartola} /></Modal>}
       {accion==="abono_fin"&&<Modal title="Abonar a financiador" onClose={()=>setAccion(null)}><FormAbonoFinanciador ocs={ocs} financiadores={financiadores} financiadorInicial={abonoFinId} onSave={handleAbonoFinanciador} difsHistoricas={difsHistoricas} /></Modal>}
       {accion==="pago_cliente"&&<Modal title="Ingresar pago" onClose={()=>setAccion(null)}><FormPagoCliente ocs={ocs} onSave={handlePagoCliente} /></Modal>}
       {accion==="vp_venta"&&<NuevaVentaPrivada token={session?.access_token} perfil={perfil} vp={vp} showToast={showToast} onRecargar={cargarVP} onCerrar={()=>setAccion(null)} onCreada={async(v)=>{ setAccion(null); await cargarVP(); abrirVP("vp_ordenes",v.id); }} />}

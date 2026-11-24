@@ -6,6 +6,7 @@ import { Seccion, Tarjeta, Badge, Monto, Desplegable, BarraAcciones, BotonPrinci
 import { FormIvaMensual } from "../forms/FormIvaMensual";
 import { CATEGORIA_IMPUESTO, periodosIvaIncompletos } from "../../lib/ivaUnificado";
 import { apoyoEnGestion } from "../../lib/informes";
+import { gastoVigente } from "../../lib/mediosPago";
 
 import { hoyChile } from "../../lib/fechaChile";
 // Los pagos a vendedores hoy se administran en Vendedores; la categoria historica solo se consulta.
@@ -13,7 +14,8 @@ const esHistoricaVendedor=(c)=>/vendedor/i.test(c?.nombre||"");
 
 export function PanelGastos({ gastos, categorias, ivaMensual=[], pagosVendedor=[], vendedores=[], onNuevoGasto, onGuardarIva, onIrImpuestos }) {
   // Etapa 3: apoyo en gestión en UNA línea (gasto + extra incluido en pagos a vendedores), cada monto una vez.
-  const apoyo=useMemo(()=>apoyoEnGestion({gastos,pagosVendedor}),[gastos,pagosVendedor]);
+  const apoyo=useMemo(()=>apoyoEnGestion({gastos,pagosVendedor}),[gastos,pagosVendedor]);   // excluye los anulados
+  // Gasto anulado (compra de venta privada cancelada con reembolso): sigue en el historial, marcado, y no es el «último» de su categoría.
   const [showForm,setShowForm]=useState(false);
   const [ivaPeriodo,setIvaPeriodo]=useState(undefined); // undefined = cerrado · null = mes sugerido · {anio,mes}
   const incompletos=useMemo(()=>periodosIvaIncompletos({gastos,ivaMensual}),[gastos,ivaMensual]);
@@ -23,7 +25,7 @@ export function PanelGastos({ gastos, categorias, ivaMensual=[], pagosVendedor=[
 
   const ultimoPorCat=useMemo(()=>{
     const map={};
-    for(const g of gastos){ const k=g.categoria_id; if(!map[k]||`${g.anio}-${g.mes}`>`${map[k].anio}-${map[k].mes}`) map[k]=g; }
+    for(const g of gastos){ if(!gastoVigente(g)) continue; const k=g.categoria_id; if(!map[k]||`${g.anio}-${g.mes}`>`${map[k].anio}-${map[k].mes}`) map[k]=g; }
     return map;
   },[gastos]);
 
@@ -56,11 +58,12 @@ export function PanelGastos({ gastos, categorias, ivaMensual=[], pagosVendedor=[
           <div style={{padding:"0 16px 12px"}}>
             <div style={{fontSize:12,fontWeight:700,color:C.inkMuted,textTransform:"uppercase",letterSpacing:0.5,marginBottom:4,paddingTop:10,borderTop:`1px solid ${C.border}`}}>Historial completo ({historial.length})</div>
             {historial.map(g=>(
-              <div key={g.id} style={{padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
+              <div key={g.id} data-gasto-anulado={gastoVigente(g)?undefined:g.id} style={{padding:"8px 0",borderBottom:`1px solid ${C.border}`,opacity:gastoVigente(g)?1:0.6}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:8}}>
                   <span style={{fontSize:13,fontWeight:600,color:C.ink}}>{fmt.monthYear(g.mes,g.anio)}</span>
-                  <Monto tam="sm" tono={historica?"suave":"neutro"}>{fmt.money(g.monto)}</Monto>
+                  <span style={{textDecoration:gastoVigente(g)?"none":"line-through"}}><Monto tam="sm" tono={historica?"suave":"neutro"}>{fmt.money(g.monto)}</Monto></span>
                 </div>
+                {!gastoVigente(g)&&<div style={{fontSize:12,color:C.dangerText,marginTop:1}}>Anulado · {g.anulacion_motivo||"sin motivo"} · no cuenta en los gastos del mes</div>}
                 {(g.detalle||g.subcategoria)&&<div style={{fontSize:12,color:C.inkMuted,marginTop:1}}>{g.subcategoria||g.detalle}</div>}
                 {esIncompleto(g)&&onGuardarIva&&(
                   <button data-iva-incompleto onClick={()=>setIvaPeriodo({anio:Number(g.anio),mes:Number(g.mes)})}

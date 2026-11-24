@@ -37,6 +37,9 @@ export const cobroEnCaja = (e) => !esCobroFueraDeBanco(e) && !esValeVistaPendien
 // El cobro reduce lo que el cliente debe (todo menos un vale vista o cheque sin cobrar).
 export const cobroSaldaCliente = (e) => !esValeVistaPendiente(e);
 
+// Gasto anulado (24/11/2026, compra de venta privada anulada con reembolso): no cuenta en el resultado ni en los gastos del
+// mes, pero su cargo bancario sí ocurrió (la caja y la conciliación lo siguen viendo).
+export const gastoVigente = (g) => !g?.anulado_en;
 export const gastoEnCaja = (g) => String(g?.subcategoria || "").trim() !== SUBCAT_GASTO_SIN_BANCO;
 export const aporteEnCaja = (a) => String(a?.medio || "").trim() !== MEDIO_APORTE_SIN_BANCO;
 

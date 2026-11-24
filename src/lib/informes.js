@@ -1,7 +1,7 @@
 import { calcularPagoVendedor, comisionProvisoria, extraGestion, pagoVigente, totalTransferido } from "./calculos.js";
 import { utilidadPorMes } from "./ocs.js";
 import { movimientosCaja } from "./caja.js";
-import { aporteEnCaja, esCobroFueraDeBanco, esValeVistaPendiente, gastoEnCaja } from "./mediosPago.js";
+import { aporteEnCaja, esCobroFueraDeBanco, esValeVistaPendiente, gastoEnCaja, gastoVigente } from "./mediosPago.js";
 import { deudaOC } from "./finanzas.js";
 
 // ═══════════════════════════════════════════════════════════════
@@ -35,7 +35,7 @@ export function claseGasto(g, categorias = []) {
 // (pago a vendedor) o el mes/año del gasto.
 export function apoyoEnGestion({ gastos, pagosVendedor }) {
   const items = [];
-  for (const g of gastos || []) if (g.categoria_id === CATEGORIA_APOYO)
+  for (const g of gastos || []) if (g.categoria_id === CATEGORIA_APOYO && gastoVigente(g))
     items.push({ origen: "gasto", id: g.id, fecha: String(g.fecha || "").slice(0, 10), anio: n(g.anio), mes: n(g.mes), monto: n(g.monto), detalle: g.detalle || "" });
   for (const p of pagosVendedor || []) if (pagoVigente(p) && extraGestion(p) > 0)
     items.push({ origen: "pago_vendedor", id: p.id, fecha: String(p.fecha || "").slice(0, 10), anio: n(p.anio), mes: n(p.mes), monto: extraGestion(p),
@@ -53,7 +53,7 @@ export function comisionesYApoyo({ pagosVendedor, gastos, vendedores }) {
     f.comision += n(p.monto_pagado); f.apoyoEnPago += extraGestion(p); f.transferido += totalTransferido(p);
   }
   // Los gastos de apoyo no traen vendedor: se informan por período, aparte (salen del banco como gasto).
-  const apoyoGastos = (gastos || []).filter((g) => g.categoria_id === CATEGORIA_APOYO).map((g) => ({ anio: n(g.anio), mes: n(g.mes), monto: n(g.monto), fecha: String(g.fecha || "").slice(0, 10), detalle: g.detalle || "" }));
+  const apoyoGastos = (gastos || []).filter((g) => g.categoria_id === CATEGORIA_APOYO && gastoVigente(g)).map((g) => ({ anio: n(g.anio), mes: n(g.mes), monto: n(g.monto), fecha: String(g.fecha || "").slice(0, 10), detalle: g.detalle || "" }));
   return { filas: Object.values(filas).sort((a, b) => a.anio - b.anio || a.mes - b.mes), apoyoGastos };
 }
 
@@ -69,7 +69,7 @@ export function resultadoMes({ ocs, gastos, pagosVendedor, ivaMensual, vendedore
     comisiones += n(c.pagoCalculado);
     if (comisionProvisoria(c)) provisoria = true;
   }
-  const delMes = (gastos || []).filter((g) => n(g.anio) === anio && n(g.mes) === mes);
+  const delMes = (gastos || []).filter((g) => gastoVigente(g) && n(g.anio) === anio && n(g.mes) === mes);   // un gasto anulado no es resultado
   const apoyo = apoyoEnGestion({ gastos: delMes, pagosVendedor: (pagosVendedor || []).filter((p) => n(p.anio) === anio && n(p.mes) === mes) }).total;
   const operacionales = delMes.filter((g) => claseGasto(g, categorias) === "operacional").reduce((s, g) => s + n(g.monto), 0);
   const comisionesHistoricas = delMes.filter((g) => claseGasto(g, categorias) === "comisiones").reduce((s, g) => s + n(g.monto), 0);
@@ -80,9 +80,9 @@ export function resultadoMes({ ocs, gastos, pagosVendedor, ivaMensual, vendedore
 }
 
 // Caja bancaria vs. registros fuera del banco. La caja usa EXACTAMENTE movimientosCaja (lib/caja.js).
-export function cajaYFueraDelBanco({ ocs, financiadores, gastos, pagosVendedor, pagoFinSueltos, aportes }) {
+export function cajaYFueraDelBanco({ ocs, financiadores, gastos, pagosVendedor, pagoFinSueltos, aportes, reembolsos = [] }) {
   const activas = (ocs || []).filter((o) => !o.archivada);
-  const movs = movimientosCaja({ ocs: activas, financiadores, gastos, pagosVendedor, pagoFinSueltos, aportes });
+  const movs = movimientosCaja({ ocs: activas, financiadores, gastos, pagosVendedor, pagoFinSueltos, aportes, reembolsos });
   const porTipo = {};
   for (const m of movs) { const t = (porTipo[m.tipo] ||= { n: 0, monto: 0 }); t.n++; t.monto += m.monto; }
   const fuera = { cobrosFueraBanco: [], valeVistaPorCobrar: [], gastosSinCargo: [], aportesSinMovimiento: [] };

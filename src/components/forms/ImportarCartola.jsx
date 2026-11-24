@@ -65,11 +65,13 @@ const TONO = {
   pendiente: { fondo: C.warnLight, borde: C.warn, texto: C.warnText },
   neutro: { fondo: C.paper, borde: C.border, texto: C.inkMuted },
 };
-const TIPO_REG = { cobro: "Cobro", pago_financiador: "Pago a financiador", pago_vendedor: "Pago a vendedor", gasto: "Gasto", retiro_capital: "Retiro de capital", aporte_capital: "Aporte de capital" };
+const TIPO_REG = { cobro: "Cobro", pago_financiador: "Pago a financiador", pago_vendedor: "Pago a vendedor", gasto: "Gasto", retiro_capital: "Retiro de capital", aporte_capital: "Aporte de capital",
+  reembolso: "Reembolso de compra anulada" };
 const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 const caja = (extra) => ({ width: "100%", padding: "7px 9px", borderRadius: 8, fontSize: 13, border: `1px solid ${C.border}`, background: C.card, color: C.ink, fontFamily: SANS, ...extra });
 
 export function ImportarCartola({ ocs, financiadores, vendedores, categorias, gastos = [], pagosVendedor = [], cierres = null, pagoFinSueltos = [], aportes = [],
+  reembolsos = [], onReembolso = null,
   onRegistrar, onRegistrarEgresos, onRegistrarRetiro, onLeerDatosFrescos, onRecargar, onLeerDecisiones, onDecidir, onAnularDecision, cierre = CIERRE_CONCILIACION }) {
   const [cartolas, setCartolas] = useState([]);
   const [leyendo, setLeyendo] = useState(false);
@@ -101,8 +103,8 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, ga
   const [selNuevos, setSelNuevos] = useState(() => new Set());
   const [serie, setSerie] = useState(null);                 // { claves: [...], hechos: n, saltados: n }
 
-  const datos = useMemo(() => ({ ocs, financiadores, vendedores, gastos, pagosVendedor, pagoFinSueltos, aportes, decisiones: decisiones || [] }),
-    [ocs, financiadores, vendedores, gastos, pagosVendedor, pagoFinSueltos, aportes, decisiones]);
+  const datos = useMemo(() => ({ ocs, financiadores, vendedores, gastos, pagosVendedor, pagoFinSueltos, aportes, reembolsos, decisiones: decisiones || [] }),
+    [ocs, financiadores, vendedores, gastos, pagosVendedor, pagoFinSueltos, aportes, reembolsos, decisiones]);
   const union = useMemo(() => unirCartolas(cartolas), [cartolas]);
   const conc = useMemo(() => conciliarMovimientos(union.movs, datos, { cierre }), [union, datos, cierre]);
   const vista = useMemo(() => vistaConciliacion(conc, { ocs, categorias, cierre }), [conc, ocs, categorias, cierre]);
@@ -132,6 +134,18 @@ export function ImportarCartola({ ocs, financiadores, vendedores, categorias, ga
     const grupos = new Map();
     for (const r of registros) { const t = r.tabla || TABLA_REGISTRO[r.tipo]; (grupos.get(t) || grupos.set(t, []).get(t)).push(String(r.id)); }
     if (decision === "vinculado" && grupos.size !== 1) { setErr("Un movimiento se vincula con registros de un solo tipo."); return; }
+    // Reembolso de una compra anulada (24/11/2026): «es este» lo registra recibido con la marca del abono (no es una decisión
+    // de conciliación). «No corresponde» no se guarda: el reembolso pendiente se vuelve a proponer hasta que llegue el abono.
+    if (grupos.has(TABLA_REGISTRO.reembolso)) {
+      if (decision !== "vinculado") { setErr("Los reembolsos pendientes se siguen proponiendo hasta confirmar el abono que corresponde."); return; }
+      if (!onReembolso) { setErr("No se puede registrar el reembolso desde aquí."); return; }
+      const r = registros[0];
+      enCurso.current = true; setDecidiendo(item.marca); setErr("");
+      try { await onReembolso({ compraId: r.id, fecha: item.fecha || item.x?.m?.fecha, monto: item.monto ?? item.x?.monto, marca: item.marca }); }
+      catch (e) { setErr(e?.message || "No se pudo registrar el reembolso."); }
+      finally { enCurso.current = false; setDecidiendo(null); }
+      return;
+    }
     enCurso.current = true; setDecidiendo(item.marca); setErr("");
     try {
       for (const [tabla, ids] of grupos) await onDecidir({ marca: item.marca, decision, tabla, ids, operacion: item.operacion || null, descripcion: item.descripcion || null });

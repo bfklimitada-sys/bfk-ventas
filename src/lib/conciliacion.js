@@ -39,7 +39,10 @@ export const ESTADOS = {
 
 // Tabla de la base de cada tipo de registro (para decisiones de conciliación).
 export const TABLA_REGISTRO = { cobro: "eventos_pago_cliente", pago_financiador: "eventos_pago_financiamiento", pago_vendedor: "pagos_vendedor",
-  gasto: "gastos_indirectos", aporte_capital: "aportes_socios", retiro_capital: "aportes_socios", compra: "eventos_compra" };
+  gasto: "gastos_indirectos", aporte_capital: "aportes_socios", retiro_capital: "aportes_socios", compra: "eventos_compra",
+  // 24/11/2026: reembolso de una compra de venta privada anulada (abono del proveedor). No usa conciliacion_decidir: se
+  // confirma con vp_registrar_reembolso, que guarda la marca del abono en la compra.
+  reembolso: "vp_compras" };
 export const CATEGORIA_IMPUESTO_SII = "cat_impuesto";
 export const claveRegistro = (r) => `${r.tabla || TABLA_REGISTRO[r.tipo]}:${r.id}`;
 
@@ -121,7 +124,7 @@ function abreviaturaUnica(desc, ocs) {
 }
 
 // Universo de registros BFK que pasaron por la cuenta, con dirección (entra/sale) y persona cuando aplica.
-export function registrosBancarios({ ocs, financiadores, vendedores, gastos, pagosVendedor, pagoFinSueltos, aportes }) {
+export function registrosBancarios({ ocs, financiadores, vendedores, gastos, pagosVendedor, pagoFinSueltos, aportes, reembolsos }) {
   const personas = personasDe(financiadores, vendedores);
   const personaTexto = (t) => { const T = norm(t); const p = personas.filter((x) => T.includes(x.clave)); return p.length === 1 ? p[0].clave : null; };
   const primer = (nombre) => norm(nombre).split(/\s+/)[0] || null;
@@ -147,8 +150,16 @@ export function registrosBancarios({ ocs, financiadores, vendedores, gastos, pag
     R.push({ id: g.id, dir: "sale", tipo: "gasto", fecha: f10(g.fecha), monto: Number(g.monto) || 0, persona: personaTexto(g.detalle), cat: g.categoria_id, nota: g.detalle || "", marca: g.marca_cartola || null });
   for (const a of aportes || []) if (aporteEnCaja(a))
     R.push({ id: a.id, dir: a.tipo === "retiro" ? "sale" : "entra", tipo: a.tipo === "retiro" ? "retiro_capital" : "aporte_capital", fecha: f10(a.fecha), monto: Number(a.monto) || 0, persona: personaTexto(a.socio), nota: a.notas || a.socio || "", marca: a.marca_cartola || null });
+  // Reembolsos de compras anuladas (entra): pendientes (fecha = anulación) o recibidos (fecha del reembolso). Con la marca del
+  // abono quedan «Ya registrado»; sin ella solo se proponen (mismo monto) y se confirman con un toque.
+  for (const k of reembolsos || []) if (k.reembolso_estado === "pendiente" || k.reembolso_estado === "recibido")
+    R.push({ id: k.id, dir: "entra", tipo: "reembolso", fecha: f10(k.reembolso_fecha || k.anulada_en), monto: Number(k.reembolso_monto) || 0, persona: null,
+      proveedor: norm(k.proveedor), nota: `Reembolso de compra anulada · ${k.proveedor || "proveedor"}`, ventaId: k.venta_id, recibido: k.reembolso_estado === "recibido", marca: k.reembolso_marca || null });
   return R.filter((r) => r.fecha && r.monto > 0).map((r) => ({ ...r, tabla: TABLA_REGISTRO[r.tipo] }));
 }
+// ¿El detalle del banco nombra al proveedor del reembolso? (palabra de 4+ letras del nombre del proveedor)
+export const proveedorEnGlosa = (r, desc) => r?.tipo === "reembolso" && !!r.proveedor
+  && r.proveedor.split(/[^A-Z]+/).some((w) => w.length >= 4 && !GENERICAS.has(w) && norm(desc).includes(w));
 
 // Concilia las líneas bancarias (ya unidas y deduplicadas) contra los datos de BFK.
 export function conciliarMovimientos(movs, datos, { cierre = CIERRE_CONCILIACION } = {}) {
@@ -271,7 +282,8 @@ export function conciliarMovimientos(movs, datos, { cierre = CIERRE_CONCILIACION
     if (c.length) {
       // Sin reservar el registro: si dos movimientos iguales compiten por él, ambos quedan «Por revisar» y el usuario decide.
       const cerca = c.some((r) => Math.abs(dias(m.fecha, r.fecha)) <= 3);
-      Object.assign(x, { estado: "posible", evidencia: cerca ? ["monto exacto", "fecha ±3 días", "sin otro dato"] : ["solo monto"], candidatos: c.slice(0, 5), nota: `${c.length} registro(s) del mismo monto` });
+      const prov = c.some((r) => proveedorEnGlosa(r, m.descripcion));
+      Object.assign(x, { estado: "posible", evidencia: prov ? ["monto exacto", "proveedor del reembolso en la glosa"] : cerca ? ["monto exacto", "fecha ±3 días", "sin otro dato"] : ["solo monto"], candidatos: c.slice(0, 5), nota: `${c.length} registro(s) del mismo monto` });
       continue;
     }
     if (x.dir === "entra") {

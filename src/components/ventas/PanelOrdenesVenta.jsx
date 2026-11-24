@@ -8,7 +8,7 @@ import { Ventana, Campo, Rejilla, Entrada, Area, Selector, ErrorForm, PedirMotiv
 import { NoInstalado, Vacio, estiloBoton, Fila, BadgeVP, SubirArchivo, ListaDocumentos, Kpi, RejillaKpi } from "./Comunes";
 import { HistorialLista } from "./PanelCotizacionesPrivadas";
 import { descargarEETT } from "../../lib/vpEETTDescarga";
-import { subirDocumento, leerVenta, actualizarVenta, registrarOcCliente, registrarEntrega, registrarFactura, registrarPago, imputarPago, registrarCompra, anular, anularVenta, buscarGastos, documentoPublico } from "../../lib/ventasPrivadasDatos";
+import { subirDocumento, leerVenta, actualizarVenta, registrarOcCliente, registrarEntrega, registrarFactura, registrarPago, imputarPago, registrarCompra, anular, anularVenta, buscarGastos, documentoPublico, anularCompra, registrarReembolso, deshacerReembolso } from "../../lib/ventasPrivadasDatos";
 import { aPesos, ESTADOS_ENTREGA, ESTADOS_FACTURACION, ESTADOS_PAGO, MEDIOS_PAGO, TIPOS_DOCUMENTO_VENTA, filtrarVentas, pesos, pct, fechaTxt, hoyISO, cantidadTxt, mensajeVP, nuevaClave, folioRevision, TASA_IVA, redondear } from "../../lib/ventasPrivadas";
 import { generarPdfCotizacion } from "../../lib/vpPdf";
 import { descargarBlob } from "../../lib/eettPdf";
@@ -121,6 +121,11 @@ function FichaVenta({ token, perfil, vp, id, showToast, onCerrar, onRecargar, on
       </div>
       {modal?.t === "anular" && <PedirMotivo titulo={modal.titulo} texto={modal.texto} etiquetaBoton="Anular" peligro onCancelar={() => setModal(null)}
         onConfirmar={async (m) => { try { await anular(token, modal.tabla, modal.id, m); showToast?.("Registro anulado (se conserva en el historial)"); setModal(null); await refrescar(); } catch (e) { showToast?.(mensajeVP(e), "error"); } }} />}
+      {modal?.t === "anular_compra" && <AnularCompra token={token} k={modal.compra} conAportes={!!(d.finInstalado && (d.aportes || []).some((a) => a.estado === "vigente"))} showToast={showToast}
+        onCerrar={() => setModal(null)} onListo={async () => { setModal(null); await refrescar(); }} />}
+      {modal?.t === "reembolso" && <RegistrarReembolso token={token} k={modal.compra} showToast={showToast} onCerrar={() => setModal(null)} onListo={async () => { setModal(null); await refrescar(); }} />}
+      {modal?.t === "deshacer_reembolso" && <PedirMotivo titulo="Deshacer reembolso" texto="El reembolso vuelve a quedar pendiente y el abono de la cartola queda libre para otro registro." etiquetaBoton="Deshacer" peligro onCancelar={() => setModal(null)}
+        onConfirmar={async (m) => { try { await deshacerReembolso(token, modal.compra.id, m); showToast?.("Reembolso vuelto a pendiente"); setModal(null); await refrescar(); } catch (e) { showToast?.(mensajeVP(e), "error"); } }} />}
       {modal?.t === "anular_venta" && <PedirMotivo titulo={`Anular venta ${v.folio}`} texto="Solo un administrador anula ventas. Antes deben anularse sus facturas y pagos vigentes. La venta se conserva para trazabilidad y deja de contar en los indicadores." etiquetaBoton="Anular venta" peligro onCancelar={() => setModal(null)}
         onConfirmar={async (m) => { try { await anularVenta(token, v.id, m); showToast?.(`Venta ${v.folio} anulada`); setModal(null); await refrescar(); } catch (e) { showToast?.(mensajeVP(e), "error"); } }} />}
     </HojaLateral>
@@ -128,6 +133,87 @@ function FichaVenta({ token, perfil, vp, id, showToast, onCerrar, onRecargar, on
 }
 
 const pedirAnular = (setModal, tabla, id, titulo, texto) => setModal({ t: "anular", tabla, id, titulo, texto });
+
+// ── Compra anulada con reembolso del proveedor (24/11/2026) ──────────────────────────────────────────────────────
+// Estado del reembolso en la fila de una compra anulada: pendiente (con «Registrar reembolso») o recibido (con «Deshacer»).
+function EstadoReembolso({ k, vigente, setModal }) {
+  if (!k.reembolso_estado) return <span data-compra-anulada style={{ fontSize: T.small, color: C.inkMuted }}>Anulada{k.anulacion_motivo ? ` · ${k.anulacion_motivo}` : ""}</span>;
+  if (k.reembolso_estado === "pendiente") return (
+    <span style={{ display: "inline-flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+      <span data-reembolso="pendiente"><Badge tono="warn">Reembolso pendiente {pesos(k.reembolso_monto)}</Badge></span>
+      {vigente && <button type="button" data-registrar-reembolso={k.id} onClick={() => setModal({ t: "reembolso", compra: k })} style={btnMini()}>Registrar reembolso</button>}
+    </span>);
+  return (
+    <span style={{ display: "inline-flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+      <span data-reembolso="recibido"><Badge tono="ok">Reembolsado {pesos(k.reembolso_monto)} el {fechaTxt(k.reembolso_fecha)}{k.reembolso_marca ? " · conciliado con la cartola" : ""}</Badge></span>
+      {vigente && <button type="button" data-deshacer-reembolso={k.id} onClick={() => setModal({ t: "deshacer_reembolso", compra: k })} style={btnMini()}>Deshacer</button>}
+    </span>);
+}
+
+// Anular una compra: «¿el proveedor devolverá el dinero?». Con reembolso, el gasto vinculado (si lo hay) se anula solo y el
+// abono del proveedor se reconoce en la cartola. Sin reembolso, el gasto vinculado se mantiene (el dinero se perdió).
+function AnularCompra({ token, k, conAportes, showToast, onCerrar, onListo }) {
+  const [motivo, setMotivo] = useState(""); const [reembolso, setReembolso] = useState(true); const [monto, setMonto] = useState(String(Math.round(Number(k.total) || 0)));
+  const [err, setErr] = useState(""); const [ocupado, setOcupado] = useState(false);
+  const total = Math.round(Number(k.total) || 0); const m = aPesos(monto);
+  const ok = async () => {
+    if (motivo.trim().length < 3) { setErr("Indica el motivo (al menos 3 caracteres)."); return; }
+    if (reembolso && !(m > 0 && m <= total)) { setErr(`El reembolso debe ser mayor que $0 y no superar lo pagado (${pesos(total)}).`); return; }
+    setOcupado(true); setErr("");
+    try {
+      let r;
+      try { r = await anularCompra(token, k.id, motivo.trim(), reembolso, reembolso ? m : null); }
+      catch (e) { if (!e?.noInstalado || reembolso) throw e; r = await anular(token, "compra", k.id, motivo.trim()); }   // sin la migración: como antes
+      showToast?.(r?.reembolso ? `Compra anulada · reembolso pendiente ${pesos(r.reembolso_monto)}${r.gasto_anulado ? " · gasto anulado en Finanzas" : ""}` : "Compra anulada (se conserva en el historial)");
+      await onListo();
+    } catch (e) { setErr(mensajeVP(e)); setOcupado(false); }
+  };
+  const nota = (t, d) => <div data-nota-anular={d} style={{ fontSize: T.small, color: C.inkMuted, lineHeight: 1.5, marginTop: 6 }}>{t}</div>;
+  return (
+    <Ventana titulo="Anular compra" onCerrar={onCerrar} dato="anular-compra" ancho={500}
+      pie={<><button type="button" onClick={onCerrar} style={{ ...estiloBoton(), minHeight: 44 }}>Cancelar</button>
+        <button type="button" data-confirmar-anular-compra disabled={ocupado} onClick={ok} style={{ ...estiloBoton("peligro"), minHeight: 44, background: C.danger, color: "#fff", border: "none" }}>{ocupado ? "Anulando…" : "Anular compra"}</button></>}>
+      <p style={{ marginTop: 0, fontSize: T.sm, color: C.inkMuted, lineHeight: 1.5 }}>{k.proveedor || "Compra"} · {fechaTxt(k.fecha)} · {pesos(total)}. Deja de ser costo de la venta y se conserva en el historial.</p>
+      <Campo etiqueta="Motivo" error={err}><Area data-motivo value={motivo} onChange={(e) => { setMotivo(e.target.value); setErr(""); }} maxLength={500} placeholder="Ej.: el producto nunca llegó; compra cancelada" /></Campo>
+      <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: T.sm, margin: "10px 0 4px", cursor: "pointer" }}>
+        <input type="checkbox" data-con-reembolso checked={reembolso} onChange={(e) => setReembolso(e.target.checked)} style={{ width: 20, height: 20 }} />
+        El proveedor devolverá el dinero
+      </label>
+      {reembolso && <Campo etiqueta="Monto que devolverá"><Entrada data-monto-reembolso inputMode="numeric" value={monto} onChange={(e) => setMonto(e.target.value)} /></Campo>}
+      {reembolso && nota("Queda como «reembolso pendiente». Cuando el abono llegue al banco, la cartola lo reconoce como reembolso de esta compra (no como un ingreso).", "cartola")}
+      {k.origen === "gasto_existente" && nota(reembolso ? "El gasto vinculado en Finanzas › Gastos se anula solo (no se borra) y deja de contar en los gastos del mes." : "Sin reembolso, el gasto vinculado se mantiene en Finanzas: el dinero no vuelve.", "gasto")}
+      {k.origen !== "gasto_existente" && !reembolso && nota("Sin reembolso, este monto deja de ser costo de la venta. Si fue una pérdida, regístralo como gasto.", "perdida")}
+      {k.documento_tipo === "factura" && nota("Esta compra tiene factura: pide al proveedor la nota de crédito. El IVA de esa factura se rebaja en el F29 del mes en que se emita.", "nc")}
+      {conAportes && reembolso && nota("Si esta compra la pagó una persona con su tarjeta, el reembolso le llega a ella: ajusta su aporte en Financiamiento.", "aporte")}
+    </Ventana>
+  );
+}
+
+// Reembolso recibido a mano (p. ej. devuelto a la tarjeta de quien pagó). Si llegó al banco, conviene confirmarlo desde la
+// cartola: queda conciliado con el abono.
+function RegistrarReembolso({ token, k, showToast, onCerrar, onListo }) {
+  const [fecha, setFecha] = useState(hoyISO()); const [monto, setMonto] = useState(String(Math.round(Number(k.reembolso_monto) || 0)));
+  const [err, setErr] = useState(""); const [ocupado, setOcupado] = useState(false);
+  const ok = async () => {
+    const m = aPesos(monto);
+    if (!fecha || fecha > hoyISO()) { setErr("Indica la fecha del reembolso (no futura)."); return; }
+    if (!(m > 0 && m <= Math.round(Number(k.total) || 0))) { setErr(`El monto debe ser mayor que $0 y no superar lo pagado (${pesos(k.total)}).`); return; }
+    setOcupado(true); setErr("");
+    try { await registrarReembolso(token, { compraId: k.id, fecha, monto: m }); showToast?.(`Reembolso registrado · ${pesos(m)}`); await onListo(); }
+    catch (e) { setErr(mensajeVP(e)); setOcupado(false); }
+  };
+  return (
+    <Ventana titulo="Registrar reembolso" onCerrar={onCerrar} dato="registrar-reembolso" ancho={460}
+      pie={<><button type="button" onClick={onCerrar} style={{ ...estiloBoton(), minHeight: 44 }}>Cancelar</button>
+        <button type="button" data-confirmar-reembolso disabled={ocupado} onClick={ok} style={{ ...estiloBoton("pri"), minHeight: 44 }}>{ocupado ? "Guardando…" : "Registrar"}</button></>}>
+      <p style={{ marginTop: 0, fontSize: T.sm, color: C.inkMuted, lineHeight: 1.5 }}>{k.proveedor || "Compra"} anulada. Si el abono llegó a la cuenta del banco, es mejor confirmarlo desde la cartola: queda conciliado.</p>
+      <Rejilla>
+        <Campo etiqueta="Fecha" error={err}><Entrada data-fecha-reembolso type="date" value={fecha} max={hoyISO()} onChange={(e) => { setFecha(e.target.value); setErr(""); }} /></Campo>
+        <Campo etiqueta="Monto"><Entrada data-monto-reembolso inputMode="numeric" value={monto} onChange={(e) => { setMonto(e.target.value); setErr(""); }} /></Campo>
+      </Rejilla>
+    </Ventana>
+  );
+}
 
 // ── Detalle: cliente, origen, OC, ítems, precios, costos, margen y condiciones ─────────────────────
 function Detalle({ token, d, v, esResp, esAdmin, vigente, vp, showToast, refrescar, setModal, onAbrir }) {
@@ -204,7 +290,8 @@ function Detalle({ token, d, v, esResp, esAdmin, vigente, vp, showToast, refresc
         <div key={k.id} data-compra={k.origen} style={{ ...cardStyle, borderRadius: R.md, padding: "8px 12px", marginTop: 6, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", opacity: k.estado === "vigente" ? 1 : 0.55 }}>
           <span style={{ flex: 1, fontSize: T.sm }}><b>{k.proveedor || (k.origen === "gasto_existente" ? "Gasto vinculado" : "Compra")}</b>{k.concepto ? <span data-compra-detalle style={{ color: C.inkMuted }}> · {k.descripcion}</span> : null} · {fechaTxt(k.fecha)}{k.documento_numero ? ` · ${k.documento_tipo || "doc."} ${k.documento_numero}` : ""}{k.origen === "gasto_existente" ? " · desde Gastos" : ""}{k.estado !== "vigente" ? ` · anulada: ${k.anulacion_motivo}` : ""}</span>
           <b style={{ fontFamily: MONO }}>{pesos(k.iva_recuperable ? k.neto : k.total)}</b>
-          {k.estado === "vigente" && <button type="button" onClick={() => pedirAnular(setModal, "compra", k.id, "Anular costo real")} style={btnMini("peligro")}>Anular</button>}
+          {k.estado === "vigente" && <button type="button" data-anular-compra={k.id} onClick={() => setModal({ t: "anular_compra", compra: k })} style={btnMini("peligro")}>Anular</button>}
+          {k.estado !== "vigente" && <EstadoReembolso k={k} vigente={vigente} setModal={setModal} />}
         </div>
       ))}
     </Seccion> : <AvisoLinea tono="info" icono="🔒">Costos, márgenes y financiamiento: visibles solo para el responsable de la venta y los administradores.</AvisoLinea>}

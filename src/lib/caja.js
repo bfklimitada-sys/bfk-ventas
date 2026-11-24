@@ -29,7 +29,7 @@ const tipo = (oc) => oc?.tipo_registro || "venta";
 const enCuenta = (oc) => !oc?.archivada && (tipo(oc) === "venta" || tipo(oc) === "externa" || tipo(oc) === "aporte_socio");
 
 // Universo único de movimientos de dinero. Cada uno: { fecha, tipo, monto (+ entra / − sale), ref }.
-export function movimientosCaja({ ocs, financiadores, gastos, pagosVendedor, pagoFinSueltos, aportes }) {
+export function movimientosCaja({ ocs, financiadores, gastos, pagosVendedor, pagoFinSueltos, aportes, reembolsos }) {
   const propio = new Set((financiadores || []).filter((f) => f.tipo === "propio").map((f) => f.id));
   const m = [];
   for (const oc of ocs || []) {
@@ -42,7 +42,13 @@ export function movimientosCaja({ ocs, financiadores, gastos, pagosVendedor, pag
       for (const e of oc.eventos_compra || []) m.push({ fecha: f10(e.fecha), tipo: "compra_fondos_propios", monto: -n(e.costo_compra), ref: oc.numero_oc });
   }
   for (const e of pagoFinSueltos || []) m.push({ fecha: f10(e.fecha), tipo: "pago_financiador", monto: -n(e.monto), ref: e.financiador_id });
+  // Un gasto ANULADO (24/11/2026) sigue aquí: su cargo ocurrió. Si el proveedor devolvió el dinero, el reembolso entra abajo.
   for (const g of gastos || []) if (gastoEnCaja(g)) m.push({ fecha: f10(g.fecha), tipo: "gasto", monto: -n(g.monto), ref: g.categoria_id });
+  // Reembolso recibido de una compra de venta privada que venía de Gastos (su cargo está arriba como gasto): entra a la caja.
+  // Las compras registradas solo en Ventas privadas no son parte de este universo, así que su reembolso tampoco.
+  const gastoCaja = new Map((gastos || []).map((g) => [g.id, gastoEnCaja(g)]));
+  for (const k of reembolsos || []) if (k.reembolso_estado === "recibido" && k.origen === "gasto_existente" && gastoCaja.get(k.gasto_id))
+    m.push({ fecha: f10(k.reembolso_fecha), tipo: "reembolso", monto: n(k.reembolso_monto), ref: k.proveedor || k.id });
   // Una transferencia = un solo movimiento por su total (comisión + extra por gestión); los anulados no son caja.
   for (const p of pagosVendedor || []) if (pagoVigente(p)) m.push({ fecha: f10(p.fecha), tipo: "pago_vendedor", monto: -totalTransferido(p), extraGestion: extraGestion(p), ref: p.vendedor_id });
   for (const a of aportes || []) if (aporteEnCaja(a)) m.push({ fecha: f10(a.fecha), tipo: a.tipo === "retiro" ? "retiro" : "aporte", monto: (a.tipo === "retiro" ? -1 : 1) * n(a.monto), ref: a.socio });
@@ -101,10 +107,10 @@ export function periodosIvaSinRegistrar({ ocs, ivaMensual, anioActual, mesActual
 }
 
 // Resumen completo del Panel: cada concepto por separado y el saldo proyectado.
-export function resumenCaja({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, aportes, saldoBanco, cierres = null, hoy = new Date() }) {
+export function resumenCaja({ ocs, financiadores, gastos, pagosVendedor, ivaMensual, vendedores, pagoFinSueltos, aportes, saldoBanco, cierres = null, hoy = new Date(), reembolsos = [] }) {
   const anioActual = hoy.getFullYear(), mesActual = hoy.getMonth() + 1;
   const activas = (ocs || []).filter((o) => !o.archivada);
-  const movs = movimientosCaja({ ocs: activas, financiadores, gastos, pagosVendedor, pagoFinSueltos, aportes });
+  const movs = movimientosCaja({ ocs: activas, financiadores, gastos, pagosVendedor, pagoFinSueltos, aportes, reembolsos });
   const conc = conciliacionBancaria(movs, saldoBanco);
 
   // Por cobrar = facturas vigentes por cobrar + ventas ya compradas que aún no se facturan (sin vale vista pendiente).
