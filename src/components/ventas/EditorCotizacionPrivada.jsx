@@ -39,14 +39,13 @@ import { leerCotizacion, guardarCotizacion, cambiarEstadoCotizacion, nuevaRevisi
 import { accionesCotizacion, ESTADOS_COTIZACION, fechaTxt, hoyISO, sumarDias, folioRevision, mensajeVP, documentoDesdeEditor, cantidadTxt } from "../../lib/ventasPrivadas";
 import { itemVacioVP, cotizacionParaEditor, calcularCotizacionVP, precioConRecargo, lineaParaGuardarVP, validarItemsVP, descripcionDeFicha } from "../../lib/vpCotizacion";
 import { ESTADOS_ENVIO, envioConfirmado, envioVacio, nuevaClave, proveedorDeEnlace, invalidarDespachosPorDireccion, revisarFicha, camposNumericosInvalidos } from "../../lib/cotizaciones";
-import { crearAlmacen, logoBFK, subirImagenesFicha, refImagen } from "../../lib/cotizacionesDatos";
-import { generarPdfCotizacion } from "../../lib/vpPdf";
+import { crearAlmacen, subirImagenesFicha, refImagen } from "../../lib/cotizacionesDatos";
+import { cotizacionEconomica } from "../../lib/documentosOfertaDescarga";
 import { normalizarFichaEETT } from "../../lib/vpEETT";
 import { descargarBlob } from "../../lib/eettPdf";
 import { guardarBorrador, borrarBorrador, leerBorrador } from "../../lib/borradoresCotizacion";
 import CampoNumeroCL from "../ui/CampoNumeroCL";
 import { esInvalido } from "../../lib/numeroCL";
-import logoUrl from "../../assets/bfk-logo.jpg";
 
 const m = (x) => fmt.money(Math.round(Number(x) || 0));
 const pctTxt = (x) => `${(Math.round(Number(x) * 1000) / 10).toLocaleString("es-CL")}%`;
@@ -292,24 +291,22 @@ export function EditorCotizacionPrivada({ token, perfil, vp, id, showToast, onCe
   };
 
   // ── PDF comercial (sin costos ni márgenes). Ver o descargar NO cambia el estado de la cotización. ──
+  // Desde el 25/11/2026 es la «Cotización económica» del generador de documentos de la oferta (el mismo de Mercado Público y de la
+  // sección «Documentos»). Una revisión ya enviada usa su documento congelado; la actual, lo que está en pantalla.
   const pdf = async (verPrimero) => {
     setOcupado(verPrimero ? "ver" : "pdf");
     try {
       const rv = c ? d.revisiones.find((r) => r.id === revVista) : null;
-      const documento = rv?.documento || documentoDesdeEditor({ folio: c?.folio || "BORRADOR", revision: rv?.numero ?? 0, cab: vista,
-        cliente: cliente ? { razon_social: cliente.razon_social, rut: cliente.rut, giro: cliente.giro, direccion: cliente.direccion, comuna: cliente.comuna } : {},
-        items: vista.items.map((it) => ({ tipo: it.tipo, codigo: it.codigo, descripcion: descripcionDeFicha(it.ficha), unidad: it.unidad, cantidad: it.cantidad, precio_unitario: it.precio_unitario, descuento_pct: it.descuento_pct })),
-        empresa: vp.empresa, responsable: c?.responsable_nombre || perfil?.nombre });
       if (sucio && editable) showToast?.("El PDF incluye cambios aún NO guardados.", "error");
-      const r = await generarPdfCotizacion(documento, { logo: await logoBFK(logoUrl) });
+      const r = await cotizacionEconomica(token, "vp", c?.id, (o) => construirModeloOferta({ ...o, documento: rv?.documento }));
       if (verPrimero) setPrevia({ ...r, tipo: "cotizacion" }); else descargarBlob(r.blob, r.nombre);
     } catch (e) { showToast?.(`No se pudo generar el PDF: ${e.message}`, "error"); } finally { setOcupado(""); }
   };
 
   // ── Documentación de la oferta (25/11/2026): el mismo generador de Mercado Público; solo cambian los datos ──
-  const construirModeloOferta = async ({ version, condiciones, matriz }) => {
+  const construirModeloOferta = async ({ version, condiciones, matriz, documento: congelado }) => {
     const v = vistaRef.current;
-    const documento = documentoDesdeEditor({ folio: c?.folio || "", revision: 0, cab: v,
+    const documento = congelado || documentoDesdeEditor({ folio: c?.folio || "", revision: 0, cab: v,
       cliente: cliente ? { razon_social: cliente.razon_social, rut: cliente.rut, giro: cliente.giro, direccion: cliente.direccion, comuna: cliente.comuna } : { razon_social: c?.cliente_nombre || "", rut: c?.cliente_rut || "" },
       items: v.items.map((it) => ({ tipo: it.tipo, codigo: it.codigo, descripcion: descripcionDeFicha(it.ficha), unidad: it.unidad, cantidad: it.cantidad, precio_unitario: it.precio_unitario, descuento_pct: it.descuento_pct })),
       empresa: vp.empresa, responsable: c?.responsable_nombre || perfil?.nombre });

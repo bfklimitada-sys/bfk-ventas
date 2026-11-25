@@ -180,6 +180,9 @@ export const cambiarEstadoCotizacion = (t, id, estado, datos, version) => rpc(t,
 export const nuevaRevision = (t, id, version) => rpc(t, "vp_cotizacion_nueva_revision", { p_cotizacion: id, p_version: version });
 export const duplicarCotizacion = (t, id) => rpc(t, "vp_duplicar_cotizacion", { p_cotizacion: id });
 export const documentoPublico = (t, revisionId) => rpc(t, "vp_documento_publico", { p_rev: revisionId });
+// Fichas de los ítems de una revisión (en orden), para los documentos de la oferta de una revisión ya enviada o aceptada.
+export const fichasRevision = async (t, revisionId) =>
+  ((await leer(t, `vp_cotizacion_items?select=orden,ficha&revision_id=eq.${q(revisionId)}&order=orden`)) || []).map((l) => (l.ficha && typeof l.ficha === "object" ? l.ficha : {}));
 
 // ── Ventas ─────────────────────────────────────────────────────────────────────────────────────────
 export const crearVentaDesdeCotizacion = (t, cotizacionId, clave, datos) => rpc(t, "vp_crear_venta_desde_cotizacion", { p_cotizacion: cotizacionId, p_clave: clave, p_datos: datos || {} });

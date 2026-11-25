@@ -43,3 +43,13 @@ permite vista previa y descarga sin emitir y lo informa.
 | `docs/pruebas-documentos/e2e_documentos.mjs` (36) | Interfaz Mercado Público (PC, celular, sin migración): texto pegado → condiciones → matriz → vista previa (páginas, navegación, zoom) → emisión idéntica → historial → v2 → cambio tras la vista previa |
 | `docs/pruebas-documentos/e2e_documentos_vp.mjs` (20) | Interfaz Ventas privadas con PostgreSQL + PostgREST reales y la migración (PC y celular) |
 | `docs/pruebas-documentos/generar_ejemplos.mjs` | Genera los tres PDF de ejemplo (con `IMAGENES_DIR` se usan otras fotografías; las del repositorio son figuras sintéticas) |
+
+## Ventas privadas: PDF de la cotización (25/11/2026)
+
+El botón «Descargar PDF de la cotización» / «Vista previa de la cotización» de la pestaña Precios y «PDF cotización aprobada»
+de la orden de venta generan la **Cotización económica** con este mismo generador (`cotizacionEconomica` en
+`lib/documentosOfertaDescarga.js`): mismas condiciones guardadas, misma regla de versión y mismo diseño que la sección
+«Documentos». No emiten ni registran nada. Si ese contenido ya fue emitido como cotización, el PDF es idéntico al emitido y
+lleva su nombre (`COT_PRIVADA_<folio>_vN.pdf`); si no, el archivo termina en `_sin-emitir.pdf`. Una revisión ya enviada o
+la aprobada usan su documento congelado y las fichas de esa revisión. El formato antiguo (`lib/vpPdf.js`) se conserva en el
+código, pero la app ya no lo usa.

@@ -2,7 +2,8 @@
 // Entrega, facturación y pago se controlan por separado (una venta entregada puede seguir pendiente de cobro).
 // Facturas: se REGISTRAN las emitidas en el SII (este módulo no emite documentos tributarios electrónicos).
 import { listarDocumentosOferta } from "../../lib/documentosOfertaDatos";
-import { descargarDocumentoEmitido } from "../../lib/documentosOfertaDescarga";
+import { descargarDocumentoEmitido, cotizacionEconomica } from "../../lib/documentosOfertaDescarga";
+import { modeloOfertaVP } from "../../lib/modeloOferta";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { C, MONO, R, S, T, cardStyle, btnMini } from "../../lib/theme";
 import { HojaLateral, Seccion, Pestanas, PanelPestana, AvisoLinea, Badge } from "../ui/Sistema";
@@ -10,17 +11,15 @@ import { Ventana, Campo, Rejilla, Entrada, Area, Selector, ErrorForm, PedirMotiv
 import { NoInstalado, Vacio, estiloBoton, Fila, BadgeVP, SubirArchivo, ListaDocumentos, Kpi, RejillaKpi } from "./Comunes";
 import { HistorialLista } from "./PanelCotizacionesPrivadas";
 import { descargarEETT } from "../../lib/vpEETTDescarga";
-import { subirDocumento, leerVenta, actualizarVenta, registrarOcCliente, registrarEntrega, registrarFactura, registrarPago, imputarPago, registrarCompra, anular, anularVenta, buscarGastos, documentoPublico } from "../../lib/ventasPrivadasDatos";
+import { subirDocumento, leerVenta, actualizarVenta, registrarOcCliente, registrarEntrega, registrarFactura, registrarPago, imputarPago, registrarCompra, anular, anularVenta, buscarGastos, documentoPublico, fichasRevision } from "../../lib/ventasPrivadasDatos";
 import { aPesos, ESTADOS_ENTREGA, ESTADOS_FACTURACION, ESTADOS_PAGO, MEDIOS_PAGO, TIPOS_DOCUMENTO_VENTA, filtrarVentas, pesos, pct, fechaTxt, hoyISO, cantidadTxt, mensajeVP, nuevaClave, folioRevision, TASA_IVA, redondear } from "../../lib/ventasPrivadas";
-import { generarPdfCotizacion } from "../../lib/vpPdf";
 import { descargarBlob } from "../../lib/eettPdf";
-import { logoBFK } from "../../lib/cotizacionesDatos";
-import logoUrl from "../../assets/bfk-logo.jpg";
+import { refImagen } from "../../lib/cotizacionesDatos";
 import { folioVPDesdeHash, hashVP } from "../../lib/navegacion";
 import { CompraVentaPrivada } from "./CompraVentaPrivada";
 import { SeccionFinanciamiento, BloqueFinanciamientoCompra, subirComprobantes } from "./Financiamiento";
 import { asignarVendedor, registrarCompraManualFinanciada } from "../../lib/ventasPrivadasDatos";
-import { claveVendedor, nombreVendedor, opcionesVendedor, gruposVendedor, filtrarPorVendedor, validarAportes, aportesParaGuardar } from "../../lib/vpFinanciamiento";
+import { claveVendedor, nombreVendedor, opcionesVendedor, gruposVendedor, filtrarPorVendedor, validarAportes, aportesParaGuardar, vendedorDocumento } from "../../lib/vpFinanciamiento";
 import { tieneBaseCotizacion } from "../../lib/compraVentaPrivada";
 
 const FILTROS = [{ key: "", label: "Vigentes" }, { key: "por_entregar", label: "Por entregar" }, { key: "por_facturar", label: "Por facturar" }, { key: "por_cobrar", label: "Por cobrar" }, { key: "vencidas", label: "Pago vencido" }, { key: "anuladas", label: "Anuladas" }];
@@ -141,7 +140,15 @@ function Detalle({ token, d, v, esResp, esAdmin, vigente, vp, showToast, refresc
   const compradoItem = (itemId) => { const fs = d.compras.filter((k) => k.estado === "vigente" && k.concepto === "producto" && k.venta_item_id === itemId); return fs.length ? fs.reduce((s, k) => s + Number(k.cantidad || 0), 0) : null; };
   const entregado = (itemId) => d.entregaItems.filter((ei) => d.entregas.find((e) => e.id === ei.entrega_id)?.estado === "vigente" && ei.venta_item_id === itemId).reduce((s, x) => s + Number(x.cantidad), 0);
   const pdfAprobada = async () => {
-    try { const doc = await documentoPublico(token, v.revision_id); const r = await generarPdfCotizacion(doc, { logo: await logoBFK(logoUrl) }); descargarBlob(r.blob, r.nombre); }
+    // Cotización económica (25/11/2026): el mismo generador de la sección «Documentos», con el documento congelado de la revisión
+    // aceptada y sus fichas. No emite ni registra nada.
+    try {
+      const [doc, fichas0] = await Promise.all([documentoPublico(token, v.revision_id), fichasRevision(token, v.revision_id)]);
+      const fichas = await Promise.all(fichas0.map(async (f) => ({ ...f, imagenes: (await Promise.all((f.imagenes || []).map(refImagen))).filter(Boolean) })));
+      const vendedor = vendedorDocumento(claveVendedor(v), { vendedores: vp?.vendedores, empresa: vp?.empresa, actual: v });
+      const r = await cotizacionEconomica(token, "vp", v.cotizacion_id, (o) => modeloOfertaVP(doc, fichas, { ...o, vendedor }));
+      descargarBlob(r.blob, r.nombre);
+    }
     catch (e) { showToast?.(`No se pudo generar el PDF: ${mensajeVP(e)}`, "error"); }
   };
   const guardar = async () => {

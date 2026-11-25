@@ -150,7 +150,7 @@ async function recorrido(browser, { pref, ancho, alto, movil }) {
   await ui.pestana(p, "precios");
   const pdfCot = await descarga(p, () => h.locator("[data-pdf-cotizacion]").click()); writeFileSync(`${CAPT}/${nombre}-documento-cotizacion.pdf`, pdfCot);
   const tCot = await textoPDF(pdfCot);
-  ok(`${pref}25a el PDF de la cotización se guarda con su código y revisión (${folio}_Rev0.pdf)`, ultimoArchivo === `${folio}_Rev0.pdf`, ultimoArchivo);
+  ok(`${pref}25a el PDF de la cotización es la cotización económica (COT_PRIVADA_${folio}_v1_sin-emitir.pdf)`, ultimoArchivo === `COT_PRIVADA_${folio}_v1_sin-emitir.pdf` && /COTIZACI[ÓO]N ECON[ÓO]MICA/i.test(tCot), ultimoArchivo);
   ok(`${pref}25 PDF de la cotización: cliente, ítems con marca/modelo y totales`, /Maderas del Sur/.test(tCot) && /Bomba centr/.test(tCot) && /Pedrollo CPm 680/.test(tCot) && /1\.043\.481/.test(tCot) && tCot.includes(folio));
   ok(`${pref}25b PDF de la cotización con el plazo de entrega completo`, contiene(tCot, LARGO));
   ok(`${pref}26 PDF de la cotización SIN costos, proveedor, enlaces ni despachos`, !/Ferreter|tienda\.invalid|285\.600|23\.800|costo|margen|utilidad/i.test(tCot));
