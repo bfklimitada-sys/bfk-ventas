@@ -22,6 +22,7 @@ import logoUrl from "../../assets/bfk-logo.jpg";
 //   ocultar: claves de CAMPOS_CONDICIONES que la cotización ya tiene como campo propio
 //   items: [{ n, nombre }] (para asociar requisitos); propuestaMatriz(): requisitos del comprador (opcional)
 //   soloLectura: revisión ya enviada (no se emite ni se editan condiciones)
+//   cambiosSinGuardar: la cotización tiene cambios sin guardar (se recuerda si BFK Datos pide actualizarse)
 const ORDEN = ["oferta", "cotizacion", "eett"];
 const DESCRIPCION = {
   oferta: "Un solo PDF con la cotización, las condiciones comerciales, las fichas técnicas de todos los productos y la matriz de cumplimiento. Es la opción principal para presentar la oferta completa.",
@@ -30,7 +31,7 @@ const DESCRIPCION = {
 };
 const fechaHora = (iso) => { try { return new Date(iso).toLocaleString("es-CL", { timeZone: "America/Santiago", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }); } catch { return iso; } };
 
-export function DocumentacionOferta({ canal, cotizacionId, token, showToast, construirModelo, asegurarGuardado, propios = [], ocultar = [], items = [], propuestaMatriz, soloLectura = false }) {
+export function DocumentacionOferta({ canal, cotizacionId, token, showToast, construirModelo, asegurarGuardado, propios = [], ocultar = [], items = [], propuestaMatriz, soloLectura = false, cambiosSinGuardar = false }) {
   const [instalada, setInstalada] = useState(null);          // null = consultando · true · false
   const [condiciones, setCondiciones] = useState({}); const [matriz, setMatriz] = useState([]);
   const [guardadas, setGuardadas] = useState("{}"); const [historial, setHistorial] = useState([]);
@@ -77,15 +78,17 @@ export function DocumentacionOferta({ canal, cotizacionId, token, showToast, con
       const { modelo, huellaContenido: hc } = await modeloConVersion();
       const r = await generar(tipo, modelo);
       setPrevia({ ...r, tipo, modelo, huellaContenido: hc, titulo: TIPOS_DOCUMENTO[tipo].nombre, version: modelo.version, avisos: revisarModeloOferta(modelo, tipo) });
-    } catch (e) { setError(e.message || String(e)); } finally { setOcupado(""); }
+    } catch (e) { setError(mensajeError(e)); } finally { setOcupado(""); }
   };
+  // Versión nueva publicada mientras la pestaña estaba abierta: se avisa sin perder nada (los cambios siguen en pantalla).
+  const mensajeError = (e) => `${e?.message || String(e)}${e?.versionNueva && cambiosSinGuardar ? " Tus cambios aún NO están guardados: pulsa Guardar antes de actualizar." : ""}`;
   const descargarActual = async (tipo) => {
     setError(""); setOcupado(`descargar-${tipo}`);
     try {
       const { modelo } = await modeloConVersion(); const r = await generar(tipo, modelo);
       descargarBlob(r.blob, r.nombre.replace(/\.pdf$/, "_sin-emitir.pdf"));
       showToast?.("PDF descargado sin emitir: no queda en el historial. Para presentarlo, emite la versión definitiva.");
-    } catch (e) { setError(e.message || String(e)); } finally { setOcupado(""); }
+    } catch (e) { setError(mensajeError(e)); } finally { setOcupado(""); }
   };
 
   // Emisión: se guarda lo pendiente, se reconstruye el documento desde lo GUARDADO y debe ser idéntico a la vista previa.
@@ -221,8 +224,8 @@ export function DocumentacionOferta({ canal, cotizacionId, token, showToast, con
       )}
 
       {previa && (
-        <VisorDocumento previa={previa} avisos={previa.avisos} emitiendo={ocupado === "emitir"} emitido={emitido}
-          onCerrar={() => { setPrevia(null); setEmitido(null); }}
+        <VisorDocumento previa={previa} avisos={previa.avisos} emitiendo={ocupado === "emitir"} emitido={emitido} error={error}
+          onCerrar={() => { setPrevia(null); setEmitido(null); setError(""); }}
           onDescargar={() => { descargarBlob(previa.blob, previa.nombre.replace(/\.pdf$/, "_sin-emitir.pdf")); showToast?.("PDF descargado sin emitir."); }}
           onEmitir={!soloLectura && cotizacionId && instalada ? emitir : null} />
       )}

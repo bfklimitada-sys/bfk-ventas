@@ -7,20 +7,14 @@
 \endif
 begin;
 set local lock_timeout = '5s';
-select (:forzar)::int as forzar \gset
+select set_config('bfk.deshacer_forzar', :'forzar', true) \g /dev/null
 do $$ begin
   if to_regclass('public.oferta_documentos') is null then raise exception 'La migración documentos-oferta no está aplicada'; end if;
+  if coalesce(current_setting('bfk.deshacer_forzar', true), '0') <> '1'
+     and (exists (select 1 from public.oferta_documentos) or exists (select 1 from public.oferta_condiciones)) then
+    raise exception 'Hay documentos emitidos o condiciones guardadas: no se deshace sin -v forzar=1 (respaldar antes)';
+  end if;
 end $$;
-select ((select count(*) from public.oferta_documentos) + (select count(*) from public.oferta_condiciones)) as filas \gset
-\if :forzar
-\else
-  select (:filas)::int > 0 as con_datos \gset
-  \if :con_datos
-    \echo 'Hay documentos emitidos o condiciones guardadas: no se deshace sin -v forzar=1'
-    rollback;
-    \quit 3
-  \endif
-\endif
 drop function public.oferta_emitir_documento(text, uuid, text, integer, jsonb, text, text, text, text, integer, text);
 drop function public.oferta_guardar_condiciones(text, uuid, jsonb, jsonb);
 drop table public.oferta_documentos;

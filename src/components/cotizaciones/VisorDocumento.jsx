@@ -8,11 +8,11 @@ import { importarModulo } from "../../lib/cargaModulos";
 // No guarda ni emite nada por sí misma: «Emitir versión definitiva» llama a onEmitir, que vuelve a comprobar que la
 // información no cambió desde esta vista previa.
 const ZOOMS = [0.5, 0.75, 1, 1.25, 1.5, 2];
-export function VisorDocumento({ previa, avisos = [], onCerrar, onDescargar, onEmitir, emitiendo = false, emitido = null }) {
+export function VisorDocumento({ previa, avisos = [], onCerrar, onDescargar, onEmitir, emitiendo = false, emitido = null, error = "" }) {
   const { blob, nombre, paginas, titulo, version } = previa;
   const url = useMemo(() => URL.createObjectURL(blob), [blob]);
   useEffect(() => () => URL.revokeObjectURL(url), [url]);
-  const [estado, setEstado] = useState("cargando"); const [error, setError] = useState("");
+  const [estado, setEstado] = useState("cargando"); const [errorDibujo, setErrorDibujo] = useState("");
   const [zoom, setZoom] = useState(1); const [actual, setActual] = useState(1);
   const cont = useRef(null); const pdfRef = useRef(null);
   const bloqueos = avisos.filter((a) => a.nivel === "bloqueo");
@@ -26,7 +26,7 @@ export function VisorDocumento({ previa, avisos = [], onCerrar, onDescargar, onE
         tarea = lib.getDocument({ data: new Uint8Array(await blob.arrayBuffer()), isEvalSupported: false });
         const pdf = await tarea.promise; if (!vivo) return;
         pdfRef.current = pdf; setEstado("dibujar");
-      } catch (e) { if (vivo) { setEstado("error"); setError(e?.message || String(e)); } }
+      } catch (e) { if (vivo) { setEstado("error"); setErrorDibujo(e?.message || String(e)); } }
     })();
     return () => { vivo = false; try { tarea?.destroy(); } catch { /* nada */ } };
   }, [blob]);
@@ -54,7 +54,7 @@ export function VisorDocumento({ previa, avisos = [], onCerrar, onDescargar, onE
         await pag.render({ canvasContext: lienzo.getContext("2d"), viewport: vp }).promise;
       }
       if (vivo) setEstado("listo");
-    })().catch((e) => { if (vivo) { setEstado("error"); setError(e?.message || String(e)); } });
+    })().catch((e) => { if (vivo) { setEstado("error"); setErrorDibujo(e?.message || String(e)); } });
     return () => { vivo = false; };
   }, [estado === "dibujar", zoom]);   // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -95,6 +95,7 @@ export function VisorDocumento({ previa, avisos = [], onCerrar, onDescargar, onE
       <div style={{ padding: 12, background: "#E5E7EB", minHeight: "100%", overflowX: "auto" }}>
         <AvisoLinea tono="info" icono="👁" dato="aviso-visor">Es exactamente el PDF que se descargará y se emitirá. La vista previa no guarda nada ni cambia estados.</AvisoLinea>
         {emitido && <AvisoLinea tono="ok" icono="✓" dato="visor-emitido">{emitido}</AvisoLinea>}
+        {error && <AvisoLinea tono="danger" dato="visor-error">{error}</AvisoLinea>}
         {avisos.length > 0 && (
           <div data-avisos-documento style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: R.sm, padding: "8px 12px", marginBottom: 10 }}>
             <div style={{ fontSize: T.sm, fontWeight: 700, color: C.ink, marginBottom: 4 }}>Revisa antes de emitir</div>
@@ -105,7 +106,7 @@ export function VisorDocumento({ previa, avisos = [], onCerrar, onDescargar, onE
         {estado === "cargando" && <div data-preview-cargando style={{ fontSize: T.sm, color: C.inkMuted, textAlign: "center", padding: 24 }}>Preparando la vista previa…</div>}
         {estado === "error" && (
           <div data-preview-alternativa>
-            <AvisoLinea tono="warn">Este navegador no pudo dibujar las páginas ({error}). Puedes verlo con el visor del navegador:</AvisoLinea>
+            <AvisoLinea tono="warn">Este navegador no pudo dibujar las páginas ({errorDibujo}). Puedes verlo con el visor del navegador:</AvisoLinea>
             <iframe title="Vista previa" src={url} style={{ width: "100%", height: "75vh", border: `1px solid ${C.border}`, borderRadius: R.sm, background: "#fff" }} />
           </div>
         )}

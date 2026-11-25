@@ -391,10 +391,16 @@ function componer(tipo, modelo, { jsPDF, fuentes, logo, imagenes = {}, id } = {}
     if (req.length) { y -= 2.2; matrizTabla("Cumplimiento técnico", req); }
   };
 
+  // Condiciones que la EETT informa (plazo de entrega, garantía, despacho, disponibilidad, vigencia): nunca montos ni forma de pago.
+  const NO_ECONOMICAS = /^(plazo de entrega|garant[ií]a|despacho|disponibilidad|vigencia de la oferta)$/i;
   const seccionFichas = (paginas) => {
     for (const g of fichasEETT(modelo)) ficha(g, paginas);
     const generales = (modelo.matriz || []).filter((r) => !r.item || !(modelo.items || []).some((it) => it.n === r.item && !it.sin_ficha));
     if (generales.length) matrizTabla("Cumplimiento técnico (requisitos generales)", generales);
+    if (tipo === "eett") {
+      const cs = (modelo.condiciones || []).filter((c) => NO_ECONOMICAS.test(String(c.titulo || "").trim()) && String(c.valor || "").trim() && !/\$\s?\d/.test(c.valor));
+      if (cs.length) tablaPares("Condiciones de la oferta", [{ titulo: "", filas: cs.map((c) => ({ etiqueta: c.titulo, valor: c.valor })) }], { colorBarra: OSCURO });
+    }
   };
 
   // ── Composición por tipo ──

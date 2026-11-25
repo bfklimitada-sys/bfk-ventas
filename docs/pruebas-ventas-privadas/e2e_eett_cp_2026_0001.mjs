@@ -111,8 +111,11 @@ async function recorridoPrivado(browser) {
   ok(`${MODO} V16 sin errores de página`, !errs.length, errs.join(" | "));
   ok(`${MODO} V17 sin llamadas a Inteligencia Comercial, IA ni sincronizaciones`, !llamadas.length, llamadas.join(" "));
   ok(`${MODO} V18 no se escribió nada en Mercado Público`, !escriturasMP(m0).length);
+  // 25/11/2026: la «Documentación de la oferta» de la cotización privada usa el generador nuevo, el mismo de Mercado Público.
+  const dn = await descarga(p, () => h.locator('[data-descargar-documento="eett"]').click()); await espera(p, 800);
+  writeFileSync(`${CAPT}/${MODO}-EETT-nueva-privada-${dn.nombre}`, dn.buf);
   await ctx.close();
-  return t;
+  return { ...t, nuevo: await textoPDF(dn.buf) };
 }
 
 // Mercado Público con la MISMA ficha (simulador de siempre): para comparar pantallas y PDF.
@@ -128,15 +131,14 @@ async function recorridoMP(browser) {
   await espera(p, 1500); await p.locator('[data-cotizacion="1234-5-COT26"]').click(); await espera(p, 1500);
   const H = p.locator('[data-hoja-lateral="cotizacion"]');
   await H.locator('[role="tab"][data-tab="eett"]').click(); await espera(p, 600); await captura(p, "mp-1-pestana-eett");
-  ok(`${MODO} MP1 pestaña EETT de Mercado Público con la misma ficha`, (await H.locator("[data-revision-eett]").count()) === 1 && /Vista previa de EETT/.test(await H.locator("[data-vista-previa-eett]").innerText()));
+  ok(`${MODO} MP1 pestaña Documentos de Mercado Público con la misma ficha`, (await H.locator("[data-revision-eett]").count()) === 1 && (await H.locator('[data-previa-documento="eett"]').count()) === 1);
   for (const cb of await H.locator("[data-aprobar-ficha] input").all()) if (!(await cb.isChecked())) await cb.check().catch(() => {});
-  await H.locator("[data-vista-previa-eett]").click(); const vp = p.locator('[data-hoja-lateral="vista-previa-eett"]');
-  await vp.locator('[data-pagina-preview="1"]').waitFor({ timeout: 20000 }); await espera(p, 900); await captura(p, "mp-2-vista-previa");
-  const boton = vp.getByText("Generar y descargar", { exact: true });
-  const d = await descarga(p, async () => { if (await boton.count()) await boton.click(); else { await vp.locator("[data-cerrar-hoja]").first().click(); await H.locator("[data-generar-eett]").click(); } });
+  await H.locator('[data-previa-documento="eett"]').click(); const vp = p.locator('[data-hoja-lateral="visor-documento"]');
+  await vp.locator('[data-pagina-doc="1"]').waitFor({ timeout: 30000 }); await espera(p, 900); await captura(p, "mp-2-vista-previa");
+  const d = await descarga(p, () => vp.locator("[data-descargar-previa]").click());
   writeFileSync(`${CAPT}/${MODO}-EETT-MP-${d.nombre}`, d.buf); await espera(p, 800); await captura(p, "mp-3-tras-generar");
   const t = await textoPDF(d.buf);
-  ok(`${MODO} MP2 EETT de Mercado Público generada y descargada con la misma plantilla`, /INFORMACI.N T.CNICA DE PRODUCTOS/.test(t.s) && /BOLSO PARAM.DICO MEDIANO 47L/.test(t.s) && imagenes(d.buf) >= 3);
+  ok(`${MODO} MP2 EETT de Mercado Público generada y descargada con el generador de la oferta`, /INFORMACI.N T.CNICA/.test(t.s) && /BOLSO PARAM.DICO MEDIANO 47L/.test(t.s) && imagenes(d.buf) >= 3);
   ok(`${MODO} MP3 sin errores ni llamadas a Inteligencia Comercial`, !errs.length && !llamadas.some((u) => /inteligencia/.test(u)), errs.join(" | ") + llamadas.join(" "));
   await ctx.close();
   return t;
@@ -147,8 +149,12 @@ try {
   const tMP = await recorridoMP(browser);
   const tVP = await recorridoPrivado(browser);
   // Misma estructura del documento: banda, tabla, franja del producto, CARACTERÍSTICAS, dos columnas, descripción, elaboración, pie.
-  const estructura = (s) => ["INFORMACIÓN TÉCNICA DE PRODUCTOS", "BOLSO PARAMÉDICO MEDIANO 47L", "CARACTERÍSTICAS", "Características Generales", "Especificaciones", "ELABORACIÓN DE ESPECIFICACIONES TÉCNICAS", "Empresa: BFK Limitada", "bfklimitada@gmail.com"].map((x) => s.includes(x));
-  ok(`${MODO} X1 ambos PDF con la misma estructura de la plantilla de Mercado Público`, estructura(tMP.s).every(Boolean) && estructura(tVP.s).every(Boolean), JSON.stringify([estructura(tMP.s), estructura(tVP.s)]));
+  // Formato anterior (EETT con folio de ventas privadas): su plantilla no cambia.
+  const anterior = (s) => ["INFORMACIÓN TÉCNICA DE PRODUCTOS", "BOLSO PARAMÉDICO MEDIANO 47L", "CARACTERÍSTICAS", "Características Generales", "Especificaciones", "ELABORACIÓN DE ESPECIFICACIONES TÉCNICAS", "Empresa: BFK Limitada", "bfklimitada@gmail.com"].map((x) => s.includes(x));
+  ok(`${MODO} X1 la EETT con folio (formato anterior) conserva su plantilla`, anterior(tVP.s).every(Boolean), JSON.stringify(anterior(tVP.s)));
+  // Generador de la oferta (25/11/2026): Mercado Público y ventas privadas con la misma estructura.
+  const nueva = (s) => ["INFORMACIÓN TÉCNICA", "DE PRODUCTOS", "BOLSO PARAMÉDICO MEDIANO 47L", "ESPECIFICACIONES TÉCNICAS", "bfklimitada@gmail.com"].map((x) => s.includes(x));
+  ok(`${MODO} X2 la EETT nueva tiene la misma estructura en ambos canales`, nueva(tMP.s).every(Boolean) && nueva(tVP.nuevo.s).every(Boolean), JSON.stringify([nueva(tMP.s), nueva(tVP.nuevo.s)]));
 } catch (e) { F.push("EXCEPCIÓN: " + e.message.split("\n")[0]); console.log("EXCEPCIÓN", e.stack); }
 finally { await browser.close(); }
 console.log(`RESUMEN e2e_eett_cp_2026_0001 (${MODO}): ${nOk} OK, ${F.length} fallas · Capturas y PDF en ${CAPT}`);

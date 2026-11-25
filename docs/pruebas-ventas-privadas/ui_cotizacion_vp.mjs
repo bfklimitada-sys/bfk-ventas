@@ -2,7 +2,13 @@
 // Solo usan selectores del editor y de la ventana «Ingresar/Editar producto» (EditorFicha), los mismos de Mercado Público.
 export const hoja = (p) => p.locator('[data-hoja-lateral="ficha-cotizacion"]');
 export const ventanaFicha = (p) => p.locator("[data-editor-ficha]");
-export const pestana = async (p, k) => { await hoja(p).locator(`[role="tab"][data-tab="${k}"]`).click(); await p.waitForTimeout(250); };
+export const pestana = async (p, k) => { await hoja(p).locator(`[role="tab"][data-tab="${k}"]`).click(); await p.waitForTimeout(250); if (k === "eett") await eettAnterior(p); };
+// 25/11/2026: en la pestaña «Documentos», la EETT con folio (formato anterior) queda en un desplegable: las pruebas de ese
+// recorrido lo abren antes de usar sus botones.
+export async function eettAnterior(p) {
+  const d = hoja(p).locator('[data-desplegable="eett-formato-anterior"] > button[aria-expanded="false"]');
+  if (await d.count()) { await d.first().click(); await p.waitForTimeout(200); }
+}
 export const dinero = async (loc) => Number((await loc.innerText()).replace(/[^\d-]/g, ""));
 export const fila = (p, dato) => hoja(p).locator(`[data-fila="${dato}"] > *`).last();
 // Imagen PNG mínima válida (1×1) para probar «Agregar foto» (se normaliza a JPEG en el navegador).

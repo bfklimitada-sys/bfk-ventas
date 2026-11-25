@@ -539,7 +539,7 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
               </Tarjeta>
             );
           })}
-          <DocumentacionOferta canal="mp" cotizacionId={cot.id || null} token={token} showToast={showToast}
+          <DocumentacionOferta canal="mp" cotizacionId={cot.id || null} token={token} showToast={showToast} cambiosSinGuardar={sucio}
             construirModelo={construirModeloOferta} asegurarGuardado={asegurarGuardado}
             propios={[{ k: "plazo_entrega", titulo: "Plazo de entrega", valor: cot.plazo }]} ocultar={["plazo_entrega"]}
             items={cot.items.map((it, i) => ({ n: i + 1, nombre: it.ficha?.nombre }))} propuestaMatriz={() => propuestaMatrizMP(cot)} />

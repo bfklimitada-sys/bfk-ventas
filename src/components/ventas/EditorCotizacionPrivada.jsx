@@ -675,7 +675,7 @@ export function EditorCotizacionPrivada({ token, perfil, vp, id, showToast, onCe
               </Tarjeta>
             );
           })}
-          <DocumentacionOferta canal="vp" cotizacionId={c?.id || null} token={token} showToast={showToast}
+          <DocumentacionOferta canal="vp" cotizacionId={c?.id || null} token={token} showToast={showToast} cambiosSinGuardar={sucio && editable}
             construirModelo={construirModeloOferta} asegurarGuardado={asegurarGuardadoOferta} soloLectura={!editable || !viendoActual}
             propios={[{ titulo: "Plazo de entrega", valor: vista.plazo_entrega }, { titulo: "Forma de pago", valor: vista.condiciones_pago }, { titulo: "Vigencia", valor: vista.vigencia_hasta }]}
             ocultar={["plazo_entrega", "forma_pago", "vigencia", "observaciones"]}

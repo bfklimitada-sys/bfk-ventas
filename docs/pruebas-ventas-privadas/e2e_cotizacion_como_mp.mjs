@@ -231,9 +231,10 @@ async function capturasMP(browser, { ancho, alto, movil }) {
   await H.locator('[role="tab"][data-tab="datos"]').click(); await H.locator('[data-campo="plazo"]').fill(LARGO);
   await H.locator('[role="tab"][data-tab="eett"]').click(); await espera(p, 300);
   for (const cb of await H.locator("[data-aprobar-ficha] input").all()) if (!(await cb.isChecked())) await cb.check();
-  const [dl] = await Promise.all([p.waitForEvent("download", { timeout: 30000 }), H.locator("[data-generar-eett]").click()]);
+  // 25/11/2026: «Documentación de la oferta» (generador nuevo): la EETT informa el plazo de entrega completo en «Condiciones de la oferta».
+  const [dl] = await Promise.all([p.waitForEvent("download", { timeout: 30000 }), H.locator('[data-descargar-documento="eett"]').click()]);
   const pdfMP = readFileSync(await dl.path()); writeFileSync(`${CAPT}/${nombre}-documento-eett-mp.pdf`, pdfMP);
-  ok(`MP-${nombre} EETT de Mercado Público con el plazo de entrega largo completo (misma plantilla)`, contiene(await textoPDF(pdfMP), LARGO) && /INFORMACI.N\s+T.CNICA DE/.test(await textoPDF(pdfMP)));
+  ok(`MP-${nombre} EETT de Mercado Público con el plazo de entrega largo completo`, contiene(await textoPDF(pdfMP), LARGO) && /INFORMACI.N\s+T.CNICA/.test(await textoPDF(pdfMP)));
   ok(`MP-${nombre} sin llamadas a Inteligencia Comercial`, !llamadasMP.some((u) => /inteligencia/.test(u)), llamadasMP.join(" "));
   ok(`MP-${nombre} el editor de Mercado Público sigue con sus pestañas y ventana de producto`, JSON.stringify(tabs) === JSON.stringify(["datos", "productos", "precios", "eett"]) && ventanaMP && !errs.length, errs.join(" | "));
   await ctx.close();

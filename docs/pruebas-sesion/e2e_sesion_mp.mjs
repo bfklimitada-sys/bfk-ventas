@@ -93,13 +93,13 @@ try {
   A.sinConexion = false; visto = await guardarViendo(p, /Cotización guardada/);
   ok("M06 al volver la conexión: guardada exactamente una vez", visto && guardados(M, n0).length === 1 && M.cots.get("c-7").version === 7);
 
-  // 5. EETT: registro de la generación con sesión vencida y con respuesta incierta.
+  // 5. Documentos de la oferta con sesión vencida (25/11/2026: la EETT anterior y su registro se reemplazaron; la emisión con
+  //    respuesta incierta se prueba en docs/pruebas-documentos/e2e_documentos.mjs).
   await tab(p, "eett"); A.vencerAhora(); r0 = A.renovaciones();
-  let nombre = await descarga(p, () => H(p).locator("[data-generar-eett]").click()); await espera(p, 1500);
-  ok("M07 EETT con sesión vencida: descargada y registrada UNA vez (una renovación)", /\.pdf$/.test(nombre) && M.eett.length === 1 && A.renovaciones() === r0 + 1, { nombre, n: M.eett.length });
-  A.cortes.push({ patron: /^POST .*\/rpc\/cz_registrar_eett/, modo: "despues", veces: 1 });
-  nombre = await descarga(p, () => H(p).locator("[data-generar-eett]").click()); await espera(p, 2000);
-  ok("M08 EETT con respuesta incierta al registrar: se comprobó; quedó UN registro más (no se repitió)", M.eett.length === 2 && M.rpc.filter((r) => /registrar_eett/.test(r.fn)).length === 2 && !/no se pudo registrar/.test(await cuerpo(p)), { n: M.eett.length, t: (await cuerpo(p)).slice(-200) });
+  let nombre = await descarga(p, () => H(p).locator('[data-descargar-documento="eett"]').click()); await espera(p, 1500);
+  ok("M07 documento con sesión vencida: se descarga sin pedir ingresar de nuevo", /\.pdf$/.test(nombre) && A.renovaciones() <= r0 + 1 && !/inicia sesión|Ingresa de nuevo/i.test(await cuerpo(p)), { nombre });
+  nombre = await descarga(p, () => H(p).locator('[data-descargar-documento="cotizacion"]').click()); await espera(p, 1500);
+  ok("M08 sin registros del formato anterior ni guardados extra al descargar", /^COT_.*_sin-emitir\.pdf$/.test(nombre) && !M.rpc.some((r) => /registrar_eett/.test(r.fn)), nombre);
 
   // 6. Cotización NUEVA con respuesta incierta: no se duplica.
   await H(p).locator("[data-cerrar-hoja]").first().click(); await espera(p, 600);
