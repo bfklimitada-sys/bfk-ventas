@@ -28,10 +28,13 @@ const PUBLICIDAD = [
   /\bcomprar ahora\b/i, /\bver m[aá]s\b/i, /\bver menos\b/i, /\bopiniones?\b/i, /\bcalificaci[oó]n/i, /\brese[ñn]as?\b/i, /\b\d(,\d)?\s?(de 5|estrellas?)\b/i,
   /\bstock\b/i, /\bdisponible(s)? (en|para) (tienda|despacho)/i, /\bvendido por\b/i, /\bdespachado por\b/i, /\bexclusivo (internet|online|web)\b/i,
   /\bcyber\b/i, /\bblack friday\b/i, /\boferta\b/i, /\bprecio\b/i, /\bcmr\b/i, /\bpuntos\b/i, /\bgarant[ií]a extendida\b/i, /\bcomparar\b/i,
-  /\bcompartir\b/i, /\bseguir comprando\b/i, /\bunidades? disponibles?\b/i, /\b(sku|c[oó]digo (falabella|sodimac|paris|ripley|lider|interno|de producto del vendedor))\b/i,
+  /\bcompartir\b/i, /\bseguir comprando\b/i, /^(mostrar|leer|ver) (m[aá]s|menos|todo|todas|detalles)\b/i, /^ver (todas las )?(caracter[ií]sticas|especificaciones)\b/i,
+  /^(ir|volver) a\b/i, /\bpreguntas y respuestas\b/i, /\bmedios de pago\b/i, /\bunidades? disponibles?\b/i, /\b(sku|c[oó]digo (falabella|sodimac|paris|ripley|lider|interno|de producto del vendedor))\b/i,
 ];
 const ETIQUETAS_COMERCIALES = /^(sku|c[oó]digo (falabella|sodimac|paris|ripley|lider|interno)|vendido por|despachado por|precio.*|stock|despacho|env[ií]o|retiro|cuotas|tienda|vendedor|cmr)$/i;
 export const esPublicidad = (linea) => PUBLICIDAD.some((re) => re.test(linea));
+// Botones y enlaces de la página («Ver más características», «Mostrar menos»…): no son información del producto.
+const NAVEGACION = /^((mostrar|leer|ver) (m[aá]s|menos|todo|todas|detalles)|ver (todas las )?(caracter[ií]sticas|especificaciones)|(ir|volver) a\b|preguntas y respuestas|medios de pago|agregar al carro|comprar ahora|compartir|comparar)/i;
 
 // ── Valores incompletos y negativos ──
 const INCOMPLETO = /^(-+|—|–|n\/?a|no aplica|s\/i|sin informaci[oó]n|consultar|por confirmar|por definir|\?+|\.+)$/i;
@@ -44,7 +47,8 @@ const UNIDADES = [["v", "V"], ["vac", "VAC"], ["vdc", "VDC"], ["w", "W"], ["kw",
   ["ml", "ml"], ["db", "dB"], ["rpm", "rpm"], ["bar", "bar"], ["psi", "psi"], ["btu", "BTU"], ["ppm", "ppm"], ["dpi", "dpi"], ["nits", "nits"], ["mp", "MP"], ["fps", "fps"]];
 const MAPA_UNIDAD = new Map(UNIDADES);
 export function normalizarUnidades(valor) {
-  return espacios(valor).replace(/(\d)(?:\s?)([a-zA-Z]{1,4})(?![A-Za-zÀ-ÿ0-9])/g, (todo, d, u) => {
+  return espacios(valor).replace(/(\d)(?:\s?)([a-zA-Z]{1,4})(?![A-Za-zÀ-ÿ0-9])(?!\s*\d)/g, (todo, d, u) => {
+    // «45 a 55 cm», «1 m 20»: si sigue otro número, la letra es una palabra («a», «x», «y»…), no una unidad.
     const ok = MAPA_UNIDAD.get(u.toLowerCase());
     return ok ? `${d} ${ok}` : todo;
   }).replace(/(\d)\s*["”]\s*(?=\s|$|,|;)/g, '$1"').replace(/\s+([,;])/g, "$1");
@@ -106,6 +110,7 @@ export function categoriaDe(etiqueta) {
   // La etiqueta manda (p. ej. «Peso máximo soportado» es capacidad, no dimensiones): se prueba en orden con prioridad a las más específicas.
   if (/\bgarantia\b/.test(k)) return "garantia";
   if (/\b(incluye|accesorios|contenido de la caja)\b/.test(k)) return "accesorios";
+  if (/\b(disco|disco duro|almacenamiento|ssd|hdd|memoria|ram)\b/.test(k)) return "memoria";
   if (/\b(peso maximo|capacidad|soporta)\b/.test(k)) return "operacion";
   if (/\b(material|materiales|tapiz|tapizado|acabado)\b/.test(k)) return "materiales";
   if (/\b(actualizacion|refresco|tasa de refresco|resolucion|retroiluminacion|pantalla|hdr|contraste|3d|curvo)\b/.test(k)) return "pantalla";
@@ -126,6 +131,9 @@ function parDeLinea(l) {
   m = l.match(/^([^\t]{1,70})\t+(\S.*)$/); if (m) return [m[1], m[2], "tabulador"];
   m = l.match(/^\|?\s*([^|]{1,70}?)\s*\|\s*([^|]+?)\s*\|?$/); if (m) return [m[1], m[2], "tabla"];
   m = l.match(/^(.{1,60}?\S) {3,}(\S.*)$/); if (m) return [m[1], m[2], "columnas"];
+  // «Marca - Samsung» / «Peso – 9,3 kg»: etiqueta corta, guion con espacios y un valor que no es una oración.
+  m = l.match(/^([^-–—]{2,40}?)\s+[-–—]\s+(\S.{0,60})$/);
+  if (m && pareceEtiqueta(m[1]) && !/[.!?]$/.test(m[2])) return [m[1], m[2], "guion"];
   return null;
 }
 
@@ -147,12 +155,20 @@ const valorClaro = (x) => /^(s[ií]|no|ninguno|ninguna)$/i.test(x) || /^[\d"'”
 // Comienzo típico de una etiqueta de ficha («Con HDMI», «Es smart», «Tipo de pantalla», «Cantidad de puertos USB»…).
 const INICIO_ETIQUETA = /^(con|es|tiene|tipo|cantidad|n[uú]mero|tama[nñ]o|resoluci[oó]n|relaci[oó]n|frecuencia|ancho|alto|altura|profundidad|peso|largo|di[aá]metro|modelo|marca|color|material(es)?|capacidad|potencia|voltaje|tensi[oó]n|consumo|apps?|aplicaciones|asistentes?|sistema|accesorios|incluye|duraci[oó]n|velocidad|formato|versi[oó]n|compatib\w*|garant[ií]a|memoria|almacenamiento|procesador|bater[ií]a|puertos?|entradas?|salidas?|dimensiones|medidas|origen|l[ií]nea|serie|a[nñ]o|certific\w*|nivel|rango|temperatura|cantidad)\b/i;
 
+// Títulos de página habituales (Mercado Libre, Falabella, Paris, Ripley, Sodimac, Lider, PC Factory, Amazon, marcas…).
+const TITULOS_PAGINA = /^(caracter[ií]sticas( (principales|del producto|generales|t[eé]cnicas|destacadas))?|especificaciones( (t[eé]cnicas|del producto|generales|principales))?|ficha t[eé]cnica( del producto)?|descripci[oó]n( (del producto|general|t[eé]cnica))?|detalles?( (del producto|t[eé]cnicos))?|informaci[oó]n (adicional|del producto|t[eé]cnica|general)|lo que tienes que saber de este producto|acerca de este (art[ií]culo|producto)|sobre este (art[ií]culo|producto)|resumen|ficha del producto|datos t[eé]cnicos)\s*:?$/i;
+
 // Procesa el texto pegado. Devuelve una PROPUESTA para revisar; nada se guarda hasta que el vendedor la acepta.
 export function procesarTextoTecnico(texto, { marca = "", modelo = "", nombre = "" } = {}) {
   const original = String(texto ?? "");
   // Los tabuladores se conservan para reconocer columnas (tablas copiadas); el resto de espacios se normaliza.
-  const linea = (l) => String(l).replace(/[\u00a0\u2007\u202f]/g, " ").replace(/ +/g, " ").replace(/ *\t */g, "\t").replace(VINETA, "").trim();
-  const lineas = original.replace(/\r/g, "").split("\n").map(linea).filter(Boolean);
+  // Espacios raros y caracteres invisibles (p. ej. las marcas de dirección de Amazon «Marca ‏ : ‎ Samsung») se limpian.
+  // Tres o más espacios seguidos separan columnas (tablas copiadas sin tabulador): se tratan como tabulador.
+  const limpia = (l) => String(l).replace(/[\u200b-\u200f\u2028\u2029\u202a-\u202e\u2060\ufeff]/g, "").replace(/[\u00a0\u2007\u202f]/g, " ").trim().replace(/ {3,}/g, "\t").replace(/ +/g, " ").replace(/ *\t */g, "\t");
+  const crudas = original.replace(/\r/g, "").split("\n").map(limpia).filter((l) => l.replace(VINETA, "").trim());
+  // Las líneas con viñeta son una lista de atributos (van a la descripción): nunca se emparejan con la línea siguiente.
+  const conVineta = new Set(crudas.map((l, i) => (VINETA.test(l) ? i : -1)).filter((i) => i >= 0));
+  const lineas = crudas.map((l) => l.replace(VINETA, "").trim());
   const pares = []; const textos = []; const descartados = []; const avisos = []; const sinValor = [];
   const dosLineas = new Set();   // índices de líneas usadas por el formato en dos líneas (títulos, pares y etiquetas sin valor)
   let seccion = "";
@@ -160,39 +176,39 @@ export function procesarTextoTecnico(texto, { marca = "", modelo = "", nombre = 
   const corta = (x) => x && !parDeLinea(x) && !esPublicidad(x) && !oracion(x);
   for (let i = 0; i < lineas.length; i++) {
     const l = lineas[i];
-    if (/^(caracter[ií]sticas|especificaciones( t[eé]cnicas)?|ficha t[eé]cnica|descripci[oó]n|detalles?( del producto)?|informaci[oó]n adicional|especificaciones del producto)\s*:?$/i.test(l)) { seccion = ""; continue; } // títulos de la página
+    if (TITULOS_PAGINA.test(l)) { seccion = ""; dosLineas.add(i); continue; } // títulos de la página
     if (esPublicidad(l)) { descartados.push(l); continue; }
     const p = parDeLinea(l);
-    if (p) { pares.push({ etiqueta: espacios(p[0]), valor: espacios(p[1]), origen: p[2], linea: i + 1, seccion }); continue; }
+    if (p) { pares.push({ etiqueta: espacios(p[0]), valor: espacios(p[1]), origen: p[2], linea: i + 1, seccion, idx: [i] }); continue; }
     const sig = lineas[i + 1], sig2 = lineas[i + 2];
     // Título de sección: va seguido de una etiqueta (no de un valor). Sirve de pista de categoría y no se imprime.
     if (esSeccion(l) && corta(sig) && !valorClaro(sig) && (INICIO_ETIQUETA.test(sig) || (corta(sig2) && valorClaro(sig2)))) { seccion = claveTexto(l); dosLineas.add(i); continue; }
-    if (sig && pareceEtiqueta(l) && !valorClaro(l) && corta(sig) && !esSeccion(sig)) {
+    const vineta = conVineta.has(i) || conVineta.has(i + 1);
+    if (!vineta && sig && pareceEtiqueta(l) && !valorClaro(l) && corta(sig) && !esSeccion(sig)) {
       // Etiqueta + valor inequívoco, o + un texto que no parece etiqueta («Control remoto», «Vidaa», «QLED»).
-      if (valorClaro(sig) || !INICIO_ETIQUETA.test(sig)) { pares.push({ etiqueta: espacios(l), valor: espacios(sig), origen: "dos_lineas", linea: i + 1, seccion }); dosLineas.add(i).add(i + 1); i++; continue; }
+      if (valorClaro(sig) || !INICIO_ETIQUETA.test(sig)) { pares.push({ etiqueta: espacios(l), valor: espacios(sig), origen: "dos_lineas", linea: i + 1, seccion, idx: [i, i + 1] }); dosLineas.add(i).add(i + 1); i++; continue; }
       // La siguiente es otra etiqueta con su valor: esta etiqueta vino sin valor (no se inventa; queda para revisar).
       if (corta(sig2) && (valorClaro(sig2) || !INICIO_ETIQUETA.test(sig2)) && INICIO_ETIQUETA.test(l)) { sinValor.push(espacios(l)); dosLineas.add(i); continue; }
     }
     // Dos líneas: etiqueta corta seguida de un valor (tablas copiadas como columnas). Si la siguiente también parece
     // etiqueta y la que sigue a esa no, la interpretación es ambigua: se conserva como texto y se pide revisar.
-    if (sig && pareceEtiqueta(l) && !parDeLinea(sig) && !esPublicidad(sig) && !oracion(sig)) {
-      const sig2 = lineas[i + 2];
+    if (!vineta && sig && pareceEtiqueta(l) && !parDeLinea(sig) && !esPublicidad(sig) && !oracion(sig)) {
       const ambigua = pareceEtiqueta(sig) && sig2 && !pareceEtiqueta(sig2) && !parDeLinea(sig2) && !oracion(sig2) && !esPublicidad(sig2);
-      if (!ambigua) { pares.push({ etiqueta: espacios(l), valor: espacios(sig), origen: "dos_lineas", linea: i + 1, seccion }); dosLineas.add(i).add(i + 1); i++; continue; }
+      if (!ambigua) { pares.push({ etiqueta: espacios(l), valor: espacios(sig), origen: "dos_lineas", linea: i + 1, seccion, idx: [i, i + 1] }); dosLineas.add(i).add(i + 1); i++; continue; }
     }
     textos.push({ texto: espacios(l), linea: i + 1 });
   }
   // Normalización, comerciales, duplicados y contradicciones.
-  const vistos = new Map(); const filas = [];
+  const vistos = new Map(); const filas = []; const duplicadas = [];
   for (const p of pares) {
     const etiqueta = normalizarEtiqueta(p.etiqueta); const valor = normalizarUnidades(p.valor);
     if (ETIQUETAS_COMERCIALES.test(claveTexto(etiqueta)) || esPublicidad(`${etiqueta} ${valor}`) && !/^garant/i.test(claveTexto(etiqueta))) { descartados.push(`${p.etiqueta}: ${p.valor}`); continue; }
     const k = claveTexto(etiqueta);
     const previos = vistos.get(k) || [];
-    if (previos.some((f) => claveTexto(f.valor) === claveTexto(valor))) continue;              // duplicado exacto
+    if (previos.some((f) => claveValor(f.valor) === claveValor(valor))) { duplicadas.push(...(p.idx || [])); continue; }   // duplicado (aunque cambie el formato)
     // Categoría por la etiqueta; si no se reconoce, por el título de sección de la página (p. ej. «Conectividad»).
     const cat = categoriaDe(etiqueta);
-    const fila = { etiqueta, valor, categoria: cat === "otras" && SECCION_CATEGORIA[p.seccion] ? SECCION_CATEGORIA[p.seccion] : cat, original: `${p.etiqueta}${p.origen === "dos_lineas" ? " / " : ": "}${p.valor}`, origen: p.origen };
+    const fila = { etiqueta, valor, categoria: cat === "otras" && SECCION_CATEGORIA[p.seccion] ? SECCION_CATEGORIA[p.seccion] : cat, original: `${p.etiqueta}${p.origen === "dos_lineas" ? " / " : ": "}${p.valor}`, origen: p.origen, idx: p.idx || [] };
     if (valorIncompleto(valor)) fila.incompleto = true;
     if (previos.length) { fila.contradictorio = true; previos.forEach((f) => { f.contradictorio = true; }); }
     previos.push(fila); vistos.set(k, previos); filas.push(fila);
@@ -218,7 +234,7 @@ export function procesarTextoTecnico(texto, { marca = "", modelo = "", nombre = 
   if (ambiguos.length) avisos.push({ tipo: "ambiguo", mensaje: `${ambiguos.length} línea${ambiguos.length === 1 ? "" : "s"} sin un valor claro: se conservan como texto para que decidas (${ambiguos.slice(0, 3).map((x) => `«${x}»`).join(", ")}${ambiguos.length > 3 ? "…" : ""}).` });
   if (!filas.length && !parrafos.length) avisos.push({ tipo: "vacio", mensaje: "No se reconocieron características en el texto pegado." });
   const categorias = agruparPorCategoria(filas);
-  return { original, filas, categorias, parrafos, ambiguos, descartados, avisos, descripcion: descripcionTecnica({ nombre, marca, modelo, filas }), lineas, dosLineas };
+  return { original, filas, categorias, parrafos, ambiguos, descartados, avisos, descripcion: descripcionTecnica({ nombre, marca, modelo, filas }), lineas, dosLineas, duplicadas };
 }
 
 // Agrupa las filas en las categorías que tienen datos (orden fijo de CATEGORIAS; «Otras características» al final).
@@ -240,6 +256,22 @@ export function descripcionTecnica({ nombre = "", marca = "", modelo = "", filas
   if (!ident && !elegidas.length) return "";
   const datos = elegidas.map((f) => `${f.etiqueta.charAt(0).toLowerCase()}${f.etiqueta.slice(1)}: ${f.valor}`).join("; ");
   return [ident ? `${ident}.` : "", datos ? `${datos.charAt(0).toUpperCase()}${datos.slice(1)}.` : ""].filter(Boolean).join(" ");
+}
+
+// ── Información duplicada (25/11/2026): se considera una sola ──
+// Mismo valor aunque cambie el formato («55"» / «55 "», «9,3 kg» / «9,3kg»).
+export const claveValor = (v) => claveTexto(normalizarUnidades(v)).replace(/\s+/g, "");
+// Etiqueta base: «Tipo de resolución», «Resolución máxima» y «Resolución» son la misma característica si el valor coincide.
+const etiquetaBase = (e) => claveTexto(normalizarEtiqueta(e)).replace(/^(tipo|clase|nivel) de /, "").replace(/ (maxima|maximo|nativa|nativo|principal|del producto|real)$/, "").trim();
+const numerosDe = (v) => (String(v).match(/\d+(?:[.,]\d+)?/g) || []).map((n) => n.replace(",", ".")).sort().join("|");
+// ¿b repite la información de a? (misma etiqueta base y valor, o misma categoría de medidas con los mismos números)
+export function filaRepetida(a, b) {
+  if (claveValor(a.valor) !== claveValor(b.valor)) {
+    const na = numerosDe(a.valor);
+    return a.categoria === "dimensiones" && b.categoria === "dimensiones" && na.split("|").length >= 2 && na === numerosDe(b.valor)
+      && /\b(ancho|alto|altura|profundidad|largo|dimension|medida)/i.test(sinTildes(`${a.etiqueta} ${b.etiqueta}`));
+  }
+  return etiquetaBase(a.etiqueta) === etiquetaBase(b.etiqueta);
 }
 
 // Ficha técnica (modelo del editor: generales / especificaciones) → filas con categoría. Lo que el vendedor ya revisó en la
@@ -264,6 +296,16 @@ export function filasDeFicha(ficha) {
     // Categoría elegida por el vendedor al revisar (si existe) manda sobre la automática.
     if (fila && p?.categoria && CATEGORIAS.concat([OTRAS]).some((c) => c.id === p.categoria)) fila.categoria = p.categoria;
   }
+  // Información repetida (misma característica con el mismo dato, aunque cambie el formato): se deja una sola, la primera
+  // (o, en medidas con los mismos números, la más breve).
+  for (let i = 0; i < filas.length; i++) {
+    for (let j = i + 1; j < filas.length; j++) {
+      if (!filas[i] || !filas[j] || !filas[i].etiqueta || !filas[j].etiqueta || !filaRepetida(filas[i], filas[j])) continue;
+      const quitar = claveValor(filas[i].valor) !== claveValor(filas[j].valor) && filas[j].valor.length < filas[i].valor.length ? i : j;
+      filas[quitar] = null; if (quitar === i) break;
+    }
+  }
+  for (let i = filas.length - 1; i >= 0; i--) if (!filas[i]) filas.splice(i, 1);
   // Misma característica con valores distintos → contradictoria; sin valor informado → incompleta (solo se marcan).
   const porEtq = new Map();
   for (const x of filas) { if (!x.etiqueta) continue; const k = claveTexto(x.etiqueta); porEtq.set(k, [...(porEtq.get(k) || []), x]); }
@@ -279,24 +321,36 @@ export function filasDeFicha(ficha) {
 // forma al menos dos pares claros, esos pares pasan a Especificaciones (con su categoría) y los párrafos quedan en la
 // descripción. Si un bloque no forma pares, queda exactamente como estaba. No se inventa ningún valor; las etiquetas sin
 // valor y los textos publicitarios de un bloque reordenado no se imprimen.
+// Caracteres invisibles que algunas páginas copian (Amazon: marcas de dirección alrededor de «:»).
+const INVISIBLES = /[\u200b-\u200f\u202a-\u202e\u2060\ufeff]/g;
+const HAY_INVISIBLE = /[\u200b-\u200f\u202a-\u202e\u2060\ufeff]/;
 export function reestructurarFicha(ficha) {
-  const f = ficha || {};
+  const f0 = ficha || {};
+  // 1) Limpieza que no cambia el contenido: caracteres invisibles y títulos de la página copiados en la descripción.
+  const sinInv = (x) => (typeof x === "string" ? x.replace(INVISIBLES, "") : x);
+  const limpiaPar = (p) => (p && typeof p === "object" ? { ...p, etiqueta: sinInv(p.etiqueta), valor: sinInv(p.valor) } : p);
+  const desc0 = String(f0.descripcion || "");
+  const desc1 = desc0.replace(INVISIBLES, "").replace(/\r/g, "").split("\n").filter((l) => !TITULOS_PAGINA.test(l.trim())).join("\n");
+  const sucio = desc1 !== desc0 || [...(f0.generales || []), ...(f0.especificaciones || [])].some((p) => HAY_INVISIBLE.test(`${p?.etiqueta || ""}${p?.valor || ""}`));
+  const f = sucio ? { ...f0, descripcion: desc1, generales: (f0.generales || []).map(limpiaPar), especificaciones: (f0.especificaciones || []).map(limpiaPar) } : f0;
   const conValor = (lista) => (lista || []).filter((p) => espacios(p?.valor));
   const sueltas = (lista) => (lista || []).filter((p) => !espacios(p?.valor) && espacios(p?.etiqueta)).map((p) => espacios(p.etiqueta));
   const bloques = { generales: sueltas(f.generales), especificaciones: sueltas(f.especificaciones),
-    descripcion: String(f.descripcion || "").replace(/\r/g, "").split("\n").map(espacios).filter(Boolean) };
+    descripcion: String(f.descripcion || "").replace(/\r/g, "").split("\n").map((l) => l.trim()).filter(Boolean) };
   const nuevas = []; const textos = []; const cambiado = {};
   for (const [k, lineas] of Object.entries(bloques)) {
-    if (lineas.length < 4) continue;
+    if (lineas.length < 3) continue;
     const r = procesarTextoTecnico(lineas.join("\n"));
-    const claras = r.filas.filter((x) => x.origen === "dos_lineas" && !x.incompleto);
-    if (claras.length < 2) continue;
+    const claras = r.filas.filter((x) => !x.incompleto);
+    // Solo se reordena si el bloque trae pares en otro formato que «Etiqueta: valor» (ese ya se leía siempre).
+    if (claras.filter((x) => x.origen !== "dos_puntos").length < 2) continue;
     cambiado[k] = true;
     nuevas.push(...claras.map((x) => ({ etiqueta: x.etiqueta, valor: x.valor, categoria: x.categoria })));
-    // Lo que no vino en dos líneas (párrafos, «Etiqueta: valor», códigos…) se conserva tal cual, en su orden.
-    textos.push(...r.lineas.filter((_, i) => !r.dosLineas.has(i)));
+    const usadas = new Set([...r.dosLineas, ...r.duplicadas, ...claras.flatMap((x) => x.idx)]);
+    // Lo que no se convirtió en característica (párrafos, listas, códigos, textos comerciales…) se conserva tal cual.
+    textos.push(...r.lineas.filter((l, i) => !usadas.has(i) && !NAVEGACION.test(l)));
   }
-  if (!Object.keys(cambiado).length) return f;
+  if (!Object.keys(cambiado).length) return f;   // sin pares nuevos: la ficha (solo limpiada, si hacía falta) queda igual
   const descripcion = cambiado.descripcion ? textos.join("\n") : [f.descripcion, ...textos].filter((x) => espacios(x)).join("\n");
   return {
     ...f,

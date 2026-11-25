@@ -83,6 +83,40 @@ ok("M4 condiciones sin valores inventados: solo las completadas + las que salen 
   const simple = { nombre: "Silla", descripcion: "Silla ergonómica.\nMuy cómoda." , especificaciones: [{ etiqueta: "Material", valor: "Malla" }] };
   ok("ML5 una ficha sin ese formato queda exactamente igual", reestructurarFicha(simple) === simple);
 }
+// Cualquier página (25/11/2026): tabla con tabulador (Falabella), dos líneas, «Etiqueta ‏:‎ valor» con caracteres invisibles
+// (Amazon), columnas con varios espacios, «Etiqueta - valor» y listas con viñetas (quedan como descripción, sin emparejar).
+{
+  const caso = (t) => fichaDocumento({ nombre: "X", descripcion: t });
+  const filas = (d) => Object.fromEntries(d.categorias.flatMap((c) => c.filas.map((f) => [f.etiqueta, f.valor])));
+  const tab = caso("Especificaciones\nMarca\tSamsung\nModelo\tUN55DU7000\nTamaño de la pantalla\t55\"\nResolución\t4K UHD\nVer más");
+  const amz = caso("Detalles del producto\nMarca \u200f : \u200e Lenovo\nNombre del modelo \u200f : \u200e IdeaPad 3\nCapacidad del disco duro \u200f : \u200e 512 GB\nAcerca de este artículo\n• Pantalla Full HD\n• 8 GB de RAM");
+  const col = caso("Marca      Bosch\nPotencia      750 W\nVelocidad      0-3000 rpm\nPeso      1,9 kg");
+  const gui = caso("Marca - Ergo Pro\nMaterial - Malla transpirable\nAltura del asiento - 45 a 55 cm");
+  const lis = caso("Silla ergonómica de oficina.\n• Respaldo de malla\n• Apoyo lumbar\n• Ruedas de nylon");
+  ok("ML6 tabla con tabulador: cada fila con su valor; botones de la página fuera", filas(tab).Marca === "Samsung" && filas(tab)["Tamaño de pantalla"] === '55"' && filas(tab)["Resolución"] === "4K UHD" && !/Ver más|Especificaciones/.test(tab.descripcion), filas(tab));
+  ok("ML7 Amazon: sin caracteres invisibles ni títulos de la página; la lista con viñetas queda como descripción",
+    filas(amz).Marca === "Lenovo" && filas(amz)["Capacidad del disco duro"] === "512 GB" && !/[\u200e\u200f]/.test(JSON.stringify(amz)) && /• Pantalla Full HD/.test(amz.descripcion) && !/Detalles del producto|Acerca de este/.test(amz.descripcion), { f: filas(amz), d: amz.descripcion });
+  ok("ML8 columnas separadas por espacios y «Etiqueta - valor»", filas(col).Potencia === "750 W" && filas(col).Peso === "1,9 kg" && filas(gui).Material === "Malla transpirable" && filas(gui)["Altura del asiento"] === "45 a 55 cm", { c: filas(col), g: filas(gui) });
+  ok("ML9 una lista con viñetas nunca se empareja (no inventa «Respaldo de malla = Apoyo lumbar»)", !lis.categorias.length && /Respaldo de malla[\s\S]*Apoyo lumbar/.test(lis.descripcion), lis);
+}
+// Información duplicada (25/11/2026): se imprime una sola vez.
+{
+  const d = fichaDocumento({ nombre: "TV", marca: "Hisense", generales: [{ etiqueta: "Dimensiones", valor: "1.234m de ancho, 71.5cm de alto y 7.3cm de profundidad." }, { etiqueta: "Marca", valor: "Hisense" }],
+    especificaciones: [{ etiqueta: "Resolución", valor: "4K" }, { etiqueta: "Tipo de resolución", valor: "4K" }, { etiqueta: "Resolución máxima", valor: "4K" }, { etiqueta: "Peso", valor: "9,3 kg" }, { etiqueta: "Peso", valor: "9,3kg" },
+      { etiqueta: "Ancho x Profundidad x Altura", valor: "1.234 m x 7.3 cm x 71.5 cm" }, { etiqueta: "Ancho", valor: "1,23 m" }, { etiqueta: "Ancho con soporte", valor: "1,23 m" }],
+    descripcion: "Incluye control remoto.\nIncluye control remoto." });
+  const todas = d.categorias.flatMap((c) => c.filas);
+  const n = (e) => todas.filter((f) => f.etiqueta === e).length;
+  ok("DUP1 misma característica con el mismo dato (aunque cambie el formato o diga «Tipo de…»/«…máxima») aparece una vez",
+    n("Marca") === 1 && todas.filter((f) => /resoluci/i.test(f.etiqueta)).length === 1 && n("Peso") === 1, todas.map((f) => `${f.etiqueta}=${f.valor}`));
+  ok("DUP2 medidas repetidas con los mismos números: queda la más breve; características distintas con igual valor se conservan",
+    !todas.some((f) => f.etiqueta === "Dimensiones") && n("Ancho x Profundidad x Altura") === 1 && n("Ancho") === 1 && n("Ancho con soporte") === 1, todas.map((f) => `${f.etiqueta}=${f.valor}`));
+  ok("DUP3 frases repetidas en la descripción: una sola", d.descripcion === "Incluye control remoto.", d.descripcion);
+  const cot0 = cotizacionEjemplo(); cot0.items = [{ ...cot0.items[0], ficha: { ...cot0.items[0].ficha, condiciones_producto: { garantia: "12 meses", plazo_entrega: "5 días hábiles" } } }];
+  const m = modeloOfertaMP(cot0, calcularCotizacion(cot0), { version: 1, condiciones: { garantia: "12 meses" } });
+  const cp = m.items[0].ficha.condiciones.map((c) => c.titulo);
+  ok("DUP4 condición del producto igual a la de la oferta: solo en «Condiciones de la oferta»", !cp.includes("Garantía") && m.condiciones.some((c) => c.titulo === "Garantía"), { cp, of: m.condiciones });
+}
 // Plazo de entrega desde los productos (25/11/2026): se define junto al despacho; el de la oferta es el mayor (5 hábiles ≈ 7 corridos).
 {
   const it = (d, t, x) => ({ ficha: { condiciones_producto: { plazo_dias: d, plazo_tipo: t, plazo_entrega: x } } });

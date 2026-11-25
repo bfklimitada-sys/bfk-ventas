@@ -6,7 +6,7 @@
 // despachos internos, financiamiento ni el texto original pegado (que puede traer precios o el nombre de la tienda).
 // Los montos salen del cálculo existente (calcularCotizacion / totales de Ventas privadas): aquí no hay fórmulas.
 // ═══════════════════════════════════════════════════════════════════════════════════════════════════
-import { agruparPorCategoria, filasDeFicha, reestructurarFicha } from "./especificaciones.js";
+import { agruparPorCategoria, filasDeFicha, reestructurarFicha, claveTexto } from "./especificaciones.js";
 import { normalizarFichaEETT } from "./vpEETT.js";
 
 const txt = (s) => String(s ?? "").replace(/\s+/g, " ").trim();
@@ -75,6 +75,14 @@ export function condicionesAutomaticas(items = [], plazoAntiguo) {
   };
 }
 
+// Información duplicada (25/11/2026): una condición del producto idéntica a la de la oferta (p. ej. el mismo plazo o la
+// misma garantía) se imprime una sola vez, en «Condiciones de la oferta». Devuelve { items, condiciones }.
+function sinRepetirCondiciones(items, condiciones) {
+  const k = (c) => `${String(c.titulo).toLowerCase()}|${String(c.valor).toLowerCase().replace(/\s+/g, " ").trim()}`;
+  const deOferta = new Set((condiciones || []).map(k));
+  return { items: (items || []).map((it) => (it?.ficha?.condiciones?.length ? { ...it, ficha: { ...it.ficha, condiciones: it.ficha.condiciones.filter((c) => !deOferta.has(k(c))) } } : it)), condiciones };
+}
+
 export const CAMPOS_CONDICIONES = [
   { k: "plazo_entrega", titulo: "Plazo de entrega", ayuda: "Ej.: 5 días desde la aceptación de la OC" },
   { k: "tipo_dias", titulo: "Tipo de días", opciones: [["", "Sin indicar"], ["habiles", "Hábiles"], ["corridos", "Corridos"]], antiguo: true },
@@ -113,7 +121,10 @@ export function fichaDocumento(ficha, condicionesProducto) {
   const categorias = agruparPorCategoria(filas).map((c) => ({ titulo: c.titulo, filas: c.filas.map((r) => ({ etiqueta: r.etiqueta, valor: r.valor, ...(r.contradictorio ? { contradictorio: true } : {}), ...(r.incompleto ? { incompleto: true } : {}) })) }));
   const cp = condicionesProducto || f.condiciones_producto || {};
   const condiciones = CAMPOS_CONDICIONES_PRODUCTO.map((c) => ({ titulo: c.titulo, valor: multilinea(cp[c.k]) })).filter((c) => c.valor);
-  return { descripcion: multilinea(n.descripcion), categorias, imagenes: (f.imagenes || []).filter(esRefImagen).slice(0, 4), condiciones };
+  // Líneas repetidas de la descripción (misma frase pegada dos veces): se imprime una sola.
+  const vistas = new Set();
+  const descripcion = multilinea(n.descripcion).split("\n").filter((l) => { const k = claveTexto(l); if (!k) return true; if (vistas.has(k)) return false; vistas.add(k); return true; }).join("\n");
+  return { descripcion, categorias, imagenes: (f.imagenes || []).filter(esRefImagen).slice(0, 4), condiciones };
 }
 
 // Matriz de cumplimiento: solo requisitos reales del comprador; el estado lo decide el vendedor (por defecto «Por verificar»).
@@ -159,10 +170,9 @@ export function modeloOfertaMP(cot, calc, { version = 1, fecha, vendedor, empres
     empresa: empresaPublica(empresa), vendedor: txt(vendedor ?? cot?.vendedor_nombre),
     cliente: { nombre: txt(cot?.institucion), rut: txt(cot?.rut), direccion: destino,
       filas: [["RUT", txt(cot?.rut)], ["Dirección de entrega", destino], [etiquetaId(cot?.id_externo), txt(cot?.id_externo)], ["Adquisición", txt(cot?.nombre)]] },
-    items,
+    ...sinRepetirCondiciones(items, condicionesDocumento(condicionesConProductos(condiciones, cot?.items, cot?.plazo))),
     totales: { neto: Math.round(t.neto || 0), iva: Math.round(t.iva_debito || 0), total: Math.round(t.total || 0), exenta: !!calc?.exenta, tasa_iva: 19,
       despacho_texto: "$0", nota: "Valores en pesos chilenos. Despacho incorporado en los precios unitarios." },
-    condiciones: condicionesDocumento(condicionesConProductos(condiciones, cot?.items, cot?.plazo)),
     matriz: matrizDocumento(matriz),
   };
 }
@@ -198,10 +208,9 @@ export function modeloOfertaVP(documento, fichas = [], { version = 1, fecha, ven
     vendedor: txt(vendedor ?? d.responsable?.nombre ?? d.responsable),
     cliente: { nombre: txt(cli.razon_social), rut: txt(cli.rut), direccion,
       filas: [["RUT", txt(cli.rut)], ["Contacto", [txt(con.nombre), txt(con.correo), txt(con.telefono)].filter(Boolean).join(" · ")], ["Dirección", direccion]] },
-    items,
+    ...sinRepetirCondiciones(items, condicionesDocumento(cond)),
     totales: { neto: Math.round(d.neto || 0), iva: Math.round(d.iva || 0), total: Math.round(d.total || 0), exenta: d.afecta_iva === false, tasa_iva: Math.round((Number(d.tasa_iva) || 0.19) * 100),
       ...(Number(d.descuento) > 0 ? { descuento: Math.round(d.descuento) } : {}), nota: "Valores en pesos chilenos." },
-    condiciones: condicionesDocumento(cond),
     matriz: matrizDocumento(matriz),
   };
 }
