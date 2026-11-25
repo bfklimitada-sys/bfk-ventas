@@ -239,6 +239,19 @@ export function fichaPublica(ficha) {
   };
 }
 
+// Lo que se GUARDA de la ficha (25/11/2026): lo técnico de fichaPublica() + el texto original que pegó el vendedor (se
+// conserva siempre, nunca va a un documento) + las condiciones particulares del producto (garantía, plazo, condiciones),
+// que sí se imprimen en «Condiciones del producto». fichaPublica() y el PDF de EETT anterior no cambian.
+export function fichaParaGuardar(ficha) {
+  const f = ficha || {}; const out = fichaPublica(f);
+  const original = String(f.texto_original || "");
+  if (original.trim()) out.texto_original = original.slice(0, 20000);
+  const cp = f.condiciones_producto || {};
+  const cond = Object.fromEntries(["garantia", "plazo_entrega", "condiciones"].map((k) => [k, String(cp[k] || "").trim()]).filter(([, v]) => v));
+  if (Object.keys(cond).length) out.condiciones_producto = cond;
+  return out;
+}
+
 const normal = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase();
 const tokensModelo = (s) => (normal(s).match(/[A-Z0-9][A-Z0-9-]*/g) || []).filter((t) => /\d/.test(t));
 

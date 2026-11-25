@@ -11,7 +11,7 @@
 // No toca ninguna tabla existente de BFK (la tabla "vendedores" solo se LEE para reutilizar el catálogo).
 // ═══════════════════════════════════════════════════════════════
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./supabase.jsx";
-import { fichaPublica, calcularCotizacion, FORMULA, formulaParaGuardar } from "./cotizaciones.js";
+import { fichaPublica, fichaParaGuardar, calcularCotizacion, FORMULA, formulaParaGuardar } from "./cotizaciones.js";
 import { preliminares, elegibilidad, payloadVinculo } from "./nuevaOCCotizacion.js";
 
 const CLAVE_LOCAL = "bfk_cotizaciones_prueba_v1";
@@ -85,6 +85,22 @@ async function bajarImagen(token, ruta) {
 const subirImagenes = (token, imgs) => Promise.all((imgs || []).map((d) => (String(d).startsWith("data:") ? subirImagen(token, d) : d)));
 // Mismo depósito y misma huella para las fichas de las cotizaciones privadas (08/11/2026): sube solo las imágenes nuevas.
 export const subirImagenesFicha = (token, imgs) => subirImagenes(token, imgs);
+// Documentos de la oferta (25/11/2026): referencia ESTABLE de una imagen = su ruta en el depósito (huella del contenido).
+// Para una imagen aún no subida se calcula la misma ruta que tendrá al guardar (sin subir nada), y su contenido queda en
+// memoria para dibujarla: así la vista previa y el documento emitido después de guardar son el mismo.
+export async function refImagen(x) {
+  if (esRutaImagen(x)) return x;
+  if (typeof x !== "string" || !x.startsWith("data:")) return null;
+  if (rutaDeImg.has(x)) return rutaDeImg.get(x);
+  const ruta = `img/${await sha1(x)}.${/png/.test(x.slice(0, 30)) ? "png" : "jpg"}`;
+  cacheImg.set(ruta, x); rutaDeImg.set(x, ruta); return ruta;
+}
+// Contenido (dataURL) de las referencias, para dibujarlas en el PDF. Las que no se pueden leer quedan fuera del mapa.
+export async function imagenesDocumento(token, refs) {
+  const out = {};
+  await Promise.all([...new Set(refs || [])].map(async (r) => { const d = await bajarImagen(token, r).catch(() => null); if (d) out[r] = d; }));
+  return out;
+}
 // Una imagen ya guardada vuelve a su ruta (así la cotización no cambia por solo haber visto la foto).
 export const rutaConocida = (d) => (typeof d === "string" && d.startsWith("data:") && rutaDeImg.get(d)) || d;
 
@@ -247,7 +263,7 @@ export function crearAlmacen(token, modo, esquema = 1) {
     async guardarCotizacion(cot) {
       const calc = calcularCotizacion(cot);
       const items = await Promise.all(cot.items.map(async (it, i) => {
-        const l = calc.lineas[i]; const ficha = { ...fichaPublica(it.ficha), imagenes: await subirImagenes(tk(), (it.ficha?.imagenes || []).slice(0, 4)) };
+        const l = calc.lineas[i]; const ficha = { ...fichaParaGuardar(it.ficha), imagenes: await subirImagenes(tk(), (it.ficha?.imagenes || []).slice(0, 4)) };
         return { ...it, ficha, iva_compra: Math.round(l.iva_credito), envio_asignado: l.envio_asignado, costo_bruto: Math.round(l.costo_bruto), costo_neto: Math.round(l.costo_neto), unitario_venta_neto: l.unitario_neto };
       }));
       // Fase 2 exentas: la clasificación tributaria se gestiona aparte (trib_*): nunca viaja al guardar la cotización.

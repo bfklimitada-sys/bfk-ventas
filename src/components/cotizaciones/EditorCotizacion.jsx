@@ -5,17 +5,16 @@ import { NavegacionCotizacion } from "./PasosCotizacion";
 import { HojaLateral, Pestanas, PanelPestana, Tarjeta, Badge, AvisoLinea, BotonPrincipal, BotonSecundario, FilaDato, Desplegable, Seccion, Ayuda } from "../ui/Sistema";
 import CampoNumeroCL from "../ui/CampoNumeroCL";
 import { esInvalido } from "../../lib/numeroCL";
-import { camposNumericosInvalidos, calcularCotizacion, formulaParaGuardar, formulaGuardadaExenta, esExentaAprobada, estadoParaPDF, destinoDe, direccionValida, invalidarDespachosPorDireccion, envioConfirmado, textoParaMercadoPublico, aplicarRecargoGeneral, aplicarRecargoProducto, itemVacio, envioVacio, nuevaClave, hoyISO, digitosValor, proveedorDeEnlace, ESTADOS_COTIZACION, ESTADOS_ENVIO, RECARGO_SUGERIDO } from "../../lib/cotizaciones";
-import { logoBFK } from "../../lib/cotizacionesDatos";
-import { generarPdfEETT, descargarBlob, huellaPDF } from "../../lib/eettPdf";
+import { camposNumericosInvalidos, calcularCotizacion, formulaParaGuardar, formulaGuardadaExenta, esExentaAprobada, estadoParaPDF, destinoDe, direccionValida, invalidarDespachosPorDireccion, envioConfirmado, textoParaMercadoPublico, aplicarRecargoGeneral, aplicarRecargoProducto, itemVacio, envioVacio, nuevaClave, digitosValor, proveedorDeEnlace, ESTADOS_COTIZACION, ESTADOS_ENVIO, RECARGO_SUGERIDO } from "../../lib/cotizaciones";
+import { refImagen } from "../../lib/cotizacionesDatos";
+import { modeloOfertaMP, propuestaMatrizMP } from "../../lib/modeloOferta";
+import { DocumentacionOferta } from "./DocumentacionOferta";
 import { EditorFicha } from "./EditorFicha";
 import { ImagenFicha } from "./ImagenFicha";
 import { ImportarCompraAgil } from "./ImportarCompraAgil";
-import { VistaPreviaEETT } from "./VistaPreviaEETT";
 import { bloqueoPorVendedor, exigeVendedor, mensajeVendedor, vendedorProtegido } from "../../lib/vendedorCotizacion";
 import { EliminarCotizacion } from "./EliminarCotizacion";
 import { ClasificacionTributaria } from "../ficha/ClasificacionTributaria";
-import logoUrl from "../../assets/bfk-logo.jpg";
 import { guardarBorrador, borrarBorrador, idLocalDe } from "../../lib/borradoresCotizacion";
 import { ConflictoVersion } from "../ui/ConflictoVersion";
 import { combinarVersiones, aplicarCombinacion, normalizarProductos, resumenProductos, textoValor } from "../../lib/conflictoVersion";
@@ -71,8 +70,7 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
   const baseRef = useRef(recuperado ? clonarJ(recuperado.base || null) : clonarJ(inicial));
   const [conflicto, setConflicto] = useState(null);   // { bfk, mio, campos }
   const [verBib, setVerBib] = useState(false);
-  const [guardando, setGuardando] = useState(false); const [generando, setGenerando] = useState(""); const [falla, setFalla] = useState(null);
-  const [preview, setPreview] = useState(null);     // { blob, nombre, paginas }
+  const [guardando, setGuardando] = useState(false); 
   const [historial, setHistorial] = useState([]); const [eliminar, setEliminar] = useState(false);
   const [vendedores, setVendedores] = useState([]); const [nuevoVend, setNuevoVend] = useState(null);
 
@@ -222,48 +220,21 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
     tomarVersionBFK(k.bfk, clonarJ(k.bfk), false); showToast?.("Se abrió la versión guardada en BFK");
   };
 
-  // ── EETT: mismo generador para vista previa y descarga ──
-  const construirPdf = async (base, { conVersion }) => {
-    const logo = await logoBFK(logoUrl);
-    const items = await Promise.all(base.items.map(async (it) => ({ ficha: { ...it.ficha, imagenes: await almacen.resolverImagenes(it.ficha?.imagenes || [], 2) } })));
-    const elaboracion = { vendedor: base.vendedor_nombre, elaborado_por: perfil?.nombre || "", fecha: hoyISO(), cotizacion: base.id_externo, version: conVersion ? base.version : null };
-    return generarPdfEETT(base, items, { logo, elaboracion, version: conVersion ? base.version : null });
+  // ── Documentación de la oferta (25/11/2026): modelo público desde lo que está en pantalla ──
+  const calcRef = useRef(calc); calcRef.current = calc; const cotTribRef = useRef(cotTrib); cotTribRef.current = cotTrib;
+  const construirModeloOferta = async ({ version, condiciones, matriz }) => {
+    const c = vivo.current.cot; const ct = cotTribRef.current;
+    const items = await Promise.all(c.items.map(async (it) => ({ ...it, ficha: { ...it.ficha, imagenes: (await Promise.all((it.ficha?.imagenes || []).map(refImagen))).filter(Boolean) } })));
+    return modeloOfertaMP({ ...ct, ...c, items }, calcRef.current, { version, fecha: c.fecha, vendedor: c.vendedor_nombre, condiciones: { ...condiciones, plazo_entrega: c.plazo }, matriz });
   };
-  const verPrevia = async () => {
-    if (!cot.items.length) return; setGenerando("previa");
-    try { setPreview(await construirPdf(cot, { conVersion: !sucio && !!cot.id })); } // no guarda nada
-    catch (e) { showToast?.(e.versionNueva ? `No se pudo preparar la vista previa: ${e.message}${sucio ? " Tus cambios aún NO están guardados: pulsa Guardar antes de actualizar." : ""}` : `No se pudo preparar la vista previa: ${e.message}`, "error"); }
-    finally { setGenerando(""); }
+  // La emisión usa SIEMPRE lo guardado: si hay cambios, se guarda primero (mismas validaciones de «Guardar»).
+  const asegurarGuardado = async () => {
+    if (vivo.current.cot.id && !vivo.current.sucio) return true;
+    try { await guardarInterno(); return true; }
+    catch (e) { showToast?.(`No se guardó: ${mensajeVendedor(e)}`, "error"); if (e.conflicto && cot.id) await abrirConflicto(); return false; }
   };
-  const descargarDe = async (base) => {
-    const r = await construirPdf(base, { conVersion: true });
-    descargarBlob(r.blob, r.nombre);
-    try {
-      await almacen.registrarEETT({ cotizacion_id: base.id, version: base.version, hash: await huellaPDF(r.blob), paginas: r.paginas, nombre_documento: r.nombre, vendedor_nombre: base.vendedor_nombre || "", generado_por_nombre: perfil?.nombre || "" });
-      cargarHistorial(base.id);
-    } catch (e) { showToast?.(`El PDF se descargó, pero no se pudo registrar la generación: ${e.message}`, "error"); }
-    return r;
-  };
-  // Generar y descargar: valida → guarda (solo si hay cambios) → genera desde lo guardado → descarga → registra metadatos.
-  const generarYDescargar = async () => {
-    if (!pdf.listo) { showToast?.("Revisa las fichas pendientes antes de generar la EETT.", "error"); return; }
-    setGenerando("descarga"); setFalla(null);
-    let base = cot;
-    try { if (!cot.id || sucio) base = await guardarInterno(); }
-    catch (e) { setGenerando(""); showToast?.(`No se guardó la cotización: ${mensajeVendedor(e)} No se generó la EETT.`, "error"); if (e.conflicto && cot.id) await abrirConflicto(); return; }
-    try {
-      const r = await descargarDe(base);
-      showToast?.(`Cotización guardada (versión ${base.version}) y EETT descargada: ${r.paginas} página${r.paginas === 1 ? "" : "s"}`);
-    } catch (e) {
-      setFalla({ base, mensaje: e.message });
-      showToast?.(`Los datos quedaron guardados (versión ${base.version}), pero la descarga falló: ${e.message}`, "error");
-    } finally { setGenerando(""); }
-  };
-  const reintentar = async () => {
-    if (!falla) return; setGenerando("descarga");
-    try { await descargarDe(falla.base); setFalla(null); showToast?.("EETT descargada"); }
-    catch (e) { setFalla({ ...falla, mensaje: e.message }); showToast?.(`La descarga volvió a fallar: ${e.message}`, "error"); } finally { setGenerando(""); }
-  };
+
+
 
   // ── Precios ──
   // Recargo general: se aplica a TODOS los productos (reemplaza los ajustes individuales). Nunca se suman recargos.
@@ -338,7 +309,7 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
         {(() => {
           const despOk = cot.items.length > 0 && cot.items.every((it) => envioConfirmado(cot.envios.find((e) => e.key === it.envio_key) || {}));
           const pasos = [["Datos del cliente", !!String(cot.institucion || "").trim(), "datos"], ["Dirección", dirOk, "datos"], ["Productos", cot.items.length > 0, "productos"],
-            ["Verificación de despacho", despOk && calc.listo, "productos"], ["Precios", calc.listo && cot.items.length > 0, "precios"], ["EETT", pdf.listo, "eett"]];
+            ["Verificación de despacho", despOk && calc.listo, "productos"], ["Precios", calc.listo && cot.items.length > 0, "precios"], ["Documentos", pdf.listo, "eett"]];
           return <NavegacionCotizacion pasos={pasos} activa={pestana} onCambiar={setPestana}
             conteos={{ productos: nPend, precios: nPend, eett: nRev }} />;
         })()}
@@ -543,8 +514,8 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
           {cot.items.length > 0 && !calc.listo && <div data-copiar-bloqueado style={{ fontSize: T.small, color: C.warnText, textAlign: "center", marginTop: 6 }}>Bloqueado: confirma los costos y despachos pendientes ({calc.pendientes.length}) antes de copiar precios a Mercado Público.</div>}
         </PanelPestana>
 
-        <PanelPestana visible={pestana === "eett"} titulo="EETT">
-          <AvisoLinea tono="info" icono="🔒">El PDF contiene solo información técnica: nunca precios, despachos, enlaces, proveedores, recargos, ganancias ni IVA. Se descarga en este dispositivo y no se guarda en el servidor.</AvisoLinea>
+        <PanelPestana visible={pestana === "eett"} titulo="Documentos">
+          <AvisoLinea tono="info" icono="🔒">Los documentos nunca incluyen costos de compra, despachos internos, enlaces, proveedores, recargos, ganancias ni financiamiento. La EETT no incluye precios.</AvisoLinea>
           {pdf.faltan.length > 0 && <AvisoLinea tono="warn" dato="faltan-datos" accion="Completar" onClick={() => setPestana("datos")}>Falta: {pdf.faltan.join(" y ")}.</AvisoLinea>}
           {pdf.advertencias.map((a, i) => <AvisoLinea key={i} tono="warn" icono="⚠" dato={`eett-advertencia-${a.tipo}`} {...(a.tipo === "faltan_datos" ? { accion: "Revisar datos", onClick: () => setPestana("datos") } : {})}>{a.mensaje}</AvisoLinea>)}
           {pdf.advertencias.length > 0 && <div data-eett-advertencias-nota style={{ fontSize: T.small, color: C.inkMuted, marginBottom: 6 }}>Estas advertencias son para revisión manual: no bloquean la generación del PDF.</div>}
@@ -568,14 +539,12 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
               </Tarjeta>
             );
           })}
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
-            <BotonSecundario data-vista-previa-eett onClick={verPrevia} disabled={!cot.items.length || !!generando} style={{ flex: "1 1 160px", justifyContent: "center", minHeight: 48 }}>{generando === "previa" ? "Preparando…" : "Vista previa de EETT"}</BotonSecundario>
-            <BotonPrincipal data-generar-eett onClick={generarYDescargar} disabled={!pdf.listo || !!generando} style={{ flex: "2 1 220px", justifyContent: "center", minHeight: 48, opacity: !pdf.listo || generando ? 0.55 : 1 }}>{generando === "descarga" ? "Guardando y generando…" : "Generar y descargar EETT"}</BotonPrincipal>
-          </div>
-          <div style={{ fontSize: T.small, color: C.inkFaint, marginTop: 6 }}>Al generar, la cotización se guarda automáticamente (solo si hay cambios) y el PDF se crea con los datos recién guardados. La vista previa no guarda nada.</div>
-          {falla && <AvisoLinea tono="danger" dato="falla-descarga" accion="Reintentar descarga" onClick={reintentar}>Los datos quedaron guardados (versión {falla.base.version}), pero la descarga falló: {falla.mensaje}</AvisoLinea>}
+          <DocumentacionOferta canal="mp" cotizacionId={cot.id || null} token={token} showToast={showToast}
+            construirModelo={construirModeloOferta} asegurarGuardado={asegurarGuardado}
+            propios={[{ k: "plazo_entrega", titulo: "Plazo de entrega", valor: cot.plazo }]} ocultar={["plazo_entrega"]}
+            items={cot.items.map((it, i) => ({ n: i + 1, nombre: it.ficha?.nombre }))} propuestaMatriz={() => propuestaMatrizMP(cot)} />
           {historial.length > 0 && (
-            <Seccion titulo="EETT generadas" nota="Registro de cada generación (los PDF quedan en el dispositivo donde se descargaron).">
+            <Seccion titulo="EETT generadas con el formato anterior" nota="Registro histórico de cada generación (los PDF quedan en el dispositivo donde se descargaron).">
               {historial.map((h) => (
                 <div key={h.id} data-eett-generado style={{ fontSize: T.small, color: C.inkMuted, padding: "4px 0", borderBottom: `1px solid ${C.border}` }}>
                   {fechaHora(h.fecha)} · versión {h.version}{h.paginas ? ` · ${h.paginas} pág.` : ""}{h.generado_por_nombre ? ` · ${h.generado_por_nombre}` : ""}{h.nombre_documento ? ` · ${h.nombre_documento}` : ""}
@@ -589,7 +558,6 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
       {editor && <EditorFicha key={editor.item.key} inicial={editor.item} esNuevo={editor.esNuevo} envios={cot.envios} items={cot.items} destino={destino} destinoValido={dirOk} dirCliente={{ direccion_entrega: cot.direccion_entrega, comuna: cot.comuna, region: cot.region }} onDireccion={setDireccion} almacen={almacen} token={token} protegido={protegido && !editor.esNuevo} onGuardar={guardarItem} onCerrar={cerrarFicha} respaldo={editor.respaldo} onBorrador={alCambiarFicha} />}
       {verBib && <SelectorBiblioteca almacen={almacen} onElegir={desdeBiblioteca} onCerrar={() => setVerBib(false)} />}
       {conflicto && <ConflictoVersion version={conflicto.bfk.version} campos={conflicto.campos} onCombinar={combinarConflicto} onDescartarMios={descartarConflicto} onCancelar={() => setConflicto(null)} />}
-      {preview && <VistaPreviaEETT {...preview} onCerrar={() => setPreview(null)} onDescargar={pdf.listo ? () => { setPreview(null); generarYDescargar(); } : null} />}
       {eliminar && <EliminarCotizacion cot={{ ...cot, estado: estadoGuardado || cot.estado, oc_codigo: inicial.oc_codigo || cot.oc_codigo }} nEett={historial.length} onCancelar={() => setEliminar(false)} onEliminar={eliminarCot} />}
     </HojaLateral>
   );

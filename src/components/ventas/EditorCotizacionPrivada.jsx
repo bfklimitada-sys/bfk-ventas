@@ -19,7 +19,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { C, T, R, MONO, iStyle, iMono, selStyle, fmt, cardStyle } from "../../lib/theme";
 import { Field } from "../ui/Basicos";
-import { HojaLateral, Pestanas, PanelPestana, Tarjeta, Badge, AvisoLinea, BotonPrincipal, BotonSecundario, FilaDato, Seccion, Ayuda } from "../ui/Sistema";
+import { HojaLateral, Pestanas, PanelPestana, Tarjeta, Badge, AvisoLinea, BotonPrincipal, BotonSecundario, FilaDato, Seccion, Ayuda, Desplegable } from "../ui/Sistema";
 import { Ventana, Campo, Entrada, Area, ErrorForm, PedirMotivo } from "../proyectos/Comunes";
 import { Vacio, estiloBoton, BadgeVP, SelectorCliente, SubirArchivo, ListaDocumentos } from "./Comunes";
 import { FormCliente } from "./PanelClientes";
@@ -29,6 +29,8 @@ import { EditorFicha } from "../cotizaciones/EditorFicha";
 import { SelectorBiblioteca } from "../cotizaciones/EditorCotizacion";
 import { ImagenFicha } from "../cotizaciones/ImagenFicha";
 import { VistaPreviaEETT } from "../cotizaciones/VistaPreviaEETT";
+import { DocumentacionOferta } from "../cotizaciones/DocumentacionOferta";
+import { modeloOfertaVP } from "../../lib/modeloOferta";
 import { ConflictoVersion } from "../ui/ConflictoVersion";
 import { combinarVersiones, aplicarCombinacion, normalizarProductos, resumenProductos, textoValor } from "../../lib/conflictoVersion";
 import { NavegacionCotizacion } from "../cotizaciones/PasosCotizacion";
@@ -38,7 +40,7 @@ import { leerCotizacion, guardarCotizacion, cambiarEstadoCotizacion, nuevaRevisi
 import { accionesCotizacion, ESTADOS_COTIZACION, fechaTxt, hoyISO, sumarDias, folioRevision, mensajeVP, documentoDesdeEditor, cantidadTxt } from "../../lib/ventasPrivadas";
 import { itemVacioVP, cotizacionParaEditor, calcularCotizacionVP, precioConRecargo, lineaParaGuardarVP, validarItemsVP, descripcionDeFicha } from "../../lib/vpCotizacion";
 import { ESTADOS_ENVIO, envioConfirmado, envioVacio, nuevaClave, proveedorDeEnlace, invalidarDespachosPorDireccion, revisarFicha, camposNumericosInvalidos } from "../../lib/cotizaciones";
-import { crearAlmacen, logoBFK, subirImagenesFicha } from "../../lib/cotizacionesDatos";
+import { crearAlmacen, logoBFK, subirImagenesFicha, refImagen } from "../../lib/cotizacionesDatos";
 import { generarPdfCotizacion } from "../../lib/vpPdf";
 import { generarPdfEETTVP, contenidoEETTVP, normalizarFichaEETT, mismoContenidoEETT } from "../../lib/vpEETT";
 import { descargarBlob } from "../../lib/eettPdf";
@@ -142,6 +144,7 @@ export function EditorCotizacionPrivada({ token, perfil, vp, id, showToast, onCe
   const editable = nueva || (acc.editar && viendoActual);
   const vistaRev = useMemo(() => (c && !viendoActual && d ? cotizacionParaEditor(d, revVista) : null), [c, viendoActual, d, revVista]);
   const vista = vistaRev ? { ...cot, ...Object.fromEntries(CAMPOS_CAB.map((k) => [k, vistaRev.rev[k] ?? ""])), afecta_iva: vistaRev.rev.afecta_iva !== false, items: vistaRev.items, envios: vistaRev.envios } : cot;
+  const vistaRef = useRef(vista); vistaRef.current = vista;
   const calc = useMemo(() => (vista ? calcularCotizacionVP(vista) : null), [vista]);
   const cliente = vp.clientes.find((x) => x.id === vista?.cliente_id);
   const cambiar = (fn) => { setCot((x) => fn(clonar(x))); setSucio(true); };
@@ -302,6 +305,22 @@ export function EditorCotizacionPrivada({ token, perfil, vp, id, showToast, onCe
       const r = await generarPdfCotizacion(documento, { logo: await logoBFK(logoUrl) });
       if (verPrimero) setPrevia({ ...r, tipo: "cotizacion" }); else descargarBlob(r.blob, r.nombre);
     } catch (e) { showToast?.(`No se pudo generar el PDF: ${e.message}`, "error"); } finally { setOcupado(""); }
+  };
+
+  // ── Documentación de la oferta (25/11/2026): el mismo generador de Mercado Público; solo cambian los datos ──
+  const construirModeloOferta = async ({ version, condiciones, matriz }) => {
+    const v = vistaRef.current;
+    const documento = documentoDesdeEditor({ folio: c?.folio || "", revision: 0, cab: v,
+      cliente: cliente ? { razon_social: cliente.razon_social, rut: cliente.rut, giro: cliente.giro, direccion: cliente.direccion, comuna: cliente.comuna } : { razon_social: c?.cliente_nombre || "", rut: c?.cliente_rut || "" },
+      items: v.items.map((it) => ({ tipo: it.tipo, codigo: it.codigo, descripcion: descripcionDeFicha(it.ficha), unidad: it.unidad, cantidad: it.cantidad, precio_unitario: it.precio_unitario, descuento_pct: it.descuento_pct })),
+      empresa: vp.empresa, responsable: c?.responsable_nombre || perfil?.nombre });
+    const fichas = await Promise.all(v.items.map(async (it) => ({ ...it.ficha, imagenes: (await Promise.all((it.ficha?.imagenes || []).map(refImagen))).filter(Boolean) })));
+    const vendedor = vendedorDocumento(v.vendedor ?? (c ? claveVendedor(c) : ""), { vendedores: vp.vendedores, empresa: vp.empresa, actual: c });
+    return modeloOfertaVP(documento, fichas, { version, fecha: v.fecha_emision, vendedor, condiciones, matriz });
+  };
+  const asegurarGuardadoOferta = async () => {
+    if (c?.id && !sucio) return true;
+    try { await guardarInterno(); return true; } catch (e) { showToast?.(`No se guardó: ${mensajeVP(e)}`, "error"); return false; }
   };
 
   // ── EETT: el mismo recorrido de Mercado Público (components/cotizaciones/EditorCotizacion.jsx) ──
@@ -631,7 +650,7 @@ export function EditorCotizacionPrivada({ token, perfil, vp, id, showToast, onCe
         </PanelPestana>
 
         {/* ── EETT (mismo recorrido de Mercado Público) ── */}
-        <PanelPestana visible={pestana === "eett"} titulo="EETT">
+        <PanelPestana visible={pestana === "eett"} titulo="Documentos">
           <AvisoLinea tono="info" icono="🔒">El PDF contiene solo información técnica: nunca precios, despachos, enlaces, proveedores, recargos, ganancias ni IVA. Se descarga en este dispositivo; la EETT queda registrada con folio y revisión para vincularla a la venta.</AvisoLinea>
           {faltanEETT.length > 0 && <AvisoLinea tono="warn" dato="faltan-datos" accion="Completar" onClick={() => setPestana("datos")}>Falta: {faltanEETT.join(" y ")}.</AvisoLinea>}
           {advEETT.map((a, i) => <AvisoLinea key={i} tono="warn" icono="⚠" dato={`eett-advertencia-${a.tipo}`} accion="Revisar datos" onClick={() => setPestana("datos")}>{a.mensaje}</AvisoLinea>)}
@@ -656,6 +675,12 @@ export function EditorCotizacionPrivada({ token, perfil, vp, id, showToast, onCe
               </Tarjeta>
             );
           })}
+          <DocumentacionOferta canal="vp" cotizacionId={c?.id || null} token={token} showToast={showToast}
+            construirModelo={construirModeloOferta} asegurarGuardado={asegurarGuardadoOferta} soloLectura={!editable || !viendoActual}
+            propios={[{ titulo: "Plazo de entrega", valor: vista.plazo_entrega }, { titulo: "Forma de pago", valor: vista.condiciones_pago }, { titulo: "Vigencia", valor: vista.vigencia_hasta }]}
+            ocultar={["plazo_entrega", "forma_pago", "vigencia", "observaciones"]}
+            items={vista.items.map((it, i) => ({ n: i + 1, nombre: it.ficha?.nombre || String(it.descripcion || "").split("\n")[0] }))} />
+          <Desplegable dato="eett-formato-anterior" titulo="EETT con folio (formato anterior)" resumen={c && d.eett.length ? `${d.eett.length} registrada${d.eett.length === 1 ? "" : "s"}` : "Sin registros"} plano>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
             <BotonSecundario data-vista-previa-eett onClick={verPreviaEETT} disabled={!vista.items.length || !!ocupado} style={{ flex: "1 1 160px", justifyContent: "center", minHeight: 48 }}>{ocupado === "previa-eett" ? "Preparando…" : "Vista previa de EETT"}</BotonSecundario>
             {(acc.eett || nueva) && <BotonPrincipal data-generar-eett onClick={generarYDescargar} disabled={!eettLista || !puedeGenerarEETT || !!ocupado} style={{ flex: "2 1 220px", justifyContent: "center", minHeight: 48, opacity: !eettLista || !puedeGenerarEETT || ocupado ? 0.55 : 1 }}>{ocupado === "generar-eett" ? "Guardando y generando…" : "Generar y descargar EETT"}</BotonPrincipal>}
@@ -676,6 +701,7 @@ export function EditorCotizacionPrivada({ token, perfil, vp, id, showToast, onCe
               ))}
             </Seccion>
           )}
+          </Desplegable>
         </PanelPestana>
       </div>
 

@@ -16,7 +16,7 @@
 //     El «recargo sobre costo» es solo una ayuda que, al usarse, escribe el precio unitario = costo unitario × (1 + recargo)
 //     redondeado hacia arriba (mismo redondeo que Mercado Público). Nunca se recalcula solo ni cambia documentos guardados.
 // ═══════════════════════════════════════════════════════════════════════════════════════════════
-import { IVA, ESTADOS_ENVIO, repartirEnvios, precioBrutoUnit, envioConfirmado, mismoDestino, fichaPublica, nuevaClave, itemVacio, envioVacio } from "./cotizaciones.js";
+import { IVA, ESTADOS_ENVIO, repartirEnvios, precioBrutoUnit, envioConfirmado, mismoDestino, fichaPublica, fichaParaGuardar, nuevaClave, itemVacio, envioVacio } from "./cotizaciones.js";
 import { calcularLinea, calcularTotales, redondear, aNumero, TASA_IVA } from "./ventasPrivadas.js";
 
 const num = (v) => { const n = Number(String(v ?? "").replace(",", ".")); return Number.isFinite(n) ? n : 0; };
@@ -143,7 +143,7 @@ export const precioConRecargo = (costoUnit, recargo) => (costoUnit > 0 && Number
 // ── Editor → base ─────────────────────────────────────────────────────────────────────────────
 // imagenes: rutas ya subidas al depósito (cz-productos) para la ficha. conCostos: quien guarda puede ver los datos internos.
 export function lineaParaGuardarVP(it, linea, { imagenes, envio, conCostos }) {
-  const ficha = { ...fichaPublica(it.ficha), imagenes: (imagenes || []).filter((x) => typeof x === "string" && x && !x.startsWith("data:")).slice(0, 4) };
+  const ficha = { ...fichaParaGuardar(it.ficha), imagenes: (imagenes || []).filter((x) => typeof x === "string" && x && !x.startsWith("data:")).slice(0, 4) };
   const base = { tipo: it.tipo === "servicio" ? "servicio" : "producto", producto_id: it.producto_id || null, codigo: txt(it.codigo) || null,
     descripcion: descripcionDeFicha(ficha), unidad: txt(it.unidad) || "UN", cantidad: aNumero(it.cantidad), precio_unitario: aNumero(it.precio_unitario),
     descuento_pct: aNumero(it.descuento_pct) ?? 0, ficha, ficha_aprobada: !!it.ficha_aprobada };
