@@ -1,6 +1,8 @@
 // Ventas privadas › Órdenes de venta: lista y ficha con cuatro pestañas (Detalle · Entregas · Documentos · Pagos).
 // Entrega, facturación y pago se controlan por separado (una venta entregada puede seguir pendiente de cobro).
 // Facturas: se REGISTRAN las emitidas en el SII (este módulo no emite documentos tributarios electrónicos).
+import { listarDocumentosOferta } from "../../lib/documentosOfertaDatos";
+import { descargarDocumentoEmitido } from "../../lib/documentosOfertaDescarga";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { C, MONO, R, S, T, cardStyle, btnMini } from "../../lib/theme";
 import { HojaLateral, Seccion, Pestanas, PanelPestana, AvisoLinea, Badge } from "../ui/Sistema";
@@ -433,8 +435,9 @@ function Documentos({ token, d, v, esResp, vigente, vp, showToast, refrescar, se
         );
       })}
     </Seccion>
-    <Seccion titulo="Cotización aprobada y EETT">
+    <Seccion titulo="Cotización aprobada y documentos de la oferta">
       {v.revision_id ? <div style={{ ...cardStyle, borderRadius: R.md, padding: "9px 12px", marginBottom: 6 }}>Cotización aprobada <b style={{ fontFamily: MONO }}>{folioRevision(v.cotizacion_folio, v.cotizacion_revision)}</b> (PDF desde la pestaña Detalle).</div> : <Vacio>Venta directa: sin cotización aprobada.</Vacio>}
+      {v.cotizacion_id && <DocumentosOfertaVenta token={token} cotizacionId={v.cotizacion_id} showToast={showToast} />}
       {d.eett.map((e) => (
         <div key={e.id} data-eett-venta={`${e.folio}-R${e.revision}`} style={{ ...cardStyle, borderRadius: R.md, padding: "9px 12px", marginBottom: 6, display: "flex", gap: 8, alignItems: "center" }}>
           <span style={{ flex: 1 }}><b style={{ fontFamily: MONO }}>{e.folio} · Rev. {e.revision}</b> {e.id === v.eett_id && <Badge tono="ok">Vinculada a esta venta</Badge>} {e.estado === "reemplazada" && <Badge>Reemplazada</Badge>}</span>
@@ -570,4 +573,22 @@ function FormImputar({ token, pago, facturas, imputaciones, showToast, onCerrar,
       <Campo etiqueta="Monto a aplicar"><Entrada inputMode="numeric" value={m} onChange={(e) => setM(e.target.value)} /></Campo>
     </Ventana>
   );
+}
+
+// Documentos de la oferta emitidos para la cotización de esta venta (25/11/2026): se vuelven a descargar idénticos.
+const NOMBRE_DOC = { oferta: "Oferta técnica y económica", cotizacion: "Cotización económica", eett: "Especificaciones técnicas (EETT)" };
+function DocumentosOfertaVenta({ token, cotizacionId, showToast }) {
+  const [docs, setDocs] = useState([]); const [ocupado, setOcupado] = useState("");
+  useEffect(() => { let vivo = true; listarDocumentosOferta(token, "vp", cotizacionId).then((x) => { if (vivo) setDocs(x); }).catch(() => {}); return () => { vivo = false; }; }, [token, cotizacionId]);
+  const bajar = async (d) => {
+    setOcupado(d.id);
+    try { const r = await descargarDocumentoEmitido(token, d.id); showToast?.(r.identico ? `Descargado ${r.nombre}` : "Atención: el archivo regenerado no es idéntico al emitido.", r.identico ? undefined : "error"); }
+    catch (e) { showToast?.(e.message || String(e), "error"); } finally { setOcupado(""); }
+  };
+  return docs.map((d) => (
+    <div key={d.id} data-documento-venta={`${d.tipo}-v${d.version}`} style={{ ...cardStyle, borderRadius: R.md, padding: "9px 12px", marginBottom: 6, display: "flex", gap: 8, alignItems: "center" }}>
+      <span style={{ flex: 1 }}><b>{NOMBRE_DOC[d.tipo] || d.tipo}</b> · versión {String(d.version).padStart(2, "0")}</span>
+      <button type="button" data-pdf-documento-venta onClick={() => bajar(d)} disabled={!!ocupado} style={btnMini()}>{ocupado === d.id ? "…" : "PDF"}</button>
+    </div>
+  ));
 }

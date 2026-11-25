@@ -1,15 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { C, T, R, iStyle, selStyle } from "../../lib/theme";
 import { Seccion, Tarjeta, Badge, AvisoLinea, BotonPrincipal, BotonSecundario, Desplegable } from "../ui/Sistema";
-import { importarModulo } from "../../lib/cargaModulos";
-import { logoBFK, imagenesDocumento } from "../../lib/cotizacionesDatos";
 import { descargarBlob } from "../../lib/eettPdf";
-import { cargarFuentes } from "../../lib/fuentesDocumento";
-import { TIPOS_DOCUMENTO, generarDocumentoOferta, revisarModeloOferta, GENERADOR } from "../../lib/documentosOferta";
+import { TIPOS_DOCUMENTO, revisarModeloOferta } from "../../lib/documentosOferta";
+import { generarDocumento, descargarDocumentoEmitido } from "../../lib/documentosOfertaDescarga";
 import { CAMPOS_CONDICIONES, ESTADOS_CUMPLIMIENTO } from "../../lib/modeloOferta";
-import { leerCondicionesOferta, guardarCondicionesOferta, listarDocumentosOferta, leerModeloEmitido, emitirDocumentoOferta, huellaContenido, versionPara } from "../../lib/documentosOfertaDatos";
+import { leerCondicionesOferta, guardarCondicionesOferta, listarDocumentosOferta, emitirDocumentoOferta, huellaContenido, versionPara } from "../../lib/documentosOfertaDatos";
 import { VisorDocumento } from "./VisorDocumento";
-import logoUrl from "../../assets/bfk-logo.jpg";
 
 // «Documentación de la oferta» (25/11/2026): dentro de cada cotización (Mercado Público y Ventas privadas, mismo
 // componente). Tres documentos —Oferta técnica y económica (principal), Cotización económica y EETT— con vista previa,
@@ -21,7 +18,8 @@ import logoUrl from "../../assets/bfk-logo.jpg";
 //   propios: [{ titulo, valor, k }] condiciones que vienen de la propia cotización (se muestran, se editan en Datos)
 //   ocultar: claves de CAMPOS_CONDICIONES que la cotización ya tiene como campo propio
 //   items: [{ n, nombre }] (para asociar requisitos); propuestaMatriz(): requisitos del comprador (opcional)
-//   soloLectura: revisión ya enviada (no se emite ni se editan condiciones)
+//   soloLectura: revisión que ya no se edita (no se cambian condiciones ni matriz; sí se emiten sus documentos)
+//   puedeEmitir: false al ver una revisión anterior (solo vista previa y descarga)
 //   cambiosSinGuardar: la cotización tiene cambios sin guardar (se recuerda si BFK Datos pide actualizarse)
 const ORDEN = ["oferta", "cotizacion", "eett"];
 const DESCRIPCION = {
@@ -31,7 +29,7 @@ const DESCRIPCION = {
 };
 const fechaHora = (iso) => { try { return new Date(iso).toLocaleString("es-CL", { timeZone: "America/Santiago", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }); } catch { return iso; } };
 
-export function DocumentacionOferta({ canal, cotizacionId, token, showToast, construirModelo, asegurarGuardado, propios = [], ocultar = [], items = [], propuestaMatriz, soloLectura = false, cambiosSinGuardar = false }) {
+export function DocumentacionOferta({ canal, cotizacionId, token, showToast, construirModelo, asegurarGuardado, propios = [], ocultar = [], items = [], propuestaMatriz, soloLectura = false, puedeEmitir = true, cambiosSinGuardar = false }) {
   const [instalada, setInstalada] = useState(null);          // null = consultando · true · false
   const [condiciones, setCondiciones] = useState({}); const [matriz, setMatriz] = useState([]);
   const [guardadas, setGuardadas] = useState("{}"); const [historial, setHistorial] = useState([]);
@@ -65,12 +63,7 @@ export function DocumentacionOferta({ canal, cotizacionId, token, showToast, con
     const hc = await huellaContenido(m0);
     return { modelo: { ...m0, version: versionPara(historial, hc) }, huellaContenido: hc };
   };
-  const generar = async (tipo, modelo) => {
-    const { jsPDF } = await importarModulo(() => import("jspdf"));
-    const refs = (modelo.items || []).flatMap((it) => it.ficha?.imagenes || []);
-    const [fuentes, logo, imagenes] = await Promise.all([cargarFuentes(), logoBFK(logoUrl), imagenesDocumento(tokenRef.current, refs)]);
-    return generarDocumentoOferta(tipo, modelo, { jsPDF, fuentes, logo, imagenes });
-  };
+  const generar = (tipo, modelo) => generarDocumento(tokenRef.current, tipo, modelo);
 
   const verPrevia = async (tipo) => {
     setError(""); setOcupado(`previa-${tipo}`); setEmitido(null);
@@ -98,7 +91,7 @@ export function DocumentacionOferta({ canal, cotizacionId, token, showToast, con
     setError(""); setOcupado("emitir");
     try {
       if (!(await asegurarGuardado())) throw new Error("No se pudo guardar la cotización: no se emitió nada.");
-      if (sinGuardar) await guardarCondiciones({ silencioso: true });
+      if (sinGuardar && !soloLectura) await guardarCondiciones({ silencioso: true });
       const { modelo, huellaContenido: hc } = await modeloConVersion();
       const r = await generar(previa.tipo, modelo);
       if (r.huellaModelo !== previa.huellaModelo || r.huellaPdf !== previa.huellaPdf) {
@@ -118,12 +111,9 @@ export function DocumentacionOferta({ canal, cotizacionId, token, showToast, con
   const descargarEmitido = async (d) => {
     setError(""); setOcupado(`hist-${d.id}`);
     try {
-      const e = await leerModeloEmitido(tokenRef.current, d.id);
-      if (e.generador !== GENERADOR) throw new Error(`Este documento se emitió con el generador «${e.generador}», que ya no está disponible.`);
-      const r = await generar(e.tipo, e.modelo);
-      descargarBlob(r.blob, e.nombre_archivo);
-      if (r.huellaPdf !== e.huella_pdf) showToast?.("Atención: el archivo regenerado no es idéntico byte a byte al emitido (cambió la fuente, el logo o una imagen). Su contenido es el mismo modelo emitido.", "error");
-      else showToast?.(`Descargado ${e.nombre_archivo} (idéntico al emitido).`);
+      const r = await descargarDocumentoEmitido(tokenRef.current, d.id);
+      if (!r.identico) showToast?.("Atención: el archivo regenerado no es idéntico byte a byte al emitido (cambió la fuente, el logo o una imagen). Su contenido es el mismo modelo emitido.", "error");
+      else showToast?.(`Descargado ${r.nombre} (idéntico al emitido).`);
     } catch (e) { setError(e.message || String(e)); } finally { setOcupado(""); }
   };
 
@@ -150,7 +140,7 @@ export function DocumentacionOferta({ canal, cotizacionId, token, showToast, con
               </div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
                 <BotonPrincipal data-previa-documento={tipo} onClick={() => verPrevia(tipo)} disabled={!!ocupado || !items.length} style={{ flex: "2 1 160px", justifyContent: "center", minHeight: 44 }}>
-                  {ocupado === `previa-${tipo}` ? "Preparando…" : soloLectura || !cotizacionId || !instalada ? "Vista previa" : "Vista previa y emitir"}</BotonPrincipal>
+                  {ocupado === `previa-${tipo}` ? "Preparando…" : !puedeEmitir || !cotizacionId || !instalada ? "Vista previa" : "Vista previa y emitir"}</BotonPrincipal>
                 <BotonSecundario data-descargar-documento={tipo} onClick={() => descargarActual(tipo)} disabled={!!ocupado || !items.length} style={{ flex: "1 1 120px", justifyContent: "center", minHeight: 44 }}>
                   {ocupado === `descargar-${tipo}` ? "Generando…" : "Descargar PDF"}</BotonSecundario>
               </div>
@@ -227,7 +217,7 @@ export function DocumentacionOferta({ canal, cotizacionId, token, showToast, con
         <VisorDocumento previa={previa} avisos={previa.avisos} emitiendo={ocupado === "emitir"} emitido={emitido} error={error}
           onCerrar={() => { setPrevia(null); setEmitido(null); setError(""); }}
           onDescargar={() => { descargarBlob(previa.blob, previa.nombre.replace(/\.pdf$/, "_sin-emitir.pdf")); showToast?.("PDF descargado sin emitir."); }}
-          onEmitir={!soloLectura && cotizacionId && instalada ? emitir : null} />
+          onEmitir={puedeEmitir && cotizacionId && instalada ? emitir : null} />
       )}
     </div>
   );

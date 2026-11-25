@@ -51,10 +51,11 @@ const cantidadTexto = (q, unidad) => {
   return `${t} ${u}`;
 };
 
-// ── Nombre de archivo: COT_<referencia>_v1.pdf · EETT_… · OFERTA_… ──
+// ── Nombre de archivo: <DOCUMENTO>_<CANAL>_<referencia>_v<n>.pdf — COT_MP_1540-1372-COT26_v1.pdf, OFERTA_PRIVADA_CP-2026-0007_v1.pdf ──
 export function nombreArchivoOferta(tipo, modelo) {
   const ref = String(modelo?.referencia || "cotizacion").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "cotizacion";
-  return `${TIPOS_DOCUMENTO[tipo]?.prefijo || "DOC"}_${ref}_v${Math.max(1, Math.trunc(Number(modelo?.version) || 1))}.pdf`;
+  const canal = modelo?.canal === "vp" ? "PRIVADA" : "MP";
+  return `${TIPOS_DOCUMENTO[tipo]?.prefijo || "DOC"}_${canal}_${ref}_v${Math.max(1, Math.trunc(Number(modelo?.version) || 1))}.pdf`;
 }
 
 // ── Fichas de la EETT: líneas con ficha técnica idéntica se presentan en UNA ficha con la cantidad total ──
@@ -191,6 +192,16 @@ function componer(tipo, modelo, { jsPDF, fuentes, logo, imagenes = {}, id } = {}
 
   // ── Bloques ──
   const barra = (titulo, color = OSCURO) => { rect(X0, y, ANCHO, 7.8, color, LINEA); fuente(true, 11, BLANCO); escribir(String(titulo).toUpperCase(), 13.1, y + 2.2, 11); y += 7.8; };
+  // Título de cada producto: Arial (Liberation Sans) 13 negrita, según el documento de requisitos (25/11/2026). La barra crece
+  // si el nombre ocupa más de una línea; nunca se recorta.
+  const lineasProducto = (titulo) => { fuente(true, 13); return lineas(String(titulo).toUpperCase(), ANCHO - 6.4); };
+  const altoBarraProducto = (titulo) => 2.6 + lineasProducto(titulo).length * altoLinea(13) + 1.9;
+  const barraProducto = (titulo) => {
+    const ls = lineasProducto(titulo); const h = altoBarraProducto(titulo);
+    rect(X0, y, ANCHO, h, OSCURO, LINEA); fuente(true, 13, BLANCO);
+    ls.forEach((l, i) => doc.text(l, 13.1, base(y + 2.6 + i * altoLinea(13), 13)));
+    y += h;
+  };
   const filaCategoria = (titulo) => { rect(X0, y, ANCHO, 6.0, CELESTE); fuente(true, 10, AZUL); escribir(titulo, 12.7, y + 1.6, 10); y += 6.0; };
   // Fila «característica / valor»: la etiqueta y el valor nunca se separan; la fila crece con el texto.
   const medirPar = (etq, valor) => {
@@ -353,12 +364,15 @@ function componer(tipo, modelo, { jsPDF, fuentes, logo, imagenes = {}, id } = {}
     const it = g.item; const f = it.ficha || {};
     const imgs = (f.imagenes || []).slice(0, 4);
     const secciones = [];
-    if (String(f.descripcion || "").trim()) secciones.push({ titulo: "Descripción técnica", filas: [{ parrafo: true, valor: f.descripcion }] });
+    // Cada texto descriptivo es una fila (nunca se corta dentro de un párrafo; una descripción larga sigue en otra página).
+    const parrafos = String(f.descripcion || "").split(/\n+/).map((x) => x.trim()).filter(Boolean);
+    if (parrafos.length) secciones.push({ titulo: "Descripción técnica", filas: parrafos.map((valor) => ({ parrafo: true, valor })) });
     for (const c of f.categorias || []) if (c.filas?.length) secciones.push({ titulo: c.titulo, filas: c.filas.map((r) => ({ etiqueta: r.etiqueta, valor: r.valor })) });
     const cond = (f.condiciones || []).filter((c) => String(c.valor || "").trim());
     const req = (modelo.matriz || []).filter((r) => g.items.includes(r.item));
     const altoCuerpo = altoTablaPares(secciones) + (cond.length ? altoTablaPares([{ titulo: "", filas: cond.map((c) => ({ etiqueta: c.titulo, valor: c.valor })) }]) - 2.2 : 0) + (req.length ? altoMatriz(req) - 2.2 : 0);
-    const altoCab = (hImg) => 7.8 + 8.8 + (imgs.length ? hImg + 2.2 : 0);
+    const tituloFicha = `${g.items.length > 1 ? "Ítems" : "Ítem"} ${g.items.map(dosDigitos).join(", ")} | ${it.nombre}`;
+    const altoCab = (hImg) => altoBarraProducto(tituloFicha) + 8.8 + (imgs.length ? hImg + 2.2 : 0);
     let altoImg = imgs.length ? (imgs.length <= 2 ? 40.2 : 34.0) : 0;
     const disponiblePagina = Y_LIM - Y_CONT;
     if (imgs.length && altoCab(altoImg) + altoCuerpo > disponiblePagina) {
@@ -376,7 +390,7 @@ function componer(tipo, modelo, { jsPDF, fuentes, logo, imagenes = {}, id } = {}
       }
     }
     g.items.forEach((n) => { paginas[n] = doc.getNumberOfPages(); });
-    barra(`${g.items.length > 1 ? "Ítems" : "Ítem"} ${g.items.map(dosDigitos).join(", ")} | ${it.nombre}`);
+    barraProducto(tituloFicha);
     fuente(true, 10);
     const ident = [[it.marca, it.modelo].filter(Boolean).join(" "), `Cantidad: ${cantidadTexto(g.cantidad, g.unidad)}`].filter(Boolean).join("  |  ");
     escribir(ident, 12.7, y + 2.5, 10);

@@ -70,7 +70,7 @@ function flat(o, p = "", out = {}) { if (o && typeof o === "object") for (const 
 const docs = {};
 for (const tipo of ["cotizacion", "eett", "oferta"]) docs[tipo] = await generarDocumentoOferta(tipo, modelo, opciones);
 const tx = Object.fromEntries(Object.entries(docs).map(([k, r]) => [k, texto(r.bytes, r.nombre)]));
-ok("P1 nombres de archivo COT_/EETT_/OFERTA_<referencia>_v1.pdf", docs.cotizacion.nombre === "COT_1540-1372-COT26_v1.pdf" && docs.eett.nombre === "EETT_1540-1372-COT26_v1.pdf" && docs.oferta.nombre === "OFERTA_1540-1372-COT26_v1.pdf");
+ok("P1 nombres de archivo COT_/EETT_/OFERTA_MP_<referencia>_v1.pdf", docs.cotizacion.nombre === "COT_MP_1540-1372-COT26_v1.pdf" && docs.eett.nombre === "EETT_MP_1540-1372-COT26_v1.pdf" && docs.oferta.nombre === "OFERTA_MP_1540-1372-COT26_v1.pdf");
 ok("P2 fuente Liberation Sans incorporada (normal y negrita) y nada de Helvetica dibujado", ["cotizacion", "eett", "oferta"].every((t) => { const f = fuentesPdf(docs[t].nombre); return /LiberationSans\s+CID TrueType\s+Identity-H\s+yes/.test(f) && /LiberationSans-Bold|LiberationSans\b/.test(f); }));
 ok("P3 A4 en todos", ["cotizacion", "eett", "oferta"].every((t) => /595\.2\d* x 841\.8\d* pts \(A4\)/.test(execFileSync("pdfinfo", [`${DIR}/${docs[t].nombre}`]).toString())));
 ok("P4 cotización: precios, subtotal, IVA, total, despacho $0, condiciones y vendedor", [pesos(calc.lineas[0].unitario_neto), pesos(calc.totales.neto), pesos(calc.totales.iva_debito), pesos(calc.totales.total), "Despacho", "$0", "IVA 19%", "TOTAL OFERTA", "CONDICIONES COMERCIALES", "Plazo de entrega", "Vendedor responsable"].every((x) => tx.cotizacion.includes(x)), tx.cotizacion.slice(0, 800));
@@ -135,13 +135,24 @@ const docVP = documentoDesdeEditor({ folio: "CP-2026-0007", revision: 0, cab: { 
 const mVP = modeloOfertaVP(docVP, [cot.items[1].ficha, {}], { version: 1, vendedor: "Vendedor VP", condiciones: { garantia: "6 meses" } });
 ok("VP1 totales del modelo = totales calculados por Ventas privadas", mVP.totales.neto === docVP.neto && mVP.totales.iva === docVP.iva && mVP.totales.total === docVP.total && mVP.items[0].total === docVP.items[0].subtotal_neto);
 const cVP = await generarDocumentoOferta("cotizacion", mVP, opciones); const tVP = texto(cVP.bytes, cVP.nombre);
-ok("VP2 nombre de archivo con el folio interno de BFK", cVP.nombre === "COT_CP-2026-0007_v1.pdf");
+ok("VP2 nombre de archivo PRIVADA con el folio interno de BFK", cVP.nombre === "COT_PRIVADA_CP-2026-0007_v1.pdf");
 ok("VP3 datos de la venta privada: cliente, RUT, contacto, dirección; sin ID Compra Ágil ni institución", /Maderas del Sur SpA/.test(tVP) && /76\.086\.428-5/.test(tVP) && /Ana Pérez/.test(tVP) && /Calle Uno 45/.test(tVP) && !/Compra Ágil|Licitación|Institución/i.test(tVP));
 ok("VP4 condiciones desde la cotización privada (plazo, forma de pago, vigencia) + garantía", /10 días hábiles/.test(tVP) && /Contado/.test(tVP) && /25\/12\/2026/.test(tVP) && /6 meses/.test(tVP));
 ok("VP5 sin despacho «$0» de Mercado Público en ventas privadas", !/Despacho\s+\$0/.test(tVP));
 const eVP = await generarDocumentoOferta("eett", mVP, opciones); const teVP = texto(eVP.bytes, eVP.nombre);
 ok("VP6 la EETT privada omite el servicio sin ficha técnica y mantiene el diseño", /ÍTEM 01 \| SILLA ERGONÓMICA RD/.test(teVP) && !/ÍTEM 02/.test(teVP) && /INFORMACIÓN TÉCNICA/.test(teVP));
 ok("VP7 mismo diseño: encabezado y pie iguales a Mercado Público (texto con «  |  » como la referencia)", /BFK Limitada \| Cotización económica CP-2026-0007 \| Versión 01/.test(tVP.replace(/[ \t]+/g, " ")) && /bfklimitada@gmail\.com \| \+56 9 97141822/.test(tVP.replace(/[ \t]+/g, " ")) && /COTIZACIÓN ECONÓMICA/.test(tVP));
+
+// ── 8. Ficha real de CP-2026-0001 (copia aislada): textos descriptivos sin valor y pares dentro de la descripción ──
+const FX = JSON.parse(fs.readFileSync("docs/pruebas-ventas-privadas/fixture_cp_2026_0001.json", "utf8"));
+const mCP = modeloOfertaVP({ folio: "CP-2026-0001", fecha_emision: "2026-11-25", cliente: { razon_social: FX.cliente.razon_social, rut: "61.513.003-6" }, items: [{ tipo: "producto", descripcion: FX.item.descripcion, unidad: "UN", cantidad: 2, precio_unitario: 59990, subtotal_neto: 119980 }], neto: 119980, iva: 22796, total: 142776 },
+  [{ ...FX.item.ficha, imagenes: [] }], { version: 1 });
+const fCP = mCP.items[0].ficha; const filasCP = fCP.categorias.flatMap((c) => c.filas);
+const rCP = await generarDocumentoOferta("eett", mCP, opciones); const tCP = texto(rCP.bytes, "cp.pdf").replace(/\s+/g, " ");
+const textosCP = [...FX.item.ficha.generales, ...FX.item.ficha.especificaciones].map((x) => x.etiqueta.replace(/\s+/g, " ").trim());
+ok("R1 ficha real: los textos sin valor van a «Descripción técnica», nunca como característica vacía", !filasCP.some((r) => !String(r.valor || "").trim()) && textosCP.every((x) => fCP.descripcion.replace(/\s+/g, " ").includes(x)));
+ok("R2 ficha real: los pares de la descripción son características (capacidad, dimensiones, material)", ["Capacidad", "Dimensiones", "Material"].every((e) => filasCP.some((r) => r.etiqueta.startsWith(e) && r.valor)));
+ok("R3 ficha real: el PDF trae todos los textos descriptivos completos", textosCP.every((x) => tCP.includes(x.replace(/[—–]/g, (m) => m))), textosCP.filter((x) => !tCP.includes(x)).map((x) => x.slice(0, 40)));
 
 console.log(`\nRESUMEN documentos: ${n} OK, ${F.length} FALLA(S)`);
 process.exit(F.length ? 1 : 0);

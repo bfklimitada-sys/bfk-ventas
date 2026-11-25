@@ -106,21 +106,21 @@ try {
   await ui.registrarEstado(p, "aceptada");
   ok("Q10 aceptación registrada", q1(`select estado from public.vp_cotizaciones where folio = '${folio}';`) === "aceptada" && (await h4.locator('[data-accion-cot="crear-venta"]').count()) === 1);
 
-  // ── 4. EETT: el mismo recorrido de Mercado Público (revisión de fichas → generar y descargar), sin ventana adicional ──
+  // ── 4. Documentos de la oferta (25/11/2026): la misma sección de Mercado Público (tres documentos, vista previa, emisión) ──
   await ui.pestana(p, "eett");
-  ok("E1 pestaña EETT de Mercado Público: revisión de cada ficha, «Vista previa de EETT» y «Generar y descargar EETT»", (await h4.locator("[data-revision-eett]").count()) === 3
-    && /Vista previa de EETT/.test(await h4.locator("[data-vista-previa-eett]").innerText()) && /Generar y descargar EETT/.test(await h4.locator("[data-generar-eett]").innerText()));
-  const pdfE = await descarga(p, () => h4.locator("[data-generar-eett]").click()); await espera(p, 1500);
+  ok("E1 pestaña «Documentos» igual a la de Mercado Público: revisión de fichas y los tres documentos", (await h4.locator("[data-revision-eett]").count()) === 3
+    && (await h4.locator("[data-documento-oferta]").count()) === 3 && !(await h4.locator('[data-desplegable="eett-formato-anterior"], [data-generar-eett]').count()));
+  const pdfE = await ui.documento(p, "eett");
   ok("E2 sin ventana adicional: no se piden objeto, alcance, requisitos ni selección de ítems", !(await p.locator('[data-ventana^="eett"], [data-eett-objeto], [data-armar-eett]').count()) && !/Objeto del suministro|Alcance/.test(await h4.innerText()));
-  const tE = await textoPDF(pdfE);
-  const eettFolio = q1(`select folio||' R'||revision from public.vp_eett where estado = 'emitida';`);
-  const pos = (r) => tE.search(r);
-  ok("E4 EETT emitida y descargada (folio, revisión, cliente, referencia, todos los ítems numerados en orden)", /^ET-\d{4}-0001 R0$/.test(eettFolio) && /ET-\d{4}-0001/.test(tE) && /Rev\. 0/.test(tE) && /Maderas del Sur/.test(tE) && tE.includes(folio)
-    && pos(/(^|\s)1\. /) >= 0 && pos(/(^|\s)1\. /) < pos(/(^|\s)2\. /) && pos(/(^|\s)2\. /) < pos(/(^|\s)3\. /), eettFolio);
-  ok("E4b EETT con el formato de Mercado Público y sin campos de licitación", /INFORMACI.N\s+T.CNICA DE/.test(tE) && /CARACTER.STICAS/.test(tE) && /COTIZACI.N/.test(tE) && !/LICITACI.N|INSTITUCI.N SOLICITANTE/.test(tE));
+  const tE = await textoPDF(pdfE.buf);
+  const emitido = q1(`select d.tipo||'|'||d.version||'|'||d.nombre_archivo from public.oferta_documentos d join public.vp_cotizaciones c on c.id = d.cotizacion_id where c.folio = '${folio}' and d.canal = 'vp';`);
+  ok("E4 EETT emitida y descargada (archivo PRIVADA con el folio de la cotización, cliente, todos los ítems numerados)", emitido === `eett|1|EETT_PRIVADA_${folio}_v1.pdf` && pdfE.nombre === `EETT_PRIVADA_${folio}_v1.pdf` && /Maderas del Sur/i.test(tE) && tE.includes(folio)
+    && /ÍTEM 01 \|/.test(tE) && /ÍTEM 02 \|/.test(tE), emitido);
+  ok("E4b mismo diseño de Mercado Público y sin campos de licitación", /INFORMACI.N\s+T.CNICA/.test(tE) && /ESPECIFICACIONES T.CNICAS/.test(tE) && !/LICITACI.N|INSTITUCI.N SOLICITANTE|Compra .gil/.test(tE));
   ok("E5 EETT con marca/modelo/características de la ficha y sin precios ni costos", /CPm 680/.test(tE) && /Pedrollo/.test(tE) && /2 HP/.test(tE) && !/\$\s?\d/.test(tE) && !/350\.000|240\.000/.test(tE) && !/Objeto del suministro|Requisitos del cliente/.test(tE));
-  ok("E6 contenido congelado en el formato de Mercado Público (sin objeto ni requisitos) y con los 3 ítems", q1(`select (contenido->>'formato')||'|'||coalesce(contenido->>'objeto','')||'|'||jsonb_array_length(contenido->'items')||'|'||(hash is not null) from public.vp_eett where estado = 'emitida';`) === "mp||3|true");
-  ok("E7 «EETT generadas» muestra la emisión con su PDF", (await h4.locator('[data-eett-generado] [data-descargar-eett]').count()) === 1);
+  ok("E6 nada se escribe en la EETT del formato anterior", q1(`select count(*) from public.vp_eett;`) === "0");
+  await h4.locator('[data-desplegable="historial-eett"] > button').first().click(); await espera(p, 300);
+  ok("E7 el historial muestra la versión emitida con su descarga", (await h4.locator('[data-documento-oferta="eett"] [data-descargar-emitido]').count()) === 1);
 
   // ── 5. Conversión a venta: doble clic no duplica; OC del cliente con archivo ───────────────────
   const h5 = p.locator('[data-hoja-lateral="ficha-cotizacion"]');
@@ -132,7 +132,7 @@ try {
   await cv.locator("[data-confirmar-venta]").dblclick(); await espera(p, 3000);
   ok("V2 doble clic: UNA sola venta para la cotización", q1(`select count(*) from public.vp_ventas v join public.vp_cotizaciones c on c.id = v.cotizacion_id where c.folio = '${folio}';`) === "1");
   const ov = q1(`select folio from public.vp_ventas order by creado_en desc limit 1;`);
-  ok("V3 venta con folio interno, total y vínculos (cotización, revisión, EETT, OC)", q1(`select v.total||'|'||v.origen||'|'||(v.eett_id is not null)||'|'||(select count(*) from public.vp_oc_cliente o where o.venta_id = v.id and o.documento_id is not null) from public.vp_ventas v where folio = '${ov}';`) === "1043481|cotizacion|true|1" && /^OV-\d{4}-0001$/.test(ov), ov);
+  ok("V3 venta con folio interno, total y vínculos (cotización, revisión, OC; sin EETT del formato anterior)", q1(`select v.total||'|'||v.origen||'|'||(v.eett_id is null)||'|'||(select count(*) from public.vp_oc_cliente o where o.venta_id = v.id and o.documento_id is not null) from public.vp_ventas v where folio = '${ov}';`) === "1043481|cotizacion|true|1" && /^OV-\d{4}-0001$/.test(ov), ov);
   const fv = p.locator('[data-hoja-lateral="ficha-venta"]'); await fv.waitFor();
   ok("V4 se abre la ficha de la venta con las cuatro pestañas", JSON.stringify(await fv.locator('[data-pestanas="Ficha de la venta"] [data-tab]').evaluateAll((b) => b.map((x) => x.dataset.tab))) === JSON.stringify(["detalle", "entregas", "documentos", "pagos"]));
   ok("V5 detalle con costo estimado y utilidad estimada (responsable)", /Costo estimado/.test(await fv.locator("[data-margen-venta]").innerText()));
@@ -154,9 +154,9 @@ try {
   await fv.locator('[data-tab="documentos"]').click();
   ok("F1 se aclara que no es emisión tributaria", /no emite documentos tributarios/.test(await fv.innerText()));
   ok("F2 OC del cliente adjunta en Documentos", (await fv.locator('[data-documento="oc_cliente"]').count()) === 1);
-  ok("F2b la EETT emitida está vinculada a la venta", (await fv.locator("[data-eett-venta]").count()) === 1 && /Vinculada a esta venta/.test(await fv.locator("[data-eett-venta]").innerText()));
-  const tEv = await textoPDF(await descarga(p, () => fv.locator("[data-pdf-eett-venta]").click()));
-  ok("F2c la EETT se recupera desde la venta (mismo folio, revisión y contenido)", /ET-\d{4}-0001/.test(tEv) && /Rev\. 0/.test(tEv) && /CPm 680/.test(tEv) && tEv.replace(/\s+/g, " ") === tE.replace(/\s+/g, " ") && !/\$\s?\d/.test(tEv));
+  ok("F2b la venta muestra los documentos emitidos de su cotización", (await fv.locator('[data-documento-venta="eett-v1"]').count()) === 1);
+  const tEv = await textoPDF(await descarga(p, () => fv.locator('[data-documento-venta="eett-v1"] [data-pdf-documento-venta]').click()));
+  ok("F2c la EETT se recupera desde la venta idéntica a la emitida", tEv.replace(/\s+/g, " ") === tE.replace(/\s+/g, " ") && /CPm 680/.test(tEv) && !/\$\s?\d/.test(tEv));
   const tAp = await textoPDF(await descarga(p, async () => { await fv.locator('[data-tab="detalle"]').click(); await fv.locator("[data-pdf-aprobada]").click(); }));
   const revAp = q1(`select r.numero from public.vp_ventas v join public.vp_cotizacion_revisiones r on r.id = v.revision_id join public.vp_cotizaciones c on c.id = v.cotizacion_id where c.folio = '${folio}';`);
   ok("F2d PDF de la cotización aprobada desde la venta (congelado, sin costos)", tAp.includes(folio) && /1\.043\.481/.test(tAp) && !/costo|margen/i.test(tAp));

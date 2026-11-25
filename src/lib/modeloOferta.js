@@ -7,6 +7,7 @@
 // Los montos salen del cálculo existente (calcularCotizacion / totales de Ventas privadas): aquí no hay fórmulas.
 // ═══════════════════════════════════════════════════════════════════════════════════════════════════
 import { agruparPorCategoria, filasDeFicha } from "./especificaciones.js";
+import { normalizarFichaEETT } from "./vpEETT.js";
 
 const txt = (s) => String(s ?? "").replace(/\s+/g, " ").trim();
 const multilinea = (s) => String(s ?? "").replace(/\r/g, "").split("\n").map((l) => l.replace(/[ \t]+/g, " ").trim()).filter(Boolean).join("\n");
@@ -40,13 +41,16 @@ export function condicionesDocumento(c = {}) {
 }
 
 // Ficha técnica del editor → ficha del documento (categorías dinámicas, sin categorías vacías).
+// Primero se aplica la MISMA interpretación de fichas que ya usan ambos canales (normalizarFichaEETT): líneas sin valor que
+// son pares «Etiqueta: valor» pasan a características; las demás son textos descriptivos y van a «Descripción técnica».
 export function fichaDocumento(ficha, condicionesProducto) {
   const f = ficha || {};
-  const filas = filasDeFicha(f);
+  const n = normalizarFichaEETT(f);
+  const filas = filasDeFicha({ marca: n.marca, modelo: n.modelo, color: n.color, generales: n.generales, especificaciones: n.especificaciones });
   const categorias = agruparPorCategoria(filas).map((c) => ({ titulo: c.titulo, filas: c.filas.map((r) => ({ etiqueta: r.etiqueta, valor: r.valor, ...(r.contradictorio ? { contradictorio: true } : {}), ...(r.incompleto ? { incompleto: true } : {}) })) }));
   const cp = condicionesProducto || f.condiciones_producto || {};
   const condiciones = CAMPOS_CONDICIONES_PRODUCTO.map((c) => ({ titulo: c.titulo, valor: multilinea(cp[c.k]) })).filter((c) => c.valor);
-  return { descripcion: multilinea(f.descripcion), categorias, imagenes: (f.imagenes || []).filter(esRefImagen).slice(0, 4), condiciones };
+  return { descripcion: multilinea(n.descripcion), categorias, imagenes: (f.imagenes || []).filter(esRefImagen).slice(0, 4), condiciones };
 }
 
 // Matriz de cumplimiento: solo requisitos reales del comprador; el estado lo decide el vendedor (por defecto «Por verificar»).
@@ -112,7 +116,8 @@ export function modeloOfertaVP(documento, fichas = [], { version = 1, fecha, ven
     const servicio = it.tipo === "servicio";
     const nombre = txt(f.nombre) || txt(String(it.descripcion || "").split("\n")[0]) || `Ítem ${i + 1}`;
     const fd = fichaDocumento(f);
-    const sinFicha = !fd.categorias.length && !fd.descripcion && !fd.imagenes.length && !fd.condiciones.length;
+    // Solo un SERVICIO sin datos técnicos queda fuera de la EETT; un producto siempre tiene su ficha (con aviso si está vacía).
+    const sinFicha = servicio && !fd.categorias.length && !fd.descripcion && !fd.imagenes.length && !fd.condiciones.length;
     return { n: i + 1, nombre, marca: txt(f.marca), modelo: txt(f.modelo), cantidad: Number(it.cantidad) || 0, unidad: txt(it.unidad),
       // Precio unitario de venta guardado (con su descuento de línea, si lo tiene); el total es el subtotal que calculó la app.
       unitario: Math.round((Number(it.precio_unitario) || 0) * (1 - (Number(it.descuento_pct) || 0) / 100)),

@@ -19,11 +19,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { C, T, R, MONO, iStyle, iMono, selStyle, fmt, cardStyle } from "../../lib/theme";
 import { Field } from "../ui/Basicos";
-import { HojaLateral, Pestanas, PanelPestana, Tarjeta, Badge, AvisoLinea, BotonPrincipal, BotonSecundario, FilaDato, Seccion, Ayuda, Desplegable } from "../ui/Sistema";
+import { HojaLateral, Pestanas, PanelPestana, Tarjeta, Badge, AvisoLinea, BotonPrincipal, BotonSecundario, FilaDato, Seccion, Ayuda } from "../ui/Sistema";
 import { Ventana, Campo, Entrada, Area, ErrorForm, PedirMotivo } from "../proyectos/Comunes";
 import { Vacio, estiloBoton, BadgeVP, SelectorCliente, SubirArchivo, ListaDocumentos } from "./Comunes";
 import { FormCliente } from "./PanelClientes";
-import { descargarEETT, imagenesDe } from "../../lib/vpEETTDescarga";
 import { CrearVentaDesdeCotizacion } from "./NuevaVenta";
 import { EditorFicha } from "../cotizaciones/EditorFicha";
 import { SelectorBiblioteca } from "../cotizaciones/EditorCotizacion";
@@ -36,13 +35,13 @@ import { combinarVersiones, aplicarCombinacion, normalizarProductos, resumenProd
 import { NavegacionCotizacion } from "../cotizaciones/PasosCotizacion";
 import { claveVendedor, nombreVendedor, opcionesVendedor, vendedorDocumento } from "../../lib/vpFinanciamiento";
 import { asignarVendedor } from "../../lib/ventasPrivadasDatos";
-import { leerCotizacion, guardarCotizacion, cambiarEstadoCotizacion, nuevaRevision, duplicarCotizacion, historialCotizacion, anular, esquemaFichaVP, leerEETT, listarEETT, guardarEETT, emitirEETT, ocClienteDeVenta } from "../../lib/ventasPrivadasDatos";
+import { leerCotizacion, guardarCotizacion, cambiarEstadoCotizacion, nuevaRevision, duplicarCotizacion, historialCotizacion, anular, esquemaFichaVP } from "../../lib/ventasPrivadasDatos";
 import { accionesCotizacion, ESTADOS_COTIZACION, fechaTxt, hoyISO, sumarDias, folioRevision, mensajeVP, documentoDesdeEditor, cantidadTxt } from "../../lib/ventasPrivadas";
 import { itemVacioVP, cotizacionParaEditor, calcularCotizacionVP, precioConRecargo, lineaParaGuardarVP, validarItemsVP, descripcionDeFicha } from "../../lib/vpCotizacion";
 import { ESTADOS_ENVIO, envioConfirmado, envioVacio, nuevaClave, proveedorDeEnlace, invalidarDespachosPorDireccion, revisarFicha, camposNumericosInvalidos } from "../../lib/cotizaciones";
 import { crearAlmacen, logoBFK, subirImagenesFicha, refImagen } from "../../lib/cotizacionesDatos";
 import { generarPdfCotizacion } from "../../lib/vpPdf";
-import { generarPdfEETTVP, contenidoEETTVP, normalizarFichaEETT, mismoContenidoEETT } from "../../lib/vpEETT";
+import { normalizarFichaEETT } from "../../lib/vpEETT";
 import { descargarBlob } from "../../lib/eettPdf";
 import { guardarBorrador, borrarBorrador, leerBorrador } from "../../lib/borradoresCotizacion";
 import CampoNumeroCL from "../ui/CampoNumeroCL";
@@ -95,7 +94,7 @@ export function EditorCotizacionPrivada({ token, perfil, vp, id, showToast, onCe
   const [cot, setCot] = useState(null); const [sucio, setSucio] = useState(false);
   const [pestana, setPestana] = useState(id ? "productos" : "datos");
   const [editor, setEditor] = useState(null); const [verBib, setVerBib] = useState(false);
-  const [ocupado, setOcupado] = useState(""); const [modal, setModal] = useState(null); const [historial, setHistorial] = useState(null); const [falla, setFalla] = useState(null);
+  const [ocupado, setOcupado] = useState(""); const [modal, setModal] = useState(null); const [historial, setHistorial] = useState(null);
   const [nuevoCliente, setNuevoCliente] = useState(false); const [previa, setPrevia] = useState(null);
   const [esquema, setEsquema] = useState(undefined); const [recuperable, setRecuperable] = useState(null);
   const yaCargo = useRef(false);
@@ -323,10 +322,7 @@ export function EditorCotizacionPrivada({ token, perfil, vp, id, showToast, onCe
     try { await guardarInterno(); return true; } catch (e) { showToast?.(`No se guardó: ${mensajeVP(e)}`, "error"); return false; }
   };
 
-  // ── EETT: el mismo recorrido de Mercado Público (components/cotizaciones/EditorCotizacion.jsx) ──
-  //   revisión de fichas → «Vista previa de EETT» (no guarda nada) → «Generar y descargar EETT»: valida → guarda la cotización
-  //   (solo si hay cambios) → emite la EETT con los datos recién guardados → la descarga. Si la descarga falla, la EETT ya
-  //   emitida se vuelve a descargar con «Reintentar descarga» (no se emite otra). Sin ventana adicional.
+  // ── Revisión de fichas antes de los documentos (igual que Mercado Público) ──
   const revEETT = useMemo(() => (vista?.items || []).map(revisionFicha), [vista]);
   // Como en Mercado Público, los avisos «por revisar» se aprueban antes de generar la EETT. En una revisión ya enviada (que no se
   // puede editar) basta con que no haya bloqueos.
@@ -338,77 +334,8 @@ export function EditorCotizacionPrivada({ token, perfil, vp, id, showToast, onCe
   })();
   const eettLista = (vista?.items || []).length > 0 && !faltanEETT.length && revEETT.every((x) => !x.bloqueos.length && (x.aprobado || !editable));
   const nRev = revEETT.filter((x) => !x.aprobado).length;
-  const puedeGenerarEETT = (acc.eett || nueva) && viendoActual && esquema !== false;
-  const folioEETT = d?.eett?.[0]?.folio || "";
-  const lineasEETT = (items) => items.map((it, i) => ({ id: it.key, orden: i + 1, cantidad: Number(it.cantidad), unidad: it.unidad, tipo: it.tipo, producto_id: it.producto_id, descripcion: descripcionDeFicha(it.ficha), ficha: it.ficha }));
-  const verPreviaEETT = async () => {
-    if (!vista.items.length) return; setOcupado("previa-eett");
-    try {
-      const rv = c ? d.revisiones.find((r) => r.id === revVista) : null;
-      const contenido = contenidoEETTVP({ cotizacion: { folio: c?.folio || "", revision: rv?.numero ?? 0 },
-        cliente: { razon_social: cliente?.razon_social || c?.cliente_nombre || "", rut: cliente?.rut || c?.cliente_rut || "" },
-        plazo_entrega: vista.plazo_entrega, fecha: hoyISO(), responsable: c?.responsable_nombre || perfil?.nombre || "", elaborado_por: perfil?.nombre || "", items: lineasEETT(vista.items),
-        vendedor: vendedorDocumento(vista.vendedor ?? (c ? claveVendedor(c) : ""), { vendedores: vp.vendedores, empresa: vp.empresa, actual: c }) });
-      const imagenes = Object.fromEntries(await Promise.all(vista.items.map(async (it) => [it.key, await almacen.resolverImagenes(it.ficha?.imagenes || [], 2)])));
-      // Vista previa: no se emite ni se registra nada (el folio de la EETT se muestra si la cotización ya tiene uno).
-      setPrevia({ ...(await generarPdfEETTVP({ folio: folioEETT, revision: null, estado: "previa", contenido }, { logo: await logoBFK(logoUrl), imagenes })), tipo: "eett" });
-    } catch (e) { showToast?.(`No se pudo preparar la vista previa: ${e.message}${sucio && editable ? " Tus cambios aún NO están guardados: pulsa Guardar antes de generar." : ""}`, "error"); }
-    finally { setOcupado(""); }
-  };
-  // Emite la EETT de la revisión vigente con lo guardado en la base (x = leerCotizacion). Un borrador existente (de la ventana
-  // anterior) se completa y emite con el mismo folio y revisión, conservando lo que tenía. Si la última emisión de esta revisión
-  // tiene exactamente el mismo contenido, se vuelve a descargar esa emisión (no se emite una revisión idéntica).
-  const emitirDesde = async (x) => {
-    const t = tokenRef.current; const rv = x.revisiones.find((r) => r.id === x.cab.revision_id);
-    const lineas = x.items.filter((i) => i.revision_id === x.cab.revision_id).sort((a, b) => a.orden - b.orden);
-    // Estado actual (no el de la pantalla): si un intento anterior quedó sin respuesta y sí se emitió, se reutiliza esa emisión.
-    const eett = await listarEETT(t, x.cab.id);
-    const borr = eett.find((e) => e.estado === "borrador");
-    const ultima = eett.find((e) => e.estado === "emitida" && e.cotizacion_revision_id === x.cab.revision_id);
-    const previa = borr || eett.find((e) => e.estado === "emitida") || null;
-    const [previo, ult, oc] = await Promise.all([previa ? leerEETT(t, previa.id) : null, ultima ? leerEETT(t, ultima.id) : null, x.cab.venta_id ? ocClienteDeVenta(t, x.cab.venta_id) : null]);
-    const contenido = contenidoEETTVP({ cotizacion: { folio: x.cab.folio, revision: rv?.numero ?? x.cab.revision_actual }, cliente: { razon_social: x.cab.cliente_nombre, rut: x.cab.cliente_rut },
-      plazo_entrega: rv?.plazo_entrega, fecha: hoyISO(), responsable: x.cab.responsable_nombre || "", elaborado_por: perfil?.nombre || "", oc_cliente: oc, items: lineas, previo: previo?.contenido,
-      // Vendedor guardado en la cotización (lo que se emite es lo guardado en la base).
-      vendedor: vendedorDocumento(claveVendedor(x.cab), { vendedores: vp.vendedores, empresa: vp.empresa, actual: x.cab }) });
-    if (ult && mismoContenidoEETT(ult.contenido, contenido)) return { eett: ult, reutilizada: true };
-    const g = await guardarEETT(t, { ...(borr ? { id: borr.id, version: borr.version } : {}), cotizacion_id: x.cab.id, contenido });
-    await emitirEETT(t, g.id, g.version);
-    return { eett: await leerEETT(t, g.id), reutilizada: false };
-  };
-  const descargarEmitida = async (e) => {
-    const r = await generarPdfEETTVP(e, { logo: await logoBFK(logoUrl), imagenes: await imagenesDe(tokenRef.current, e.contenido) });
-    descargarBlob(r.blob, r.nombre);
-    return r;
-  };
-  const etqEETT = (e) => `${e.folio} Rev. ${e.revision}`;
-  const pags = (n) => `${n} página${n === 1 ? "" : "s"}`;
-  // Generar y descargar: valida → guarda (solo si hay cambios) → emite desde lo guardado → descarga.
-  const generarYDescargar = async () => {
-    if (!eettLista) { showToast?.("Revisa las fichas pendientes antes de generar la EETT.", "error"); return; }
-    if (!puedeGenerarEETT) return;
-    setOcupado("generar-eett"); setFalla(null);
-    let x = d; let guardada = false;
-    try { if (!c || (sucio && editable)) { x = (await guardarInterno()).x; guardada = true; } }
-    catch (e) { setOcupado(""); showToast?.(`No se guardó la cotización: ${mensajeVP(e)} No se generó la EETT.`, "error"); if (e.conflicto && c) await abrirConflicto(); return; }
-    if (!x) { setOcupado(""); showToast?.("La cotización quedó guardada, pero no se pudo leer de vuelta. No se generó la EETT: vuelve a intentarlo.", "error"); return; }
-    let em;
-    try { em = await emitirDesde(x); }
-    catch (e) { setOcupado(""); showToast?.(`${guardada ? "La cotización quedó guardada, pero no" : "No"} se generó la EETT: ${mensajeVP(e)}${e?.status === 0 ? " Al reintentar, la app comprueba primero si ya quedó emitida (no se emite dos veces)." : ""}`, "error"); await cargar(x.cab.id).catch(() => {}); return; }
-    try {
-      const r = await descargarEmitida(em.eett);
-      showToast?.(em.reutilizada ? `EETT ${etqEETT(em.eett)} descargada (sin cambios desde su emisión): ${pags(r.paginas)}`
-        : `${guardada ? "Cotización guardada y " : ""}EETT ${etqEETT(em.eett)} emitida y descargada: ${pags(r.paginas)}`);
-    } catch (e) {
-      setFalla({ eett: em.eett, mensaje: e.message });
-      showToast?.(`La EETT quedó emitida (${etqEETT(em.eett)}), pero la descarga falló: ${e.message}`, "error");
-    } finally { setOcupado(""); await cargar(x.cab.id); }
-  };
-  const reintentar = async () => {
-    if (!falla) return; setOcupado("generar-eett");
-    try { await descargarEmitida(falla.eett); setFalla(null); showToast?.("EETT descargada"); }
-    catch (e) { setFalla({ ...falla, mensaje: e.message }); showToast?.(`La descarga volvió a fallar: ${e.message}`, "error"); } finally { setOcupado(""); }
-  };
+  // 25/11/2026: la EETT con folio (formato anterior) se retiró de la pestaña «Documentos»: Ventas privadas usa los mismos tres
+  // documentos que Mercado Público. Las EETT ya emitidas siguen en la base y se descargan desde la orden de venta.
 
   // ── Estados, revisiones y duplicar (flujo privado, sin cambios) ──
   const estado = async (est, datos) => {
@@ -676,32 +603,10 @@ export function EditorCotizacionPrivada({ token, perfil, vp, id, showToast, onCe
             );
           })}
           <DocumentacionOferta canal="vp" cotizacionId={c?.id || null} token={token} showToast={showToast} cambiosSinGuardar={sucio && editable}
-            construirModelo={construirModeloOferta} asegurarGuardado={asegurarGuardadoOferta} soloLectura={!editable || !viendoActual}
+            construirModelo={construirModeloOferta} asegurarGuardado={asegurarGuardadoOferta} soloLectura={!editable || !viendoActual} puedeEmitir={viendoActual}
             propios={[{ titulo: "Plazo de entrega", valor: vista.plazo_entrega }, { titulo: "Forma de pago", valor: vista.condiciones_pago }, { titulo: "Vigencia", valor: vista.vigencia_hasta }]}
             ocultar={["plazo_entrega", "forma_pago", "vigencia", "observaciones"]}
             items={vista.items.map((it, i) => ({ n: i + 1, nombre: it.ficha?.nombre || String(it.descripcion || "").split("\n")[0] }))} />
-          <Desplegable dato="eett-formato-anterior" titulo="EETT con folio (formato anterior)" resumen={c && d.eett.length ? `${d.eett.length} registrada${d.eett.length === 1 ? "" : "s"}` : "Sin registros"} plano>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
-            <BotonSecundario data-vista-previa-eett onClick={verPreviaEETT} disabled={!vista.items.length || !!ocupado} style={{ flex: "1 1 160px", justifyContent: "center", minHeight: 48 }}>{ocupado === "previa-eett" ? "Preparando…" : "Vista previa de EETT"}</BotonSecundario>
-            {(acc.eett || nueva) && <BotonPrincipal data-generar-eett onClick={generarYDescargar} disabled={!eettLista || !puedeGenerarEETT || !!ocupado} style={{ flex: "2 1 220px", justifyContent: "center", minHeight: 48, opacity: !eettLista || !puedeGenerarEETT || ocupado ? 0.55 : 1 }}>{ocupado === "generar-eett" ? "Guardando y generando…" : "Generar y descargar EETT"}</BotonPrincipal>}
-          </div>
-          {!viendoActual && <div data-eett-revision-anterior style={{ fontSize: T.small, color: C.warnText, marginTop: 6 }}>Estás viendo una revisión anterior: la vista previa usa esta revisión, pero la EETT se genera desde la revisión vigente.</div>}
-          <div style={{ fontSize: T.small, color: C.inkFaint, marginTop: 6 }}>Al generar, la cotización se guarda automáticamente (solo si hay cambios) y el PDF se crea con los datos recién guardados. La vista previa no guarda nada.</div>
-          {falla && <AvisoLinea tono="danger" dato="falla-descarga" accion="Reintentar descarga" onClick={reintentar}>La EETT quedó emitida ({etqEETT(falla.eett)}), pero la descarga falló: {falla.mensaje}</AvisoLinea>}
-          {c && d.eett.length > 0 && (
-            <Seccion titulo="EETT generadas" nota="Cada generación queda emitida y congelada con su folio y revisión; si la cotización cambia, la siguiente generación emite una revisión nueva.">
-              {d.eett.map((e) => (
-                <div key={e.id} data-eett={`${e.folio}-R${e.revision}`} data-eett-generado={e.estado !== "borrador" ? "" : undefined} style={{ fontSize: T.small, color: C.inkMuted, padding: "6px 0", borderBottom: `1px solid ${C.border}`, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                  <span style={{ fontFamily: MONO, fontWeight: 700, color: C.ink }}>{etqEETT(e)}</span>
-                  <Badge tono={e.estado === "emitida" ? "ok" : e.estado === "borrador" ? "warn" : "neutro"}>{e.estado === "emitida" ? "Emitida" : e.estado === "borrador" ? "Borrador" : "Reemplazada"}</Badge>
-                  <span style={{ flex: 1, minWidth: 140 }}>{e.estado === "borrador" ? "Sin emitir: se completa y emite con «Generar y descargar EETT» (conserva su folio y su contenido)."
-                    : `Cotización R${d.revisiones.find((r) => r.id === e.cotizacion_revision_id)?.numero ?? "?"}${e.emitida_en ? ` · ${fechaHora(e.emitida_en)}` : ""}`}</span>
-                  {e.estado !== "borrador" && <button type="button" data-descargar-eett onClick={() => descargarEETT(token, e.id, vp.empresa, showToast)} style={estiloBoton()}>PDF</button>}
-                </div>
-              ))}
-            </Seccion>
-          )}
-          </Desplegable>
         </PanelPestana>
       </div>
 
@@ -710,8 +615,6 @@ export function EditorCotizacionPrivada({ token, perfil, vp, id, showToast, onCe
       {verBib && <SelectorBiblioteca almacen={almacen} onElegir={desdeBiblioteca} onCerrar={() => setVerBib(false)} />}
       {conflicto && <ConflictoVersion version={conflicto.x2.cab.version} campos={conflicto.campos} nota={conflicto.nota} bloqueado={!!conflicto.nota}
         onCombinar={combinarConflicto} onDescartarMios={descartarConflicto} onCancelar={() => setConflicto(null)} />}
-      {previa?.tipo === "eett" && <VistaPreviaEETT blob={previa.blob} nombre={previa.nombre} paginas={previa.paginas}
-        onCerrar={() => setPrevia(null)} onDescargar={eettLista && puedeGenerarEETT ? () => { setPrevia(null); generarYDescargar(); } : null} />}
       {previa?.tipo === "cotizacion" && <VistaPreviaEETT blob={previa.blob} nombre={previa.nombre} paginas={previa.paginas} titulo="Vista previa de la cotización"
         aviso="Vista previa: es el mismo PDF que se descarga. Verla o descargarla no la marca como enviada ni aceptada."
         onCerrar={() => setPrevia(null)} onDescargar={() => { descargarBlob(previa.blob, previa.nombre); setPrevia(null); }} />}

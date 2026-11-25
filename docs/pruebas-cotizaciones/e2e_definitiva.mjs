@@ -153,7 +153,7 @@ async function ingresarProducto(p, d) {
   const [desc] = await Promise.all([p.waitForEvent("download", { timeout: 30000 }), H(p).locator('[data-descargar-documento="eett"]').click()]);
   const ruta = join(SALIDA, desc.suggestedFilename()); await desc.saveAs(ruta); await espera(p, 800);
   const pdfTxt = textoPdf(ruta).replace(/[ \t]+/g, " ");
-  ok("09_pdf_con_datos_guardados", desc.suggestedFilename() === "EETT_3390-246-COT26_v1_sin-emitir.pdf" && /MESA PLEGABLE DE CAMPING/i.test(pdfTxt) && /TOLDO 3X3/i.test(pdfTxt) && /Versión 01/.test(pdfTxt), desc.suggestedFilename());
+  ok("09_pdf_con_datos_guardados", desc.suggestedFilename() === "EETT_MP_3390-246-COT26_v1_sin-emitir.pdf" && /MESA PLEGABLE DE CAMPING/i.test(pdfTxt) && /TOLDO 3X3/i.test(pdfTxt) && /Versión 01/.test(pdfTxt), desc.suggestedFilename());
   ok("12_pdf_sin_datos_comerciales", !/51800|51\.800|56669|56\.669|tienda\.cl|Tienda Uno|3\.690|\$|6\.000\.000/.test(pdfTxt));
   ok("12_sin_registro_ni_pdf_subido", !M.rpc.some((r) => /cz_registrar_eett/.test(r.fn)) && !M.storagePost.some((x) => /cz-eett|\.pdf/.test(x)) && M.storagePost.every((x) => /cz-productos\/img\//.test(x)), M.storagePost);
   ok("12_vista_previa_igual_al_pdf", Number(execFileSync("pdfinfo", [ruta]).toString().match(/Pages:\s+(\d+)/)[1]) === pagsPrevia);

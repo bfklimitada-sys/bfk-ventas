@@ -1,11 +1,11 @@
 // EETT de la cotización de la captura (CP-2026-0001 · «Bolso Paramédico Mediano 47L») sobre una COPIA AISLADA de sus datos
 // técnicos (fixture_cp_2026_0001.json y sus dos fotos reducidas), en navegador real, contra PostgREST real sobre una base
 // desechable (nunca producción). Compara el recorrido privado con el de Mercado Público (simulador de siempre, misma ficha).
-//   Privado: abrir CP-2026-0001 con su borrador ET-2026-0001 Rev. 0 armado por la ventana anterior → pestaña EETT (revisión de
-//   fichas, sin «No informado», sin objeto/alcance) → «Vista previa de EETT» (no guarda nada) → «Generar y descargar» desde la
-//   vista previa → la EETT se emite con el mismo folio y revisión → el PDF trae la descripción y las características →
-//   «PDF» desde «EETT generadas» descarga lo mismo → generar otra vez no emite una revisión idéntica.
-//   Mercado Público: misma ficha → pestaña EETT → vista previa → generar y descargar (para comparar pantallas y PDF).
+//   Privado (25/11/2026, «Documentación de la oferta»): abrir CP-2026-0001 (con su borrador ET-2026-0001 del formato anterior,
+//   que queda intacto) → pestaña Documentos (revisión de fichas y tres documentos) → vista previa de la EETT (no guarda nada) →
+//   emitir → el PDF trae la descripción completa y las características → descargar desde el historial entrega lo mismo →
+//   emitir otra vez sin cambios no registra otra versión.
+//   Mercado Público: misma ficha → pestaña Documentos → vista previa → descarga (para comparar pantallas y PDF).
 // Uso: (entorno.sh instalar) → PGRST_URL, JWT_SECRET, VP_DB_URL ·
 //      node docs/pruebas-ventas-privadas/e2e_eett_cp_2026_0001.mjs http://127.0.0.1:4330/ escritorio|celular   (CAPTURAS=carpeta)
 import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
@@ -72,50 +72,45 @@ async function recorridoPrivado(browser) {
   const llamadas = vigilar(p); await calma(); const m0 = marca();
   await irACotizaciones(p); await p.locator(`[data-cotizacion="${folio}"]`).click(); await espera(p, 1500);
   const h = ui.hoja(p);
-  await ui.pestana(p, "eett"); await espera(p, 600); await captura(p, "privado-1-pestana-eett");
-  const tab = await h.locator('[role="tabpanel"]:visible, [data-panel-pestana="eett"]').first().innerText().catch(() => h.innerText());
-  ok(`${MODO} V1 pestaña EETT como Mercado Público: «Ficha 1: Bolso Paramédico Mediano 47L» lista, «Vista previa de EETT» y «Generar y descargar EETT»`, (await h.locator("[data-revision-eett]").count()) === 1
+  // 25/11/2026: la pestaña «Documentos» es la misma de Mercado Público; la EETT con folio (formato anterior) ya no se arma aquí.
+  await ui.pestana(p, "eett"); await espera(p, 600); await captura(p, "privado-1-pestana-documentos");
+  ok(`${MODO} V1 pestaña Documentos como Mercado Público: «Ficha 1: Bolso Paramédico Mediano 47L» lista y los tres documentos`, (await h.locator("[data-revision-eett]").count()) === 1
     && /Ficha 1: Bolso Param.dico Mediano 47L/.test(await h.locator('[data-revision-eett="1"]').innerText()) && /Lista/.test(await h.locator('[data-revision-eett="1"]').innerText())
-    && await h.locator("[data-generar-eett]").isEnabled() && /Vista previa de EETT/.test(await h.locator("[data-vista-previa-eett]").innerText()));
-  ok(`${MODO} V2 sin «No informado», sin «Objeto del suministro» ni «Alcance», sin lista de errores ni ventana propia`, !/No informado|Objeto del suministro|Alcance|Emitir EETT|Guardar borrador/i.test(await h.innerText()) && !(await p.locator('[data-ventana^="eett"], [data-errores-eett]').count()), tab.slice(0, 300));
-  ok(`${MODO} V3 el borrador anterior aparece en «EETT generadas» y se completará con el mismo folio`, /ET-2026-0001 Rev\. 0/.test(await h.locator('[data-eett="ET-2026-0001-R0"]').innerText()) && /Sin emitir/.test(await h.locator('[data-eett="ET-2026-0001-R0"]').innerText()));
+    && (await h.locator("[data-documento-oferta]").count()) === 3);
+  ok(`${MODO} V2 sin «No informado», «Objeto del suministro», «Alcance», ventana propia ni formato anterior`, !/No informado|Objeto del suministro|Alcance|Emitir EETT|Guardar borrador|formato anterior/i.test(await h.innerText()) && !(await p.locator('[data-ventana^="eett"], [data-errores-eett], [data-generar-eett]').count()));
   const v0 = q1(`select version||'|'||estado from public.vp_eett where id = '${borr.id}';`);
-  await h.locator("[data-vista-previa-eett]").click(); const vp = p.locator('[data-hoja-lateral="vista-previa-eett"]');
-  await vp.locator('[data-pagina-preview="1"]').waitFor({ timeout: 20000 }); await espera(p, 900); await captura(p, "privado-2-vista-previa");
-  ok(`${MODO} V4 vista previa (la de Mercado Público): no guarda ni emite nada`, /Vista previa de EETT/.test(await vp.innerText()) && /No se guard. la cotizaci.n ni se registr. ninguna EETT/.test(await vp.innerText())
-    && /EETT_CP-2026-0001_ET-2026-0001\.pdf · 2 p.ginas/.test(await vp.innerText()) && q1(`select version||'|'||estado from public.vp_eett where id = '${borr.id}';`) === v0);
-  if (await vp.locator('[data-pagina-preview="2"]').count()) { await vp.locator('[data-pagina-preview="2"]').scrollIntoViewIfNeeded(); await captura(p, "privado-3-vista-previa-pagina-2"); }
-  const d1 = await descarga(p, () => vp.getByText("Generar y descargar", { exact: true }).click()); await espera(p, 1500);
+  await h.locator('[data-previa-documento="eett"]').click(); const vp = p.locator('[data-hoja-lateral="visor-documento"]');
+  await vp.locator('[data-pagina-doc="1"]').waitFor({ timeout: 40000 }); await espera(p, 900); await captura(p, "privado-2-vista-previa");
+  ok(`${MODO} V4 vista previa: no guarda ni emite nada`, /Vista previa/.test(await vp.innerText()) && q1(`select count(*) from public.oferta_documentos where cotizacion_id = '${cot.id}';`) === "0");
+  const d1 = await descarga(p, () => vp.locator("[data-emitir-documento]").click()); await espera(p, 1500);
   writeFileSync(`${CAPT}/${MODO}-EETT-privada-${d1.nombre}`, d1.buf);
-  await captura(p, "privado-4-tras-generar");
-  const t = await textoPDF(d1.buf);
-  const fila = JSON.parse(q1(`select to_jsonb(e) - 'contenido' || jsonb_build_object('formato', contenido->>'formato', 'objeto', contenido ? 'objeto', 'n', jsonb_array_length(contenido->'items'->0->'caracteristicas')) from public.vp_eett e where id = '${borr.id}';`));
-  ok(`${MODO} V5 «Generar y descargar» desde la vista previa emite el MISMO borrador (ET-2026-0001 Rev. 0) con el formato de Mercado Público`, fila.estado === "emitida" && fila.folio === "ET-2026-0001" && fila.revision === 0 && fila.formato === "mp" && fila.objeto === false && fila.n === 7 && /^[0-9a-f]{64}$/.test(fila.hash)
-    && q1(`select count(*) from public.vp_eett where cotizacion_id = '${cot.id}';`) === "1", JSON.stringify(fila));
-  ok(`${MODO} V6 archivo con el criterio de Mercado Público`, d1.nombre === "EETT_CP-2026-0001_ET-2026-0001_Rev0.pdf", d1.nombre);
-  const PARES = ficha.descripcion.split("\n").map((l) => l.split(/:\s*/));
-  ok(`${MODO} V7 el PDF trae nombre, marca, modelo y color de la ficha`, /1\. BOLSO PARAM.DICO MEDIANO 47L/.test(t.s) && /MARCA TBQ/.test(t.s) && /MODELO BOL-BPRM-A/.test(t.s) && /COLOR Azul/.test(t.s));
-  ok(`${MODO} V8 el PDF trae las 7 características con su valor (Especificaciones)`, PARES.every(([e, v]) => t.s.includes(comoPDF(e)) && t.s.includes(comoPDF(v))), PARES.filter(([e, v]) => !t.s.includes(comoPDF(e)) || !t.s.includes(comoPDF(v))));
+  await captura(p, "privado-4-tras-emitir");
+  await vp.locator("[data-volver-editar]").click(); await espera(p, 400);
+  const t = await textoPDF(d1.buf); const s1 = t.s.replace(/\s+/g, " ");
+  ok(`${MODO} V3 el borrador anterior ET-2026-0001 queda intacto en la base (no se borra ni se emite)`, q1(`select version||'|'||estado from public.vp_eett where id = '${borr.id}';`) === v0 && v0.endsWith("|borrador"));
+  ok(`${MODO} V5 emitida en el historial de la oferta (versión 1)`, q1(`select tipo||'|'||version||'|'||nombre_archivo from public.oferta_documentos where cotizacion_id = '${cot.id}';`) === "eett|1|EETT_PRIVADA_CP-2026-0001_v1.pdf");
+  ok(`${MODO} V6 archivo con el criterio común (documento, canal, cotización, versión)`, d1.nombre === "EETT_PRIVADA_CP-2026-0001_v1.pdf", d1.nombre);
+  const PARES = ficha.descripcion.split("\n").map((l) => l.split(/:\s*/)).filter((x) => x.length === 2);
+  ok(`${MODO} V7 el PDF trae nombre, marca, modelo y color de la ficha`, /BOLSO PARAM.DICO MEDIANO 47L/.test(s1) && /Marca TBQ/.test(s1) && /Modelo BOL-BPRM-A/.test(s1) && /Color Azul/.test(s1));
+  ok(`${MODO} V8 el PDF trae las características con su valor`, PARES.every(([e, v]) => s1.includes(comoPDF(v))), PARES.filter(([, v]) => !s1.includes(comoPDF(v))));
   const textos = [...ficha.generales, ...ficha.especificaciones].map((x) => x.etiqueta);
-  ok(`${MODO} V9 el PDF trae la descripción técnica completa (12 textos descriptivos, ninguno como característica vacía)`, /DESCRIPCI.N T.CNICA/.test(t.s) && textos.every((x) => t.continuo.includes(comoPDF(x))), textos.filter((x) => !t.continuo.includes(comoPDF(x))).map((x) => x.slice(0, 50)));
-  ok(`${MODO} V10 encabezado con referencias del canal (cotización, EETT, cliente completo, RUT, plazo) y sin «No informado»`, /CP-2026-0001 ET-2026-0001 Rev\. 0/.test(t.s) && /CARABINEROS DE CHILE 61\.513\.003-6/.test(t.s) && /3 d.as habiles/.test(t.s)
-    && !/No informado|Objeto del suministro|LICITACI.N|INSTITUCI.N SOLICITANTE|BORRADOR/i.test(t.s));
-  ok(`${MODO} V11 las 2 fotos de la ficha van en el PDF (como en Mercado Público) y sin precios`, imagenes(d1.buf) >= 3 && !/\$\s?\d|59\.990/.test(t.s), imagenes(d1.buf));
-  ok(`${MODO} V12 «EETT generadas» muestra ET-2026-0001 Rev. 0 emitida con su PDF`, /Emitida/.test(await h.locator('[data-eett="ET-2026-0001-R0"]').innerText()) && (await h.locator('[data-eett="ET-2026-0001-R0"] [data-descargar-eett]').count()) === 1);
-  await h.locator('[data-eett="ET-2026-0001-R0"]').scrollIntoViewIfNeeded(); await captura(p, "privado-5-eett-generadas");
-  const d2 = await descarga(p, () => h.locator('[data-eett="ET-2026-0001-R0"] [data-descargar-eett]').click());
-  ok(`${MODO} V13 «PDF» de la EETT emitida descarga el mismo documento`, (await textoPDF(d2.buf)).s === t.s && d2.nombre === d1.nombre);
-  const d3 = await descarga(p, () => h.locator("[data-generar-eett]").click()); await espera(p, 1200);
-  ok(`${MODO} V14 generar otra vez sin cambios descarga la misma emisión (no crea otra revisión)`, q1(`select count(*) from public.vp_eett where cotizacion_id = '${cot.id}';`) === "1" && (await textoPDF(d3.buf)).s === t.s);
+  const s1g = comoPDF(s1);   // mismos guiones que comoPDF() en ambos lados
+  ok(`${MODO} V9 el PDF trae la descripción técnica completa (textos descriptivos, ninguno como característica vacía)`, /DESCRIPCI.N T.CNICA|Descripci.n t.cnica/.test(s1) && textos.every((x) => s1g.includes(comoPDF(x))), textos.filter((x) => !s1g.includes(comoPDF(x))).map((x) => x.slice(0, 50)));
+  ok(`${MODO} V10 encabezado y cliente del canal privado (cotización, cliente, RUT) con el plazo de entrega y sin campos de licitación`, /CP-2026-0001/.test(s1) && /CARABINEROS DE CHILE/.test(s1) && /61\.513\.003-6/.test(s1) && /3 d.as habiles/.test(s1)
+    && !/No informado|Objeto del suministro|LICITACI.N|INSTITUCI.N SOLICITANTE|BORRADOR/i.test(s1));
+  ok(`${MODO} V11 las 2 fotos de la ficha van en el PDF y sin precios`, imagenes(d1.buf) >= 3 && !/\$\s?\d|59\.990/.test(s1), imagenes(d1.buf));
+  await h.locator('[data-desplegable="historial-eett"] > button').first().click(); await espera(p, 300); await captura(p, "privado-5-historial");
+  ok(`${MODO} V12 el historial muestra la versión 01 emitida`, (await h.locator('[data-documento-oferta="eett"] [data-version-emitida="1"]').count()) === 1);
+  const d2 = await descarga(p, () => h.locator('[data-documento-oferta="eett"] [data-descargar-emitido]').first().click());
+  ok(`${MODO} V13 descargar desde el historial entrega el mismo documento`, Buffer.compare(d2.buf, d1.buf) === 0 && d2.nombre === d1.nombre);
+  const d3 = (await ui.documento(p, "eett"));
+  ok(`${MODO} V14 emitir otra vez sin cambios descarga la misma versión (no registra otra)`, q1(`select count(*) from public.oferta_documentos where cotizacion_id = '${cot.id}';`) === "1" && Buffer.compare(d3.buf, d1.buf) === 0);
   ok(`${MODO} V15 sin desborde horizontal`, !movil || await sinDesborde(p));
   ok(`${MODO} V16 sin errores de página`, !errs.length, errs.join(" | "));
   ok(`${MODO} V17 sin llamadas a Inteligencia Comercial, IA ni sincronizaciones`, !llamadas.length, llamadas.join(" "));
   ok(`${MODO} V18 no se escribió nada en Mercado Público`, !escriturasMP(m0).length);
-  // 25/11/2026: la «Documentación de la oferta» de la cotización privada usa el generador nuevo, el mismo de Mercado Público.
-  const dn = await descarga(p, () => h.locator('[data-descargar-documento="eett"]').click()); await espera(p, 800);
-  writeFileSync(`${CAPT}/${MODO}-EETT-nueva-privada-${dn.nombre}`, dn.buf);
   await ctx.close();
-  return { ...t, nuevo: await textoPDF(dn.buf) };
+  return t;
 }
 
 // Mercado Público con la MISMA ficha (simulador de siempre): para comparar pantallas y PDF.
@@ -149,12 +144,9 @@ try {
   const tMP = await recorridoMP(browser);
   const tVP = await recorridoPrivado(browser);
   // Misma estructura del documento: banda, tabla, franja del producto, CARACTERÍSTICAS, dos columnas, descripción, elaboración, pie.
-  // Formato anterior (EETT con folio de ventas privadas): su plantilla no cambia.
-  const anterior = (s) => ["INFORMACIÓN TÉCNICA DE PRODUCTOS", "BOLSO PARAMÉDICO MEDIANO 47L", "CARACTERÍSTICAS", "Características Generales", "Especificaciones", "ELABORACIÓN DE ESPECIFICACIONES TÉCNICAS", "Empresa: BFK Limitada", "bfklimitada@gmail.com"].map((x) => s.includes(x));
-  ok(`${MODO} X1 la EETT con folio (formato anterior) conserva su plantilla`, anterior(tVP.s).every(Boolean), JSON.stringify(anterior(tVP.s)));
-  // Generador de la oferta (25/11/2026): Mercado Público y ventas privadas con la misma estructura.
-  const nueva = (s) => ["INFORMACIÓN TÉCNICA", "DE PRODUCTOS", "BOLSO PARAMÉDICO MEDIANO 47L", "ESPECIFICACIONES TÉCNICAS", "bfklimitada@gmail.com"].map((x) => s.includes(x));
-  ok(`${MODO} X2 la EETT nueva tiene la misma estructura en ambos canales`, nueva(tMP.s).every(Boolean) && nueva(tVP.nuevo.s).every(Boolean), JSON.stringify([nueva(tMP.s), nueva(tVP.nuevo.s)]));
+  // Mismo generador en ambos canales: misma estructura del documento.
+  const estructura = (s) => ["INFORMACIÓN TÉCNICA", "DE PRODUCTOS", "BOLSO PARAMÉDICO MEDIANO 47L", "ESPECIFICACIONES TÉCNICAS", "bfklimitada@gmail.com"].map((x) => s.includes(x));
+  ok(`${MODO} X1 la EETT tiene la misma estructura en Mercado Público y ventas privadas`, estructura(tMP.s).every(Boolean) && estructura(tVP.s).every(Boolean), JSON.stringify([estructura(tMP.s), estructura(tVP.s)]));
 } catch (e) { F.push("EXCEPCIÓN: " + e.message.split("\n")[0]); console.log("EXCEPCIÓN", e.stack); }
 finally { await browser.close(); }
 console.log(`RESUMEN e2e_eett_cp_2026_0001 (${MODO}): ${nOk} OK, ${F.length} fallas · Capturas y PDF en ${CAPT}`);
