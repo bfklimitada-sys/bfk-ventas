@@ -1,6 +1,9 @@
 // Ventas privadas › Órdenes de venta: lista y ficha con cuatro pestañas (Detalle · Entregas · Documentos · Pagos).
 // Entrega, facturación y pago se controlan por separado (una venta entregada puede seguir pendiente de cobro).
 // Facturas: se REGISTRAN las emitidas en el SII (este módulo no emite documentos tributarios electrónicos).
+import { listarDocumentosOferta } from "../../lib/documentosOfertaDatos";
+import { descargarDocumentoEmitido, cotizacionEconomica } from "../../lib/documentosOfertaDescarga";
+import { modeloOfertaVP } from "../../lib/modeloOferta";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { C, MONO, R, S, T, cardStyle, btnMini } from "../../lib/theme";
 import { HojaLateral, Seccion, Pestanas, PanelPestana, AvisoLinea, Badge } from "../ui/Sistema";
@@ -8,17 +11,15 @@ import { Ventana, Campo, Rejilla, Entrada, Area, Selector, ErrorForm, PedirMotiv
 import { NoInstalado, Vacio, estiloBoton, Fila, BadgeVP, SubirArchivo, ListaDocumentos, Kpi, RejillaKpi } from "./Comunes";
 import { HistorialLista } from "./PanelCotizacionesPrivadas";
 import { descargarEETT } from "../../lib/vpEETTDescarga";
-import { subirDocumento, leerVenta, actualizarVenta, registrarOcCliente, registrarEntrega, registrarFactura, registrarPago, imputarPago, registrarCompra, anular, anularVenta, buscarGastos, documentoPublico, anularCompra, registrarReembolso, deshacerReembolso } from "../../lib/ventasPrivadasDatos";
+import { subirDocumento, leerVenta, actualizarVenta, registrarOcCliente, registrarEntrega, registrarFactura, registrarPago, imputarPago, registrarCompra, anular, anularVenta, buscarGastos, documentoPublico, fichasRevision, anularCompra, registrarReembolso, deshacerReembolso } from "../../lib/ventasPrivadasDatos";
 import { aPesos, ESTADOS_ENTREGA, ESTADOS_FACTURACION, ESTADOS_PAGO, MEDIOS_PAGO, TIPOS_DOCUMENTO_VENTA, filtrarVentas, pesos, pct, fechaTxt, hoyISO, cantidadTxt, mensajeVP, nuevaClave, folioRevision, TASA_IVA, redondear } from "../../lib/ventasPrivadas";
-import { generarPdfCotizacion } from "../../lib/vpPdf";
 import { descargarBlob } from "../../lib/eettPdf";
-import { logoBFK } from "../../lib/cotizacionesDatos";
-import logoUrl from "../../assets/bfk-logo.jpg";
+import { refImagen } from "../../lib/cotizacionesDatos";
 import { folioVPDesdeHash, hashVP } from "../../lib/navegacion";
 import { CompraVentaPrivada } from "./CompraVentaPrivada";
 import { SeccionFinanciamiento, BloqueFinanciamientoCompra, subirComprobantes } from "./Financiamiento";
 import { asignarVendedor, registrarCompraManualFinanciada } from "../../lib/ventasPrivadasDatos";
-import { claveVendedor, nombreVendedor, opcionesVendedor, gruposVendedor, filtrarPorVendedor, validarAportes, aportesParaGuardar } from "../../lib/vpFinanciamiento";
+import { claveVendedor, nombreVendedor, opcionesVendedor, gruposVendedor, filtrarPorVendedor, validarAportes, aportesParaGuardar, vendedorDocumento } from "../../lib/vpFinanciamiento";
 import { tieneBaseCotizacion } from "../../lib/compraVentaPrivada";
 
 const FILTROS = [{ key: "", label: "Vigentes" }, { key: "por_entregar", label: "Por entregar" }, { key: "por_facturar", label: "Por facturar" }, { key: "por_cobrar", label: "Por cobrar" }, { key: "vencidas", label: "Pago vencido" }, { key: "anuladas", label: "Anuladas" }];
@@ -225,7 +226,15 @@ function Detalle({ token, d, v, esResp, esAdmin, vigente, vp, showToast, refresc
   const compradoItem = (itemId) => { const fs = d.compras.filter((k) => k.estado === "vigente" && k.concepto === "producto" && k.venta_item_id === itemId); return fs.length ? fs.reduce((s, k) => s + Number(k.cantidad || 0), 0) : null; };
   const entregado = (itemId) => d.entregaItems.filter((ei) => d.entregas.find((e) => e.id === ei.entrega_id)?.estado === "vigente" && ei.venta_item_id === itemId).reduce((s, x) => s + Number(x.cantidad), 0);
   const pdfAprobada = async () => {
-    try { const doc = await documentoPublico(token, v.revision_id); const r = await generarPdfCotizacion(doc, { logo: await logoBFK(logoUrl) }); descargarBlob(r.blob, r.nombre); }
+    // Cotización económica (25/11/2026): el mismo generador de la sección «Documentos», con el documento congelado de la revisión
+    // aceptada y sus fichas. No emite ni registra nada.
+    try {
+      const [doc, fichas0] = await Promise.all([documentoPublico(token, v.revision_id), fichasRevision(token, v.revision_id)]);
+      const fichas = await Promise.all(fichas0.map(async (f) => ({ ...f, imagenes: (await Promise.all((f.imagenes || []).map(refImagen))).filter(Boolean) })));
+      const vendedor = vendedorDocumento(claveVendedor(v), { vendedores: vp?.vendedores, empresa: vp?.empresa, actual: v });
+      const r = await cotizacionEconomica(token, "vp", v.cotizacion_id, (o) => modeloOfertaVP(doc, fichas, { ...o, vendedor }));
+      descargarBlob(r.blob, r.nombre);
+    }
     catch (e) { showToast?.(`No se pudo generar el PDF: ${mensajeVP(e)}`, "error"); }
   };
   const guardar = async () => {
@@ -520,8 +529,9 @@ function Documentos({ token, d, v, esResp, vigente, vp, showToast, refrescar, se
         );
       })}
     </Seccion>
-    <Seccion titulo="Cotización aprobada y EETT">
+    <Seccion titulo="Cotización aprobada y documentos de la oferta">
       {v.revision_id ? <div style={{ ...cardStyle, borderRadius: R.md, padding: "9px 12px", marginBottom: 6 }}>Cotización aprobada <b style={{ fontFamily: MONO }}>{folioRevision(v.cotizacion_folio, v.cotizacion_revision)}</b> (PDF desde la pestaña Detalle).</div> : <Vacio>Venta directa: sin cotización aprobada.</Vacio>}
+      {v.cotizacion_id && <DocumentosOfertaVenta token={token} cotizacionId={v.cotizacion_id} showToast={showToast} />}
       {d.eett.map((e) => (
         <div key={e.id} data-eett-venta={`${e.folio}-R${e.revision}`} style={{ ...cardStyle, borderRadius: R.md, padding: "9px 12px", marginBottom: 6, display: "flex", gap: 8, alignItems: "center" }}>
           <span style={{ flex: 1 }}><b style={{ fontFamily: MONO }}>{e.folio} · Rev. {e.revision}</b> {e.id === v.eett_id && <Badge tono="ok">Vinculada a esta venta</Badge>} {e.estado === "reemplazada" && <Badge>Reemplazada</Badge>}</span>
@@ -657,4 +667,22 @@ function FormImputar({ token, pago, facturas, imputaciones, showToast, onCerrar,
       <Campo etiqueta="Monto a aplicar"><Entrada inputMode="numeric" value={m} onChange={(e) => setM(e.target.value)} /></Campo>
     </Ventana>
   );
+}
+
+// Documentos de la oferta emitidos para la cotización de esta venta (25/11/2026): se vuelven a descargar idénticos.
+const NOMBRE_DOC = { oferta: "Oferta técnica y económica", cotizacion: "Cotización económica", eett: "Especificaciones técnicas (EETT)" };
+function DocumentosOfertaVenta({ token, cotizacionId, showToast }) {
+  const [docs, setDocs] = useState([]); const [ocupado, setOcupado] = useState("");
+  useEffect(() => { let vivo = true; listarDocumentosOferta(token, "vp", cotizacionId).then((x) => { if (vivo) setDocs(x); }).catch(() => {}); return () => { vivo = false; }; }, [token, cotizacionId]);
+  const bajar = async (d) => {
+    setOcupado(d.id);
+    try { const r = await descargarDocumentoEmitido(token, d.id); showToast?.(r.identico ? `Descargado ${r.nombre}` : "Atención: el archivo regenerado no es idéntico al emitido.", r.identico ? undefined : "error"); }
+    catch (e) { showToast?.(e.message || String(e), "error"); } finally { setOcupado(""); }
+  };
+  return docs.map((d) => (
+    <div key={d.id} data-documento-venta={`${d.tipo}-v${d.version}`} style={{ ...cardStyle, borderRadius: R.md, padding: "9px 12px", marginBottom: 6, display: "flex", gap: 8, alignItems: "center" }}>
+      <span style={{ flex: 1 }}><b>{NOMBRE_DOC[d.tipo] || d.tipo}</b> · versión {String(d.version).padStart(2, "0")}</span>
+      <button type="button" data-pdf-documento-venta onClick={() => bajar(d)} disabled={!!ocupado} style={btnMini()}>{ocupado === d.id ? "…" : "PDF"}</button>
+    </div>
+  ));
 }

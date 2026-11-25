@@ -1,8 +1,19 @@
+import { readFileSync } from "node:fs";
 // Acciones de interfaz de la cotización privada (misma experiencia que Mercado Público), compartidas por las pruebas e2e.
 // Solo usan selectores del editor y de la ventana «Ingresar/Editar producto» (EditorFicha), los mismos de Mercado Público.
 export const hoja = (p) => p.locator('[data-hoja-lateral="ficha-cotizacion"]');
 export const ventanaFicha = (p) => p.locator("[data-editor-ficha]");
 export const pestana = async (p, k) => { await hoja(p).locator(`[role="tab"][data-tab="${k}"]`).click(); await p.waitForTimeout(250); };
+// 25/11/2026: «Documentación de la oferta» (misma de Mercado Público). Vista previa del documento → emite (o descarga sin
+// emitir) desde la vista previa → vuelve a editar. Devuelve { nombre, buf } del PDF descargado.
+export async function documento(p, tipo, { emitir = true } = {}) {
+  await hoja(p).locator(`[data-previa-documento="${tipo}"]`).click();
+  const v = p.locator('[data-hoja-lateral="visor-documento"]'); await v.locator("[data-pagina-doc]").first().waitFor({ timeout: 40000 }); await p.waitForTimeout(600);
+  const [d] = await Promise.all([p.waitForEvent("download", { timeout: 40000 }), v.locator(emitir ? "[data-emitir-documento]" : "[data-descargar-previa]").click()]);
+  const buf = readFileSync(await d.path()); await p.waitForTimeout(900);
+  await v.locator("[data-volver-editar]").click(); await p.waitForTimeout(300);
+  return { nombre: d.suggestedFilename(), buf };
+}
 export const dinero = async (loc) => Number((await loc.innerText()).replace(/[^\d-]/g, ""));
 export const fila = (p, dato) => hoja(p).locator(`[data-fila="${dato}"] > *`).last();
 // Imagen PNG mínima válida (1×1) para probar «Agregar foto» (se normaliza a JPEG en el navegador).

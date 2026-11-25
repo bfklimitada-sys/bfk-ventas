@@ -117,11 +117,11 @@ const texto = async (p) => (await p.locator("body").innerText()).replace(/\s+/g,
   await H(p).locator('[data-campo="oc_codigo"]').fill("2005-105-SE26"); await guardar(p);
   const adj = M.cots.get("c-pres");
   ok("B04_adjudicada_conserva_vendedor", adj.estado === "adjudicada" && adj.vendedor_id === "v2" && adj.vendedor_nombre === "Vendedora Dos" && adj.oc_codigo === "2005-105-SE26");
-  // 12. EETT con el vendedor responsable.
+  // 12. Documentos de la oferta con el vendedor responsable (25/11/2026: la cotización económica lo indica en «Datos del proveedor»).
   await tab(p, "eett");
-  const [d] = await Promise.all([p.waitForEvent("download", { timeout: 20000 }), H(p).locator("[data-generar-eett]").click()]);
-  const txt = execFileSync("pdftotext", ["-layout", await d.path(), "-"]).toString();
-  ok("B05_eett_con_vendedor_responsable", /Vendedor responsable: Vendedora Dos/.test(txt), txt.slice(0, 200));
+  const [d] = await Promise.all([p.waitForEvent("download", { timeout: 20000 }), H(p).locator('[data-descargar-documento="cotizacion"]').click()]);
+  const txt = execFileSync("pdftotext", ["-layout", await d.path(), "-"]).toString().replace(/[ \t]+/g, " ");
+  ok("B05_documento_con_vendedor_responsable", /Vendedor responsable: Vendedora Dos/.test(txt), txt.slice(0, 200));
   await cerrar(p);
   // 9 y 10. OC: con vendedor distinto → solo aviso; sin vendedor → transferencia controlada.
   await p.reload({ waitUntil: "load" }); await espera(p, 2600);

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { C, T, R, iStyle, iMono, selStyle, fmt } from "../../lib/theme";
 import { Modal, Field } from "../ui/Basicos";
 import { Badge, AvisoLinea, BotonPrincipal, BotonSecundario } from "../ui/Sistema";
+import { ProcesarTextoTecnico } from "./ProcesarTextoTecnico";
 import { revisarFicha, paresDeTexto, textoDePares, ESTADOS_ENVIO, proveedorDeEnlace, envioConfirmado, envioVacio } from "../../lib/cotizaciones";
 import { normalizarImagen, traerImagen, rutaConocida } from "../../lib/cotizacionesDatos";
 
@@ -153,11 +154,25 @@ export function EditorFicha({ inicial, envios = [], items = [], destino = "", de
         </div>
         <Field label="Color"><input data-campo="color" value={it.ficha.color || ""} onChange={(e) => setF("color", e.target.value)} style={iStyle} /></Field>
         </>}
+        <ProcesarTextoTecnico ficha={it.ficha} deshabilitado={!!soloLectura} onAplicar={(r) => {
+          const nuevas = textoDePares(r.filas.map((f) => ({ etiqueta: f.etiqueta, valor: f.valor })));
+          setTxtEsp((t) => (r.modo === "agregar" && t.trim() ? `${t.trim()}\n${nuevas}` : nuevas));
+          setIt((x) => ({ ...x, ficha: { ...x.ficha,
+            texto_original: [r.modo === "agregar" ? x.ficha.texto_original : "", r.original].filter((v) => String(v || "").trim()).join("\n\n---\n\n"),
+            ...(!String(x.ficha.descripcion || "").trim() && r.descripcion ? { descripcion: r.descripcion } : {}) } }));
+        }} />
+        {String(it.ficha.texto_original || "").trim() && <div data-texto-original-guardado style={{ fontSize: T.small, color: C.inkFaint, margin: "-4px 0 8px" }}>Texto original del proveedor guardado ({String(it.ficha.texto_original).length} caracteres): no se imprime en ningún documento.</div>}
         <Field label={servicio ? "Alcance y condiciones" : "Características generales"} hint={servicio ? "Una por línea: Etiqueta: valor (alcance, duración, lugar de ejecución…)." : "Una por línea: Etiqueta: valor (marca, modelo y color van arriba)."}><textarea data-campo="generales" rows={3} value={txtGen} onChange={(e) => setTxtGen(e.target.value)} style={{ ...iStyle, resize: "vertical" }} placeholder={servicio ? "Alcance: Instalación y puesta en marcha\nDuración: 1 día" : "Material: Acero\nGarantía: 12 meses"} /></Field>
         <Field label="Especificaciones técnicas" hint="Una por línea: Etiqueta: valor."><textarea data-campo="especificaciones" rows={servicio ? 3 : 6} value={txtEsp} onChange={(e) => setTxtEsp(e.target.value)} style={{ ...iStyle, resize: "vertical" }} placeholder={"Capacidad bruta: 590 L\nVoltaje: 220 V"} /></Field>
         <Field label="Descripción técnica (opcional)"><textarea data-campo="descripcion" rows={3} value={it.ficha.descripcion || ""} onChange={(e) => setF("descripcion", e.target.value)} style={{ ...iStyle, resize: "vertical" }} /></Field>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 8 }} data-condiciones-producto>
+          {[["garantia", "Garantía del producto"], ["plazo_entrega", "Plazo de entrega del producto"], ["condiciones", "Condiciones particulares"]].map(([k, l]) => (
+            <Field key={k} label={l} hint={k === "condiciones" ? "Solo si difieren de las generales." : undefined}><input data-condicion-producto={k} value={it.ficha.condiciones_producto?.[k] || ""}
+              onChange={(e) => setF("condiciones_producto", { ...(it.ficha.condiciones_producto || {}), [k]: e.target.value })} style={iStyle} /></Field>
+          ))}
+        </div>
 
-        <Field label={`Imágenes (${imgs.length} de 4) · las 2 primeras van en la EETT`}>
+        <Field label={`Imágenes (${imgs.length} de 4) · van en la ficha técnica`}>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
             {imgs.map((src, i) => (
               <div key={i} data-imagen-ficha style={{ position: "relative", width: 86, height: 86, border: `1px solid ${C.border}`, borderRadius: R.sm, background: "#fff", overflow: "hidden" }}>

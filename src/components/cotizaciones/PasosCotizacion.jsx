@@ -8,7 +8,7 @@ import { C, T } from "../../lib/theme";
 // Marca de cada pestaña: ✓ verde (completa) o punto ámbar (pendiente), en la esquina para que las cuatro quepan en 360 px.
 // pasos: [[texto, completado, pestaña], …] · conteos: { pestaña: n } — cuántas cosas faltan en esa pestaña; se muestra en la línea
 // «Falta», junto al último paso pendiente de esa pestaña (p. ej. «Verificación de despacho (3)», «EETT (2)»).
-const PESTANAS = [["datos", "Datos"], ["productos", "Productos"], ["precios", "Precios"], ["eett", "EETT"]];
+const PESTANAS = [["datos", "Datos"], ["productos", "Productos"], ["precios", "Precios"], ["eett", "Documentos"]];
 
 export function NavegacionCotizacion({ pasos, activa, onCambiar, conteos = {} }) {
   const estadoDe = (tab) => { const p = pasos.filter((x) => x[2] === tab); return !p.length ? null : p.every((x) => x[1]) ? "listo" : "pendiente"; };

@@ -2,6 +2,8 @@
 // Simula una pestaña con la versión anterior (el archivo de jsPDF ya no existe en el sitio → 404) y comprueba:
 // error claro sin pérdida de datos, aviso «Actualizar BFK Datos», UNA sola recarga controlada (sin bucles) y que, con el
 // archivo disponible, la vista previa y la descarga funcionan en PC y celular. Supabase simulado (nada sale a la red).
+// 25/11/2026: la pestaña «Documentos» reemplaza los botones de la EETT por «Documentación de la oferta» (vista previa y descarga
+// de la EETT con el generador nuevo); las comprobaciones de esta prueba son las mismas.
 // Uso: NODE_PATH=$PWD/node_modules node docs/pruebas-cotizaciones/e2e_eett_version_nueva.mjs http://127.0.0.1:4190/
 import { chromium, CHROME, crearBase, abrir } from "../pruebas-oc/mock_estado.mjs";
 import { crearDatos } from "../pruebas-oc/datos_oc.mjs";
@@ -47,7 +49,7 @@ for (const movil of [false, true]) {
 
   // 1. Pestaña con versión anterior: el archivo de jsPDF ya no existe.
   estado.bloquear = true;
-  await H(p).locator("[data-vista-previa-eett]").click(); await espera(p, 1500);
+  await H(p).locator('[data-previa-documento="eett"]').click(); await espera(p, 1500);
   const t1 = await toast(p);
   ok(`${K}01_vista_previa_error_claro`, /se actualizó mientras esta pestaña estaba abierta/.test(t1) && estado.pedidos >= 1, t1.slice(0, 300));
   ok(`${K}02_aviso_actualizar_visible`, await p.locator("[data-aviso-version-nueva] [data-actualizar-version]").count() === 1);
@@ -55,8 +57,8 @@ for (const movil of [false, true]) {
   ok(`${K}04_sin_recarga_automatica`, estado.cargas === 0, estado.cargas);
 
   // 2. Descarga con el archivo faltante: aviso de falla con reintento; cotización intacta; nada registrado.
-  await H(p).locator("[data-generar-eett]").click(); await espera(p, 1500);
-  ok(`${K}05_descarga_falla_con_reintento_sin_perdida`, await H(p).locator('[data-aviso-linea="falla-descarga"]').count() === 1 && registros(M) === 0 && JSON.stringify(M.cots.get("c-7")) === antes);
+  await H(p).locator('[data-descargar-documento="eett"]').click(); await espera(p, 1500);
+  ok(`${K}05_descarga_falla_con_aviso_sin_perdida`, /se actualizó mientras esta pestaña estaba abierta/.test(await H(p).locator('[data-aviso-linea="oferta-error"]').innerText().catch(() => "")) && registros(M) === 0 && JSON.stringify(M.cots.get("c-7")) === antes);
 
   // 3. Actualizar: UNA recarga controlada.
   await p.locator("[data-actualizar-version]").click(); await p.waitForLoadState("load"); await espera(p, 2600);
@@ -64,7 +66,7 @@ for (const movil of [false, true]) {
 
   // 4. Si el archivo sigue faltando tras recargar: no se ofrece otra recarga (sin bucles).
   await abrirCotizacion(p, movil);
-  await H(p).locator("[data-vista-previa-eett]").click(); await espera(p, 1500);
+  await H(p).locator('[data-previa-documento="eett"]').click(); await espera(p, 1500);
   ok(`${K}07_segundo_fallo_sin_bucle`, await p.locator("[data-aviso-version-nueva]").count() === 1 && await p.locator("[data-actualizar-version]").count() === 0 && /ya se actualizó hace pocos minutos/.test(await p.locator("[data-aviso-version-nueva]").innerText()));
   await espera(p, 2000);
   ok(`${K}08_sin_recargas_adicionales`, estado.cargas === 1, estado.cargas);
@@ -74,13 +76,13 @@ for (const movil of [false, true]) {
   //    vista previa y descarga funcionan.
   estado.bloquear = false;
   await p.reload({ waitUntil: "load" }); await espera(p, 2600); await abrirCotizacion(p, movil);
-  await H(p).locator("[data-vista-previa-eett]").click();
-  await p.locator("[data-pagina-preview]").first().waitFor({ timeout: 20000 }).catch(() => {}); await espera(p, 800);
-  ok(`${K}09_vista_previa_funciona`, await p.locator("[data-pagina-preview]").count() >= 1 && await p.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1));
-  await p.locator('[data-hoja-lateral="vista-previa-eett"] [data-cerrar-hoja]').click(); await espera(p, 300);
-  const [d] = await Promise.all([p.waitForEvent("download", { timeout: 20000 }), H(p).locator("[data-generar-eett]").click()]);
+  await H(p).locator('[data-previa-documento="eett"]').click();
+  await p.locator("[data-pagina-doc]").first().waitFor({ timeout: 20000 }).catch(() => {}); await espera(p, 800);
+  ok(`${K}09_vista_previa_funciona`, await p.locator("[data-pagina-doc]").count() >= 1 && await p.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1));
+  await p.locator('[data-hoja-lateral="visor-documento"] [data-volver-editar]').click(); await espera(p, 300);
+  const [d] = await Promise.all([p.waitForEvent("download", { timeout: 20000 }), H(p).locator('[data-descargar-documento="eett"]').click()]);
   const ruta = await d.path(); await espera(p, 800);
-  ok(`${K}10_descarga_funciona`, !!ruta && /^EETT_697036-78-COT26_v\d+\.pdf$/.test(d.suggestedFilename()) && registros(M) === 1, d.suggestedFilename());
+  ok(`${K}10_descarga_funciona`, !!ruta && /^EETT_MP_697036-78-COT26_v\d+_sin-emitir\.pdf$/.test(d.suggestedFilename()) && registros(M) === 0, d.suggestedFilename());
   ok(`${K}11_precios_y_especificaciones_intactos`, (() => { const c = M.cots.get("c-7"); return c.items[0].precio_origen === 82865 && c.items[0].cantidad === 3 && JSON.stringify(c.items[0].ficha.especificaciones) === JSON.stringify(COT.items[0].ficha.especificaciones); })());
   ok(`${K}12_sin_errores_js_de_la_app`, errs.filter((e) => !/dynamically imported module|jspdf/i.test(e)).length === 0, errs);
   await ctx.close();
@@ -95,7 +97,7 @@ for (const movil of [false, true]) {
   await campo.fill("Laja (editado)"); await espera(p, 200);
   await tab(p, "eett");
   estado.bloquear = true;
-  await H(p).locator("[data-vista-previa-eett]").click(); await espera(p, 1500);
+  await H(p).locator('[data-previa-documento="eett"]').click(); await espera(p, 1500);
   ok("S01_aviso_cambios_no_guardados", /Tus cambios aún NO están guardados/.test(await toast(p)));
   ok("S02_sin_recarga_ni_guardado_automatico", estado.cargas === 0 && guardados(M) === 0);
   await tab(p, "datos");

@@ -36,6 +36,8 @@ function nuevaCot() {
 const version = (id) => Number(q1(`select version from public.vp_cotizaciones where id = '${id}';`));
 const revision = (id) => JSON.parse(q1(`select to_jsonb(r) from public.vp_cotizacion_revisiones r join public.vp_cotizaciones c on c.id = r.cotizacion_id and c.revision_actual = r.numero where c.id = '${id}';`));
 const nRev = (id) => Number(q1(`select count(*) from public.vp_cotizacion_revisiones where cotizacion_id = '${id}';`));
+// 25/11/2026: los documentos de la oferta (misma sección de Mercado Público) quedan en oferta_documentos.
+const nDocs = (id) => Number(q1(`select count(*) from public.oferta_documentos where canal = 'vp' and cotizacion_id = '${id}';`));
 const nEETT = (id, estado) => Number(q1(`select count(*) from public.vp_eett where cotizacion_id = '${id}'${estado ? ` and estado = '${estado}'` : ""};`));
 const nVentas = (id) => Number(q1(`select count(*) from public.vp_ventas where cotizacion_id = '${id}';`));
 const nCots = () => Number(q1(`select count(*) from public.vp_cotizaciones;`));
@@ -102,14 +104,14 @@ try {
     ok("A03 guardar: la cotización quedó guardada exactamente una vez (versión +1, misma revisión)", version(cot.id) === v0 + 1 && revision(cot.id).observaciones === "guardado con sesión vencida" && nRev(cot.id) === 1, { v: version(cot.id), v0 });
     ok("A04 guardar: sin aviso de sesión y sin cambios pendientes", !(await p.locator("[data-aviso-sesion]").count()) && (await ui.hoja(p).locator('[data-estado-guardado="local"]').count()) === 0 && (await est(p)).reintentos >= 1);
 
-    // Emitir EETT con la sesión vencida.
+    // Emitir la EETT (documentos de la oferta) con la sesión vencida.
     await ui.pestana(p, "eett"); await espera(p, 500);
     A.vencerAhora();
     const i1 = A.pedidos.length; const r1 = A.renovaciones();
-    const nombre = await descarga(p, () => ui.hoja(p).locator("[data-generar-eett]").click()); await espera(p, 1500);
-    ok("A05 EETT: emitida y descargada con la sesión vencida (una renovación, un solo guardado y una sola emisión)", /^EETT_.*_Rev0\.pdf$/.test(nombre) && A.renovaciones() === r1 + 1
-      && desde(A, i1, "rpc/vp_guardar_eett", 200).length === 1 && desde(A, i1, "rpc/vp_emitir_eett", 200).length === 1 && A.pedidos.slice(i1).filter((x) => x.status === 401).length === 1, A.pedidos.slice(i1).map((x) => `${x.obj}:${x.status}`).join(" "));
-    ok("A06 EETT: UNA sola EETT, emitida, revisión 0", nEETT(cot.id) === 1 && nEETT(cot.id, "emitida") === 1 && q1(`select revision from public.vp_eett where cotizacion_id = '${cot.id}';`) === "0");
+    const { nombre } = await ui.documento(p, "eett"); await espera(p, 800);
+    ok("A05 EETT: emitida y descargada con la sesión vencida (una renovación y una sola emisión)", /^EETT_.*_v1\.pdf$/.test(nombre) && A.renovaciones() === r1 + 1
+      && desde(A, i1, "rpc/oferta_emitir_documento", 200).length === 1 && A.pedidos.slice(i1).filter((x) => x.status === 401).length <= 1, A.pedidos.slice(i1).map((x) => `${x.obj}:${x.status}`).join(" "));
+    ok("A06 EETT: UN solo documento emitido (versión 1) y nada en el formato anterior", nDocs(cot.id) === 1 && nEETT(cot.id) === 0);
 
     // Crear la venta con la sesión vencida.
     psql(`${comoUsuario(U.ana)}select public.vp_cotizacion_estado('${cot.id}', 'enviada', '{}'::jsonb, ${version(cot.id)});`);
@@ -267,16 +269,17 @@ try {
     ok("D07 siguiente intento: comprobó primero; NO volvió a guardar (una sola ejecución, una versión)", version(cot.id) === v0 + 1 && desde(A, i0, "rpc/vp_guardar_cotizacion").length === 1 && (await ui.hoja(p).locator('[data-estado-guardado="local"]').count()) === 0, desde(A, i0, "rpc/vp_guardar_cotizacion"));
     ok("D08 cada guardado dejó una sola versión en el historial de la revisión", nRev(cot.id) === 1);
 
-    // D5. EETT con respuestas inciertas: al reintentar se usa el mismo borrador y la misma emisión.
-    await ui.pestana(p, "eett"); await espera(p, 500); i0 = A.pedidos.length;
-    A.cortes.push({ patron: /^POST .*\/rpc\/vp_guardar_eett$/, modo: "despues", veces: 1 });
-    await ui.hoja(p).locator("[data-generar-eett]").click(); visto = await ve(p, /[Nn]o se generó la EETT/); await espera(p, 2500);
-    ok("D09 EETT, respuesta incierta al preparar: se informa; quedó UN borrador y nada emitido", nEETT(cot.id) === 1 && nEETT(cot.id, "emitida") === 0 && visto, (await cuerpo(p)).slice(-300));
-    A.cortes.push({ patron: /^POST .*\/rpc\/vp_emitir_eett$/, modo: "despues", veces: 1 });
-    await ui.hoja(p).locator("[data-generar-eett]").click(); visto = await ve(p, /no se emite dos veces/); await espera(p, 2500);
-    ok("D10 EETT, respuesta incierta al emitir: el servidor la emitió una vez (mismo borrador)", nEETT(cot.id) === 1 && nEETT(cot.id, "emitida") === 1 && visto, (await cuerpo(p)).slice(-300));
-    const nom = await descarga(p, () => ui.hoja(p).locator("[data-generar-eett]").click()); await espera(p, 1200);
-    ok("D11 EETT, reintento: comprueba, encuentra la emisión y la descarga; NO emite otra", /_Rev0\.pdf$/.test(nom) && nEETT(cot.id) === 1 && desde(A, i0, "rpc/vp_emitir_eett").length === 1 && q1(`select max(revision) from public.vp_eett where cotizacion_id = '${cot.id}';`) === "0", nom);
+    // D5. Documento con respuesta incierta al emitir: la base lo registró, la respuesta no llegó → el reintento no duplica.
+    await ui.pestana(p, "eett"); await espera(p, 500); i0 = A.pedidos.length; const nDoc0 = nDocs(cot.id);
+    A.cortes.push({ patron: /^POST .*\/rpc\/oferta_emitir_documento$/, modo: "despues", veces: 1 });
+    await ui.hoja(p).locator('[data-previa-documento="oferta"]').click(); const vis = p.locator('[data-hoja-lateral="visor-documento"]');
+    await vis.locator("[data-pagina-doc]").first().waitFor({ timeout: 40000 }); await espera(p, 600);
+    await vis.locator("[data-emitir-documento]").click(); visto = await ve(p, /conexi|fetch|red/i); await espera(p, 1500);
+    ok("D09 respuesta incierta al emitir: se informa y la base lo registró una vez", nDocs(cot.id) === nDoc0 + 1 && visto, (await cuerpo(p)).slice(-300));
+    const [dl] = await Promise.all([p.waitForEvent("download", { timeout: 40000 }), vis.locator("[data-emitir-documento]").click()]); await espera(p, 1200);
+    ok("D10 reintento: devuelve la emisión existente y la descarga; NO registra otra", /^OFERTA_.*_v\d+\.pdf$/.test(dl.suggestedFilename()) && nDocs(cot.id) === nDoc0 + 1 && /ya estaba emitida/.test(await vis.innerText()), dl.suggestedFilename());
+    ok("D11 un solo registro en la base (el reintento devolvió el existente)", q1(`select count(*) from public.oferta_documentos where cotizacion_id = '${cot.id}' and tipo = 'oferta';`) === "1");
+    await vis.locator("[data-volver-editar]").click(); await espera(p, 300);
 
     // D6. Crear la venta con respuesta incierta: el reintento no crea otra.
     psql(`${comoUsuario(U.ana)}select public.vp_cotizacion_estado('${cot.id}', 'enviada', '{}'::jsonb, ${version(cot.id)});`);

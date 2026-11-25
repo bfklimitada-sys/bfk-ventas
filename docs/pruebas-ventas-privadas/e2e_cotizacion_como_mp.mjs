@@ -143,14 +143,14 @@ async function recorrido(browser, { pref, ancho, alto, movil }) {
   // EETT: revisión de fichas, vista previa (no guarda) y PDF de la cotización (no cambia el estado).
   await ui.pestana(p, "eett");
   for (const cb of await h.locator("[data-aprobar-ficha] input").all()) if (!(await cb.isChecked())) await cb.check();
-  ok(`${pref}23 fichas revisadas: EETT lista para generar`, (await h.locator("[data-revision-eett]").count()) === 3 && await h.locator("[data-generar-eett]").isEnabled());
-  await h.locator("[data-vista-previa-eett]").click(); await p.locator('[data-hoja-lateral="vista-previa-eett"] [data-pagina-preview="1"]').waitFor({ timeout: 20000 });
-  ok(`${pref}24 vista previa de EETT desde las fichas, sin registrar nada`, /Vista previa de EETT/.test(await p.locator('[data-hoja-lateral="vista-previa-eett"]').innerText()) && q1(`select count(*) from public.vp_eett e join public.vp_cotizaciones c on c.id = e.cotizacion_id where c.folio = '${folio}';`) === "0");
-  await p.locator('[data-hoja-lateral="vista-previa-eett"] [data-cerrar-hoja]').first().click(); await espera(p, 400);
+  ok(`${pref}23 fichas revisadas y los tres documentos de la oferta (como en Mercado Público)`, (await h.locator("[data-revision-eett]").count()) === 3 && (await h.locator("[data-documento-oferta]").count()) === 3);
+  await h.locator('[data-previa-documento="eett"]').click(); await p.locator('[data-hoja-lateral="visor-documento"] [data-pagina-doc="1"]').waitFor({ timeout: 40000 });
+  ok(`${pref}24 vista previa de EETT desde las fichas, sin registrar nada`, /Vista previa/.test(await p.locator('[data-hoja-lateral="visor-documento"]').innerText()) && q1(`select count(*) from public.oferta_documentos d join public.vp_cotizaciones c on c.id = d.cotizacion_id where c.folio = '${folio}';`) === "0" && q1(`select count(*) from public.vp_eett e join public.vp_cotizaciones c on c.id = e.cotizacion_id where c.folio = '${folio}';`) === "0");
+  await p.locator('[data-hoja-lateral="visor-documento"] [data-volver-editar]').click(); await espera(p, 400);
   await ui.pestana(p, "precios");
   const pdfCot = await descarga(p, () => h.locator("[data-pdf-cotizacion]").click()); writeFileSync(`${CAPT}/${nombre}-documento-cotizacion.pdf`, pdfCot);
   const tCot = await textoPDF(pdfCot);
-  ok(`${pref}25a el PDF de la cotización se guarda con su código y revisión (${folio}_Rev0.pdf)`, ultimoArchivo === `${folio}_Rev0.pdf`, ultimoArchivo);
+  ok(`${pref}25a el PDF de la cotización es la cotización económica (COT_${folio}_v1_sin-emitir.pdf)`, ultimoArchivo === `COT_${folio}_v1_sin-emitir.pdf` && /COTIZACI[ÓO]N ECON[ÓO]MICA/i.test(tCot), ultimoArchivo);
   ok(`${pref}25 PDF de la cotización: cliente, ítems con marca/modelo y totales`, /Maderas del Sur/.test(tCot) && /Bomba centr/.test(tCot) && /Pedrollo CPm 680/.test(tCot) && /1\.043\.481/.test(tCot) && tCot.includes(folio));
   ok(`${pref}25b PDF de la cotización con el plazo de entrega completo`, contiene(tCot, LARGO));
   ok(`${pref}26 PDF de la cotización SIN costos, proveedor, enlaces ni despachos`, !/Ferreter|tienda\.invalid|285\.600|23\.800|costo|margen|utilidad/i.test(tCot));
@@ -178,17 +178,17 @@ async function recorrido(browser, { pref, ancho, alto, movil }) {
   await ui.registrarEstado(p, "enviada"); await ui.registrarEstado(p, "aceptada");
   ok(`${pref}32 R1 aceptada: disponible «Crear venta / Registrar OC»`, q1(`select estado from public.vp_cotizaciones where folio = '${folio}';`) === "aceptada" && (await h.locator('[data-accion-cot="crear-venta"]').count()) === 1);
   await ui.pestana(p, "eett");
-  ok(`${pref}33 pestaña EETT igual a la de Mercado Público (revisión de fichas, vista previa, «Generar y descargar EETT»)`, (await h.locator("[data-revision-eett]").count()) === 3 && /Generar y descargar EETT/.test(await h.locator("[data-generar-eett]").innerText()));
-  const pdfEETT = await descarga(p, () => h.locator("[data-generar-eett]").click()); await espera(p, 1500); writeFileSync(`${CAPT}/${nombre}-documento-eett.pdf`, pdfEETT);
+  ok(`${pref}33 pestaña Documentos igual a la de Mercado Público (revisión de fichas y tres documentos, sin formato anterior)`, (await h.locator("[data-revision-eett]").count()) === 3 && (await h.locator("[data-documento-oferta]").count()) === 3 && !(await h.locator("[data-generar-eett]").count()));
+  const docE = await ui.documento(p, "eett"); const pdfEETT = docE.buf; writeFileSync(`${CAPT}/${nombre}-documento-eett.pdf`, pdfEETT);
   ok(`${pref}34 sin ventana adicional (objeto, alcance, requisitos, emisión aparte)`, !(await p.locator('[data-ventana^="eett"], [data-eett-objeto]').count()));
   const tE = await textoPDF(pdfEETT);
-  ok(`${pref}35 EETT emitida con el formato de Mercado Público y la ficha (marca, modelo, generales, especificaciones)`, /INFORMACI.N\s+T.CNICA DE/.test(tE) && /Pedrollo/.test(tE) && /CPm 680/.test(tE) && /Hierro fundido/.test(tE) && /Altura m.xima/.test(tE) && !/\$\s?\d/.test(tE) && !/Ferreter/.test(tE) && !/BOM-01/.test(tE) && !/Objeto del suministro/.test(tE));
+  ok(`${pref}35 EETT emitida con el diseño de Mercado Público y la ficha (marca, modelo, especificaciones)`, /INFORMACI.N\s+T.CNICA/.test(tE) && /Pedrollo/.test(tE) && /CPm 680/.test(tE) && /Hierro fundido/.test(tE) && /Altura m.xima/.test(tE) && !/\$\s?\d/.test(tE) && !/Ferreter/.test(tE) && docE.nombre.startsWith("EETT_"), docE.nombre);
   ok(`${pref}35a EETT privada con el plazo de entrega largo completo (la fila crece)`, contiene(tE, LARGO), tE.slice(0, 300));
   ok(`${pref}35b la foto de la ficha va en la EETT (como en Mercado Público)`, pdfEETT.toString("latin1").includes("/Subtype /Image"));
-  ok(`${pref}36 EETT emitida y congelada en la base (formato de Mercado Público)`, q1(`select count(*)||'|'||bool_and(hash is not null)||'|'||bool_and(contenido->>'formato' = 'mp') from public.vp_eett e join public.vp_cotizaciones c on c.id = e.cotizacion_id where c.folio = '${folio}' and e.estado = 'emitida';`) === "1|true|true");
-  // Generar otra vez sin cambios: vuelve a descargar la misma emisión (no emite una revisión idéntica).
-  const pdfEETT2 = await descarga(p, () => h.locator("[data-generar-eett]").click()); await espera(p, 1200);
-  ok(`${pref}36b generar otra vez sin cambios descarga la misma EETT (sin revisión nueva)`, q1(`select count(*) from public.vp_eett e join public.vp_cotizaciones c on c.id = e.cotizacion_id where c.folio = '${folio}';`) === "1" && (await textoPDF(pdfEETT2)).replace(/\s+/g, " ") === tE.replace(/\s+/g, " "));
+  ok(`${pref}36 EETT emitida y congelada en el historial de la oferta`, q1(`select count(*)||'|'||bool_and(huella_pdf is not null) from public.oferta_documentos d join public.vp_cotizaciones c on c.id = d.cotizacion_id where c.folio = '${folio}' and d.tipo = 'eett';`) === "1|true");
+  // Emitir otra vez sin cambios: se descarga la misma versión (no se registra otra).
+  const pdfEETT2 = (await ui.documento(p, "eett")).buf;
+  ok(`${pref}36b emitir otra vez sin cambios descarga la misma EETT (sin versión nueva)`, q1(`select count(*) from public.oferta_documentos d join public.vp_cotizaciones c on c.id = d.cotizacion_id where c.folio = '${folio}';`) === "1" && Buffer.compare(pdfEETT2, pdfEETT) === 0);
   await h.locator('[data-accion-cot="crear-venta"]').click(); await p.locator('[data-ventana="crear-venta"]').waitFor();
   await p.locator('[data-ventana="crear-venta"] [data-confirmar-venta]').dblclick(); await espera(p, 3000);
   const ov = q1(`select v.folio from public.vp_ventas v join public.vp_cotizaciones c on c.id = v.cotizacion_id where c.folio = '${folio}';`);
@@ -231,9 +231,10 @@ async function capturasMP(browser, { ancho, alto, movil }) {
   await H.locator('[role="tab"][data-tab="datos"]').click(); await H.locator('[data-campo="plazo"]').fill(LARGO);
   await H.locator('[role="tab"][data-tab="eett"]').click(); await espera(p, 300);
   for (const cb of await H.locator("[data-aprobar-ficha] input").all()) if (!(await cb.isChecked())) await cb.check();
-  const [dl] = await Promise.all([p.waitForEvent("download", { timeout: 30000 }), H.locator("[data-generar-eett]").click()]);
+  // 25/11/2026: «Documentación de la oferta» (generador nuevo): la EETT informa el plazo de entrega completo en «Condiciones de la oferta».
+  const [dl] = await Promise.all([p.waitForEvent("download", { timeout: 30000 }), H.locator('[data-descargar-documento="eett"]').click()]);
   const pdfMP = readFileSync(await dl.path()); writeFileSync(`${CAPT}/${nombre}-documento-eett-mp.pdf`, pdfMP);
-  ok(`MP-${nombre} EETT de Mercado Público con el plazo de entrega largo completo (misma plantilla)`, contiene(await textoPDF(pdfMP), LARGO) && /INFORMACI.N\s+T.CNICA DE/.test(await textoPDF(pdfMP)));
+  ok(`MP-${nombre} EETT de Mercado Público con el plazo de entrega largo completo`, contiene(await textoPDF(pdfMP), LARGO) && /INFORMACI.N\s+T.CNICA/.test(await textoPDF(pdfMP)));
   ok(`MP-${nombre} sin llamadas a Inteligencia Comercial`, !llamadasMP.some((u) => /inteligencia/.test(u)), llamadasMP.join(" "));
   ok(`MP-${nombre} el editor de Mercado Público sigue con sus pestañas y ventana de producto`, JSON.stringify(tabs) === JSON.stringify(["datos", "productos", "precios", "eett"]) && ventanaMP && !errs.length, errs.join(" | "));
   await ctx.close();

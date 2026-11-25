@@ -1,6 +1,8 @@
 // Actualización definitiva de Cotizaciones y EETT (octubre 2026): interfaz de punta a punta con Supabase,
 // /api/compra-agil y Storage SIMULADOS (nada sale a la red). Cubre las 14 pruebas pedidas en la especificación
 // (la 7, formato visual frente al Excel, se revisa aparte con docs/pruebas-cotizaciones/comparar_excel.mjs).
+// 25/11/2026: las pruebas 8–12 y 14 usan «Documentación de la oferta» (generador nuevo); la emisión con historial se prueba en
+// docs/pruebas-documentos/e2e_documentos.mjs.
 // Uso: NODE_PATH=$PWD/node_modules node docs/pruebas-cotizaciones/e2e_definitiva.mjs http://127.0.0.1:4190/
 import { readFileSync, writeFileSync, mkdtempSync } from "node:fs";
 import { execFileSync } from "node:child_process";
@@ -127,49 +129,49 @@ async function ingresarProducto(p, d) {
   ok("06_copiar_valores_mp_general", /56669\t2833450/.test(await p.evaluate(() => navigator.clipboard.readText())));
   void precios;
 
-  // 8. Vista previa: mismo generador, todas las páginas, sin guardar nada.
+  // 8. Vista previa (25/11/2026: «Documentación de la oferta», generador nuevo): todas las páginas, sin guardar nada.
   await tab(p, "eett");
   for (const c of await H(p).locator("[data-aprobar-ficha] input").all()) await c.check();
   const rpcAntes = M.rpc.length; const stAntes = M.storagePost.length;
-  await H(p).locator("[data-vista-previa-eett]").click();
-  await p.locator('[data-hoja-lateral="vista-previa-eett"] [data-pagina-preview]').first().waitFor({ timeout: 20000 }).catch(() => {});
+  const visor = p.locator('[data-hoja-lateral="visor-documento"]');
+  await H(p).locator('[data-previa-documento="eett"]').click();
+  await visor.locator("[data-pagina-doc]").first().waitFor({ timeout: 30000 }).catch(() => {});
   await espera(p, 1500);
-  const pagsPrevia = await p.locator("[data-pagina-preview]").count();
-  ok("08_vista_previa_todas_las_paginas", pagsPrevia === 3, pagsPrevia);
+  const pagsPrevia = await visor.locator("[data-pagina-doc]").count();
+  ok("08_vista_previa_todas_las_paginas", pagsPrevia >= 2, pagsPrevia);
   ok("08_vista_previa_no_guarda_nada", M.rpc.length === rpcAntes && M.cots.size === 0 && M.storagePost.length === stAntes);
   if (process.env.CAPTURAS) await p.screenshot({ path: join(SALIDA, "vista-previa-escritorio.png") });
-  await p.locator('[data-hoja-lateral="vista-previa-eett"] [data-cerrar-hoja]').click(); await espera(p, 300);
-
-  // 9, 11 y 12. Generar y descargar: guarda primero, genera desde lo guardado, registra solo metadatos.
-  const [desc] = await Promise.all([p.waitForEvent("download", { timeout: 20000 }), H(p).locator("[data-generar-eett]").click()]);
-  const ruta = join(SALIDA, desc.suggestedFilename()); await desc.saveAs(ruta); await espera(p, 800);
-  const iG = M.rpc.findIndex((r) => r.fn === "cz_guardar_cotizacion_v2"); const iR = M.rpc.findIndex((r) => r.fn === "cz_registrar_eett_v2");
-  ok("09_guardado_automatico_antes_de_generar", iG >= 0 && iR > iG && M.cots.size === 1, M.rpc.map((r) => r.fn));
+  // Sin guardar todavía: la emisión no está disponible (se informa); se puede descargar sin emitir y no se guarda nada.
+  ok("09_emitir_requiere_guardar", (await visor.locator("[data-emitir-documento]").count()) === 0 && (await H(p).locator('[data-aviso-linea="oferta-sin-guardar"]').count()) === 1);
+  await visor.locator("[data-volver-editar]").click(); await espera(p, 300);
+  await H(p).locator("[data-guardar-cotizacion]").click(); await espera(p, 1500);
   const guardado = M.cots.get("c-1");
   ok("09_guardado_completo", guardado.items.length === 3 && guardado.vendedor_nombre === "María Pérez" && guardado.requerimientos.length === 2 && guardado.items[0].enlace === "https://www.tienda.cl/mesa-plegable");
-  const pdfTxt = textoPdf(ruta);
-  ok("09_pdf_con_datos_guardados", desc.suggestedFilename() === "EETT_3390-246-COT26_v1.pdf" && /Mesa plegable de camping/i.test(pdfTxt) && /Toldo 3x3/i.test(pdfTxt) && /Versi.n 1/.test(pdfTxt), desc.suggestedFilename());
-  ok("11_pdf_vendedor_y_elaborador", /Vendedor responsable: Mar.a P.rez/.test(pdfTxt) && /Elaborado por: Admin Prueba/.test(pdfTxt) && /Empresa: BFK Limitada/.test(pdfTxt));
-  ok("12_pdf_sin_datos_comerciales", !/51800|51\.800|56669|56\.669|tienda\.cl|Tienda Uno|3\.690|\$|6\.000\.000/.test(pdfTxt));
-  const reg = M.rpc[iR].b.p;
-  ok("12_solo_metadatos_registrados", reg.cotizacion_id === "c-1" && reg.version === 1 && /^[0-9a-f]{64}$/.test(reg.hash) && reg.nombre_documento === "EETT_3390-246-COT26_v1.pdf" && !("blob" in reg));
-  ok("12_ningun_pdf_subido_a_storage", !M.storagePost.some((x) => /cz-eett|\.pdf/.test(x)) && M.storagePost.every((x) => /cz-productos\/img\//.test(x)), M.storagePost);
-  ok("12_vista_previa_igual_al_pdf", Number(execFileSync("pdfinfo", [ruta]).toString().match(/Pages:\s+(\d+)/)[1]) === pagsPrevia);
 
-  // Sin cambios: generar de nuevo NO crea otra versión.
+  // 9, 11 y 12. Descarga del PDF (sin emitir): datos guardados, sin datos comerciales, nada registrado ni subido.
   const nG = M.rpc.filter((r) => r.fn === "cz_guardar_cotizacion_v2").length;
-  const [d2] = await Promise.all([p.waitForEvent("download", { timeout: 20000 }), H(p).locator("[data-generar-eett]").click()]); await d2.path(); await espera(p, 800);
-  ok("09_sin_cambios_no_crea_version", M.rpc.filter((r) => r.fn === "cz_guardar_cotizacion_v2").length === nG && M.rpc.filter((r) => r.fn === "cz_registrar_eett_v2").length === 2);
+  const [desc] = await Promise.all([p.waitForEvent("download", { timeout: 30000 }), H(p).locator('[data-descargar-documento="eett"]').click()]);
+  const ruta = join(SALIDA, desc.suggestedFilename()); await desc.saveAs(ruta); await espera(p, 800);
+  const pdfTxt = textoPdf(ruta).replace(/[ \t]+/g, " ");
+  ok("09_pdf_con_datos_guardados", desc.suggestedFilename() === "EETT_MP_3390-246-COT26_v1_sin-emitir.pdf" && /MESA PLEGABLE DE CAMPING/i.test(pdfTxt) && /TOLDO 3X3/i.test(pdfTxt) && /Versión 01/.test(pdfTxt), desc.suggestedFilename());
+  ok("12_pdf_sin_datos_comerciales", !/51800|51\.800|56669|56\.669|tienda\.cl|Tienda Uno|3\.690|\$|6\.000\.000/.test(pdfTxt));
+  ok("12_sin_registro_ni_pdf_subido", !M.rpc.some((r) => /cz_registrar_eett/.test(r.fn)) && !M.storagePost.some((x) => /cz-eett|\.pdf/.test(x)) && M.storagePost.every((x) => /cz-productos\/img\//.test(x)), M.storagePost);
+  ok("12_vista_previa_igual_al_pdf", Number(execFileSync("pdfinfo", [ruta]).toString().match(/Pages:\s+(\d+)/)[1]) === pagsPrevia);
+  const [dc] = await Promise.all([p.waitForEvent("download", { timeout: 30000 }), H(p).locator('[data-descargar-documento="cotizacion"]').click()]);
+  const rutaC = join(SALIDA, dc.suggestedFilename()); await dc.saveAs(rutaC); await espera(p, 600);
+  const cotTxt = textoPdf(rutaC).replace(/[ \t]+/g, " ");
+  ok("11_pdf_vendedor_y_empresa", /Vendedor responsable: Mar.a P.rez/.test(cotTxt) && /BFK Limitada/.test(cotTxt) && /56\.669/.test(cotTxt));
+  ok("09_descargar_no_guarda_ni_crea_version", M.rpc.filter((r) => r.fn === "cz_guardar_cotizacion_v2").length === nG);
 
-  // 10. Edición posterior y nueva EETT.
+  // 10. Edición posterior: el documento refleja lo nuevo.
   await tab(p, "productos");
   await H(p).locator('[data-item-cotizacion="1"] [data-editar-item]').click(); await espera(p);
   await llenar(fichaModal(p).locator('[data-campo="especificaciones"]'), "Largo: 180 cm\nMaterial: Aluminio reforzado"); await fichaModal(p).locator("[data-guardar-ficha]").click(); await espera(p, 400);
+  await H(p).locator("[data-guardar-cotizacion]").click(); await espera(p, 1500);
   await tab(p, "eett"); for (const c of await H(p).locator("[data-aprobar-ficha] input").all()) await c.check();
-  const [d3] = await Promise.all([p.waitForEvent("download", { timeout: 20000 }), H(p).locator("[data-generar-eett]").click()]);
+  const [d3] = await Promise.all([p.waitForEvent("download", { timeout: 30000 }), H(p).locator('[data-descargar-documento="eett"]').click()]);
   const ruta3 = join(SALIDA, d3.suggestedFilename()); await d3.saveAs(ruta3); await espera(p, 800);
-  ok("10_edicion_genera_nueva_version", M.cots.get("c-1").version === 2 && d3.suggestedFilename() === "EETT_3390-246-COT26_v2.pdf" && /Aluminio reforzado/.test(textoPdf(ruta3)));
-  ok("10_historial_de_generaciones", (await H(p).locator("[data-eett-generado]").count()) === 3 && /versi.n 2/.test(await H(p).locator("[data-eett-generado]").first().innerText()));
+  ok("10_edicion_se_refleja_en_el_documento", M.cots.get("c-1").version >= 2 && /Aluminio reforzado/.test(textoPdf(ruta3)));
   ok("12_imagenes_no_se_resuben", M.storagePost.length === 1, M.storagePost);
 
   // 3. Reabrir: enlaces conservados; adjudicada → «Ir a comprar» y lo ofertado protegido.
@@ -247,15 +249,16 @@ async function ingresarProducto(p, d) {
   ok("14_aviso_migracion_pendiente", (await H(p).locator('[data-aviso-linea="esquema-pendiente"]').count()) === 1);
   ok("14_sin_eliminar_sin_migracion", (await H(p).locator("[data-eliminar-cotizacion]").count()) === 0);
   await tab(p, "eett");
-  await H(p).locator("[data-vista-previa-eett]").click();
-  await p.locator("[data-pagina-preview]").first().waitFor({ timeout: 20000 }).catch(() => {}); await espera(p, 800);
-  ok("08_vista_previa_celular", (await p.locator("[data-pagina-preview]").count()) === 1 && await p.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1));
+  await H(p).locator('[data-previa-documento="eett"]').click();
+  await p.locator("[data-pagina-doc]").first().waitFor({ timeout: 30000 }).catch(() => {}); await espera(p, 800);
+  ok("08_vista_previa_celular", (await p.locator("[data-pagina-doc]").count()) >= 1 && await p.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1));
   if (process.env.CAPTURAS) await p.screenshot({ path: join(SALIDA, "vista-previa-celular.png") });
-  await p.locator('[data-hoja-lateral="vista-previa-eett"] [data-cerrar-hoja]').click(); await espera(p, 300);
-  const [d] = await Promise.all([p.waitForEvent("download", { timeout: 20000 }), H(p).locator("[data-generar-eett]").click()]); await d.path(); await espera(p, 800);
-  const g = M.rpc.find((r) => r.fn === "cz_guardar_cotizacion"); const r1 = M.rpc.find((r) => r.fn === "cz_registrar_eett");
+  await p.locator('[data-hoja-lateral="visor-documento"] [data-volver-editar]').click(); await espera(p, 300);
+  await H(p).locator("[data-guardar-cotizacion]").click(); await espera(p, 1500);
+  const [d] = await Promise.all([p.waitForEvent("download", { timeout: 30000 }), H(p).locator('[data-descargar-documento="eett"]').click()]); await d.path(); await espera(p, 800);
+  const g = M.rpc.find((r) => r.fn === "cz_guardar_cotizacion");
   ok("14_guarda_con_funcion_actual", !!g && g.b.p.version === 3 && g.b.p.items[0].disponibilidad === "En stock" && g.b.p.items[0].ficha.imagenes[0] === "img/abc.jpg", g?.b.p.items[0]);
-  ok("14_registro_sin_pdf_en_base_actual", !!r1 && r1.b.p_ruta === null && r1.b.p_version === 4 && !M.storagePost.length, r1?.b);
+  ok("14_descarga_sin_registro_ni_pdf_en_base", !M.rpc.some((r) => r.fn === "cz_registrar_eett") && !M.storagePost.length && /_sin-emitir\.pdf$/.test(d.suggestedFilename()));
   ok("C_sin_errores_de_consola", errs.length === 0, errs);
   await ctx.close();
 }
