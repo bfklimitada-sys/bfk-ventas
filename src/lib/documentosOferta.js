@@ -369,7 +369,7 @@ function componer(tipo, modelo, { jsPDF, fuentes, logo, imagenes = {}, id } = {}
     const enUso = y > Y_CONT + 0.1;
     if (enUso) {
       if (cabe(total + 2.2)) y += 2.2;
-      else if (total <= disponiblePagina) nuevaPagina();
+      else if (total <= disponiblePagina && y > Y_CONT + 70) nuevaPagina();   // con la página casi vacía, la ficha empieza ahí
       else {
         const minimo = altoCab(altoImg) + 7.8 + (secciones[0] ? 6.0 + Math.min(2, secciones[0].filas.length) * 6.3 : 0);
         if (!cabe(minimo + 2.2)) nuevaPagina(); else y += 2.2;
@@ -410,7 +410,14 @@ function componer(tipo, modelo, { jsPDF, fuentes, logo, imagenes = {}, id } = {}
     datosPartes(); detalle(); totales(); condiciones();
   }
   if (tipo === "eett" || tipo === "oferta") {
-    nuevaPagina({ titulo: TIPOS_DOCUMENTO.eett.titulo, subtitulo: TIPOS_DOCUMENTO.eett.subtitulo });
+    const cabEETT = { titulo: TIPOS_DOCUMENTO.eett.titulo, subtitulo: TIPOS_DOCUMENTO.eett.subtitulo };
+    // Oferta: si la cotización terminó con apenas unas filas en una página nueva, las fichas técnicas continúan en esa misma
+    // página (con el encabezado de «Información técnica») en lugar de dejarla prácticamente vacía.
+    if (tipo === "oferta" && doc.getNumberOfPages() > 1 && y < Y_CONT + 70) {
+      cabecera = cabEETT; rect(X0, 9.2, 143.7, 18.3, AZUL);
+      fuente(true, 16, BLANCO); escribir(cabecera.titulo, 14.1, 12.5, 16); fuente(true, 11, BLANCO); escribir(cabecera.subtitulo, 14.1, 20.2, 11);
+      y += 2.2;
+    } else nuevaPagina(cabEETT);
     if (tipo === "eett") {
       const c = modelo.cliente || {};
       const datos = [c.nombre, c.rut && `RUT ${c.rut}`].filter(Boolean).join(" · ");
