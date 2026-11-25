@@ -149,12 +149,12 @@ async function cotizacionConProductos(p, { movil = false } = {}) {
   ok("A14_vista_previa_no_guarda_ni_emite", S.rpc.length === n0 && M.rpc.length === g0);
   const previa = await descargar(p, () => visor(p).locator("[data-descargar-previa]").click());
   const tPrev = textoPdf(previa.ruta);
-  ok("A15_descarga_sin_emitir_marcada_en_el_nombre", previa.nombre === "OFERTA_MP_3390-246-COT26_v1_sin-emitir.pdf", previa.nombre);
+  ok("A15_descarga_sin_emitir_con_nombre_simple", previa.nombre === "OFERTA_3390-246-COT26_v1.pdf", previa.nombre);
   ok("A16_pdf_con_precios_del_calculo_y_sin_datos_internos", /OFERTA TÉCNICA Y ECONÓMICA/.test(tPrev) && /TOTAL OFERTA/.test(tPrev) && !/Tienda Uno|Tienda Dos|simulación|160\.000|\$199\.990|cuotas/.test(tPrev));
   ok("A17_matriz_y_garantias_en_el_pdf", /CUMPLIMIENTO TÉCNICO/.test(tPrev) && /Cumple/.test(tPrev) && /12 meses con el fabricante/.test(tPrev) && /Vigencia de la oferta/.test(tPrev));
   // Emisión definitiva = el mismo PDF de la vista previa.
   const emit = await descargar(p, () => visor(p).locator("[data-emitir-documento]").click());
-  ok("A18_emision_descarga_el_documento_definitivo", emit.nombre === "OFERTA_MP_3390-246-COT26_v1.pdf", emit.nombre);
+  ok("A18_emision_descarga_el_documento_definitivo", emit.nombre === "OFERTA_3390-246-COT26_v1.pdf", emit.nombre);
   ok("A19_documento_emitido_identico_a_la_vista_previa", sha(emit.bytes) === sha(previa.bytes));
   const rpcEmit = S.rpc.filter((r) => r.fn === "oferta_emitir_documento");
   ok("A20_registro_inalterable_con_version_y_huellas", rpcEmit.length === 1 && rpcEmit[0].b.p_version === 1 && rpcEmit[0].b.p_huella_pdf === sha(emit.bytes) && rpcEmit[0].b.p_tipo === "oferta");
@@ -164,12 +164,12 @@ async function cotizacionConProductos(p, { movil = false } = {}) {
   // EETT con la misma información: conserva la versión 1. Sin precios.
   await sec.locator('[data-previa-documento="eett"]').click(); await visor(p).locator("[data-pagina-doc]").first().waitFor({ timeout: 30000 }); await espera(p, 800);
   const eett = await descargar(p, () => visor(p).locator("[data-emitir-documento]").click());
-  ok("A23_eett_misma_version_y_sin_montos", eett.nombre === "EETT_MP_3390-246-COT26_v1.pdf" && !/\$\s?\d|TOTAL OFERTA|IVA/.test(textoPdf(eett.ruta)), eett.nombre);
+  ok("A23_eett_misma_version_y_sin_montos", eett.nombre === "EETT_3390-246-COT26_v1.pdf" && !/\$\s?\d|TOTAL OFERTA|IVA/.test(textoPdf(eett.ruta)), eett.nombre);
   await visor(p).locator("[data-volver-editar]").click(); await espera(p, 500);
   // Descargar de nuevo desde el historial: idéntico al emitido.
   await sec.locator('[data-desplegable="historial-oferta"] button').first().click(); await espera(p, 200);
   const otra = await descargar(p, () => sec.locator("[data-descargar-emitido]").first().click());
-  ok("A24_nueva_descarga_de_version_emitida_identica", otra.nombre === "OFERTA_MP_3390-246-COT26_v1.pdf" && sha(otra.bytes) === sha(emit.bytes));
+  ok("A24_nueva_descarga_de_version_emitida_identica", otra.nombre === "OFERTA_3390-246-COT26_v1.pdf" && sha(otra.bytes) === sha(emit.bytes));
   // Cambio después de la vista previa → no se emite: se actualiza la vista previa.
   await sec.locator('[data-previa-documento="cotizacion"]').click(); await visor(p).locator("[data-pagina-doc]").first().waitFor({ timeout: 30000 }); await espera(p, 500);
   await visor(p).locator("[data-volver-editar]").click(); await espera(p, 300);
@@ -178,7 +178,7 @@ async function cotizacionConProductos(p, { movil = false } = {}) {
   const sub = await visor(p).innerText();
   ok("A25_informacion_distinta_recibe_version_siguiente", /versión 02/.test(sub), sub.slice(0, 200));
   const cot2 = await descargar(p, () => visor(p).locator("[data-emitir-documento]").click());
-  ok("A26_cotizacion_v2", cot2.nombre === "COT_MP_3390-246-COT26_v2.pdf" && /30 días/.test(textoPdf(cot2.ruta)));
+  ok("A26_cotizacion_v2", cot2.nombre === "COT_3390-246-COT26_v2.pdf" && /30 días/.test(textoPdf(cot2.ruta)));
   await visor(p).locator("[data-volver-editar]").click(); await espera(p, 300);
   // Respuesta incierta: la base registró la emisión pero la respuesta se perdió → reintentar NO duplica (devuelve la existente).
   await sec.locator('[data-previa-documento="eett"]').click(); await visor(p).locator("[data-pagina-doc]").first().waitFor({ timeout: 30000 }); await espera(p, 500);
@@ -186,7 +186,7 @@ async function cotizacionConProductos(p, { movil = false } = {}) {
   await visor(p).locator("[data-emitir-documento]").click(); await espera(p, 2000);
   const errCorte = await visor(p).locator('[data-aviso-linea="visor-error"]').innerText().catch(() => "");
   const reint = await descargar(p, () => visor(p).locator("[data-emitir-documento]").click()); await espera(p, 600);
-  ok("A26b_respuesta_perdida_reintento_sin_duplicar", !!errCorte && S.docs.length === nDocs + 1 && reint.nombre === "EETT_MP_3390-246-COT26_v2.pdf" && /ya estaba emitida/.test(await visor(p).locator('[data-aviso-linea="visor-emitido"]').innerText()), { errCorte, n: S.docs.length - nDocs });
+  ok("A26b_respuesta_perdida_reintento_sin_duplicar", !!errCorte && S.docs.length === nDocs + 1 && reint.nombre === "EETT_3390-246-COT26_v2.pdf" && /ya estaba emitida/.test(await visor(p).locator('[data-aviso-linea="visor-emitido"]').innerText()), { errCorte, n: S.docs.length - nDocs });
   await visor(p).locator("[data-volver-editar]").click(); await espera(p, 300);
   // Producto modificado DESPUÉS de abrir la vista previa → la emisión se detiene y pide revisar.
   await sec.locator('[data-previa-documento="oferta"]').click(); await visor(p).locator("[data-pagina-doc]").first().waitFor({ timeout: 30000 }); await espera(p, 500);
@@ -225,7 +225,7 @@ async function cotizacionConProductos(p, { movil = false } = {}) {
   const sec = H(p).locator("[data-documentacion-oferta]");
   ok("C01_aviso_de_actualizacion_pendiente", (await sec.locator('[data-aviso-linea="oferta-no-instalada"]').count()) === 1);
   const d = await descargar(p, () => sec.locator('[data-descargar-documento="cotizacion"]').click());
-  ok("C02_descarga_sin_emitir_disponible", /_sin-emitir\.pdf$/.test(d.nombre));
+  ok("C02_descarga_sin_emitir_disponible", /^[A-Z]+_[^_]+_v\d+\.pdf$/.test(d.nombre));
   await sec.locator('[data-previa-documento="eett"]').click(); await visor(p).locator("[data-pagina-doc]").first().waitFor({ timeout: 30000 });
   ok("C03_sin_boton_emitir", (await visor(p).locator("[data-emitir-documento]").count()) === 0 && !S.rpc.length);
   ok("C04_sin_errores", errs.length === 0, errs);

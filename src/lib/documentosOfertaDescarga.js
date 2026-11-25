@@ -28,7 +28,7 @@ export async function descargarDocumentoEmitido(token, id) {
 // Cotización económica fuera de la sección «Documentos» (Ventas privadas, 25/11/2026): botón «PDF de la cotización» de la
 // pestaña Precios y «PDF cotización aprobada» de la orden de venta. Mismo generador, condiciones y versión que la sección
 // «Documentos»; NO emite ni registra nada. Si ese mismo contenido ya se emitió como cotización, el PDF es idéntico al emitido
-// (mismo nombre); si no, el archivo lleva «_sin-emitir».
+// (mismo nombre). El nombre no indica si está emitido (25/11/2026: nombre simple).
 // construir({ version, condiciones, matriz }) → Promise<modelo público>.
 export async function cotizacionEconomica(token, canal, cotizacionId, construir) {
   let condiciones = {}, matriz = [], historial = [];
@@ -43,5 +43,5 @@ export async function cotizacionEconomica(token, canal, cotizacionId, construir)
   const modelo = { ...m0, version: versionPara(historial, hc) };
   const r = await generarDocumento(token, "cotizacion", modelo);
   const emitida = historial.some((d) => d.tipo === "cotizacion" && d.huella_contenido === hc && d.version === modelo.version);
-  return { ...r, nombre: emitida ? r.nombre : r.nombre.replace(/\.pdf$/, "_sin-emitir.pdf"), emitida, modelo, avisos: revisarModeloOferta(modelo, "cotizacion") };
+  return { ...r, emitida, modelo, avisos: revisarModeloOferta(modelo, "cotizacion") };
 }

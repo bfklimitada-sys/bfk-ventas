@@ -51,14 +51,15 @@ const cantidadTexto = (q, unidad) => {
   return `${t} ${u}`;
 };
 
-// ── Nombre de archivo: COT_MP_1540-1372-COT26_v1.pdf (Mercado Público) · OFERTA_CP-2026-0007_v1.pdf (Ventas privadas: el folio ya dice CP) ──
+// ── Nombre de archivo: COT_1540-1372-COT26_v1.pdf (Mercado Público) · OFERTA_CP-2026-0007_v1.pdf (Ventas privadas) ──
 export function nombreArchivoOferta(tipo, modelo) {
   const ref = String(modelo?.referencia || "cotizacion").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "cotizacion";
-  // Mercado Público: COT_MP_<id>_vN.pdf. Ventas privadas: el folio ya dice «CP» → COT_CP-2026-0001_vN.pdf (sin folio: CP-BORRADOR).
+  // Nombre simple, como la EETT anterior (25/11/2026): COT_956-659-COT26_v1.pdf · EETT_CP-2026-0001_v1.pdf. El código ya
+  // distingue el canal (Mercado Público …-COT26 / Ventas privadas CP-…). Sin código: «cotizacion» (MP) o «CP-BORRADOR» (VP).
   const v = `_v${Math.max(1, Math.trunc(Number(modelo?.version) || 1))}.pdf`;
   const prefijo = TIPOS_DOCUMENTO[tipo]?.prefijo || "DOC";
-  if (modelo?.canal === "vp") return `${prefijo}_${modelo?.referencia ? ref : "CP-BORRADOR"}${v}`;
-  return `${prefijo}_MP_${ref}${v}`;
+  if (modelo?.canal === "vp" && !modelo?.referencia) return `${prefijo}_CP-BORRADOR${v}`;
+  return `${prefijo}_${ref}${v}`;
 }
 
 // ── Fichas de la EETT: líneas con ficha técnica idéntica se presentan en UNA ficha con la cantidad total ──

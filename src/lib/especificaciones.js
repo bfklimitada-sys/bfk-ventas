@@ -108,7 +108,9 @@ export function categoriaDe(etiqueta) {
   if (/\b(incluye|accesorios|contenido de la caja)\b/.test(k)) return "accesorios";
   if (/\b(peso maximo|capacidad|soporta)\b/.test(k)) return "operacion";
   if (/\b(material|materiales|tapiz|tapizado|acabado)\b/.test(k)) return "materiales";
-  if (/\b(actualizacion|refresco|tasa de refresco)\b/.test(k)) return "pantalla";
+  if (/\b(actualizacion|refresco|tasa de refresco|resolucion|retroiluminacion|pantalla|hdr|contraste|3d|curvo)\b/.test(k)) return "pantalla";
+  if (/\b(sistema operativo|asistentes?|apps?|aplicaciones|smart)\b/.test(k)) return "software";
+  if (/\b(vesa|montaje|soporte)\b/.test(k) && !/\b(ancho|alto|altura|profundidad|peso)\b/.test(k)) return "materiales";
   if (/\b(apoyacabezas|apoya cabezas|cabecero|apoyapies|apoya pies|apoyabrazos|reposabrazos)\b/.test(k)) return "ergonomia";
   for (const c of CATEGORIAS) if (c.re.test(k)) return c.id;
   return "otras";
@@ -127,27 +129,56 @@ function parDeLinea(l) {
   return null;
 }
 
+// Formato «ficha en dos líneas» (25/11/2026, p. ej. Mercado Libre): títulos de sección («Conectividad», «Pantalla»,
+// «Peso y dimensiones»…) seguidos de pares etiqueta / valor en líneas separadas, a veces con una etiqueta sin valor.
+const SECCIONES = new Set(["caracteristicas principales", "caracteristicas generales", "otras caracteristicas", "otros", "tecnologia", "conectividad",
+  "conexiones", "puertos", "accesorios", "pantalla", "imagen", "video", "audio", "sonido", "peso y dimensiones", "dimensiones", "medidas",
+  "diseno", "energia", "bateria", "alimentacion", "memoria", "almacenamiento", "procesador", "procesamiento", "camara", "camaras", "sistema",
+  "generales", "general", "seguridad", "garantia", "rendimiento", "materiales", "especificaciones generales", "informacion general",
+  "otras especificaciones", "funciones", "caracteristicas", "ergonomia", "ajustes", "uso", "certificaciones"]);
+const SECCION_CATEGORIA = { tecnologia: "software", conectividad: "conectividad", conexiones: "conectividad", puertos: "conectividad", accesorios: "accesorios",
+  pantalla: "pantalla", imagen: "pantalla", video: "pantalla", audio: "audio", sonido: "audio", "peso y dimensiones": "dimensiones", dimensiones: "dimensiones",
+  medidas: "dimensiones", energia: "electrica", bateria: "electrica", alimentacion: "electrica", memoria: "memoria", almacenamiento: "memoria",
+  procesador: "procesamiento", procesamiento: "procesamiento", seguridad: "proteccion", garantia: "garantia", materiales: "materiales",
+  funciones: "software", ergonomia: "ergonomia", ajustes: "ergonomia", certificaciones: "normas" };
+const esSeccion = (l) => SECCIONES.has(claveTexto(l)) || CATEGORIAS.some((c) => claveTexto(c.titulo) === claveTexto(l));
+// Valor inequívoco: sí/no o empieza con un número o comillas («55 "», «4K», «9,3 kg», «2»).
+const valorClaro = (x) => /^(s[ií]|no|ninguno|ninguna)$/i.test(x) || /^[\d"'”(]/.test(x);
+// Comienzo típico de una etiqueta de ficha («Con HDMI», «Es smart», «Tipo de pantalla», «Cantidad de puertos USB»…).
+const INICIO_ETIQUETA = /^(con|es|tiene|tipo|cantidad|n[uú]mero|tama[nñ]o|resoluci[oó]n|relaci[oó]n|frecuencia|ancho|alto|altura|profundidad|peso|largo|di[aá]metro|modelo|marca|color|material(es)?|capacidad|potencia|voltaje|tensi[oó]n|consumo|apps?|aplicaciones|asistentes?|sistema|accesorios|incluye|duraci[oó]n|velocidad|formato|versi[oó]n|compatib\w*|garant[ií]a|memoria|almacenamiento|procesador|bater[ií]a|puertos?|entradas?|salidas?|dimensiones|medidas|origen|l[ií]nea|serie|a[nñ]o|certific\w*|nivel|rango|temperatura|cantidad)\b/i;
+
 // Procesa el texto pegado. Devuelve una PROPUESTA para revisar; nada se guarda hasta que el vendedor la acepta.
 export function procesarTextoTecnico(texto, { marca = "", modelo = "", nombre = "" } = {}) {
   const original = String(texto ?? "");
   // Los tabuladores se conservan para reconocer columnas (tablas copiadas); el resto de espacios se normaliza.
   const linea = (l) => String(l).replace(/[\u00a0\u2007\u202f]/g, " ").replace(/ +/g, " ").replace(/ *\t */g, "\t").replace(VINETA, "").trim();
   const lineas = original.replace(/\r/g, "").split("\n").map(linea).filter(Boolean);
-  const pares = []; const textos = []; const descartados = []; const avisos = [];
+  const pares = []; const textos = []; const descartados = []; const avisos = []; const sinValor = [];
+  const dosLineas = new Set();   // índices de líneas usadas por el formato en dos líneas (títulos, pares y etiquetas sin valor)
+  let seccion = "";
+  const oracion = (x) => /[.!?]$/.test(x) || x.length > 80;
+  const corta = (x) => x && !parDeLinea(x) && !esPublicidad(x) && !oracion(x);
   for (let i = 0; i < lineas.length; i++) {
     const l = lineas[i];
-    if (/^(caracter[ií]sticas|especificaciones( t[eé]cnicas)?|ficha t[eé]cnica|descripci[oó]n|detalles?( del producto)?|informaci[oó]n adicional|especificaciones del producto)\s*:?$/i.test(l)) continue; // títulos de la página
+    if (/^(caracter[ií]sticas|especificaciones( t[eé]cnicas)?|ficha t[eé]cnica|descripci[oó]n|detalles?( del producto)?|informaci[oó]n adicional|especificaciones del producto)\s*:?$/i.test(l)) { seccion = ""; continue; } // títulos de la página
     if (esPublicidad(l)) { descartados.push(l); continue; }
     const p = parDeLinea(l);
-    if (p) { pares.push({ etiqueta: espacios(p[0]), valor: espacios(p[1]), origen: p[2], linea: i + 1 }); continue; }
+    if (p) { pares.push({ etiqueta: espacios(p[0]), valor: espacios(p[1]), origen: p[2], linea: i + 1, seccion }); continue; }
+    const sig = lineas[i + 1], sig2 = lineas[i + 2];
+    // Título de sección: va seguido de una etiqueta (no de un valor). Sirve de pista de categoría y no se imprime.
+    if (esSeccion(l) && corta(sig) && !valorClaro(sig) && (INICIO_ETIQUETA.test(sig) || (corta(sig2) && valorClaro(sig2)))) { seccion = claveTexto(l); dosLineas.add(i); continue; }
+    if (sig && pareceEtiqueta(l) && !valorClaro(l) && corta(sig) && !esSeccion(sig)) {
+      // Etiqueta + valor inequívoco, o + un texto que no parece etiqueta («Control remoto», «Vidaa», «QLED»).
+      if (valorClaro(sig) || !INICIO_ETIQUETA.test(sig)) { pares.push({ etiqueta: espacios(l), valor: espacios(sig), origen: "dos_lineas", linea: i + 1, seccion }); dosLineas.add(i).add(i + 1); i++; continue; }
+      // La siguiente es otra etiqueta con su valor: esta etiqueta vino sin valor (no se inventa; queda para revisar).
+      if (corta(sig2) && (valorClaro(sig2) || !INICIO_ETIQUETA.test(sig2)) && INICIO_ETIQUETA.test(l)) { sinValor.push(espacios(l)); dosLineas.add(i); continue; }
+    }
     // Dos líneas: etiqueta corta seguida de un valor (tablas copiadas como columnas). Si la siguiente también parece
     // etiqueta y la que sigue a esa no, la interpretación es ambigua: se conserva como texto y se pide revisar.
-    const sig = lineas[i + 1];
-    const oracion = (x) => /[.!?]$/.test(x) || x.length > 80;
     if (sig && pareceEtiqueta(l) && !parDeLinea(sig) && !esPublicidad(sig) && !oracion(sig)) {
       const sig2 = lineas[i + 2];
       const ambigua = pareceEtiqueta(sig) && sig2 && !pareceEtiqueta(sig2) && !parDeLinea(sig2) && !oracion(sig2) && !esPublicidad(sig2);
-      if (!ambigua) { pares.push({ etiqueta: espacios(l), valor: espacios(sig), origen: "dos_lineas", linea: i + 1 }); i++; continue; }
+      if (!ambigua) { pares.push({ etiqueta: espacios(l), valor: espacios(sig), origen: "dos_lineas", linea: i + 1, seccion }); dosLineas.add(i).add(i + 1); i++; continue; }
     }
     textos.push({ texto: espacios(l), linea: i + 1 });
   }
@@ -159,7 +190,9 @@ export function procesarTextoTecnico(texto, { marca = "", modelo = "", nombre = 
     const k = claveTexto(etiqueta);
     const previos = vistos.get(k) || [];
     if (previos.some((f) => claveTexto(f.valor) === claveTexto(valor))) continue;              // duplicado exacto
-    const fila = { etiqueta, valor, categoria: categoriaDe(etiqueta), original: `${p.etiqueta}${p.origen === "dos_lineas" ? " / " : ": "}${p.valor}` };
+    // Categoría por la etiqueta; si no se reconoce, por el título de sección de la página (p. ej. «Conectividad»).
+    const cat = categoriaDe(etiqueta);
+    const fila = { etiqueta, valor, categoria: cat === "otras" && SECCION_CATEGORIA[p.seccion] ? SECCION_CATEGORIA[p.seccion] : cat, original: `${p.etiqueta}${p.origen === "dos_lineas" ? " / " : ": "}${p.valor}`, origen: p.origen };
     if (valorIncompleto(valor)) fila.incompleto = true;
     if (previos.length) { fila.contradictorio = true; previos.forEach((f) => { f.contradictorio = true; }); }
     previos.push(fila); vistos.set(k, previos); filas.push(fila);
@@ -180,10 +213,12 @@ export function procesarTextoTecnico(texto, { marca = "", modelo = "", nombre = 
     if (t.texto.length >= 45 || /[.;!?]$/.test(t.texto)) parrafos.push(t.texto);
     else ambiguos.push(t.texto);
   }
+  if (sinValor.length) avisos.push({ tipo: "incompleto", mensaje: `${sinValor.length === 1 ? "Una característica vino" : `${sinValor.length} características vinieron`} sin valor y no se incluye${sinValor.length === 1 ? "" : "n"}: ${sinValor.map((x) => `«${x}»`).join(", ")}.` });
+  sinValor.forEach((x) => descartados.push(`${x}: (sin valor)`));
   if (ambiguos.length) avisos.push({ tipo: "ambiguo", mensaje: `${ambiguos.length} línea${ambiguos.length === 1 ? "" : "s"} sin un valor claro: se conservan como texto para que decidas (${ambiguos.slice(0, 3).map((x) => `«${x}»`).join(", ")}${ambiguos.length > 3 ? "…" : ""}).` });
   if (!filas.length && !parrafos.length) avisos.push({ tipo: "vacio", mensaje: "No se reconocieron características en el texto pegado." });
   const categorias = agruparPorCategoria(filas);
-  return { original, filas, categorias, parrafos, ambiguos, descartados, avisos, descripcion: descripcionTecnica({ nombre, marca, modelo, filas }) };
+  return { original, filas, categorias, parrafos, ambiguos, descartados, avisos, descripcion: descripcionTecnica({ nombre, marca, modelo, filas }), lineas, dosLineas };
 }
 
 // Agrupa las filas en las categorías que tienen datos (orden fijo de CATEGORIAS; «Otras características» al final).
@@ -235,4 +270,38 @@ export function filasDeFicha(ficha) {
   for (const lista of porEtq.values()) if (lista.length > 1) lista.forEach((x) => { x.contradictorio = true; });
   for (const x of filas) if (x.etiqueta && valorIncompleto(x.valor)) x.incompleto = true;
   return filas;
+}
+
+// ── Reordenamiento automático de una ficha (25/11/2026) ──
+// Cuando la ficha técnica se pegó «tal cual» (p. ej. desde Mercado Libre, con la etiqueta en una línea y el valor en la
+// siguiente), las líneas quedan sin valor y terminaban todas en la descripción. Aquí, cada bloque de líneas sin valor
+// (en Características generales, en Especificaciones o en la Descripción) se vuelve a leer con procesarTextoTecnico: si
+// forma al menos dos pares claros, esos pares pasan a Especificaciones (con su categoría) y los párrafos quedan en la
+// descripción. Si un bloque no forma pares, queda exactamente como estaba. No se inventa ningún valor; las etiquetas sin
+// valor y los textos publicitarios de un bloque reordenado no se imprimen.
+export function reestructurarFicha(ficha) {
+  const f = ficha || {};
+  const conValor = (lista) => (lista || []).filter((p) => espacios(p?.valor));
+  const sueltas = (lista) => (lista || []).filter((p) => !espacios(p?.valor) && espacios(p?.etiqueta)).map((p) => espacios(p.etiqueta));
+  const bloques = { generales: sueltas(f.generales), especificaciones: sueltas(f.especificaciones),
+    descripcion: String(f.descripcion || "").replace(/\r/g, "").split("\n").map(espacios).filter(Boolean) };
+  const nuevas = []; const textos = []; const cambiado = {};
+  for (const [k, lineas] of Object.entries(bloques)) {
+    if (lineas.length < 4) continue;
+    const r = procesarTextoTecnico(lineas.join("\n"));
+    const claras = r.filas.filter((x) => x.origen === "dos_lineas" && !x.incompleto);
+    if (claras.length < 2) continue;
+    cambiado[k] = true;
+    nuevas.push(...claras.map((x) => ({ etiqueta: x.etiqueta, valor: x.valor, categoria: x.categoria })));
+    // Lo que no vino en dos líneas (párrafos, «Etiqueta: valor», códigos…) se conserva tal cual, en su orden.
+    textos.push(...r.lineas.filter((_, i) => !r.dosLineas.has(i)));
+  }
+  if (!Object.keys(cambiado).length) return f;
+  const descripcion = cambiado.descripcion ? textos.join("\n") : [f.descripcion, ...textos].filter((x) => espacios(x)).join("\n");
+  return {
+    ...f,
+    generales: cambiado.generales ? conValor(f.generales) : f.generales,
+    especificaciones: [...(cambiado.especificaciones ? conValor(f.especificaciones) : f.especificaciones || []), ...nuevas],
+    descripcion,
+  };
 }

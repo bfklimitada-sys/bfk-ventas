@@ -8,6 +8,7 @@ import { normalizarImagen, traerImagen, rutaConocida } from "../../lib/cotizacio
 
 import { hoyChile } from "../../lib/fechaChile";
 import { TIPOS_DIAS, textoPlazo, plazoProducto } from "../../lib/modeloOferta";
+import { reestructurarFicha } from "../../lib/especificaciones";
 import CampoNumeroCL from "../ui/CampoNumeroCL";
 import { esInvalido } from "../../lib/numeroCL";
 const m = (x) => fmt.money(Math.round(Number(x) || 0));
@@ -131,7 +132,8 @@ export function EditorFicha({ inicial, envios = [], items = [], destino = "", de
       if (envioConfirmado(desp) && destinoValido && !String(desp.evidencia || "").trim()) { setError("Registra brevemente cómo se verificó el despacho (simulación de compra, cotización del proveedor, captura…)."); return; }
       if (Number(desp.monto) < 0) { setError("El costo del despacho no puede ser negativo."); return; }
     }
-    const fichaFinal = { ...ficha, imagenes: (ficha.imagenes || []).map(rutaConocida) };
+    // Ficha pegada «tal cual» (etiqueta y valor en líneas separadas): se reordena sola al guardar (25/11/2026).
+    const fichaFinal = { ...reestructurarFicha(ficha), imagenes: (ficha.imagenes || []).map(rutaConocida) };
     let item = { ...it, ficha: fichaFinal };
     // El primer enlace registrado se conserva como referencia si luego se cambia por otro.
     if (modo === "item" && inicial.enlace && !mismoTexto(inicial.enlace, it.enlace) && !inicial.enlace_original) item.enlace_original = inicial.enlace;

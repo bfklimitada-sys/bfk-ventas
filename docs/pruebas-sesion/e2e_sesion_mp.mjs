@@ -99,7 +99,7 @@ try {
   let nombre = await descarga(p, () => H(p).locator('[data-descargar-documento="eett"]').click()); await espera(p, 1500);
   ok("M07 documento con sesión vencida: se descarga sin pedir ingresar de nuevo", /\.pdf$/.test(nombre) && A.renovaciones() <= r0 + 1 && !/inicia sesión|Ingresa de nuevo/i.test(await cuerpo(p)), { nombre });
   nombre = await descarga(p, () => H(p).locator('[data-descargar-documento="cotizacion"]').click()); await espera(p, 1500);
-  ok("M08 sin registros del formato anterior ni guardados extra al descargar", /^COT_MP_.*_sin-emitir\.pdf$/.test(nombre) && !M.rpc.some((r) => /registrar_eett/.test(r.fn)), nombre);
+  ok("M08 sin registros del formato anterior ni guardados extra al descargar", /^COT_[^_]+_v\d+\.pdf$/.test(nombre) && !M.rpc.some((r) => /registrar_eett/.test(r.fn)), nombre);
 
   // 6. Cotización NUEVA con respuesta incierta: no se duplica.
   await H(p).locator("[data-cerrar-hoja]").first().click(); await espera(p, 600);

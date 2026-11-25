@@ -82,7 +82,7 @@ for (const movil of [false, true]) {
   await p.locator('[data-hoja-lateral="visor-documento"] [data-volver-editar]').click(); await espera(p, 300);
   const [d] = await Promise.all([p.waitForEvent("download", { timeout: 20000 }), H(p).locator('[data-descargar-documento="eett"]').click()]);
   const ruta = await d.path(); await espera(p, 800);
-  ok(`${K}10_descarga_funciona`, !!ruta && /^EETT_MP_697036-78-COT26_v\d+_sin-emitir\.pdf$/.test(d.suggestedFilename()) && registros(M) === 0, d.suggestedFilename());
+  ok(`${K}10_descarga_funciona`, !!ruta && /^EETT_697036-78-COT26_v\d+\.pdf$/.test(d.suggestedFilename()) && registros(M) === 0, d.suggestedFilename());
   ok(`${K}11_precios_y_especificaciones_intactos`, (() => { const c = M.cots.get("c-7"); return c.items[0].precio_origen === 82865 && c.items[0].cantidad === 3 && JSON.stringify(c.items[0].ficha.especificaciones) === JSON.stringify(COT.items[0].ficha.especificaciones); })());
   ok(`${K}12_sin_errores_js_de_la_app`, errs.filter((e) => !/dynamically imported module|jspdf/i.test(e)).length === 0, errs);
   await ctx.close();

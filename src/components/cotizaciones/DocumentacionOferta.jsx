@@ -96,7 +96,7 @@ export function DocumentacionOferta({ canal, cotizacionId, token, showToast, con
     setError(""); setOcupado(`descargar-${tipo}`);
     try {
       const { modelo } = await modeloConVersion(); const r = await generar(tipo, modelo);
-      descargarBlob(r.blob, r.nombre.replace(/\.pdf$/, "_sin-emitir.pdf"));
+      descargarBlob(r.blob, r.nombre);
       showToast?.("PDF descargado sin emitir: no queda en el historial. Para presentarlo, emite la versión definitiva.");
     } catch (e) { setError(mensajeError(e)); } finally { setOcupado(""); }
   };
@@ -244,7 +244,7 @@ export function DocumentacionOferta({ canal, cotizacionId, token, showToast, con
       {previa && (
         <VisorDocumento previa={previa} avisos={previa.avisos} emitiendo={ocupado === "emitir"} emitido={emitido} error={error}
           onCerrar={() => { setPrevia(null); setEmitido(null); setError(""); }}
-          onDescargar={() => { descargarBlob(previa.blob, previa.nombre.replace(/\.pdf$/, "_sin-emitir.pdf")); showToast?.("PDF descargado sin emitir."); }}
+          onDescargar={() => { descargarBlob(previa.blob, previa.nombre); showToast?.("PDF descargado sin emitir."); }}
           onEmitir={puedeEmitir && cotizacionId && instalada ? emitir : null} />
       )}
     </div>

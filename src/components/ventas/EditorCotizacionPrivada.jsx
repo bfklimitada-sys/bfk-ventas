@@ -332,9 +332,10 @@ export function EditorCotizacionPrivada({ token, perfil, vp, id, showToast, onCe
   const faltanEETT = cliente || c?.cliente_nombre ? [] : ["cliente"];
   const advEETT = (() => {
     const falta = [["fecha_emision", "fecha de emisión"]].filter(([k]) => !String(vista?.[k] || "").trim()).map(([, t]) => t);
-    if (!(plazoDesdeProductos(vista?.items || []).texto || String(vista?.plazo_entrega || "").trim())) falta.push("plazo de entrega (se indica en cada producto, junto al despacho)");
+    const sinPlazo = (vista?.items || []).length > 0 && !(plazoDesdeProductos(vista?.items || []).texto || String(vista?.plazo_entrega || "").trim());
     if ((cliente || c) && !String(cliente?.rut || c?.cliente_rut || "").trim()) falta.push("RUT del cliente");
-    return falta.length ? [{ tipo: "faltan_datos", mensaje: `Faltan datos del encabezado del PDF: ${falta.join(", ")}. Se omitirán o quedarán en blanco.` }] : [];
+    return [...(falta.length ? [{ tipo: "faltan_datos", mensaje: `Faltan datos del encabezado del PDF: ${falta.join(", ")}. Se omitirán o quedarán en blanco.` }] : []),
+      ...(sinPlazo ? [{ tipo: "falta_plazo", mensaje: "Falta el plazo de entrega: indícalo en cada producto, junto al costo del despacho (o escríbelo en Condiciones comerciales)." }] : [])];
   })();
   const eettLista = (vista?.items || []).length > 0 && !faltanEETT.length && revEETT.every((x) => !x.bloqueos.length && (x.aprobado || !editable));
   const nRev = revEETT.filter((x) => !x.aprobado).length;
@@ -577,7 +578,7 @@ export function EditorCotizacionPrivada({ token, perfil, vp, id, showToast, onCe
         <PanelPestana visible={pestana === "eett"} titulo="Documentos" fijo>
           <AvisoLinea tono="info" icono="🔒">El PDF contiene solo información técnica: nunca precios, despachos, enlaces, proveedores, recargos, ganancias ni IVA. Se descarga en este dispositivo; la EETT queda registrada con folio y revisión para vincularla a la venta.</AvisoLinea>
           {faltanEETT.length > 0 && <AvisoLinea tono="warn" dato="faltan-datos" accion="Completar" onClick={() => setPestana("datos")}>Falta: {faltanEETT.join(" y ")}.</AvisoLinea>}
-          {advEETT.map((a, i) => <AvisoLinea key={i} tono="warn" icono="⚠" dato={`eett-advertencia-${a.tipo}`} accion="Revisar datos" onClick={() => setPestana("datos")}>{a.mensaje}</AvisoLinea>)}
+          {advEETT.map((a, i) => <AvisoLinea key={i} tono="warn" icono="⚠" dato={`eett-advertencia-${a.tipo}`} accion={a.tipo === "falta_plazo" ? "Ir a Productos" : "Revisar datos"} onClick={() => setPestana(a.tipo === "falta_plazo" ? "productos" : "datos")}>{a.mensaje}</AvisoLinea>)}
           {advEETT.length > 0 && <div data-eett-advertencias-nota style={{ fontSize: T.small, color: C.inkMuted, marginBottom: 6 }}>Estas advertencias son para revisión manual: no bloquean la generación del PDF.</div>}
           {!vista.items.length && <div style={{ fontSize: T.sm, color: C.inkFaint }}>Agrega productos para generar la EETT.</div>}
           {revEETT.map((p, i) => {

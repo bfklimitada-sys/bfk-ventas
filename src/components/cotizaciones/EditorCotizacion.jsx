@@ -520,7 +520,7 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
         <PanelPestana visible={pestana === "eett"} titulo="Documentos" fijo>
           <AvisoLinea tono="info" icono="🔒">Los documentos nunca incluyen costos de compra, despachos internos, enlaces, proveedores, recargos, ganancias ni financiamiento. La EETT no incluye precios.</AvisoLinea>
           {pdf.faltan.length > 0 && <AvisoLinea tono="warn" dato="faltan-datos" accion="Completar" onClick={() => setPestana("datos")}>Falta: {pdf.faltan.join(" y ")}.</AvisoLinea>}
-          {pdf.advertencias.map((a, i) => <AvisoLinea key={i} tono="warn" icono="⚠" dato={`eett-advertencia-${a.tipo}`} {...(a.tipo === "faltan_datos" ? { accion: "Revisar datos", onClick: () => setPestana("datos") } : {})}>{a.mensaje}</AvisoLinea>)}
+          {pdf.advertencias.map((a, i) => <AvisoLinea key={i} tono="warn" icono="⚠" dato={`eett-advertencia-${a.tipo}`} {...(a.tipo === "faltan_datos" ? { accion: "Revisar datos", onClick: () => setPestana("datos") } : a.tipo === "falta_plazo" ? { accion: "Ir a Productos", onClick: () => setPestana("productos") } : {})}>{a.mensaje}</AvisoLinea>)}
           {pdf.advertencias.length > 0 && <div data-eett-advertencias-nota style={{ fontSize: T.small, color: C.inkMuted, marginBottom: 6 }}>Estas advertencias son para revisión manual: no bloquean la generación del PDF.</div>}
           {!cot.items.length && <div style={{ fontSize: T.sm, color: C.inkFaint }}>Agrega productos para generar la EETT.</div>}
           {pdf.porItem.map((p, i) => {

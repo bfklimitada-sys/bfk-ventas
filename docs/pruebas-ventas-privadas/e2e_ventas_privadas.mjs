@@ -84,7 +84,7 @@ try {
   const pdfCot = await descarga(p, () => h2.locator("[data-pdf-cotizacion]").click());
   const tCot = await textoPDF(pdfCot);
   ok("Q5 PDF con datos de BFK, cliente, ítems y totales", /77\.322\.317-3/.test(tCot) && /Maderas del Sur/.test(tCot) && /Bomba centr/.test(tCot) && /1\.043\.481/.test(tCot) && tCot.includes(folio));
-  ok("Q6a el PDF de la cotización es la cotización económica del generador único (COT_<folio>_v1_sin-emitir.pdf)", ultimoArchivo === `COT_${folio}_v1_sin-emitir.pdf` && /COTIZACI[ÓO]N ECON[ÓO]MICA/i.test(tCot), ultimoArchivo);
+  ok("Q6a el PDF de la cotización es la cotización económica del generador único (COT_<folio>_v1.pdf)", ultimoArchivo === `COT_${folio}_v1.pdf` && /COTIZACI[ÓO]N ECON[ÓO]MICA/i.test(tCot), ultimoArchivo);
   ok("Q6 PDF SIN costos ni márgenes", !/240\.000|480\.000|2\.100|506\.256|370\.619/.test(tCot) && !/costo|margen|utilidad/i.test(tCot));
   await h2.locator("[data-ver-cotizacion]").click(); await p.locator('[data-hoja-lateral="vista-previa-eett"] [data-pagina-preview="1"]').waitFor({ timeout: 15000 });
   ok("Q6b vista previa de la cotización en la app (mismo PDF) sin registrar envío", /cotizaci/i.test(await p.locator('[data-hoja-lateral="vista-previa-eett"]').innerText()) && q1(`select estado from public.vp_cotizaciones where folio = '${folio}';`) === "borrador");
@@ -162,7 +162,7 @@ try {
   const tAp = await textoPDF(await descarga(p, async () => { await fv.locator('[data-tab="detalle"]').click(); await fv.locator("[data-pdf-aprobada]").click(); }));
   const revAp = q1(`select r.numero from public.vp_ventas v join public.vp_cotizacion_revisiones r on r.id = v.revision_id join public.vp_cotizaciones c on c.id = v.cotizacion_id where c.folio = '${folio}';`);
   ok("F2d PDF de la cotización aprobada desde la venta (congelado, sin costos)", tAp.includes(folio) && /1\.043\.481/.test(tAp) && !/costo|margen/i.test(tAp));
-  ok("F2e ese PDF es la cotización económica del generador único (COT_<folio>_vN)", new RegExp(`^COT_${folio}_v\\d+(_sin-emitir)?\\.pdf$`).test(ultimoArchivo) && /COTIZACI[ÓO]N ECON[ÓO]MICA/i.test(tAp), `${ultimoArchivo} (rev ${revAp})`);
+  ok("F2e ese PDF es la cotización económica del generador único (COT_<folio>_vN)", new RegExp(`^COT_${folio}_v\\d+\\.pdf$`).test(ultimoArchivo) && /COTIZACI[ÓO]N ECON[ÓO]MICA/i.test(tAp), `${ultimoArchivo} (rev ${revAp})`);
   await fv.locator('[data-tab="documentos"]').click();
   await fv.locator("[data-registrar-factura]").click(); const ff = p.locator('[data-ventana="form-factura"]');
   ok("F3 neto e IVA propuestos para lo pendiente", (await ff.locator("[data-factura-neto]").inputValue()) === "876875" && (await ff.locator("[data-factura-iva]").inputValue()) === "166606");

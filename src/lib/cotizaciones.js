@@ -303,11 +303,16 @@ export function estadoParaPDF(cot) {
 // entre la licitación y cada producto. Solo AVISAN para revisión manual: no bloquean ni corrigen nada.
 const VACIAS = new Set("ADQUISICION ADQUISICIONES COMPRA COMPRAS PARA CON SIN DEL DE LA LAS LOS POR UNA UNO UNOS UNAS SEGUN OTROS OTRAS VARIOS VARIAS MATERIALES MATERIAL INSUMOS INSUMO PRODUCTOS PRODUCTO SERVICIO SERVICIOS SUMINISTRO SUMINISTROS ARTICULOS ARTICULO ELEMENTOS ELEMENTO EQUIPOS EQUIPO UNIDAD UNIDADES DEPARTAMENTO DIRECCION MUNICIPAL MUNICIPALIDAD ESCUELA LICEO HOSPITAL CESFAM OFICINA OFICINAS AREA SECCION PROGRAMA PROYECTO REQUERIMIENTO SOLICITUD COTIZACION GENERAL GENERALES NUEVO NUEVOS NUEVA NUEVAS TIPO SEGUN ADJUNTO ADJUNTA".split(" "));
 const raices = (s) => (normal(s).match(/[A-Z0-9]+/g) || []).filter((w) => w.length >= 4 && !/^\d+$/.test(w) && !VACIAS.has(w)).map((w) => w.slice(0, 5));
+const tienePlazoProductos = (items) => items.some((it) => { const c = it?.ficha?.condiciones_producto || {}; return Number(c.plazo_dias) > 0 || String(c.plazo_entrega || "").trim(); });
 export function advertenciasEETT(cot) {
   const av = [];
-  const faltaEnc = [["nombre", "nombre de la licitación"], ["fecha", "fecha de emisión"], ["plazo", "plazo de entrega"], ["rut", "RUT de la institución"]]
+  const faltaEnc = [["nombre", "nombre de la licitación"], ["fecha", "fecha de emisión"], ["rut", "RUT de la institución"]]
     .filter(([k]) => !String(cot?.[k] || "").trim()).map(([, t]) => t);
   if (faltaEnc.length) av.push({ tipo: "faltan_datos", mensaje: `Faltan datos del encabezado del PDF: ${faltaEnc.join(", ")}. Se omitirán o quedarán en blanco.` });
+  // Plazo de entrega (25/11/2026): se define en cada producto, junto al despacho (o se escribe en Condiciones comerciales).
+  // Solo se avisa si ningún producto lo tiene y la cotización tampoco tiene uno anterior; el aviso lleva a Productos.
+  if ((cot?.items || []).length && !tienePlazoProductos(cot.items) && !String(cot?.plazo || "").trim())
+    av.push({ tipo: "falta_plazo", mensaje: "Falta el plazo de entrega: indícalo en cada producto, junto al costo del despacho (o escríbelo en Condiciones comerciales)." });
   const textoLic = [cot?.nombre, cot?.descripcion, ...(cot?.requerimientos || []).flatMap((r) => [r?.nombre, r?.descripcion])].filter(Boolean).join(" ");
   const lic = new Set(raices(textoLic));
   if (lic.size >= 2) (cot?.items || []).forEach((it, i) => {

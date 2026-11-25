@@ -6,7 +6,7 @@
 // despachos internos, financiamiento ni el texto original pegado (que puede traer precios o el nombre de la tienda).
 // Los montos salen del cálculo existente (calcularCotizacion / totales de Ventas privadas): aquí no hay fórmulas.
 // ═══════════════════════════════════════════════════════════════════════════════════════════════════
-import { agruparPorCategoria, filasDeFicha } from "./especificaciones.js";
+import { agruparPorCategoria, filasDeFicha, reestructurarFicha } from "./especificaciones.js";
 import { normalizarFichaEETT } from "./vpEETT.js";
 
 const txt = (s) => String(s ?? "").replace(/\s+/g, " ").trim();
@@ -107,7 +107,8 @@ export function condicionesDocumento(c = {}) {
 // son pares «Etiqueta: valor» pasan a características; las demás son textos descriptivos y van a «Descripción técnica».
 export function fichaDocumento(ficha, condicionesProducto) {
   const f = ficha || {};
-  const n = normalizarFichaEETT(f);
+  // Una ficha pegada «tal cual» (etiqueta y valor en líneas separadas) se reordena sola antes de imprimir (25/11/2026).
+  const n = normalizarFichaEETT(reestructurarFicha(f));
   const filas = filasDeFicha({ marca: n.marca, modelo: n.modelo, color: n.color, generales: n.generales, especificaciones: n.especificaciones });
   const categorias = agruparPorCategoria(filas).map((c) => ({ titulo: c.titulo, filas: c.filas.map((r) => ({ etiqueta: r.etiqueta, valor: r.valor, ...(r.contradictorio ? { contradictorio: true } : {}), ...(r.incompleto ? { incompleto: true } : {}) })) }));
   const cp = condicionesProducto || f.condiciones_producto || {};

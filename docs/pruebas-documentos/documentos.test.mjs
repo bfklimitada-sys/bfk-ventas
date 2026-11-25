@@ -7,8 +7,8 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import { jsPDF } from "jspdf";
 import { calcularCotizacion, fichaParaGuardar } from "../../src/lib/cotizaciones.js";
-import { procesarTextoTecnico, filasDeFicha, categoriaDe, normalizarUnidades } from "../../src/lib/especificaciones.js";
-import { modeloOfertaMP, modeloOfertaVP, propuestaMatrizMP, condicionesDocumento, plazoDesdeProductos, textoPlazo, condicionesConProductos } from "../../src/lib/modeloOferta.js";
+import { procesarTextoTecnico, filasDeFicha, categoriaDe, normalizarUnidades, reestructurarFicha } from "../../src/lib/especificaciones.js";
+import { modeloOfertaMP, modeloOfertaVP, propuestaMatrizMP, condicionesDocumento, fichaDocumento, plazoDesdeProductos, textoPlazo, condicionesConProductos } from "../../src/lib/modeloOferta.js";
 import { generarDocumentoOferta, nombreArchivoOferta, fichasEETT, revisarModeloOferta, pesos } from "../../src/lib/documentosOferta.js";
 import { versionPara, huellaContenido } from "../../src/lib/documentosOfertaDatos.js";
 import { documentoDesdeEditor } from "../../src/lib/ventasPrivadas.js";
@@ -63,6 +63,26 @@ ok("M3 el modelo no contiene costos, recargos, proveedores, enlaces ni utilidade
 ok("M4 condiciones sin valores inventados: solo las completadas + las que salen de Productos (despacho incluido en el valor unitario)",
   condicionesDocumento({}).length === 0 && modelo.condiciones.length === 4 && modelo.condiciones[0].valor.includes("hábiles")
   && modelo.condiciones.some((c) => c.titulo === "Despacho" && c.valor === "Incluido en el valor unitario"), modelo.condiciones);
+// Ficha pegada «tal cual» desde Mercado Libre (25/11/2026): etiqueta y valor en líneas separadas, títulos de sección y
+// una característica sin valor. Se reordena sola (al guardar y al imprimir), sin inventar valores.
+{
+  const ml = fs.readFileSync(`${process.env.RAIZ_BFK || "."}/docs/pruebas-documentos/ficha_mercadolibre.txt`, "utf8");
+  const r = procesarTextoTecnico(ml, { marca: "Hisense", modelo: "55q6qv" });
+  const v = (e) => r.filas.find((f) => f.etiqueta === e)?.valor;
+  const cat = (e) => r.filas.find((f) => f.etiqueta === e)?.categoria;
+  ok("ML1 pares en dos líneas con títulos de sección: cada etiqueta con su valor (sin corrimientos)",
+    v("Sistema operativo") === "Vidaa" && v("Apps integradas") === "Netflix, YouTube, Disney+, Prime Video" && v("Es smart") === "Sí" && v("Con HDMI") === "Sí"
+    && v("Cantidad de puertos HDMI") === "3" && v("Accesorios incluidos") === "Control remoto" && v("Frecuencia de actualización de la pantalla") === "60 Hz" && v("Peso con soporte") === "9,5 kg"
+    && !r.filas.some((f) => ["Tecnología", "Conectividad", "Pantalla", "Peso y dimensiones", "Accesorios"].includes(f.etiqueta) || /^(Sí|No)$/.test(f.etiqueta)), r.filas.map((f) => `${f.etiqueta}=${f.valor}`));
+  ok("ML2 categorías por etiqueta o por la sección de la página", cat("Tipo de resolución") === "pantalla" && cat("Con Wi-Fi") === "conectividad" && cat("Sistema operativo") === "software" && cat("Peso") === "dimensiones" && cat("Accesorios incluidos") === "accesorios");
+  ok("ML3 la etiqueta sin valor no se inventa ni se corre: queda avisada y fuera de la ficha", !r.filas.some((f) => /contraste/i.test(f.etiqueta)) && r.descartados.includes("Relación de contraste: (sin valor)") && r.avisos.some((a) => /Relación de contraste/.test(a.mensaje)));
+  const ficha = { nombre: "TV", marca: "Hisense", modelo: "55q6qv", generales: [], especificaciones: ml.split("\n").map((l) => ({ etiqueta: l, valor: "" })), descripcion: "" };
+  const d = fichaDocumento(ficha);
+  ok("ML4 ficha guardada desordenada → el documento la imprime por categorías; los párrafos quedan en la descripción",
+    d.categorias.some((c) => c.titulo === "Conectividad" && c.filas.length === 7) && /Dolby Vision/.test(d.descripcion) && !/^Vidaa$/m.test(d.descripcion) && !/^Sí$/m.test(d.descripcion), d.categorias.map((c) => c.titulo));
+  const simple = { nombre: "Silla", descripcion: "Silla ergonómica.\nMuy cómoda." , especificaciones: [{ etiqueta: "Material", valor: "Malla" }] };
+  ok("ML5 una ficha sin ese formato queda exactamente igual", reestructurarFicha(simple) === simple);
+}
 // Plazo de entrega desde los productos (25/11/2026): se define junto al despacho; el de la oferta es el mayor (5 hábiles ≈ 7 corridos).
 {
   const it = (d, t, x) => ({ ficha: { condiciones_producto: { plazo_dias: d, plazo_tipo: t, plazo_entrega: x } } });
@@ -87,7 +107,7 @@ function flat(o, p = "", out = {}) { if (o && typeof o === "object") for (const 
 const docs = {};
 for (const tipo of ["cotizacion", "eett", "oferta"]) docs[tipo] = await generarDocumentoOferta(tipo, modelo, opciones);
 const tx = Object.fromEntries(Object.entries(docs).map(([k, r]) => [k, texto(r.bytes, r.nombre)]));
-ok("P1 nombres de archivo COT_/EETT_/OFERTA_MP_<referencia>_v1.pdf", docs.cotizacion.nombre === "COT_MP_1540-1372-COT26_v1.pdf" && docs.eett.nombre === "EETT_MP_1540-1372-COT26_v1.pdf" && docs.oferta.nombre === "OFERTA_MP_1540-1372-COT26_v1.pdf");
+ok("P1 nombres de archivo COT_/EETT_/OFERTA_<referencia>_v1.pdf", docs.cotizacion.nombre === "COT_1540-1372-COT26_v1.pdf" && docs.eett.nombre === "EETT_1540-1372-COT26_v1.pdf" && docs.oferta.nombre === "OFERTA_1540-1372-COT26_v1.pdf");
 ok("P2 fuente Liberation Sans incorporada (normal y negrita) y nada de Helvetica dibujado", ["cotizacion", "eett", "oferta"].every((t) => { const f = fuentesPdf(docs[t].nombre); return /LiberationSans\s+CID TrueType\s+Identity-H\s+yes/.test(f) && /LiberationSans-Bold|LiberationSans\b/.test(f); }));
 ok("P3 A4 en todos", ["cotizacion", "eett", "oferta"].every((t) => /595\.2\d* x 841\.8\d* pts \(A4\)/.test(execFileSync("pdfinfo", [`${DIR}/${docs[t].nombre}`]).toString())));
 ok("P4 cotización: precios, subtotal, IVA, total, despacho $0, condiciones y vendedor", [pesos(calc.lineas[0].unitario_neto), pesos(calc.totales.neto), pesos(calc.totales.iva_debito), pesos(calc.totales.total), "Despacho", "$0", "IVA 19%", "TOTAL OFERTA", "CONDICIONES COMERCIALES", "Plazo de entrega", "Vendedor responsable"].every((x) => tx.cotizacion.includes(x)), tx.cotizacion.slice(0, 800));
