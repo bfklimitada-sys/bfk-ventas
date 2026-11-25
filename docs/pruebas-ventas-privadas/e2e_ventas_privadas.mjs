@@ -154,6 +154,7 @@ try {
   await fv.locator('[data-tab="documentos"]').click();
   ok("F1 se aclara que no es emisión tributaria", /no emite documentos tributarios/.test(await fv.innerText()));
   ok("F2 OC del cliente adjunta en Documentos", (await fv.locator('[data-documento="oc_cliente"]').count()) === 1);
+  await fv.locator('[data-documento-venta="eett-v1"]').waitFor({ timeout: 10000 }).catch(() => {});   // la lista se carga aparte
   ok("F2b la venta muestra los documentos emitidos de su cotización", (await fv.locator('[data-documento-venta="eett-v1"]').count()) === 1);
   const tEv = await textoPDF(await descarga(p, () => fv.locator('[data-documento-venta="eett-v1"] [data-pdf-documento-venta]').click()));
   ok("F2c la EETT se recupera desde la venta idéntica a la emitida", tEv.replace(/\s+/g, " ") === tE.replace(/\s+/g, " ") && /CPm 680/.test(tEv) && !/\$\s?\d/.test(tEv));
