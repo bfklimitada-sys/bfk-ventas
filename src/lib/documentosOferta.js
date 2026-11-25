@@ -169,7 +169,14 @@ function componer(tipo, modelo, { jsPDF, fuentes, logo, imagenes = {}, id } = {}
     fuente(true, 8, SUAVE);
     escribir("REFERENCIA", X0, 30.9, 8); escribir("OPERACIÓN", 67.0, 30.9, 8); escribir("FECHA DE EMISIÓN", 128.0, 30.9, 8); escribir("VERSIÓN", 165.6, 30.9, 8);
     fuente(true, 10);
-    const corta = (s, w) => { const ls = lineas(s, w); return ls.length > 1 ? `${ls[0].replace(/\s+\S*$/, "")}…` : ls[0] || ""; };
+    // Una línea: si no cabe, se corta en la última palabra que cabe con «…» (el texto completo va en «Datos del cliente»).
+    const corta = (s, w) => {
+      const t = textoDoc(s); if (doc.getTextWidth(t) <= w) return t;
+      const palabras = t.split(" "); let r = "";
+      for (const pal of palabras) { const prueba = r ? `${r} ${pal}` : pal; if (doc.getTextWidth(`${prueba}…`) > w) break; r = prueba; }
+      if (!r) { r = t; while (r && doc.getTextWidth(`${r}…`) > w) r = r.slice(0, -1); }
+      return `${r}…`;
+    };
     doc.text(corta(ref, 55), X0, base(35.3, 10));
     doc.text(corta(modelo.operacion || "", 58), 67.0, base(35.3, 10));
     escribir(fechaCL(modelo.fecha), 128.0, 35.3, 10); escribir(version, 165.6, 35.3, 10);
@@ -372,7 +379,10 @@ function componer(tipo, modelo, { jsPDF, fuentes, logo, imagenes = {}, id } = {}
     const req = (modelo.matriz || []).filter((r) => g.items.includes(r.item));
     const altoCuerpo = altoTablaPares(secciones) + (cond.length ? altoTablaPares([{ titulo: "", filas: cond.map((c) => ({ etiqueta: c.titulo, valor: c.valor })) }]) - 2.2 : 0) + (req.length ? altoMatriz(req) - 2.2 : 0);
     const tituloFicha = `${g.items.length > 1 ? "Ítems" : "Ítem"} ${g.items.map(dosDigitos).join(", ")} | ${it.nombre}`;
-    const altoCab = (hImg) => altoBarraProducto(tituloFicha) + 8.8 + (imgs.length ? hImg + 2.2 : 0);
+    const ident = [[it.marca, it.modelo].filter(Boolean).join(" "), `Cantidad: ${cantidadTexto(g.cantidad, g.unidad)}`].filter(Boolean).join("  |  ");
+    fuente(true, 10); const identLs = lineas(ident, ANCHO - 5.6);
+    const altoIdent = 2.5 + identLs.length * altoLinea(10) + 2.0;
+    const altoCab = (hImg) => altoBarraProducto(tituloFicha) + altoIdent + (imgs.length ? hImg + 2.2 : 0);
     let altoImg = imgs.length ? (imgs.length <= 2 ? 40.2 : 34.0) : 0;
     const disponiblePagina = Y_LIM - Y_CONT;
     if (imgs.length && altoCab(altoImg) + altoCuerpo > disponiblePagina) {
@@ -383,7 +393,9 @@ function componer(tipo, modelo, { jsPDF, fuentes, logo, imagenes = {}, id } = {}
     const enUso = y > Y_CONT + 0.1;
     if (enUso) {
       if (cabe(total + 2.2)) y += 2.2;
-      else if (total <= disponiblePagina && y > Y_CONT + 70) nuevaPagina();   // con la página casi vacía, la ficha empieza ahí
+      // Si la ficha no cabe en lo que queda pero sí en una página nueva, empieza en página nueva… salvo que quede casi media
+      // página libre (o la página esté casi vacía): ahí empieza y continúa en la siguiente, para no dejar páginas a medio usar.
+      else if (total <= disponiblePagina && y > Y_CONT + 70 && (Y_LIM - y) < disponiblePagina * 0.45) nuevaPagina();
       else {
         const minimo = altoCab(altoImg) + 7.8 + (secciones[0] ? 6.0 + Math.min(2, secciones[0].filas.length) * 6.3 : 0);
         if (!cabe(minimo + 2.2)) nuevaPagina(); else y += 2.2;
@@ -391,10 +403,8 @@ function componer(tipo, modelo, { jsPDF, fuentes, logo, imagenes = {}, id } = {}
     }
     g.items.forEach((n) => { paginas[n] = doc.getNumberOfPages(); });
     barraProducto(tituloFicha);
-    fuente(true, 10);
-    const ident = [[it.marca, it.modelo].filter(Boolean).join(" "), `Cantidad: ${cantidadTexto(g.cantidad, g.unidad)}`].filter(Boolean).join("  |  ");
-    escribir(ident, 12.7, y + 2.5, 10);
-    y += 8.8;
+    fuente(true, 10); identLs.forEach((l, i) => doc.text(l, 12.7, base(y + 2.5 + i * altoLinea(10), 10)));
+    y += altoIdent;
     if (imgs.length) {
       const colW = ANCHO / imgs.length; const maxW = imgs.length <= 2 ? 80 : colW - 6;
       imgs.forEach((ref, i) => imagen(ref, X0 + colW * i + (colW - maxW) / 2, y, maxW, altoImg));

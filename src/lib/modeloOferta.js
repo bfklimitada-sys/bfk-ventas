@@ -95,7 +95,7 @@ export function modeloOfertaMP(cot, calc, { version = 1, fecha, vendedor, empres
     referencia: txt(cot?.id_externo), operacion: txt(cot?.nombre),
     empresa: empresaPublica(empresa), vendedor: txt(vendedor ?? cot?.vendedor_nombre),
     cliente: { nombre: txt(cot?.institucion), rut: txt(cot?.rut), direccion: destino,
-      filas: [["RUT", txt(cot?.rut)], ["Dirección de entrega", destino], [etiquetaId(cot?.id_externo), txt(cot?.id_externo)]] },
+      filas: [["RUT", txt(cot?.rut)], ["Dirección de entrega", destino], [etiquetaId(cot?.id_externo), txt(cot?.id_externo)], ["Adquisición", txt(cot?.nombre)]] },
     items,
     totales: { neto: Math.round(t.neto || 0), iva: Math.round(t.iva_debito || 0), total: Math.round(t.total || 0), exenta: !!calc?.exenta, tasa_iva: 19,
       despacho_texto: "$0", nota: "Valores en pesos chilenos. Despacho incorporado en los precios unitarios." },
