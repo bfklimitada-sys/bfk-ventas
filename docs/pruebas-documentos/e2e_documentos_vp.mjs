@@ -48,7 +48,7 @@ for (const [pref, ancho, alto, movil] of [["P", 1440, 900, false], ["M", 390, 84
   const previa = await descargar(p, () => visor(p).locator("[data-descargar-previa]").click());
   const emit = await descargar(p, () => visor(p).locator("[data-emitir-documento]").click()); await espera(p, 1200);
   const t = texto(emit.buf);
-  ok(`${pref}03 emitida con el folio interno de BFK`, emit.nombre === `OFERTA_PRIVADA_${folio}_v1.pdf`, emit.nombre);
+  ok(`${pref}03 emitida con el folio interno de BFK`, emit.nombre === `OFERTA_${folio}_v1.pdf`, emit.nombre);
   ok(`${pref}04 idéntica a la vista previa`, sha(emit.buf) === sha(previa.buf));
   ok(`${pref}05 registro en oferta_documentos con huella del PDF y autor`, q1(`select count(*) || '|' || max(huella_pdf) || '|' || max(emitido_por::text) from public.oferta_documentos where canal = 'vp' and cotizacion_id = '${cotId}'`) === `1|${sha(emit.buf)}|${U.ana}`);
   ok(`${pref}06 datos de la venta privada, sin Mercado Público ni datos internos`, /Maderas del Sur SpA/.test(t) && /76\.086\.428-5/.test(t) && /Rosa Pérez/.test(t) && /\$95\.000/.test(t) && /6 meses por defectos/.test(t) && !/Compra Ágil|Licitación|Instituci|Tienda Dos|Simulación|70\.000/.test(t));

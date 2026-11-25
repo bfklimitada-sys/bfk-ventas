@@ -83,7 +83,7 @@ try {
   const pdfCot = await descarga(p, () => h2.locator("[data-pdf-cotizacion]").click());
   const tCot = await textoPDF(pdfCot);
   ok("Q5 PDF con datos de BFK, cliente, ítems y totales", /77\.322\.317-3/.test(tCot) && /Maderas del Sur/.test(tCot) && /Bomba centr/.test(tCot) && /1\.043\.481/.test(tCot) && tCot.includes(folio));
-  ok("Q6a el PDF de la cotización es la cotización económica del generador único (COT_PRIVADA_<folio>_v1_sin-emitir.pdf)", ultimoArchivo === `COT_PRIVADA_${folio}_v1_sin-emitir.pdf` && /COTIZACI[ÓO]N ECON[ÓO]MICA/i.test(tCot), ultimoArchivo);
+  ok("Q6a el PDF de la cotización es la cotización económica del generador único (COT_<folio>_v1_sin-emitir.pdf)", ultimoArchivo === `COT_${folio}_v1_sin-emitir.pdf` && /COTIZACI[ÓO]N ECON[ÓO]MICA/i.test(tCot), ultimoArchivo);
   ok("Q6 PDF SIN costos ni márgenes", !/240\.000|480\.000|2\.100|506\.256|370\.619/.test(tCot) && !/costo|margen|utilidad/i.test(tCot));
   await h2.locator("[data-ver-cotizacion]").click(); await p.locator('[data-hoja-lateral="vista-previa-eett"] [data-pagina-preview="1"]').waitFor({ timeout: 15000 });
   ok("Q6b vista previa de la cotización en la app (mismo PDF) sin registrar envío", /cotizaci/i.test(await p.locator('[data-hoja-lateral="vista-previa-eett"]').innerText()) && q1(`select estado from public.vp_cotizaciones where folio = '${folio}';`) === "borrador");
@@ -114,7 +114,7 @@ try {
   ok("E2 sin ventana adicional: no se piden objeto, alcance, requisitos ni selección de ítems", !(await p.locator('[data-ventana^="eett"], [data-eett-objeto], [data-armar-eett]').count()) && !/Objeto del suministro|Alcance/.test(await h4.innerText()));
   const tE = await textoPDF(pdfE.buf);
   const emitido = q1(`select d.tipo||'|'||d.version||'|'||d.nombre_archivo from public.oferta_documentos d join public.vp_cotizaciones c on c.id = d.cotizacion_id where c.folio = '${folio}' and d.canal = 'vp';`);
-  ok("E4 EETT emitida y descargada (archivo PRIVADA con el folio de la cotización, cliente, todos los ítems numerados)", emitido === `eett|1|EETT_PRIVADA_${folio}_v1.pdf` && pdfE.nombre === `EETT_PRIVADA_${folio}_v1.pdf` && /Maderas del Sur/i.test(tE) && tE.includes(folio)
+  ok("E4 EETT emitida y descargada (archivo con el folio CP de la cotización, cliente, todos los ítems numerados)", emitido === `eett|1|EETT_${folio}_v1.pdf` && pdfE.nombre === `EETT_${folio}_v1.pdf` && /Maderas del Sur/i.test(tE) && tE.includes(folio)
     && /ÍTEM 01 \|/.test(tE) && /ÍTEM 02 \|/.test(tE), emitido);
   ok("E4b mismo diseño de Mercado Público y sin campos de licitación", /INFORMACI.N\s+T.CNICA/.test(tE) && /ESPECIFICACIONES T.CNICAS/.test(tE) && !/LICITACI.N|INSTITUCI.N SOLICITANTE|Compra .gil/.test(tE));
   ok("E5 EETT con marca/modelo/características de la ficha y sin precios ni costos", /CPm 680/.test(tE) && /Pedrollo/.test(tE) && /2 HP/.test(tE) && !/\$\s?\d/.test(tE) && !/350\.000|240\.000/.test(tE) && !/Objeto del suministro|Requisitos del cliente/.test(tE));
@@ -160,7 +160,7 @@ try {
   const tAp = await textoPDF(await descarga(p, async () => { await fv.locator('[data-tab="detalle"]').click(); await fv.locator("[data-pdf-aprobada]").click(); }));
   const revAp = q1(`select r.numero from public.vp_ventas v join public.vp_cotizacion_revisiones r on r.id = v.revision_id join public.vp_cotizaciones c on c.id = v.cotizacion_id where c.folio = '${folio}';`);
   ok("F2d PDF de la cotización aprobada desde la venta (congelado, sin costos)", tAp.includes(folio) && /1\.043\.481/.test(tAp) && !/costo|margen/i.test(tAp));
-  ok("F2e ese PDF es la cotización económica del generador único (COT_PRIVADA_<folio>_vN)", new RegExp(`^COT_PRIVADA_${folio}_v\\d+(_sin-emitir)?\\.pdf$`).test(ultimoArchivo) && /COTIZACI[ÓO]N ECON[ÓO]MICA/i.test(tAp), `${ultimoArchivo} (rev ${revAp})`);
+  ok("F2e ese PDF es la cotización económica del generador único (COT_<folio>_vN)", new RegExp(`^COT_${folio}_v\\d+(_sin-emitir)?\\.pdf$`).test(ultimoArchivo) && /COTIZACI[ÓO]N ECON[ÓO]MICA/i.test(tAp), `${ultimoArchivo} (rev ${revAp})`);
   await fv.locator('[data-tab="documentos"]').click();
   await fv.locator("[data-registrar-factura]").click(); const ff = p.locator('[data-ventana="form-factura"]');
   ok("F3 neto e IVA propuestos para lo pendiente", (await ff.locator("[data-factura-neto]").inputValue()) === "876875" && (await ff.locator("[data-factura-iva]").inputValue()) === "166606");

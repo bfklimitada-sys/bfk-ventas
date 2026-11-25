@@ -88,8 +88,8 @@ async function recorridoPrivado(browser) {
   await vp.locator("[data-volver-editar]").click(); await espera(p, 400);
   const t = await textoPDF(d1.buf); const s1 = t.s.replace(/\s+/g, " ");
   ok(`${MODO} V3 el borrador anterior ET-2026-0001 queda intacto en la base (no se borra ni se emite)`, q1(`select version||'|'||estado from public.vp_eett where id = '${borr.id}';`) === v0 && v0.endsWith("|borrador"));
-  ok(`${MODO} V5 emitida en el historial de la oferta (versión 1)`, q1(`select tipo||'|'||version||'|'||nombre_archivo from public.oferta_documentos where cotizacion_id = '${cot.id}';`) === "eett|1|EETT_PRIVADA_CP-2026-0001_v1.pdf");
-  ok(`${MODO} V6 archivo con el criterio común (documento, canal, cotización, versión)`, d1.nombre === "EETT_PRIVADA_CP-2026-0001_v1.pdf", d1.nombre);
+  ok(`${MODO} V5 emitida en el historial de la oferta (versión 1)`, q1(`select tipo||'|'||version||'|'||nombre_archivo from public.oferta_documentos where cotizacion_id = '${cot.id}';`) === "eett|1|EETT_CP-2026-0001_v1.pdf");
+  ok(`${MODO} V6 archivo con el criterio común (documento, folio CP, versión)`, d1.nombre === "EETT_CP-2026-0001_v1.pdf", d1.nombre);
   const PARES = ficha.descripcion.split("\n").map((l) => l.split(/:\s*/)).filter((x) => x.length === 2);
   ok(`${MODO} V7 el PDF trae nombre, marca, modelo y color de la ficha`, /BOLSO PARAM.DICO MEDIANO 47L/.test(s1) && /Marca TBQ/.test(s1) && /Modelo BOL-BPRM-A/.test(s1) && /Color Azul/.test(s1));
   ok(`${MODO} V8 el PDF trae las características con su valor`, PARES.every(([e, v]) => s1.includes(comoPDF(v))), PARES.filter(([, v]) => !s1.includes(comoPDF(v))));

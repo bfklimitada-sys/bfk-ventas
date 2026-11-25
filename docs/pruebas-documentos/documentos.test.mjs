@@ -135,7 +135,7 @@ const docVP = documentoDesdeEditor({ folio: "CP-2026-0007", revision: 0, cab: { 
 const mVP = modeloOfertaVP(docVP, [cot.items[1].ficha, {}], { version: 1, vendedor: "Vendedor VP", condiciones: { garantia: "6 meses" } });
 ok("VP1 totales del modelo = totales calculados por Ventas privadas", mVP.totales.neto === docVP.neto && mVP.totales.iva === docVP.iva && mVP.totales.total === docVP.total && mVP.items[0].total === docVP.items[0].subtotal_neto);
 const cVP = await generarDocumentoOferta("cotizacion", mVP, opciones); const tVP = texto(cVP.bytes, cVP.nombre);
-ok("VP2 nombre de archivo PRIVADA con el folio interno de BFK", cVP.nombre === "COT_PRIVADA_CP-2026-0007_v1.pdf");
+ok("VP2 nombre de archivo con el folio interno de BFK", cVP.nombre === "COT_CP-2026-0007_v1.pdf");
 ok("VP3 datos de la venta privada: cliente, RUT, contacto, dirección; sin ID Compra Ágil ni institución", /Maderas del Sur SpA/.test(tVP) && /76\.086\.428-5/.test(tVP) && /Ana Pérez/.test(tVP) && /Calle Uno 45/.test(tVP) && !/Compra Ágil|Licitación|Institución/i.test(tVP));
 ok("VP4 condiciones desde la cotización privada (plazo, forma de pago, vigencia) + garantía", /10 días hábiles/.test(tVP) && /Contado/.test(tVP) && /25\/12\/2026/.test(tVP) && /6 meses/.test(tVP));
 ok("VP5 sin despacho «$0» de Mercado Público en ventas privadas", !/Despacho\s+\$0/.test(tVP));

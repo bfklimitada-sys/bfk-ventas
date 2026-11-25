@@ -109,7 +109,7 @@ try {
     A.vencerAhora();
     const i1 = A.pedidos.length; const r1 = A.renovaciones();
     const { nombre } = await ui.documento(p, "eett"); await espera(p, 800);
-    ok("A05 EETT: emitida y descargada con la sesión vencida (una renovación y una sola emisión)", /^EETT_PRIVADA_.*_v1\.pdf$/.test(nombre) && A.renovaciones() === r1 + 1
+    ok("A05 EETT: emitida y descargada con la sesión vencida (una renovación y una sola emisión)", /^EETT_.*_v1\.pdf$/.test(nombre) && A.renovaciones() === r1 + 1
       && desde(A, i1, "rpc/oferta_emitir_documento", 200).length === 1 && A.pedidos.slice(i1).filter((x) => x.status === 401).length <= 1, A.pedidos.slice(i1).map((x) => `${x.obj}:${x.status}`).join(" "));
     ok("A06 EETT: UN solo documento emitido (versión 1) y nada en el formato anterior", nDocs(cot.id) === 1 && nEETT(cot.id) === 0);
 
@@ -277,7 +277,7 @@ try {
     await vis.locator("[data-emitir-documento]").click(); visto = await ve(p, /conexi|fetch|red/i); await espera(p, 1500);
     ok("D09 respuesta incierta al emitir: se informa y la base lo registró una vez", nDocs(cot.id) === nDoc0 + 1 && visto, (await cuerpo(p)).slice(-300));
     const [dl] = await Promise.all([p.waitForEvent("download", { timeout: 40000 }), vis.locator("[data-emitir-documento]").click()]); await espera(p, 1200);
-    ok("D10 reintento: devuelve la emisión existente y la descarga; NO registra otra", /^OFERTA_PRIVADA_.*_v\d+\.pdf$/.test(dl.suggestedFilename()) && nDocs(cot.id) === nDoc0 + 1 && /ya estaba emitida/.test(await vis.innerText()), dl.suggestedFilename());
+    ok("D10 reintento: devuelve la emisión existente y la descarga; NO registra otra", /^OFERTA_.*_v\d+\.pdf$/.test(dl.suggestedFilename()) && nDocs(cot.id) === nDoc0 + 1 && /ya estaba emitida/.test(await vis.innerText()), dl.suggestedFilename());
     ok("D11 un solo registro en la base (el reintento devolvió el existente)", q1(`select count(*) from public.oferta_documentos where cotizacion_id = '${cot.id}' and tipo = 'oferta';`) === "1");
     await vis.locator("[data-volver-editar]").click(); await espera(p, 300);
 
