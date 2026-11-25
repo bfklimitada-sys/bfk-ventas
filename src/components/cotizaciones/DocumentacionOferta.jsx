@@ -17,6 +17,9 @@ import { VisorDocumento } from "./VisorDocumento";
 //   asegurarGuardado() → Promise<boolean>: guarda la cotización si tiene cambios (la emisión usa SIEMPRE lo guardado)
 //   propios: [{ titulo, valor, k }] condiciones que vienen de la propia cotización (se muestran, se editan en Datos)
 //   ocultar: claves de CAMPOS_CONDICIONES que la cotización ya tiene como campo propio
+//   sugeridas: { clave: texto } valor que se imprime si el campo queda vacío (p. ej. despacho «Incluido en el valor unitario»)
+//   camposPropios: campos editables de la propia cotización que se muestran dentro de esta sección (Ventas privadas: vigencia,
+//     forma de pago, condiciones y observaciones de la revisión) · onIrA(pestaña): enlace «Cambiar en Productos»
 //   items: [{ n, nombre }] (para asociar requisitos); propuestaMatriz(): requisitos del comprador (opcional)
 //   soloLectura: revisión que ya no se edita (no se cambian condiciones ni matriz; sí se emiten sus documentos)
 //   puedeEmitir: false al ver una revisión anterior (solo vista previa y descarga)
@@ -29,7 +32,7 @@ const DESCRIPCION = {
 };
 const fechaHora = (iso) => { try { return new Date(iso).toLocaleString("es-CL", { timeZone: "America/Santiago", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }); } catch { return iso; } };
 
-export function DocumentacionOferta({ canal, cotizacionId, token, showToast, construirModelo, asegurarGuardado, propios = [], ocultar = [], items = [], propuestaMatriz, soloLectura = false, puedeEmitir = true, cambiosSinGuardar = false }) {
+export function DocumentacionOferta({ canal, cotizacionId, token, showToast, construirModelo, asegurarGuardado, propios = [], ocultar = [], sugeridas = {}, origenes = {}, avisos = {}, camposPropios = null, onIrA, pendientes, items = [], propuestaMatriz, soloLectura = false, puedeEmitir = true, cambiosSinGuardar = false }) {
   const [instalada, setInstalada] = useState(null);          // null = consultando · true · false
   const [condiciones, setCondiciones] = useState({}); const [matriz, setMatriz] = useState([]);
   const [guardadas, setGuardadas] = useState("{}"); const [historial, setHistorial] = useState([]);
@@ -42,13 +45,27 @@ export function DocumentacionOferta({ canal, cotizacionId, token, showToast, con
     if (!cotizacionId) { setInstalada((x) => x ?? true); return; }
     try {
       const [c, h] = await Promise.all([leerCondicionesOferta(tokenRef.current, canal, cotizacionId), listarDocumentosOferta(tokenRef.current, canal, cotizacionId)]);
-      setCondiciones(c.condiciones || {}); setMatriz(c.matriz || []); setGuardadas(JSON.stringify({ condiciones: c.condiciones || {}, matriz: c.matriz || [] }));
+      // Lo escrito antes de guardar la cotización por primera vez no se pierde: si la base aún no tiene condiciones, se
+      // conservan las de pantalla (y el guardado automático las registra).
+      const vacias = !Object.values(c.condiciones || {}).some((v) => String(v || "").trim()) && !(c.matriz || []).length;
+      setGuardadas(JSON.stringify({ condiciones: c.condiciones || {}, matriz: c.matriz || [] }));
+      if (!vacias) { setCondiciones(c.condiciones || {}); setMatriz(c.matriz || []); }
       setHistorial(h); setInstalada(true);
     } catch (e) { if (e.codigo === "NO_INSTALADA") setInstalada(false); else setError(e.message); }
   };
   useEffect(() => { cargar(); }, [canal, cotizacionId]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const setCond = (k, v) => setCondiciones((c) => ({ ...c, [k]: v }));
+  // Cotización nueva (sin guardar): lo escrito aquí se entrega al editor, que lo guarda junto con la cotización (al guardarla por
+  // primera vez el editor se vuelve a abrir con la cotización guardada y esta sección se monta de nuevo).
+  useEffect(() => { if (pendientes) pendientes.current = !cotizacionId && sinGuardar ? { condiciones, matriz } : null; });
+  // Guardado automático (25/11/2026): las condiciones y la matriz se guardan solas poco después de escribirlas (sin un segundo
+  // botón «Guardar» que obligue a volver). Solo con la cotización ya guardada y la actualización instalada.
+  useEffect(() => {
+    if (!sinGuardar || soloLectura || !cotizacionId || !instalada) return undefined;
+    const t = setTimeout(() => { guardarCondiciones({ silencioso: true }).catch((e) => setError(e.message)); }, 1200);
+    return () => clearTimeout(t);
+  }, [condiciones, matriz, guardadas, cotizacionId, instalada, soloLectura]);   // eslint-disable-line react-hooks/exhaustive-deps
   const guardarCondiciones = async ({ silencioso } = {}) => {
     if (!cotizacionId || !instalada) return false;
     await guardarCondicionesOferta(tokenRef.current, canal, cotizacionId, condiciones, matriz);
@@ -118,7 +135,8 @@ export function DocumentacionOferta({ canal, cotizacionId, token, showToast, con
   };
 
   const porTipo = useMemo(() => Object.fromEntries(ORDEN.map((t) => [t, historial.filter((h) => h.tipo === t)])), [historial]);
-  const campos = CAMPOS_CONDICIONES.filter((c) => !ocultar.includes(c.k));
+  // «Tipo de días» ya va con el plazo de cada producto: el campo solo aparece si una cotización antigua lo tiene guardado.
+  const campos = CAMPOS_CONDICIONES.filter((c) => !ocultar.includes(c.k) && (!c.antiguo || String(condiciones[c.k] || "").trim()));
   const propuesta = propuestaMatriz ? propuestaMatriz() : [];
 
   return (
@@ -160,10 +178,16 @@ export function DocumentacionOferta({ canal, cotizacionId, token, showToast, con
         })}
       </Seccion>
 
-      <Seccion titulo="Condiciones comerciales" nota="Solo se imprimen las que completes. No hay valores predeterminados.">
-        {propios.filter((p) => String(p.valor || "").trim()).map((p) => (
-          <div key={p.titulo} data-condicion-propia style={{ fontSize: T.small, color: C.inkMuted, marginBottom: 6 }}><b style={{ color: C.ink }}>{p.titulo}:</b> {p.valor} <span style={{ color: C.inkFaint }}>(desde Datos)</span></div>
+      <Seccion titulo="Condiciones comerciales" nota="El plazo y el despacho ya vienen de Productos (puedes reemplazarlos). Lo demás solo se imprime si lo completas.">
+        {propios.filter((p) => String(p.valor || "").trim() || p.aviso).map((p) => (
+          <div key={p.titulo} data-condicion-propia={p.k || p.titulo} style={{ fontSize: T.small, color: C.inkMuted, marginBottom: 8 }}>
+            <b style={{ color: C.ink }}>{p.titulo}:</b> {p.valor || <span style={{ color: C.warnText, fontWeight: 600 }}>sin indicar</span>}
+            {p.origen && <span style={{ color: C.inkFaint }}> ({p.origen})</span>}
+            {p.aviso && <div style={{ color: C.warnText }}>{p.aviso}</div>}
+            {p.ir && onIrA && !soloLectura && <button type="button" data-compact data-ir-a={p.ir} onClick={() => onIrA(p.ir)} style={{ border: "none", background: "none", padding: "2px 0", color: C.tealDark, fontSize: T.small, fontWeight: 600, textDecoration: "underline", cursor: "pointer" }}>Cambiar en Productos</button>}
+          </div>
         ))}
+        {camposPropios}
         <fieldset disabled={soloLectura} style={{ border: 0, padding: 0, margin: 0, minWidth: 0, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10 }}>
           {campos.map((c) => (
             <label key={c.k} style={{ display: "block", fontSize: T.small, color: C.inkMuted }} data-condicion={c.k}>
@@ -174,7 +198,11 @@ export function DocumentacionOferta({ canal, cotizacionId, token, showToast, con
               ) : c.multilinea ? (
                 <textarea rows={2} value={condiciones[c.k] || ""} onChange={(e) => setCond(c.k, e.target.value)} style={{ ...iStyle, width: "100%", marginTop: 4, resize: "vertical" }} />
               ) : (
-                <input value={condiciones[c.k] || ""} placeholder={c.ayuda || ""} onChange={(e) => setCond(c.k, e.target.value)} style={{ ...iStyle, width: "100%", marginTop: 4 }} />
+                <>
+                  <input value={condiciones[c.k] || ""} placeholder={sugeridas[c.k] || c.ayuda || ""} onChange={(e) => setCond(c.k, e.target.value)} style={{ ...iStyle, width: "100%", marginTop: 4 }} />
+                  {sugeridas[c.k] && !String(condiciones[c.k] || "").trim() && <span data-sugerida={c.k} style={{ display: "block", fontSize: T.small, color: C.inkFaint, marginTop: 2 }}>Vacío: se imprime «{sugeridas[c.k]}»{origenes[c.k] ? ` (${origenes[c.k]})` : ""}.</span>}
+                  {avisos[c.k] && !String(condiciones[c.k] || "").trim() && <span data-aviso-condicion={c.k} style={{ display: "block", fontSize: T.small, color: C.warnText, marginTop: 2 }}>{avisos[c.k]}{onIrA && !soloLectura && <> <button type="button" data-compact data-ir-a="productos" onClick={() => onIrA("productos")} style={{ border: "none", background: "none", padding: 0, color: C.tealDark, fontSize: T.small, fontWeight: 600, textDecoration: "underline", cursor: "pointer" }}>Ir a Productos</button></>}</span>}
+                </>
               )}
             </label>
           ))}
@@ -210,7 +238,7 @@ export function DocumentacionOferta({ canal, cotizacionId, token, showToast, con
       </Seccion>
       {!soloLectura && instalada && cotizacionId && (
         <BotonSecundario data-guardar-condiciones onClick={() => guardarCondiciones().catch((e) => setError(e.message))} disabled={!sinGuardar || !!ocupado} style={{ minHeight: 44, width: "100%", justifyContent: "center", opacity: sinGuardar ? 1 : 0.55 }}>
-          {sinGuardar ? "Guardar condiciones y matriz" : "Condiciones y matriz guardadas"}</BotonSecundario>
+          {sinGuardar ? (cotizacionId ? "Guardando condiciones…" : "Se guardan al guardar la cotización") : "✓ Condiciones y matriz guardadas"}</BotonSecundario>
       )}
 
       {previa && (

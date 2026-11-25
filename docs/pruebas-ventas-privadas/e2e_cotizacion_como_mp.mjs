@@ -69,11 +69,18 @@ async function recorrido(browser, { pref, ancho, alto, movil }) {
   const txtDatos = await h.locator('[role="tabpanel"]').first().innerText().catch(() => h.innerText());
   ok(`${pref}02 Datos sin campos exclusivos de Mercado Público`, !/Mercado P[uú]blico|licitaci|Compra [AÁ]gil|ChileCompra|Instituci[oó]n|Presupuesto del comprador/i.test(await h.innerText()) && !(await h.locator('[data-campo="id_externo"]').count()), txtDatos.slice(0, 200));
   await ui.elegirCliente(p, "Maderas", "76.086.428-5");
-  ok(`${pref}03 cliente del registro: propone contacto, dirección y condiciones`, (await h.locator('[data-campo="contacto"]').inputValue()) === "Rosa Pérez" && (await h.locator('[data-campo="direccion"]').inputValue()) === "Planta km 5, Laja" && (await h.locator('[data-campo="pago"]').inputValue()) === "50% anticipo y saldo a 30 días" && /76\.086\.428-5/.test(await h.locator("[data-cliente-elegido]").innerText())
+  // 25/11/2026: forma de pago, vigencia y condiciones están en Documentos › Condiciones comerciales (igual que Mercado Público);
+  // el plazo de entrega se define en cada producto, junto al despacho (y puede reemplazarse por un texto en Condiciones).
+  const d03 = { contacto: await h.locator('[data-campo="contacto"]').inputValue(), direccion: await h.locator('[data-campo="direccion"]').inputValue(),
+    cliente: await h.locator("[data-cliente-elegido]").innerText(), datosCli: (await h.locator("[data-datos-cliente]").count()) ? await h.locator("[data-datos-cliente]").innerText() : "" };
+  ok(`${pref}03b Datos sin plazo, vigencia ni condiciones de pago (van en Productos y Documentos)`, (await h.locator('[data-campo="plazo"], [data-campo="vigencia"], [data-campo="pago"]').evaluateAll((es) => es.filter((e) => e.offsetParent !== null).length)) === 0);
+  await ui.pestana(p, "eett");
+  ok(`${pref}03 cliente del registro: propone contacto, dirección y condiciones`, d03.contacto === "Rosa Pérez" && d03.direccion === "Planta km 5, Laja" && (await h.locator('[data-campo="pago"]').inputValue()) === "50% anticipo y saldo a 30 días" && /76\.086\.428-5/.test(d03.cliente)
     // 13/11/2026: razón social y RUT una sola vez (cliente elegido); debajo solo lo adicional (giro), sin repetirlos.
-    && (await h.locator("[data-datos-cliente]").count() === 0 || !/76\.086\.428-5|Razón social/.test(await h.locator("[data-datos-cliente]").innerText())));
-  await h.locator('[data-campo="plazo"]').fill(LARGO);
+    && !/76\.086\.428-5|Razón social/.test(d03.datosCli));
+  await h.locator('[data-condicion="plazo_entrega"] input').fill(LARGO);
   await h.locator('[data-campo="condiciones"]').fill("Precios netos en pesos chilenos. Despacho incluido.");
+  await ui.pestana(p, "datos");
   ok(`${pref}04 cambios sin guardar señalados (protección)`, (await h.locator('[data-estado-guardado="local"]').count()) === 1);
   await revisarDesborde("datos");
 
@@ -125,8 +132,8 @@ async function recorrido(browser, { pref, ancho, alto, movil }) {
   // Cerrar, reabrir y editar.
   await h.locator("[data-cerrar-hoja]").click(); await espera(p, 500);
   await p.locator(`[data-cotizacion="${folio}"]`).click(); await h.waitFor(); await espera(p, 1500);
-  await ui.pestana(p, "datos");
-  const reab = { plazo: await h.locator('[data-campo="plazo"]').inputValue(), cond: await h.locator('[data-campo="condiciones"]').inputValue() };
+  await ui.pestana(p, "eett"); await espera(p, 800);
+  const reab = { plazo: await h.locator('[data-condicion="plazo_entrega"] input').inputValue(), cond: await h.locator('[data-campo="condiciones"]').inputValue() };
   await ui.pestana(p, "productos");
   ok(`${pref}19 al reabrir: datos, tres ítems con su ficha y despacho`, reab.plazo === LARGO && /Despacho incluido/.test(reab.cond) && (await h.locator("[data-item-cotizacion]").count()) === 3 && /Bomba centrífuga 2 HP/.test(await h.locator('[data-item-cotizacion="1"]').innerText()) && /Confirmado/.test(await h.locator('[data-item-cotizacion="1"]').innerText()));
   { await ui.pestana(p, "datos"); await captura(p, `${nombre}-vp-1-datos`); await ui.pestana(p, "productos"); await captura(p, `${nombre}-vp-2-productos`); await ui.pestana(p, "precios"); await captura(p, `${nombre}-vp-3-precios`); await ui.pestana(p, "eett"); await captura(p, `${nombre}-vp-4-eett`); await ui.pestana(p, "productos"); }
@@ -228,8 +235,8 @@ async function capturasMP(browser, { ancho, alto, movil }) {
   const estiloNombre = await p.locator('[data-editor-ficha] [data-campo="marca"]').evaluate((e) => getComputedStyle(e).borderRadius);
   ok(`MP-${nombre} «Cantidad» con el mismo formato de los demás campos (ventana compartida)`, estiloCantidad.split("|")[1] === estiloNombre && /mono|Mono|Menlo|Consolas|courier/i.test(estiloCantidad), estiloCantidad + " vs " + estiloNombre);
   await p.locator("[data-editor-ficha]").getByText("Cancelar", { exact: true }).click(); await espera(p, 300);
-  await H.locator('[role="tab"][data-tab="datos"]').click(); await H.locator('[data-campo="plazo"]').fill(LARGO);
   await H.locator('[role="tab"][data-tab="eett"]').click(); await espera(p, 300);
+  await H.locator('[data-condicion="plazo_entrega"] input').fill(LARGO);
   for (const cb of await H.locator("[data-aprobar-ficha] input").all()) if (!(await cb.isChecked())) await cb.check();
   // 25/11/2026: «Documentación de la oferta» (generador nuevo): la EETT informa el plazo de entrega completo en «Condiciones de la oferta».
   const [dl] = await Promise.all([p.waitForEvent("download", { timeout: 30000 }), H.locator('[data-descargar-documento="eett"]').click()]);

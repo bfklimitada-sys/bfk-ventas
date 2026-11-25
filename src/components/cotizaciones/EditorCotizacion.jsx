@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { C, T, R, iStyle, iMono, selStyle, fmt, MONO } from "../../lib/theme";
+import { C, T, R, iStyle, iMono, iFecha, selStyle, fmt, MONO } from "../../lib/theme";
 import { Field, Modal } from "../ui/Basicos";
 import { NavegacionCotizacion } from "./PasosCotizacion";
 import { HojaLateral, Pestanas, PanelPestana, Tarjeta, Badge, AvisoLinea, BotonPrincipal, BotonSecundario, FilaDato, Desplegable, Seccion, Ayuda } from "../ui/Sistema";
@@ -7,7 +7,8 @@ import CampoNumeroCL from "../ui/CampoNumeroCL";
 import { esInvalido } from "../../lib/numeroCL";
 import { camposNumericosInvalidos, calcularCotizacion, formulaParaGuardar, formulaGuardadaExenta, esExentaAprobada, estadoParaPDF, destinoDe, direccionValida, invalidarDespachosPorDireccion, envioConfirmado, textoParaMercadoPublico, aplicarRecargoGeneral, aplicarRecargoProducto, itemVacio, envioVacio, nuevaClave, digitosValor, proveedorDeEnlace, ESTADOS_COTIZACION, ESTADOS_ENVIO, RECARGO_SUGERIDO } from "../../lib/cotizaciones";
 import { refImagen } from "../../lib/cotizacionesDatos";
-import { modeloOfertaMP, propuestaMatrizMP } from "../../lib/modeloOferta";
+import { modeloOfertaMP, propuestaMatrizMP, condicionesAutomaticas } from "../../lib/modeloOferta";
+import { guardarCondicionesOferta } from "../../lib/documentosOfertaDatos";
 import { DocumentacionOferta } from "./DocumentacionOferta";
 import { EditorFicha } from "./EditorFicha";
 import { ImagenFicha } from "./ImagenFicha";
@@ -175,6 +176,7 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
   const mover = (i, d) => cambiar((c) => { const j = i + d; if (j < 0 || j >= c.items.length) return c; [c.items[i], c.items[j]] = [c.items[j], c.items[i]]; return c; });
 
   // ── Guardar ──
+  const condOfertaPendientes = useRef(null);
   const guardarInterno = async () => {
     const malos = camposNumericosInvalidos(cot);
     if (malos.length) throw new Error(`corrige el formato de ${malos.join(", ")} (punto para miles, coma para decimales; ej.: 1.250.000,75).`);
@@ -182,6 +184,8 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
     if (bloqueo) { setPestana("datos"); throw Object.assign(new Error(bloqueo), { vendedor: true }); }
     const enviada = cot; const { _idLocal, ...paraBFK } = { ...enviada, ...cotTrib, items: enviada.items, envios: enviada.envios }; // eslint-disable-line no-unused-vars
     const r = await almacen.guardarCotizacion(paraBFK);
+    // Condiciones comerciales escritas antes de guardar la cotización por primera vez: se guardan ahora con ella.
+    if (!enviada.id && condOfertaPendientes.current) await guardarCondicionesOferta(token, "mp", r.id, condOfertaPendientes.current.condiciones, condOfertaPendientes.current.matriz).catch(() => {});
     setFormulaGuardada(formulaParaGuardar(paraBFK));
     const nueva = { ...enviada, id: r.id, version: r.version }; baseRef.current = clonarJ(nueva);
     // Lo escrito DURANTE el guardado se conserva (y sigue marcado como pendiente de guardar).
@@ -225,7 +229,7 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
   const construirModeloOferta = async ({ version, condiciones, matriz }) => {
     const c = vivo.current.cot; const ct = cotTribRef.current;
     const items = await Promise.all(c.items.map(async (it) => ({ ...it, ficha: { ...it.ficha, imagenes: (await Promise.all((it.ficha?.imagenes || []).map(refImagen))).filter(Boolean) } })));
-    return modeloOfertaMP({ ...ct, ...c, items }, calcRef.current, { version, fecha: c.fecha, vendedor: c.vendedor_nombre, condiciones: { ...condiciones, plazo_entrega: c.plazo }, matriz });
+    return modeloOfertaMP({ ...ct, ...c, items }, calcRef.current, { version, fecha: c.fecha, vendedor: c.vendedor_nombre, condiciones, matriz });
   };
   // La emisión usa SIEMPRE lo guardado: si hay cambios, se guarda primero (mismas validaciones de «Guardar»).
   const asegurarGuardado = async () => {
@@ -358,18 +362,17 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
           <Field label="Institución" required><input data-campo="institucion" list="cz-entidades" value={cot.institucion} onChange={(e) => elegirEntidad(e.target.value)} style={iStyle} />
             <datalist id="cz-entidades">{entidadesCatalogo.slice(0, 400).map((e) => <option key={e.id || e.rut} value={e.nombre_entidad} />)}</datalist></Field>
           <Field label="Unidad solicitante"><input data-campo="unidad_compra" value={cot.unidad_compra || ""} onChange={(e) => setCampo("unidad_compra", e.target.value)} style={iStyle} /></Field>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          {/* 25/11/2026: el plazo de entrega ya no se pide aquí (se define en cada producto, junto al despacho). Columnas con
+              minmax(0, 1fr) y fechas con ancho mínimo 0: en el celular las fechas ya no se salen de la pantalla. */}
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 8 }}>
             <Field label="RUT"><input data-campo="rut" value={cot.rut} onChange={(e) => setCampo("rut", e.target.value)} style={iMono} /></Field>
-            <Field label="Fecha de emisión (BFK)"><input data-campo="fecha" type="date" value={cot.fecha || ""} onChange={(e) => setCampo("fecha", e.target.value)} style={iStyle} /></Field>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            <Field label="Plazo de entrega"><input data-campo="plazo" value={cot.plazo} onChange={(e) => setCampo("plazo", e.target.value)} style={iStyle} placeholder="15 DÍAS" /></Field>
             <Field label="Presupuesto del comprador" hint="Referencial. No es el precio de BFK."><CampoNumeroCL data-campo="presupuesto" decimales={2} vacio={null} valor={cot.presupuesto_estimado} onCambiar={(v) => setCampo("presupuesto_estimado", v)} style={iMono} /></Field>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            <Field label="Publicación"><input data-campo="fecha_publicacion" type="datetime-local" value={String(cot.fecha_publicacion || "").slice(0, 16)} onChange={(e) => setCampo("fecha_publicacion", e.target.value || null)} style={iStyle} /></Field>
-            <Field label="Cierre"><input data-campo="fecha_cierre" type="datetime-local" value={String(cot.fecha_cierre || "").slice(0, 16)} onChange={(e) => setCampo("fecha_cierre", e.target.value || null)} style={iStyle} /></Field>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 8 }}>
+            <Field label="Publicación"><input data-campo="fecha_publicacion" type="datetime-local" value={String(cot.fecha_publicacion || "").slice(0, 16)} onChange={(e) => setCampo("fecha_publicacion", e.target.value || null)} style={iFecha} /></Field>
+            <Field label="Cierre"><input data-campo="fecha_cierre" type="datetime-local" value={String(cot.fecha_cierre || "").slice(0, 16)} onChange={(e) => setCampo("fecha_cierre", e.target.value || null)} style={iFecha} /></Field>
           </div>
+          <Field label="Fecha de emisión (BFK)" hint="La que se imprime en los documentos."><input data-campo="fecha" type="date" value={cot.fecha || ""} onChange={(e) => setCampo("fecha", e.target.value)} style={iFecha} /></Field>
           {cot.requerimientos?.length > 0 && (
             <Seccion titulo="Productos requeridos por el comprador" nota="Requerimientos de la Compra Ágil (no son productos de proveedores). Cada producto ofrecido se ingresa en Productos.">
               {cot.requerimientos.map((r, i) => (
@@ -514,7 +517,7 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
           {cot.items.length > 0 && !calc.listo && <div data-copiar-bloqueado style={{ fontSize: T.small, color: C.warnText, textAlign: "center", marginTop: 6 }}>Bloqueado: confirma los costos y despachos pendientes ({calc.pendientes.length}) antes de copiar precios a Mercado Público.</div>}
         </PanelPestana>
 
-        <PanelPestana visible={pestana === "eett"} titulo="Documentos">
+        <PanelPestana visible={pestana === "eett"} titulo="Documentos" fijo>
           <AvisoLinea tono="info" icono="🔒">Los documentos nunca incluyen costos de compra, despachos internos, enlaces, proveedores, recargos, ganancias ni financiamiento. La EETT no incluye precios.</AvisoLinea>
           {pdf.faltan.length > 0 && <AvisoLinea tono="warn" dato="faltan-datos" accion="Completar" onClick={() => setPestana("datos")}>Falta: {pdf.faltan.join(" y ")}.</AvisoLinea>}
           {pdf.advertencias.map((a, i) => <AvisoLinea key={i} tono="warn" icono="⚠" dato={`eett-advertencia-${a.tipo}`} {...(a.tipo === "faltan_datos" ? { accion: "Revisar datos", onClick: () => setPestana("datos") } : {})}>{a.mensaje}</AvisoLinea>)}
@@ -541,7 +544,7 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
           })}
           <DocumentacionOferta canal="mp" cotizacionId={cot.id || null} token={token} showToast={showToast} cambiosSinGuardar={sucio}
             construirModelo={construirModeloOferta} asegurarGuardado={asegurarGuardado}
-            propios={[{ k: "plazo_entrega", titulo: "Plazo de entrega", valor: cot.plazo }]} ocultar={["plazo_entrega"]}
+            {...condicionesAutomaticas(cot.items, cot.plazo)} onIrA={setPestana} pendientes={condOfertaPendientes}
             items={cot.items.map((it, i) => ({ n: i + 1, nombre: it.ficha?.nombre }))} propuestaMatriz={() => propuestaMatrizMP(cot)} />
           {historial.length > 0 && (
             <Seccion titulo="EETT generadas con el formato anterior" nota="Registro histórico de cada generación (los PDF quedan en el dispositivo donde se descargaron).">

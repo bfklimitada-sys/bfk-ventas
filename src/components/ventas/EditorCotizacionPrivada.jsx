@@ -17,7 +17,7 @@
 //   · Flujo privado intacto: borrador, envío/aceptación/rechazo/vencimiento MANUALES, revisiones, duplicar, «Crear venta /
 //     Registrar OC» (idempotente), respaldos, permisos e historial. Ver o descargar un PDF nunca cambia el estado.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { C, T, R, MONO, iStyle, iMono, selStyle, fmt, cardStyle } from "../../lib/theme";
+import { C, T, R, MONO, iStyle, iMono, iFecha, selStyle, fmt, cardStyle } from "../../lib/theme";
 import { Field } from "../ui/Basicos";
 import { HojaLateral, Pestanas, PanelPestana, Tarjeta, Badge, AvisoLinea, BotonPrincipal, BotonSecundario, FilaDato, Seccion, Ayuda } from "../ui/Sistema";
 import { Ventana, Campo, Entrada, Area, ErrorForm, PedirMotivo } from "../proyectos/Comunes";
@@ -29,7 +29,7 @@ import { SelectorBiblioteca } from "../cotizaciones/EditorCotizacion";
 import { ImagenFicha } from "../cotizaciones/ImagenFicha";
 import { VistaPreviaEETT } from "../cotizaciones/VistaPreviaEETT";
 import { DocumentacionOferta } from "../cotizaciones/DocumentacionOferta";
-import { modeloOfertaVP } from "../../lib/modeloOferta";
+import { modeloOfertaVP, plazoDesdeProductos, condicionesAutomaticas } from "../../lib/modeloOferta";
 import { ConflictoVersion } from "../ui/ConflictoVersion";
 import { combinarVersiones, aplicarCombinacion, normalizarProductos, resumenProductos, textoValor } from "../../lib/conflictoVersion";
 import { NavegacionCotizacion } from "../cotizaciones/PasosCotizacion";
@@ -41,6 +41,7 @@ import { itemVacioVP, cotizacionParaEditor, calcularCotizacionVP, precioConRecar
 import { ESTADOS_ENVIO, envioConfirmado, envioVacio, nuevaClave, proveedorDeEnlace, invalidarDespachosPorDireccion, revisarFicha, camposNumericosInvalidos } from "../../lib/cotizaciones";
 import { crearAlmacen, subirImagenesFicha, refImagen } from "../../lib/cotizacionesDatos";
 import { cotizacionEconomica } from "../../lib/documentosOfertaDescarga";
+import { guardarCondicionesOferta } from "../../lib/documentosOfertaDatos";
 import { normalizarFichaEETT } from "../../lib/vpEETT";
 import { descargarBlob } from "../../lib/eettPdf";
 import { guardarBorrador, borrarBorrador, leerBorrador } from "../../lib/borradoresCotizacion";
@@ -142,6 +143,7 @@ export function EditorCotizacionPrivada({ token, perfil, vp, id, showToast, onCe
   const editable = nueva || (acc.editar && viendoActual);
   const vistaRev = useMemo(() => (c && !viendoActual && d ? cotizacionParaEditor(d, revVista) : null), [c, viendoActual, d, revVista]);
   const vista = vistaRev ? { ...cot, ...Object.fromEntries(CAMPOS_CAB.map((k) => [k, vistaRev.rev[k] ?? ""])), afecta_iva: vistaRev.rev.afecta_iva !== false, items: vistaRev.items, envios: vistaRev.envios } : cot;
+  const condOfertaPendientes = useRef(null);
   const vistaRef = useRef(vista); vistaRef.current = vista;
   const calc = useMemo(() => (vista ? calcularCotizacionVP(vista) : null), [vista]);
   const cliente = vp.clientes.find((x) => x.id === vista?.cliente_id);
@@ -267,15 +269,19 @@ export function EditorCotizacionPrivada({ token, perfil, vp, id, showToast, onCe
     const malos = camposNumericosInvalidos(cot);
     if (malos.length) { setPestana("precios"); throw new Error(`Corrige el formato de ${malos.join(", ")} (punto para miles, coma para decimales; ej.: 1.250.000,75).`); }
     const errores = validarItemsVP(cot.items); if (errores.length) { setPestana(/precio unitario de venta/.test(errores[0]) ? "precios" : "productos"); throw new Error(errores[0]); }
-    if (cot.vigencia_hasta < cot.fecha_emision) { setPestana("datos"); throw new Error("La vigencia no puede ser anterior a la emisión."); }
+    if (cot.vigencia_hasta < cot.fecha_emision) { setPestana("eett"); throw new Error("La vigencia no puede ser anterior a la emisión."); }
     const ca = calcularCotizacionVP(cot);
     const items = await Promise.all(cot.items.map(async (it, i) => lineaParaGuardarVP(it, ca.lineas[i], {
       imagenes: await subirImagenesFicha(tokenRef.current, (it.ficha?.imagenes || []).slice(0, 4)),
       envio: it.tipo === "servicio" ? null : cot.envios.find((e) => e.key === it.envio_key) || null, conCostos: verCostos })));
-    const p = { ...(c ? { id: c.id, version: c.version } : {}), cliente_id: cot.cliente_id, ...Object.fromEntries(CAMPOS_CAB.map((k) => [k, cot[k]])), afecta_iva: cot.afecta_iva !== false, items,
+    const p = { ...(c ? { id: c.id, version: c.version } : {}), cliente_id: cot.cliente_id, ...Object.fromEntries(CAMPOS_CAB.map((k) => [k, cot[k]])),
+      // Plazo de entrega (25/11/2026): el mayor de los productos (se define junto al despacho); si ninguno lo tiene, el guardado.
+      plazo_entrega: plazoDesdeProductos(cot.items).texto || cot.plazo_entrega || "", afecta_iva: cot.afecta_iva !== false, items,
       // Vendedor (11/11/2026): solo se envía si cambió; sin cambio, se guarda con la función de siempre (vp_guardar_cotizacion).
       ...("vendedor" in cot && vp.finInstalado && (cot.vendedor || "") !== (c ? claveVendedor(c) : "") ? { vendedor: cot.vendedor || "" } : {}) };
     const r = await guardarCotizacion(tokenRef.current, p);
+    // Condiciones comerciales escritas antes de guardar la cotización por primera vez: se guardan ahora con ella.
+    if (!c && condOfertaPendientes.current) await guardarCondicionesOferta(tokenRef.current, "vp", r.id, condOfertaPendientes.current.condiciones, condOfertaPendientes.current.matriz).catch(() => {});
     borrarBorrador(usuarioLocal(usuarioId), id || "nueva").catch(() => {});
     await onRecargar?.();
     const x = await cargar(r.id); if (!c) { cerrandoAdrede.current = true; onAbierta?.(r.id); }
@@ -325,7 +331,8 @@ export function EditorCotizacionPrivada({ token, perfil, vp, id, showToast, onCe
   // puede editar) basta con que no haya bloqueos.
   const faltanEETT = cliente || c?.cliente_nombre ? [] : ["cliente"];
   const advEETT = (() => {
-    const falta = [["fecha_emision", "fecha de emisión"], ["plazo_entrega", "plazo de entrega"]].filter(([k]) => !String(vista?.[k] || "").trim()).map(([, t]) => t);
+    const falta = [["fecha_emision", "fecha de emisión"]].filter(([k]) => !String(vista?.[k] || "").trim()).map(([, t]) => t);
+    if (!(plazoDesdeProductos(vista?.items || []).texto || String(vista?.plazo_entrega || "").trim())) falta.push("plazo de entrega (se indica en cada producto, junto al despacho)");
     if ((cliente || c) && !String(cliente?.rut || c?.cliente_rut || "").trim()) falta.push("RUT del cliente");
     return falta.length ? [{ tipo: "faltan_datos", mensaje: `Faltan datos del encabezado del PDF: ${falta.join(", ")}. Se omitirán o quedarán en blanco.` }] : [];
   })();
@@ -401,7 +408,7 @@ export function EditorCotizacionPrivada({ token, perfil, vp, id, showToast, onCe
           const despOk = vista.items.length > 0 && vista.items.every((it) => it.tipo === "servicio" || envioConfirmado(vista.envios.find((e) => e.key === it.envio_key) || {}));
           const preciosOk = vista.items.length > 0 && calc.lineas.every((l) => l.precio_unitario != null);
           const pasos = [["Datos del cliente", !!vista.cliente_id, "datos"], ["Dirección", dirOk, "datos"], ["Productos", vista.items.length > 0, "productos"],
-            ...(verInterno ? [["Verificación de despacho", despOk, "productos"]] : []), ["Precios", preciosOk, "precios"], ["EETT", eettLista, "eett"]];
+            ...(verInterno ? [["Verificación de despacho", despOk, "productos"]] : []), ["Precios", preciosOk, "precios"], ["Documentos", eettLista, "eett"]];
           return <NavegacionCotizacion pasos={pasos} activa={pestana} onCambiar={setPestana}
             conteos={{ productos: verInterno ? nPend : 0, precios: verInterno ? nPend : 0, eett: nRev }} />;
         })()}
@@ -426,20 +433,13 @@ export function EditorCotizacionPrivada({ token, perfil, vp, id, showToast, onCe
           {"vendedor" in (cot || {}) && vp.finInstalado && <CampoVendedor vp={vp} c={c} valor={vista.vendedor ?? ""} editable={!ro} puedeReasignar={!!c && esResp && (!c.vendedor_tipo || esAdmin)}
             onCambiar={(v) => setCampo("vendedor", v)} onReasignar={async (v) => { try { await asignarVendedor(tokenRef.current, "cotizacion", c.id, v, c.version); showToast?.("Vendedor actualizado"); await onRecargar?.(); await cargar(c.id); } catch (e) { showToast?.(mensajeVP(e), "error"); } }} />}
           <Field label="Responsable" hint="Quien crea la cotización queda como responsable (gestiona: decide costos, envío, aceptación y venta). El vendedor puede ser otra persona o BFK."><input data-campo="responsable" disabled value={c?.responsable_nombre || perfil?.nombre || ""} style={iStyle} /></Field>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          {/* 25/11/2026: Datos = cliente y cotización. El plazo de entrega se define en cada producto (junto al despacho); vigencia,
+              forma de pago, condiciones y observaciones están en Documentos › Condiciones comerciales (igual que Mercado Público). */}
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 8 }}>
             <Field label="Folio"><input data-campo="folio" disabled value={c ? folioRevision(c.folio, rvVista?.numero ?? c.revision_actual) : "Se asigna al guardar"} style={iMono} /></Field>
-            <Field label="Fecha de emisión"><input data-campo="emision" type="date" disabled={ro} value={vista.fecha_emision || ""} onChange={(e) => setCampo("fecha_emision", e.target.value)} style={iStyle} /></Field>
+            <Field label="Fecha de emisión"><input data-campo="emision" type="date" disabled={ro} value={vista.fecha_emision || ""} onChange={(e) => setCampo("fecha_emision", e.target.value)} style={iFecha} /></Field>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            <Field label="Vigente hasta" hint={vista.fecha_emision && vista.vigencia_hasta ? `${Math.max(0, Math.round((new Date(vista.vigencia_hasta) - new Date(vista.fecha_emision)) / 86400000))} días de vigencia` : ""}><input data-campo="vigencia" type="date" disabled={ro} value={vista.vigencia_hasta || ""} onChange={(e) => setCampo("vigencia_hasta", e.target.value)} style={iStyle} /></Field>
-            <Field label="Plazo de entrega"><input data-campo="plazo" disabled={ro} value={vista.plazo_entrega || ""} maxLength={300} onChange={(e) => setCampo("plazo_entrega", e.target.value)} style={iStyle} placeholder="Ej.: 10 días hábiles desde la aceptación" /></Field>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            <Field label="Condiciones de pago"><input data-campo="pago" disabled={ro} value={vista.condiciones_pago || ""} maxLength={500} onChange={(e) => setCampo("condiciones_pago", e.target.value)} style={iStyle} /></Field>
-            <Field label="IVA"><select data-campo="iva" disabled={ro} value={vista.afecta_iva === false ? "no" : "si"} onChange={(e) => setCampo("afecta_iva", e.target.value === "si")} style={selStyle}><option value="si">Afecta (19 %)</option><option value="no">Exenta</option></select></Field>
-          </div>
-          <Field label="Condiciones comerciales"><textarea data-campo="condiciones" rows={3} disabled={ro} value={vista.condiciones_comerciales || ""} maxLength={4000} onChange={(e) => setCampo("condiciones_comerciales", e.target.value)} style={{ ...iStyle, resize: "vertical" }} /></Field>
-          <Field label="Observaciones (van en el PDF de la cotización)"><textarea data-campo="observaciones" rows={3} disabled={ro} value={vista.observaciones || ""} maxLength={4000} onChange={(e) => setCampo("observaciones", e.target.value)} style={{ ...iStyle, resize: "vertical" }} /></Field>
+          <Field label="IVA"><select data-campo="iva" disabled={ro} value={vista.afecta_iva === false ? "no" : "si"} onChange={(e) => setCampo("afecta_iva", e.target.value === "si")} style={selStyle}><option value="si">Afecta (19 %)</option><option value="no">Exenta</option></select></Field>
           {c && <>
             <Seccion titulo="Respaldos de la cotización">
               <SubirArchivo token={token} ambito="cotizacion" id={c.id} categorias={["aceptacion", "otro"]} habilitado={vp.documentosHabilitados} showToast={showToast} onSubido={() => cargar(c.id)} />
@@ -574,7 +574,7 @@ export function EditorCotizacionPrivada({ token, perfil, vp, id, showToast, onCe
         </PanelPestana>
 
         {/* ── EETT (mismo recorrido de Mercado Público) ── */}
-        <PanelPestana visible={pestana === "eett"} titulo="Documentos">
+        <PanelPestana visible={pestana === "eett"} titulo="Documentos" fijo>
           <AvisoLinea tono="info" icono="🔒">El PDF contiene solo información técnica: nunca precios, despachos, enlaces, proveedores, recargos, ganancias ni IVA. Se descarga en este dispositivo; la EETT queda registrada con folio y revisión para vincularla a la venta.</AvisoLinea>
           {faltanEETT.length > 0 && <AvisoLinea tono="warn" dato="faltan-datos" accion="Completar" onClick={() => setPestana("datos")}>Falta: {faltanEETT.join(" y ")}.</AvisoLinea>}
           {advEETT.map((a, i) => <AvisoLinea key={i} tono="warn" icono="⚠" dato={`eett-advertencia-${a.tipo}`} accion="Revisar datos" onClick={() => setPestana("datos")}>{a.mensaje}</AvisoLinea>)}
@@ -601,8 +601,16 @@ export function EditorCotizacionPrivada({ token, perfil, vp, id, showToast, onCe
           })}
           <DocumentacionOferta canal="vp" cotizacionId={c?.id || null} token={token} showToast={showToast} cambiosSinGuardar={sucio && editable}
             construirModelo={construirModeloOferta} asegurarGuardado={asegurarGuardadoOferta} soloLectura={!editable || !viendoActual} puedeEmitir={viendoActual}
-            propios={[{ titulo: "Plazo de entrega", valor: vista.plazo_entrega }, { titulo: "Forma de pago", valor: vista.condiciones_pago }, { titulo: "Vigencia", valor: vista.vigencia_hasta }]}
-            ocultar={["plazo_entrega", "forma_pago", "vigencia", "observaciones"]}
+            {...(() => { const a = condicionesAutomaticas(vista.items, vista.plazo_entrega); return { ...a, ocultar: [...a.ocultar, "forma_pago", "vigencia", "observaciones"] }; })()}
+            onIrA={setPestana} pendientes={condOfertaPendientes}
+            camposPropios={(
+              <div data-condiciones-cotizacion style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10, marginBottom: 10 }}>
+                <Field label="Vigente hasta" hint={vista.fecha_emision && vista.vigencia_hasta ? `${Math.max(0, Math.round((new Date(vista.vigencia_hasta) - new Date(vista.fecha_emision)) / 86400000))} días de vigencia` : ""}><input data-campo="vigencia" type="date" disabled={ro} value={vista.vigencia_hasta || ""} onChange={(e) => setCampo("vigencia_hasta", e.target.value)} style={iFecha} /></Field>
+                <Field label="Forma de pago"><input data-campo="pago" disabled={ro} value={vista.condiciones_pago || ""} maxLength={500} onChange={(e) => setCampo("condiciones_pago", e.target.value)} style={iStyle} /></Field>
+                <Field label="Condiciones comerciales"><textarea data-campo="condiciones" rows={3} disabled={ro} value={vista.condiciones_comerciales || ""} maxLength={4000} onChange={(e) => setCampo("condiciones_comerciales", e.target.value)} style={{ ...iStyle, resize: "vertical" }} /></Field>
+                <Field label="Observaciones"><textarea data-campo="observaciones" rows={3} disabled={ro} value={vista.observaciones || ""} maxLength={4000} onChange={(e) => setCampo("observaciones", e.target.value)} style={{ ...iStyle, resize: "vertical" }} /></Field>
+              </div>
+            )}
             items={vista.items.map((it, i) => ({ n: i + 1, nombre: it.ficha?.nombre || String(it.descripcion || "").split("\n")[0] }))} />
         </PanelPestana>
       </div>

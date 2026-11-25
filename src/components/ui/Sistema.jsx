@@ -140,11 +140,15 @@ export function Pestanas({ items, activa, onCambiar, etiqueta = "Secciones", sty
 }
 
 // Contenido de una pestaña: en modo impresión se muestran todas, cada una con su título.
-export function PanelPestana({ visible, titulo, children }) {
+// fijo (25/11/2026): el panel queda montado aunque no esté visible (solo se oculta), para no perder lo escrito en él que aún no
+// se guarda (p. ej. las condiciones comerciales de «Documentos» al pasar a otra pestaña).
+export function PanelPestana({ visible, titulo, children, fijo = false }) {
   const todo = useModoTodo();
-  if (!visible && !todo) return null;
+  const oculto = !visible && !todo;
+  if (oculto && !fijo) return null;
+  // Misma estructura visible u oculto (solo cambia el estilo): así React no vuelve a montar el contenido al cambiar de pestaña.
   return (
-    <div role="tabpanel">
+    <div role="tabpanel" hidden={oculto || undefined} style={oculto ? { display: "none" } : undefined}>
       {todo && titulo && <h2 style={{ fontSize: T.title, fontWeight: 700, color: C.ink, margin: "8px 0 10px" }}>{titulo}</h2>}
       {children}
     </div>

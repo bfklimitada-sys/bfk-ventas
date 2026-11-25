@@ -248,6 +248,9 @@ export function fichaParaGuardar(ficha) {
   if (original.trim()) out.texto_original = original.slice(0, 20000);
   const cp = f.condiciones_producto || {};
   const cond = Object.fromEntries(["garantia", "plazo_entrega", "condiciones"].map((k) => [k, String(cp[k] || "").trim()]).filter(([, v]) => v));
+  // Plazo estructurado (25/11/2026, junto al despacho): días y tipo; plazo_entrega guarda su texto.
+  const dias = Math.trunc(Number(cp.plazo_dias));
+  if (dias > 0 && dias < 1000) { cond.plazo_dias = dias; if (["habiles", "corridos"].includes(cp.plazo_tipo)) cond.plazo_tipo = cp.plazo_tipo; }
   if (Object.keys(cond).length) out.condiciones_producto = cond;
   return out;
 }

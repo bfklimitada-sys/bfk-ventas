@@ -46,6 +46,9 @@ export const fmt = {
 export const iStyle = { width:"100%", padding:"10px 12px", minHeight:42, borderRadius:R.sm, border:`1px solid ${C.borderFuerte}`, fontSize:14, color:C.ink, background:C.card, boxSizing:"border-box", fontFamily:SANS };
 
 export const iMono = { ...iStyle, fontFamily:MONO };
+// Fechas (25/11/2026): en Safari del iPhone un input date/datetime-local tiene un ancho mínimo propio y se salía de la pantalla
+// en columnas de dos; con ancho mínimo 0 y sin apariencia nativa se ajusta a su columna (el selector de fecha sigue igual).
+export const iFecha = { ...iStyle, minWidth:0, maxWidth:"100%", display:"block", WebkitAppearance:"none", appearance:"none", textAlign:"left" };
 
 export const selStyle = { ...iStyle, cursor:"pointer" };
 

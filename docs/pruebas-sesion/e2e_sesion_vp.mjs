@@ -60,8 +60,9 @@ const cuerpo = (p) => p.locator("body").innerText();
 const desde = (A, i, obj, status) => A.pedidos.slice(i).filter((x) => x.obj === obj && (status === undefined || x.status === status));
 
 async function irACotizaciones(p) { await p.locator('aside [data-nav="vp_cotizaciones"]').click(); await p.locator("[data-panel-vp-cotizaciones]").waitFor(); await espera(p, 500); }
-async function abrirCot(p, folio) { if (await ui.hoja(p).isVisible().catch(() => false)) { await ui.pestana(p, "datos"); return; }   // tras recargar, la app la reabre sola
-  await irACotizaciones(p); await p.locator(`[data-cotizacion="${folio}"]`).click(); await ui.hoja(p).waitFor(); await espera(p, 1500); await ui.pestana(p, "datos"); }
+// 25/11/2026: vigencia, forma de pago, condiciones y observaciones están en Documentos › Condiciones comerciales.
+async function abrirCot(p, folio) { if (await ui.hoja(p).isVisible().catch(() => false)) { await ui.pestana(p, "eett"); return; }   // tras recargar, la app la reabre sola
+  await irACotizaciones(p); await p.locator(`[data-cotizacion="${folio}"]`).click(); await ui.hoja(p).waitFor(); await espera(p, 1500); await ui.pestana(p, "eett"); }
 async function iniciar(browser, A, extra = {}) {
   const r = await abrir(browser, { usuario: U.ana, url: URL_APP, hash: "#/panel", auth: A, ...extra });
   const aux = extra.ctx ? null : await auxiliar(r.ctx);
@@ -188,24 +189,24 @@ try {
     // C3. Pestaña desactualizada: no sobrescribe; recupera lo escrito y resuelve campo por campo.
     const [p1, p2] = [S.p, T2.p];
     await abrirCot(p1, cot.folio); await abrirCot(p2, cot.folio);
-    await campo(p1, "plazo").fill("20 días (pestaña 1)"); await campo(p1, "pago").fill("Contado (pestaña 1)"); await guardar(p1);
+    await campo(p1, "condiciones").fill("20 días (pestaña 1)"); await campo(p1, "pago").fill("Contado (pestaña 1)"); await guardar(p1);
     const v1 = version(cot.id);
-    await campo(p2, "plazo").fill("5 días (pestaña 2)"); await campo(p2, "observaciones").fill("nota de la pestaña 2"); await espera(p2, 700);
+    await campo(p2, "condiciones").fill("5 días (pestaña 2)"); await campo(p2, "observaciones").fill("nota de la pestaña 2"); await espera(p2, 700);
     const iC = A.pedidos.length; await guardar(p2);
     const dlg = p2.locator("[data-conflicto-version]");
-    ok("C05 pestaña desactualizada: se detecta antes de enviar (nada llega a guardarse) y NO se sobrescribe lo guardado después", desde(A, iC, "rpc/vp_guardar_cotizacion").length === 0 && version(cot.id) === v1 && revision(cot.id).plazo_entrega === "20 días (pestaña 1)" && revision(cot.id).observaciones === "inicial");
+    ok("C05 pestaña desactualizada: se detecta antes de enviar (nada llega a guardarse) y NO se sobrescribe lo guardado después", desde(A, iC, "rpc/vp_guardar_cotizacion").length === 0 && version(cot.id) === v1 && revision(cot.id).condiciones_comerciales === "20 días (pestaña 1)" && revision(cot.id).observaciones === "inicial");
     const estados = await dlg.locator("[data-campo-conflicto]").evaluateAll((l) => Object.fromEntries(l.map((x) => [x.dataset.campoConflicto, x.dataset.estadoConflicto]))).catch(() => ({}));
-    ok("C06 se abre la comparación: plazo cambió en ambos; observaciones solo en esta; condiciones de pago solo en BFK", estados.plazo_entrega === "conflicto" && estados.observaciones === "solo_mio" && estados.condiciones_pago === "solo_bfk" && Object.keys(estados).length === 3, JSON.stringify(estados) + " · " + ((await cuerpo(p2)).match(/.{0,80}(No se guard|No se pudo)[^\n]{0,300}/) || ["sin aviso"])[0] + " · " + T2.errs.join("|"));
-    ok("C07 lo escrito sigue en la pantalla y en la copia local", (await campo(p2, "plazo").inputValue()) === "5 días (pestaña 2)" && (await borradores(p2)).some((b) => b.cotId === cot.id && b.obs === "nota de la pestaña 2"), await borradores(p2));
+    ok("C06 se abre la comparación: plazo cambió en ambos; observaciones solo en esta; condiciones de pago solo en BFK", estados.condiciones_comerciales === "conflicto" && estados.observaciones === "solo_mio" && estados.condiciones_pago === "solo_bfk" && Object.keys(estados).length === 3, JSON.stringify(estados) + " · " + ((await cuerpo(p2)).match(/.{0,80}(No se guard|No se pudo)[^\n]{0,300}/) || ["sin aviso"])[0] + " · " + T2.errs.join("|"));
+    ok("C07 lo escrito sigue en la pantalla y en la copia local", (await campo(p2, "condiciones").inputValue()) === "5 días (pestaña 2)" && (await borradores(p2)).some((b) => b.cotId === cot.id && b.obs === "nota de la pestaña 2"), await borradores(p2));
     await dlg.locator("[data-combinar-conflicto]").click(); await espera(p2, 500);
-    ok("C08 combinar (sin elegir): toma lo de BFK en el conflicto, conserva lo propio; queda sin guardar", (await campo(p2, "plazo").inputValue()) === "20 días (pestaña 1)" && (await campo(p2, "observaciones").inputValue()) === "nota de la pestaña 2"
+    ok("C08 combinar (sin elegir): toma lo de BFK en el conflicto, conserva lo propio; queda sin guardar", (await campo(p2, "condiciones").inputValue()) === "20 días (pestaña 1)" && (await campo(p2, "observaciones").inputValue()) === "nota de la pestaña 2"
       && (await campo(p2, "pago").inputValue()) === "Contado (pestaña 1)" && version(cot.id) === v1 && (await ui.hoja(p2).locator('[data-estado-guardado="local"]').count()) === 1);
     await guardar(p2);
     const rv = revision(cot.id);
-    ok("C09 guardar tras combinar: una versión nueva con lo de ambas pestañas", version(cot.id) === v1 + 1 && rv.plazo_entrega === "20 días (pestaña 1)" && rv.condiciones_pago === "Contado (pestaña 1)" && rv.observaciones === "nota de la pestaña 2", rv);
+    ok("C09 guardar tras combinar: una versión nueva con lo de ambas pestañas", version(cot.id) === v1 + 1 && rv.condiciones_comerciales === "20 días (pestaña 1)" && rv.condiciones_pago === "Contado (pestaña 1)" && rv.observaciones === "nota de la pestaña 2", rv);
     // Copia local escrita sobre una versión anterior (la pestaña se cerró sin guardar): al reabrir se ofrece combinar.
     await ui.hoja(p1).locator("[data-cerrar-hoja]").first().click(); await espera(p1, 400); await abrirCot(p1, cot.folio);
-    await campo(p1, "plazo").fill("30 días (copia local)"); await espera(p1, 900);
+    await campo(p1, "condiciones").fill("30 días (copia local)"); await espera(p1, 900);
     await campo(p2, "observaciones").fill("guardado después por la pestaña 2"); await guardar(p2);
     const v2 = version(cot.id);
     await p1.reload({ waitUntil: "load" }); await espera(p1, 3500); await abrirCot(p1, cot.folio);
@@ -213,22 +214,22 @@ try {
     ok("C10 copia local de una versión anterior: no se borra; se ofrece «Revisar y combinar»", (await av.count()) === 1 && /Revisar y combinar/.test(await av.innerText()) && /no se sobrescribirá/.test(await av.innerText()), await ui.hoja(p1).innerText().then((t) => t.slice(0, 300)));
     await av.click({ position: { x: 14, y: 14 } }); const dlg1 = p1.locator("[data-conflicto-version]"); await dlg1.waitFor();
     const est1 = await dlg1.locator("[data-campo-conflicto]").evaluateAll((l) => Object.fromEntries(l.map((x) => [x.dataset.campoConflicto, x.dataset.estadoConflicto])));
-    ok("C11 comparación de la copia local: plazo solo propio; observaciones solo de BFK", est1.plazo_entrega === "solo_mio" && est1.observaciones === "solo_bfk", est1);
+    ok("C11 comparación de la copia local: plazo solo propio; observaciones solo de BFK", est1.condiciones_comerciales === "solo_mio" && est1.observaciones === "solo_bfk", est1);
     await dlg1.locator("[data-combinar-conflicto]").click(); await espera(p1, 400); await guardar(p1);
     const rv2 = revision(cot.id);
-    ok("C12 se guarda sobre la versión vigente, sin perder lo de la otra pestaña", version(cot.id) === v2 + 1 && rv2.plazo_entrega === "30 días (copia local)" && rv2.observaciones === "guardado después por la pestaña 2", rv2);
+    ok("C12 se guarda sobre la versión vigente, sin perder lo de la otra pestaña", version(cot.id) === v2 + 1 && rv2.condiciones_comerciales === "30 días (copia local)" && rv2.observaciones === "guardado después por la pestaña 2", rv2);
 
     // La versión cambia justo entre la comprobación y el envío: la base rechaza (VP409) y la API puede no responder → la app deja
     // de esperar, comprueba, y abre la misma comparación (nada se sobrescribe).
-    await campo(p2, "plazo").fill("45 días (pestaña 2, carrera)"); await espera(p2, 600);
+    await campo(p2, "condiciones").fill("45 días (pestaña 2, carrera)"); await espera(p2, 600);
     await campo(p1, "pago").fill("30 días (pestaña 1, carrera)"); await espera(p1, 300);
     const vC = version(cot.id);
-    psql(`${comoUsuario(U.ana)}select public.vp_guardar_cotizacion((select jsonb_build_object('id', c.id, 'version', c.version, 'cliente_id', c.cliente_id, 'plazo_entrega', 'cambiado por otra persona', 'items', (select jsonb_agg(to_jsonb(i) - 'id' - 'revision_id' order by i.orden) from public.vp_cotizacion_items i where i.revision_id = r.id)) from public.vp_cotizaciones c join public.vp_cotizacion_revisiones r on r.cotizacion_id = c.id and r.numero = c.revision_actual where c.id = '${cot.id}'));`);
+    psql(`${comoUsuario(U.ana)}select public.vp_guardar_cotizacion((select jsonb_build_object('id', c.id, 'version', c.version, 'cliente_id', c.cliente_id, 'condiciones_comerciales', 'cambiado por otra persona', 'items', (select jsonb_agg(to_jsonb(i) - 'id' - 'revision_id' order by i.orden) from public.vp_cotizacion_items i where i.revision_id = r.id)) from public.vp_cotizaciones c join public.vp_cotizacion_revisiones r on r.cotizacion_id = c.id and r.numero = c.revision_actual where c.id = '${cot.id}'));`);
     A.cortes.push({ patron: /^GET .*\/vp_cotizaciones$/, modo: "antes", veces: 1 });   // la comprobación previa no alcanza a ver el cambio
     const iR = A.pedidos.length; await ui.hoja(p2).locator("[data-guardar-cotizacion]").click();
     await p2.locator("[data-conflicto-version]").waitFor({ timeout: 70000 }).catch(() => {});
-    ok("C12b carrera: la base rechaza la versión antigua; la app deja de esperar, comprueba y abre la comparación", await p2.locator("[data-conflicto-version]").isVisible() && version(cot.id) === vC + 1 && revision(cot.id).plazo_entrega === "cambiado por otra persona"
-      && (await campo(p2, "plazo").inputValue()) === "45 días (pestaña 2, carrera)", { v: version(cot.id), vC, n: desde(A, iR, "rpc/vp_guardar_cotizacion").length });
+    ok("C12b carrera: la base rechaza la versión antigua; la app deja de esperar, comprueba y abre la comparación", await p2.locator("[data-conflicto-version]").isVisible() && version(cot.id) === vC + 1 && revision(cot.id).condiciones_comerciales === "cambiado por otra persona"
+      && (await campo(p2, "condiciones").inputValue()) === "45 días (pestaña 2, carrera)", { v: version(cot.id), vC, n: desde(A, iR, "rpc/vp_guardar_cotizacion").length });
     await p2.locator("[data-cancelar-conflicto]").click().catch(() => {}); await espera(p2, 300);
 
     // C4. Cierre de sesión en otra pestaña: las demás vuelven al ingreso con un aviso (no siguen con un token ajeno).
@@ -317,7 +318,7 @@ try {
     A.fallar = null; await p.evaluate(() => window.dispatchEvent(new Event("online"))); await espera(p, 1500);
     ok("E02 al volver la conexión renueva sola", A.renovaciones() === r0 + 1 && (await est(p)).vence_en_s > 3000);
     // E2. El servidor RECHAZA la renovación y el token vence: aviso para volver a ingresar; nada se pierde.
-    await campo(p, "observaciones").fill("escrito antes de vencer la sesión"); await campo(p, "plazo").fill("7 días (pendiente)"); await espera(p, 800);
+    await campo(p, "observaciones").fill("escrito antes de vencer la sesión"); await campo(p, "condiciones").fill("7 días (pendiente)"); await espera(p, 800);
     const v0 = version(cot.id); let i0 = A.pedidos.length; A.fallar = "rechazo";
     await ponerSesion(S.aux, queVenceEn(A, U.ana, 5)); await p.evaluate(() => window.dispatchEvent(new Event("focus")));
     const vent = p.locator('[data-aviso-sesion="ventana"]'); await vent.waitFor({ timeout: 20000 }).catch(() => {});
@@ -333,7 +334,7 @@ try {
     ok("E07 reingreso con la misma cuenta: el aviso se cierra y la sesión queda vigente", !(await p.locator("[data-aviso-sesion]").count()) && (await est(p)).estado === "vigente" && (await est(p)).vence_en_s > 3000, await est(p));
     i0 = A.pedidos.length; await guardar(p);
     const rv = revision(cot.id);
-    ok("E08 guardar tras reingresar: lo escrito se guarda exactamente una vez", version(cot.id) === v0 + 1 && rv.observaciones === "escrito antes de vencer la sesión" && rv.plazo_entrega === "7 días (pendiente)" && desde(A, i0, "rpc/vp_guardar_cotizacion", 200).length === 1, rv);
+    ok("E08 guardar tras reingresar: lo escrito se guarda exactamente una vez", version(cot.id) === v0 + 1 && rv.observaciones === "escrito antes de vencer la sesión" && rv.condiciones_comerciales === "7 días (pendiente)" && desde(A, i0, "rpc/vp_guardar_cotizacion", 200).length === 1, rv);
     // E3. Rechazo mientras el token aún sirve para el navegador (el servidor lo da por vencido): franja con el aviso.
     await campo(p, "observaciones").fill("segunda sesión rechazada"); await espera(p, 800); A.fallar = "rechazo";
     A.vencerAhora(); const v1 = version(cot.id); await guardar(p, 3000);

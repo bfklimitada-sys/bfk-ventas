@@ -14,9 +14,70 @@ const multilinea = (s) => String(s ?? "").replace(/\r/g, "").split("\n").map((l)
 const esRefImagen = (x) => typeof x === "string" && x.length > 0;
 
 // Condiciones comerciales generales (sin valores predeterminados: solo las que el vendedor completó).
+// ── Plazo de entrega (25/11/2026): se define en cada producto, junto al costo del despacho (días + hábiles/corridos). El plazo de
+// la oferta es el MAYOR de los productos (para comparar, 5 días hábiles ≈ 7 corridos). Un plazo antiguo escrito como texto se
+// respeta tal cual. Misma regla en Mercado Público y Ventas privadas.
+export const TIPOS_DIAS = [["habiles", "hábiles"], ["corridos", "corridos"]];
+export function textoPlazo(dias, tipo) {
+  const n = Math.trunc(Number(dias));
+  if (!(n > 0)) return "";
+  const t = TIPOS_DIAS.find(([k]) => k === tipo)?.[1];
+  return `${n} ${n === 1 ? "día" : "días"}${t ? ` ${n === 1 ? t.replace(/es$/, "").replace(/os$/, "o") : t}` : ""}`;
+}
+// Plazo de un producto: { dias, tipo, texto } (texto vacío si no tiene).
+export function plazoProducto(ficha) {
+  const c = ficha?.condiciones_producto || {};
+  const dias = Math.trunc(Number(c.plazo_dias));
+  if (dias > 0) return { dias, tipo: c.plazo_tipo || "", texto: textoPlazo(dias, c.plazo_tipo) };
+  return { dias: null, tipo: "", texto: txt(c.plazo_entrega) };
+}
+// Plazo de la oferta desde sus productos: { texto, conPlazo, sinPlazo }.
+export function plazoDesdeProductos(items = []) {
+  const ps = items.map((it) => plazoProducto(it?.ficha));
+  const conDias = ps.filter((p) => p.dias);
+  const sinPlazo = ps.filter((p) => !p.texto).length;
+  let texto = "";
+  if (conDias.length) {
+    const corridos = (p) => (p.tipo === "habiles" ? p.dias * 7 / 5 : p.dias);
+    texto = conDias.reduce((a, b) => (corridos(b) > corridos(a) || (corridos(b) === corridos(a) && b.tipo === "habiles") ? b : a)).texto;
+  } else {
+    const textos = [...new Set(ps.map((p) => p.texto).filter(Boolean))];
+    texto = textos.length === 1 ? textos[0] : "";   // textos antiguos distintos: no se adivina cuál es mayor
+  }
+  return { texto, conPlazo: ps.length - sinPlazo, sinPlazo };
+}
+// Condición «Despacho» desde los productos: el costo del despacho siempre va incorporado en el valor unitario (ambos canales).
+export const despachoDesdeProductos = (items = []) => (items.some((it) => it?.tipo !== "servicio") ? "Incluido en el valor unitario" : "");
+
+// Condiciones de la oferta completadas con lo ya ingresado en los pasos anteriores (25/11/2026, ambos canales): el plazo de
+// entrega sale de los productos (el mayor; si ninguno lo tiene, el plazo antiguo de la cotización) y el despacho, de que haya
+// productos con despacho. Lo escrito a mano en «Condiciones comerciales» siempre prevalece.
+export function condicionesConProductos(condiciones, items, plazoAntiguo) {
+  const c = { ...(condiciones || {}) };
+  if (!txt(c.plazo_entrega)) c.plazo_entrega = plazoDesdeProductos(items).texto || txt(plazoAntiguo);
+  if (!txt(c.despacho)) c.despacho = despachoDesdeProductos(items);
+  return c;
+}
+
+// Lo que la sección «Condiciones comerciales» muestra ya completado (mismas props en ambos canales): plazo (el mayor de los
+// productos; si ninguno lo tiene, el que tenía la cotización) y despacho. Si el campo se deja vacío se imprime esa propuesta;
+// lo escrito a mano (p. ej. «15 días hábiles desde la recepción de la OC») prevalece.
+export function condicionesAutomaticas(items = [], plazoAntiguo) {
+  const p = plazoDesdeProductos(items);
+  const plazo = p.texto || txt(plazoAntiguo);
+  const avisoPlazo = !items.length ? "" : !plazo ? "Sin plazo: indícalo en cada producto, junto al costo del despacho (o escríbelo aquí)."
+    : p.texto && p.sinPlazo ? `${p.sinPlazo} producto${p.sinPlazo === 1 ? "" : "s"} sin plazo: se usa el mayor de los demás.` : "";
+  return {
+    sugeridas: { plazo_entrega: plazo, despacho: despachoDesdeProductos(items) },
+    origenes: { plazo_entrega: p.texto ? "el mayor de los productos" : plazo ? "plazo registrado en la cotización" : "" },
+    avisos: { plazo_entrega: avisoPlazo },
+    ocultar: [],
+  };
+}
+
 export const CAMPOS_CONDICIONES = [
   { k: "plazo_entrega", titulo: "Plazo de entrega", ayuda: "Ej.: 5 días desde la aceptación de la OC" },
-  { k: "tipo_dias", titulo: "Tipo de días", opciones: [["", "Sin indicar"], ["habiles", "Hábiles"], ["corridos", "Corridos"]] },
+  { k: "tipo_dias", titulo: "Tipo de días", opciones: [["", "Sin indicar"], ["habiles", "Hábiles"], ["corridos", "Corridos"]], antiguo: true },
   { k: "garantia", titulo: "Garantía" },
   { k: "vigencia", titulo: "Vigencia de la oferta" },
   { k: "despacho", titulo: "Despacho" },
@@ -27,6 +88,7 @@ export const CAMPOS_CONDICIONES = [
 // Condiciones particulares de un producto (en su ficha).
 export const CAMPOS_CONDICIONES_PRODUCTO = [
   { k: "garantia", titulo: "Garantía" }, { k: "plazo_entrega", titulo: "Plazo de entrega" }, { k: "condiciones", titulo: "Condiciones particulares" },
+  // plazo_dias / plazo_tipo: el plazo estructurado (ventana del producto, junto al despacho); plazo_entrega guarda su texto.
 ];
 
 export function condicionesDocumento(c = {}) {
@@ -99,7 +161,7 @@ export function modeloOfertaMP(cot, calc, { version = 1, fecha, vendedor, empres
     items,
     totales: { neto: Math.round(t.neto || 0), iva: Math.round(t.iva_debito || 0), total: Math.round(t.total || 0), exenta: !!calc?.exenta, tasa_iva: 19,
       despacho_texto: "$0", nota: "Valores en pesos chilenos. Despacho incorporado en los precios unitarios." },
-    condiciones: condicionesDocumento(condiciones || {}),
+    condiciones: condicionesDocumento(condicionesConProductos(condiciones, cot?.items, cot?.plazo)),
     matriz: matrizDocumento(matriz),
   };
 }
@@ -123,8 +185,7 @@ export function modeloOfertaVP(documento, fichas = [], { version = 1, fecha, ven
       unitario: Math.round((Number(it.precio_unitario) || 0) * (1 - (Number(it.descuento_pct) || 0) / 100)),
       total: Math.round(Number(it.subtotal_neto) || 0), ficha: fd, ...(sinFicha ? { sin_ficha: true } : {}), ...(servicio ? { servicio: true } : {}) };
   });
-  const cond = { ...(condiciones || {}) };
-  if (!txt(cond.plazo_entrega) && txt(d.plazo_entrega)) cond.plazo_entrega = d.plazo_entrega;
+  const cond = condicionesConProductos(condiciones, (d.items || []).map((it, i) => ({ tipo: it.tipo, ficha: fichas[i] })), d.plazo_entrega);
   if (!txt(cond.forma_pago) && txt(d.condiciones_pago)) cond.forma_pago = d.condiciones_pago;
   if (!txt(cond.vigencia) && txt(d.vigencia_hasta)) cond.vigencia = `Hasta el ${String(d.vigencia_hasta).slice(8, 10)}/${String(d.vigencia_hasta).slice(5, 7)}/${String(d.vigencia_hasta).slice(0, 4)}`;
   if (!txt(cond.observaciones)) cond.observaciones = [d.condiciones_comerciales, d.observaciones].map(multilinea).filter(Boolean).join("\n");

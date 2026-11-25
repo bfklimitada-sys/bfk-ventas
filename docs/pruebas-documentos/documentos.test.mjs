@@ -6,9 +6,9 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import { jsPDF } from "jspdf";
-import { calcularCotizacion } from "../../src/lib/cotizaciones.js";
+import { calcularCotizacion, fichaParaGuardar } from "../../src/lib/cotizaciones.js";
 import { procesarTextoTecnico, filasDeFicha, categoriaDe, normalizarUnidades } from "../../src/lib/especificaciones.js";
-import { modeloOfertaMP, modeloOfertaVP, propuestaMatrizMP, condicionesDocumento } from "../../src/lib/modeloOferta.js";
+import { modeloOfertaMP, modeloOfertaVP, propuestaMatrizMP, condicionesDocumento, plazoDesdeProductos, textoPlazo, condicionesConProductos } from "../../src/lib/modeloOferta.js";
 import { generarDocumentoOferta, nombreArchivoOferta, fichasEETT, revisarModeloOferta, pesos } from "../../src/lib/documentosOferta.js";
 import { versionPara, huellaContenido } from "../../src/lib/documentosOfertaDatos.js";
 import { documentoDesdeEditor } from "../../src/lib/ventasPrivadas.js";
@@ -60,7 +60,24 @@ ok("M2 despacho Mercado Público = $0 (modalidad A)", modelo.totales.despacho_te
 const json = JSON.stringify(modelo);
 ok("M3 el modelo no contiene costos, recargos, proveedores, enlaces ni utilidades",
   !/costo|recargo|proveedor|enlace|utilidad|margen|precio_origen|envio|financ|comision/i.test(Object.keys(flat(modelo)).join(" ")) && !json.includes("Tienda A") && !json.includes("160000"));
-ok("M4 condiciones sin valores predeterminados (solo las completadas)", condicionesDocumento({}).length === 0 && modelo.condiciones.length === 3 && modelo.condiciones[0].valor.includes("hábiles"));
+ok("M4 condiciones sin valores inventados: solo las completadas + las que salen de Productos (despacho incluido en el valor unitario)",
+  condicionesDocumento({}).length === 0 && modelo.condiciones.length === 4 && modelo.condiciones[0].valor.includes("hábiles")
+  && modelo.condiciones.some((c) => c.titulo === "Despacho" && c.valor === "Incluido en el valor unitario"), modelo.condiciones);
+// Plazo de entrega desde los productos (25/11/2026): se define junto al despacho; el de la oferta es el mayor (5 hábiles ≈ 7 corridos).
+{
+  const it = (d, t, x) => ({ ficha: { condiciones_producto: { plazo_dias: d, plazo_tipo: t, plazo_entrega: x } } });
+  const a = plazoDesdeProductos([it(5, "habiles"), it(8, "corridos"), it(null, "", "")]);
+  const b = plazoDesdeProductos([it(10, "habiles"), it(12, "corridos")]);
+  ok("M4b plazo de la oferta = el mayor de los productos (hábiles vs corridos) y cuenta los productos sin plazo",
+    a.texto === "8 días corridos" && a.sinPlazo === 1 && b.texto === "10 días hábiles" && textoPlazo(1, "habiles") === "1 día hábil", { a, b });
+  const c = condicionesConProductos({}, [it(5, "habiles")], "15 DÍAS"); const d = condicionesConProductos({ plazo_entrega: "Inmediato", despacho: "A bodega" }, [it(5, "habiles")], "");
+  const e = condicionesConProductos({}, [it(null, "", "")], "15 DÍAS");
+  ok("M4c lo escrito a mano prevalece; sin plazo en productos se usa el plazo anterior de la cotización; servicios sin despacho",
+    c.plazo_entrega === "5 días hábiles" && d.plazo_entrega === "Inmediato" && d.despacho === "A bodega" && e.plazo_entrega === "15 DÍAS"
+    && condicionesConProductos({}, [{ tipo: "servicio", ficha: {} }], "").despacho === "", { c, d, e });
+  const g = fichaParaGuardar({ nombre: "X", condiciones_producto: { plazo_dias: "7", plazo_tipo: "habiles", plazo_entrega: "7 días hábiles", basura: "x" } });
+  ok("M4d el plazo del producto se guarda (días, tipo y texto) sin campos extra", JSON.stringify(g.condiciones_producto) === JSON.stringify({ plazo_entrega: "7 días hábiles", plazo_dias: 7, plazo_tipo: "habiles" }), g.condiciones_producto);
+}
 ok("M5 matriz propuesta desde requerimientos: siempre «Por verificar»", modelo.matriz.length === 1 && modelo.matriz[0].estado === "por_verificar" && modelo.matriz[0].item === 1);
 ok("M6 sin requerimientos no hay matriz (nunca se inventa)", propuestaMatrizMP({ ...cot, requerimientos: [] }).length === 0);
 ok("M7 el texto original del proveedor nunca llega al modelo", !JSON.stringify(modeloOfertaMP({ ...cot, items: cot.items.map((it) => ({ ...it, ficha: { ...it.ficha, texto_original: "Precio $199.990 Tienda Ejemplo" } })) }, calc, {})).includes("199.990"));

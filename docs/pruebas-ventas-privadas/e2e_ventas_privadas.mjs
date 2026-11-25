@@ -63,10 +63,11 @@ try {
   await p.locator("aside [data-boton-nuevo]").click(); await p.locator('[data-nuevo="vp_cotizacion"]').click(); await p.locator('[data-hoja-lateral="ficha-cotizacion"]').waitFor();
   const h = ui.hoja(p);
   await ui.elegirCliente(p, "Maderas", "76.086.428-5");
-  ok("Q1 al elegir el cliente se proponen contacto y condiciones", (await h.locator('[data-campo="contacto"]').inputValue()) === "Rosa Pérez" && (await h.locator('[data-campo="pago"]').inputValue()) === "50% anticipo y saldo a 30 días");
-  await h.locator('[data-campo="plazo"]').fill("10 días hábiles desde la aceptación");
+  // 25/11/2026: forma de pago, vigencia y condiciones están en Documentos › Condiciones comerciales (igual que Mercado Público).
+  const contactoQ1 = await h.locator('[data-campo="contacto"]').inputValue(); await ui.pestana(p, "eett");
+  ok("Q1 al elegir el cliente se proponen contacto y condiciones", contactoQ1 === "Rosa Pérez" && (await h.locator('[data-campo="pago"]').inputValue()) === "50% anticipo y saldo a 30 días");
   await ui.pestana(p, "productos");
-  await ui.ingresarManual(p, { nombre: "Bomba centrífuga 2 HP", marca: "Pedrollo", modelo: "CPm 680", especificaciones: "Potencia: 2 HP", cantidad: 2, unidad: "UN", precio: 240000, incluyeIva: false,
+  await ui.ingresarManual(p, { nombre: "Bomba centrífuga 2 HP", marca: "Pedrollo", modelo: "CPm 680", especificaciones: "Potencia: 2 HP", cantidad: 2, unidad: "UN", precio: 240000, incluyeIva: false, plazo: { dias: 10, tipo: "habiles" },
     despacho: { modo: "propio", monto: 0, estado: "sin_costo_confirmado", evidencia: "Retiro en tienda del proveedor" }, biblioteca: false });
   await ui.ingresarManual(p, { nombre: "Manguera 1 pulgada", cantidad: "12,5", unidad: "M", precio: "2100,5", incluyeIva: false, despacho: { modo: "existente" }, biblioteca: false });
   await h.locator("[data-ingreso-manual]").click(); await ui.llenarFicha(p, { tipo: "servicio", nombre: "Instalación y puesta en marcha", cantidad: 1, unidad: "GL", biblioteca: false }); await ui.guardarFicha(p);
@@ -96,7 +97,7 @@ try {
   const folio2 = q1(`select folio from public.vp_cotizaciones order by creado_en desc limit 1;`);
   const h3 = ui.hoja(p);
   ok("Q9 duplicar crea otra cotización con los mismos ítems y fichas", folio2 !== folio && /^CP-/.test(folio2) && (await h3.locator("[data-item-cotizacion]").count()) === 3 && q1(`select count(*) from public.vp_cotizacion_items i join public.vp_cotizacion_revisiones r on r.id = i.revision_id join public.vp_cotizaciones c on c.id = r.cotizacion_id where c.folio = '${folio2}' and i.ficha is not null;`) === "3");
-  await ui.pestana(p, "datos");
+  await ui.pestana(p, "eett");   // vigencia: Documentos › Condiciones comerciales
   await h3.locator('[data-campo="vigencia"]').fill(new Date(Date.now() + 2 * 86400000 - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10));
   await ui.guardarCotizacion(p);
   await ui.registrarEstado(p, "enviada");

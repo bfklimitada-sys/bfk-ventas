@@ -40,7 +40,9 @@ for (const [pref, ancho, alto, movil] of [["P", 1440, 900, false], ["M", 390, 84
   const cotId = q1(`select id from public.vp_cotizaciones where folio = '${folio}'`);
   await ui.pestana(p, "eett");
   const sec = h.locator("[data-documentacion-oferta]");
-  ok(`${pref}01 sección con los tres documentos y condiciones que vienen de la cotización`, (await sec.locator("[data-documento-oferta]").count()) === 3 && /50% anticipo/.test(await sec.innerText()));
+  ok(`${pref}01 sección con los tres documentos y condiciones que vienen de la cotización`, (await sec.locator("[data-documento-oferta]").count()) === 3 && /50% anticipo/.test(await sec.locator('[data-campo="pago"]').inputValue())
+    // 25/11/2026: el despacho se propone desde Productos (si el campo queda vacío se imprime la propuesta).
+    && /Incluido en el valor unitario/.test(await sec.locator('[data-sugerida="despacho"]').innerText()));
   await sec.locator('[data-condicion="garantia"] input').fill("6 meses por defectos de fabricación");
   await sec.locator("[data-guardar-condiciones]").click(); await espera(p, 1200);
   ok(`${pref}02 condiciones guardadas en la base (con permisos reales)`, q1(`select condiciones->>'garantia' from public.oferta_condiciones where canal = 'vp' and cotizacion_id = '${cotId}'`) === "6 meses por defectos de fabricación");

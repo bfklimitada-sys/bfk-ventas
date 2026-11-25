@@ -72,7 +72,13 @@ async function ingresarProducto(p, d) {
   ok("01_compra_agil_codigo_al_servidor", M.api.length === 1 && /3390-246-COT26/.test(decodeURIComponent(M.api[0])), M.api);
   await vista.locator("[data-aplicar-compra-agil]").click(); await espera(p, 500);
   const val = async (c) => H(p).locator(`[data-campo="${c}"]`).inputValue();
-  ok("01_compra_agil_campos_aplicados", (await val("institucion")) === "Ejército de Chile" && (await val("rut")) === "61.962.500-5" && (await val("plazo")) === "15 DÍAS" && (await val("direccion")) === "Av. General Velásquez 1750, Arica" && (await val("id_externo")) === "3390-246-COT26" && (await val("unidad_compra")) === "Brigada Motorizada N.º 4 Rancagua" && (await val("presupuesto")) === "6.000.000");
+  // 25/11/2026: el plazo ya no se escribe en Datos (se define en cada producto, junto al despacho). El plazo publicado por el
+  // comprador queda en la cotización y se muestra en Documentos › Condiciones comerciales mientras los productos no tengan el suyo.
+  await H(p).locator('[role="tab"][data-tab="eett"]').click(); await espera(p, 300);
+  const plazoDoc = await H(p).locator('[data-sugerida="plazo_entrega"]').innerText().catch(() => "");
+  ok("01_compra_agil_plazo_en_condiciones", /15 DÍAS/.test(plazoDoc) && (await H(p).locator('[data-campo="plazo"]').count()) === 0, plazoDoc);
+  await H(p).locator('[role="tab"][data-tab="datos"]').click(); await espera(p, 200);
+  ok("01_compra_agil_campos_aplicados", (await val("institucion")) === "Ejército de Chile" && (await val("rut")) === "61.962.500-5" && (await val("direccion")) === "Av. General Velásquez 1750, Arica" && (await val("id_externo")) === "3390-246-COT26" && (await val("unidad_compra")) === "Brigada Motorizada N.º 4 Rancagua" && (await val("presupuesto")) === "6.000.000");
   ok("01_compra_agil_no_toca_fecha_ni_estado", (await val("fecha")) === hoy && (await val("estado")) === "borrador");
   ok("01_compra_agil_requerimientos_del_comprador", (await H(p).locator("[data-requerimiento]").count()) === 2);
   // Confirmar antes de sobrescribir: un dato distinto ya escrito queda sin marcar.

@@ -7,6 +7,7 @@ import { revisarFicha, paresDeTexto, textoDePares, ESTADOS_ENVIO, proveedorDeEnl
 import { normalizarImagen, traerImagen, rutaConocida } from "../../lib/cotizacionesDatos";
 
 import { hoyChile } from "../../lib/fechaChile";
+import { TIPOS_DIAS, textoPlazo, plazoProducto } from "../../lib/modeloOferta";
 import CampoNumeroCL from "../ui/CampoNumeroCL";
 import { esInvalido } from "../../lib/numeroCL";
 const m = (x) => fmt.money(Math.round(Number(x) || 0));
@@ -84,6 +85,26 @@ export function EditorFicha({ inicial, envios = [], items = [], destino = "", de
   const set = (k, v) => setIt((x) => ({ ...x, [k]: v }));
   const imgs = it.ficha.imagenes || [];
   const servicio = vp && it.tipo === "servicio";
+  // Plazo de entrega (25/11/2026): se define aquí, junto al costo del despacho. Se guarda en la ficha (días, tipo y su texto);
+  // un plazo antiguo escrito como texto se muestra como referencia hasta que se indiquen los días.
+  const cp = it.ficha.condiciones_producto || {};
+  const setPlazo = (cambios) => setIt((x) => { const c = { ...(x.ficha.condiciones_producto || {}), ...cambios };
+    const t = textoPlazo(c.plazo_dias, c.plazo_tipo); if (t || Number(c.plazo_dias) > 0 || cambios.plazo_dias === "") c.plazo_entrega = t;
+    return { ...x, ficha: { ...x.ficha, condiciones_producto: c } }; });
+  const plazoAntiguo = !(Number(cp.plazo_dias) > 0) && String(cp.plazo_entrega || "").trim();
+  const campoPlazo = (
+    <div data-plazo-producto style={{ marginBottom: 12 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 8 }}>
+        <Field label={servicio ? "Plazo de ejecución (días)" : "Plazo de entrega (días)"} hint={plazoAntiguo ? `Antes: ${cp.plazo_entrega}` : undefined}>
+          <input data-campo="plazo-dias" inputMode="numeric" value={cp.plazo_dias ?? ""} placeholder="Ej.: 5"
+            onChange={(e) => setPlazo({ plazo_dias: e.target.value.replace(/\D/g, "").slice(0, 3) })} style={iMono} /></Field>
+        <Field label="Tipo de días">
+          <select data-campo="plazo-tipo" value={cp.plazo_tipo || ""} onChange={(e) => setPlazo({ plazo_tipo: e.target.value })} style={selStyle}>
+            <option value="">Sin indicar</option>{TIPOS_DIAS.map(([k, l]) => <option key={k} value={k}>{l[0].toUpperCase() + l.slice(1)}</option>)}</select></Field>
+      </div>
+      <div style={{ fontSize: T.small, color: C.inkMuted }}>{plazoProducto(it.ficha).texto ? `Se imprime: ${plazoProducto(it.ficha).texto}. El plazo de la oferta es el mayor de sus productos.` : "Opcional. El plazo de la oferta es el mayor de sus productos."}</div>
+    </div>
+  );
 
   const agregarArchivos = async (files) => {
     setError(""); setCargandoImg(true);
@@ -166,7 +187,7 @@ export function EditorFicha({ inicial, envios = [], items = [], destino = "", de
         <Field label="Especificaciones técnicas" hint="Una por línea: Etiqueta: valor."><textarea data-campo="especificaciones" rows={servicio ? 3 : 6} value={txtEsp} onChange={(e) => setTxtEsp(e.target.value)} style={{ ...iStyle, resize: "vertical" }} placeholder={"Capacidad bruta: 590 L\nVoltaje: 220 V"} /></Field>
         <Field label="Descripción técnica (opcional)"><textarea data-campo="descripcion" rows={3} value={it.ficha.descripcion || ""} onChange={(e) => setF("descripcion", e.target.value)} style={{ ...iStyle, resize: "vertical" }} /></Field>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 8 }} data-condiciones-producto>
-          {[["garantia", "Garantía del producto"], ["plazo_entrega", "Plazo de entrega del producto"], ["condiciones", "Condiciones particulares"]].map(([k, l]) => (
+          {[["garantia", "Garantía del producto"], ["condiciones", "Condiciones particulares"]].map(([k, l]) => (
             <Field key={k} label={l} hint={k === "condiciones" ? "Solo si difieren de las generales." : undefined}><input data-condicion-producto={k} value={it.ficha.condiciones_producto?.[k] || ""}
               onChange={(e) => setF("condiciones_producto", { ...(it.ficha.condiciones_producto || {}), [k]: e.target.value })} style={iStyle} /></Field>
           ))}
@@ -222,7 +243,7 @@ export function EditorFicha({ inicial, envios = [], items = [], destino = "", de
             <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: T.sm, marginBottom: 6, minHeight: 32 }}><input type="checkbox" disabled={protegido} checked={it.precio_incluye_iva !== false} onChange={(e) => set("precio_incluye_iva", e.target.checked)} /> El precio publicado incluye IVA</label>
             <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: T.sm, marginBottom: 12, minHeight: 32 }}><input type="checkbox" disabled={protegido} checked={it.con_factura !== false} onChange={(e) => set("con_factura", e.target.checked)} /> Se compra con factura</label>
 
-            {servicio ? <div data-despacho-no-aplica style={{ fontSize: T.small, color: C.inkMuted, marginBottom: 12 }}>Servicio: el despacho no aplica.</div> : <div data-despacho-ficha style={{ border: `1px solid ${C.border}`, borderRadius: R.md, padding: "10px 12px", marginBottom: 12, background: C.paper, opacity: protegido ? 0.7 : 1 }}>
+            {servicio ? <><div data-despacho-no-aplica style={{ fontSize: T.small, color: C.inkMuted, marginBottom: 12 }}>Servicio: el despacho no aplica.</div>{campoPlazo}</> : <div data-despacho-ficha style={{ border: `1px solid ${C.border}`, borderRadius: R.md, padding: "10px 12px", marginBottom: 12, background: C.paper, opacity: protegido ? 0.7 : 1 }}>
               <div style={{ fontSize: T.sm, fontWeight: 700, color: C.ink, marginBottom: 6 }}>Despacho</div>
               {mostrarDir && dirCliente && (
                 <div data-direccion-en-ficha style={{ border: `1px solid ${destinoValido ? C.ok : C.warn}`, background: destinoValido ? C.okLight : C.warnLight, borderRadius: R.sm, padding: "8px 10px", marginBottom: 10 }}>
@@ -255,6 +276,7 @@ export function EditorFicha({ inicial, envios = [], items = [], destino = "", de
                   <select data-campo="estado-despacho" value={desp.estado} disabled={protegido} onChange={(e) => cambiarEstado(e.target.value)} style={selStyle}>{Object.entries(ESTADOS_ENVIO).map(([k, v]) => { const req = !destinoValido && envioConfirmado({ estado: k }); return <option key={k} value={k} disabled={req}>{v.label}{req ? " (requiere dirección)" : ""}</option>; })}</select>
                 </Field>
               </div>
+              {campoPlazo}
               <Field label="Cómo se verificó"><input data-campo="evidencia-despacho" value={desp.evidencia || ""} disabled={protegido} onChange={(e) => setD("evidencia", e.target.value)} placeholder={destinoValido ? `Simulación de compra a ${destino}…` : "Primero la dirección de entrega del cliente"} style={iStyle} /></Field>
               <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: T.sm, minHeight: 32 }}><input type="checkbox" disabled={protegido} checked={desp.con_factura !== false} onChange={(e) => setD("con_factura", e.target.checked)} /> Despacho incluido en la factura</label>
               <div data-despacho-destino style={{ fontSize: T.small, marginTop: 4, color: destinoDistinto ? C.warnText : C.inkMuted, fontWeight: destinoDistinto ? 600 : 400 }}>

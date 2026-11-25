@@ -38,6 +38,8 @@ export async function llenarFicha(p, d) {
   if (d.foto) { await v.locator('input[type="file"]').setInputFiles({ name: "foto.png", mimeType: "image/png", buffer: PNG }); await v.locator("[data-imagen-ficha]").first().waitFor({ timeout: 8000 }); }
   if (d.incluyeIva !== undefined) { const cb = v.getByLabel("El precio publicado incluye IVA"); if ((await cb.isChecked()) !== d.incluyeIva) await cb.click(); }
   if (d.conFactura !== undefined) { const cb = v.getByLabel("Se compra con factura"); if ((await cb.isChecked()) !== d.conFactura) await cb.click(); }
+  // 25/11/2026: plazo de entrega del producto, junto al despacho (días + tipo).
+  if (d.plazo) { await campo("plazo-dias").fill(String(d.plazo.dias)); if (d.plazo.tipo) await campo("plazo-tipo").selectOption(d.plazo.tipo); }
   if (d.despacho) {
     const x = d.despacho;
     if (x.modo === "existente") { await v.locator('[data-despacho-modo="existente"]').click(); await p.waitForTimeout(150); }
