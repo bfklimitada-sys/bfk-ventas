@@ -117,6 +117,24 @@ ok("M4 condiciones sin valores inventados: solo las completadas + las que salen 
   const cp = m.items[0].ficha.condiciones.map((c) => c.titulo);
   ok("DUP4 condición del producto igual a la de la oferta: solo en «Condiciones de la oferta»", !cp.includes("Garantía") && m.condiciones.some((c) => c.titulo === "Garantía"), { cp, of: m.condiciones });
 }
+// Ficha guardada con pares corridos (26/11/2026, caso real 2123-531-COT26): características llamadas «Sí» por haber leído mal
+// los títulos de sección. Se reparan solas leyendo la lista en su orden original; sin «Sí» como nombre ni avisos falsos.
+{
+  const p = (l) => l.map(([etiqueta, valor]) => ({ etiqueta, valor }));
+  const d = fichaDocumento({ nombre: "Silla cajero", marca: "Bookstore",
+    generales: p([["Material del tapizado", "Algodón"], ["Material del relleno", "espuma."], ["Peso máximo soportado", "180kg."], ["Con ruedas.", ""]]),
+    especificaciones: p([["Material del tapizado", "Algodón"], ["Materiales del relleno", "Espuma"], ["Altura del respaldo", "53 cm"], ["Ensamblado", "Requiere ensamblado"], ["Sí", "Incluye manual de ensamblado"],
+      ["Sí", "Características de la estructura"], ["Con altura ajustable", "Sí"], ["Con ruedas", "Sí"], ["Peso máximo soportado", "180 kg"], ["Tipo de soporte lumbar", "Fijo"], ["Respaldo", "Con respaldo reclinable"],
+      ["Sí", "Otros"], ["Tipo de silla de oficina", "Cajero"], ["Con aro para pies", "Sí"]]) });
+  const filas = d.categorias.flatMap((c) => c.filas.map((f) => ({ ...f, cat: c.titulo })));
+  const v = (e) => filas.filter((f) => f.etiqueta === e).map((f) => f.valor);
+  ok("REP1 pares corridos reparados: ninguna característica se llama «Sí» y cada una con su valor",
+    !filas.some((f) => /^(sí|no)$/i.test(f.etiqueta)) && v("Requiere ensamblado")[0] === "Sí" && v("Incluye manual de ensamblado")[0] === "Sí" && v("Con respaldo reclinable")[0] === "Sí"
+    && !filas.some((f) => ["Ensamblado", "Respaldo", "Otros", "Características de la estructura"].includes(f.etiqueta)) && !filas.some((f) => f.contradictorio), filas.map((f) => `${f.etiqueta}=${f.valor}`));
+  ok("REP2 repetidos una vez y bien escritos («180 kg», «Espuma»); ergonomía agrupada",
+    v("Peso máximo soportado").join() === "180 kg" && filas.filter((f) => /relleno/i.test(f.etiqueta)).map((f) => f.valor).join() === "Espuma" && v("Material del tapizado").length === 1
+    && ["Con altura ajustable", "Tipo de soporte lumbar", "Con aro para pies", "Con respaldo reclinable"].every((e) => filas.find((f) => f.etiqueta === e)?.cat === "Ergonomía y ajustes"), filas.map((f) => `${f.cat}: ${f.etiqueta}=${f.valor}`));
+}
 // Plazo de entrega desde los productos (25/11/2026): se define junto al despacho; el de la oferta es el mayor (5 hábiles ≈ 7 corridos).
 {
   const it = (d, t, x) => ({ ficha: { condiciones_producto: { plazo_dias: d, plazo_tipo: t, plazo_entrega: x } } });

@@ -113,6 +113,7 @@ export function categoriaDe(etiqueta) {
   if (/\b(disco|disco duro|almacenamiento|ssd|hdd|memoria|ram)\b/.test(k)) return "memoria";
   if (/\b(peso maximo|capacidad|soporta)\b/.test(k)) return "operacion";
   if (/\b(material|materiales|tapiz|tapizado|acabado)\b/.test(k)) return "materiales";
+  if (/\b(lumbar|apoyabrazos|apoyacabezas|apoya pies|aro para pies|reposapies|reclinable|ajustable|regulable|giratori[ao]|ergonomic[ao])\b/.test(k)) return "ergonomia";
   if (/\b(actualizacion|refresco|tasa de refresco|resolucion|retroiluminacion|pantalla|hdr|contraste|3d|curvo)\b/.test(k)) return "pantalla";
   if (/\b(sistema operativo|asistentes?|apps?|aplicaciones|smart)\b/.test(k)) return "software";
   if (/\b(vesa|montaje|soporte)\b/.test(k) && !/\b(ancho|alto|altura|profundidad|peso)\b/.test(k)) return "materiales";
@@ -143,7 +144,8 @@ const SECCIONES = new Set(["caracteristicas principales", "caracteristicas gener
   "conexiones", "puertos", "accesorios", "pantalla", "imagen", "video", "audio", "sonido", "peso y dimensiones", "dimensiones", "medidas",
   "diseno", "energia", "bateria", "alimentacion", "memoria", "almacenamiento", "procesador", "procesamiento", "camara", "camaras", "sistema",
   "generales", "general", "seguridad", "garantia", "rendimiento", "materiales", "especificaciones generales", "informacion general",
-  "otras especificaciones", "funciones", "caracteristicas", "ergonomia", "ajustes", "uso", "certificaciones"]);
+  "otras especificaciones", "funciones", "caracteristicas", "ergonomia", "ajustes", "uso", "certificaciones", "ensamblado", "armado",
+  "estructura", "caracteristicas de la estructura", "respaldo", "asiento", "base", "terminaciones", "embalaje", "contenido de la caja"]);
 const SECCION_CATEGORIA = { tecnologia: "software", conectividad: "conectividad", conexiones: "conectividad", puertos: "conectividad", accesorios: "accesorios",
   pantalla: "pantalla", imagen: "pantalla", video: "pantalla", audio: "audio", sonido: "audio", "peso y dimensiones": "dimensiones", dimensiones: "dimensiones",
   medidas: "dimensiones", energia: "electrica", bateria: "electrica", alimentacion: "electrica", memoria: "memoria", almacenamiento: "memoria",
@@ -153,7 +155,7 @@ const esSeccion = (l) => SECCIONES.has(claveTexto(l)) || CATEGORIAS.some((c) => 
 // Valor inequívoco: sí/no o empieza con un número o comillas («55 "», «4K», «9,3 kg», «2»).
 const valorClaro = (x) => /^(s[ií]|no|ninguno|ninguna)$/i.test(x) || /^[\d"'”(]/.test(x);
 // Comienzo típico de una etiqueta de ficha («Con HDMI», «Es smart», «Tipo de pantalla», «Cantidad de puertos USB»…).
-const INICIO_ETIQUETA = /^(con|es|tiene|tipo|cantidad|n[uú]mero|tama[nñ]o|resoluci[oó]n|relaci[oó]n|frecuencia|ancho|alto|altura|profundidad|peso|largo|di[aá]metro|modelo|marca|color|material(es)?|capacidad|potencia|voltaje|tensi[oó]n|consumo|apps?|aplicaciones|asistentes?|sistema|accesorios|incluye|duraci[oó]n|velocidad|formato|versi[oó]n|compatib\w*|garant[ií]a|memoria|almacenamiento|procesador|bater[ií]a|puertos?|entradas?|salidas?|dimensiones|medidas|origen|l[ií]nea|serie|a[nñ]o|certific\w*|nivel|rango|temperatura|cantidad)\b/i;
+const INICIO_ETIQUETA = /^(con|es|tiene|requiere|posee|permite|admite|apto|apta|tipo|cantidad|n[uú]mero|tama[nñ]o|resoluci[oó]n|relaci[oó]n|frecuencia|ancho|alto|altura|profundidad|peso|largo|di[aá]metro|modelo|marca|color|material(es)?|capacidad|potencia|voltaje|tensi[oó]n|consumo|apps?|aplicaciones|asistentes?|sistema|accesorios|incluye|duraci[oó]n|velocidad|formato|versi[oó]n|compatib\w*|garant[ií]a|memoria|almacenamiento|procesador|bater[ií]a|puertos?|entradas?|salidas?|dimensiones|medidas|origen|l[ií]nea|serie|a[nñ]o|certific\w*|nivel|rango|temperatura|cantidad)\b/i;
 
 // Títulos de página habituales (Mercado Libre, Falabella, Paris, Ripley, Sodimac, Lider, PC Factory, Amazon, marcas…).
 const TITULOS_PAGINA = /^(caracter[ií]sticas( (principales|del producto|generales|t[eé]cnicas|destacadas))?|especificaciones( (t[eé]cnicas|del producto|generales|principales))?|ficha t[eé]cnica( del producto)?|descripci[oó]n( (del producto|general|t[eé]cnica))?|detalles?( (del producto|t[eé]cnicos))?|informaci[oó]n (adicional|del producto|t[eé]cnica|general)|lo que tienes que saber de este producto|acerca de este (art[ií]culo|producto)|sobre este (art[ií]culo|producto)|resumen|ficha del producto|datos t[eé]cnicos)\s*:?$/i;
@@ -169,6 +171,7 @@ export function procesarTextoTecnico(texto, { marca = "", modelo = "", nombre = 
   // Las líneas con viñeta son una lista de atributos (van a la descripción): nunca se emparejan con la línea siguiente.
   const conVineta = new Set(crudas.map((l, i) => (VINETA.test(l) ? i : -1)).filter((i) => i >= 0));
   const lineas = crudas.map((l) => l.replace(VINETA, "").trim());
+  const vinetaEn = (i) => conVineta.has(i);
   const pares = []; const textos = []; const descartados = []; const avisos = []; const sinValor = [];
   const dosLineas = new Set();   // índices de líneas usadas por el formato en dos líneas (títulos, pares y etiquetas sin valor)
   let seccion = "";
@@ -183,6 +186,8 @@ export function procesarTextoTecnico(texto, { marca = "", modelo = "", nombre = 
     const sig = lineas[i + 1], sig2 = lineas[i + 2];
     // Título de sección: va seguido de una etiqueta (no de un valor). Sirve de pista de categoría y no se imprime.
     if (esSeccion(l) && corta(sig) && !valorClaro(sig) && (INICIO_ETIQUETA.test(sig) || (corta(sig2) && valorClaro(sig2)))) { seccion = claveTexto(l); dosLineas.add(i); continue; }
+    // Título de sección no listado: línea corta que no parece etiqueta, seguida de una etiqueta («Con…», «Es…») y un valor claro.
+    if (!vinetaEn(i) && pareceEtiqueta(l) && !valorClaro(l) && !INICIO_ETIQUETA.test(l) && corta(sig) && INICIO_ETIQUETA.test(sig) && !valorClaro(sig) && corta(sig2) && valorClaro(sig2)) { seccion = claveTexto(l); dosLineas.add(i); continue; }
     const vineta = conVineta.has(i) || conVineta.has(i + 1);
     if (!vineta && sig && pareceEtiqueta(l) && !valorClaro(l) && corta(sig) && !esSeccion(sig)) {
       // Etiqueta + valor inequívoco, o + un texto que no parece etiqueta («Control remoto», «Vidaa», «QLED»).
@@ -260,9 +265,9 @@ export function descripcionTecnica({ nombre = "", marca = "", modelo = "", filas
 
 // ── Información duplicada (25/11/2026): se considera una sola ──
 // Mismo valor aunque cambie el formato («55"» / «55 "», «9,3 kg» / «9,3kg»).
-export const claveValor = (v) => claveTexto(normalizarUnidades(v)).replace(/\s+/g, "");
+export const claveValor = (v) => claveTexto(normalizarUnidades(String(v || "").replace(/[.;,]+\s*$/, ""))).replace(/\s+/g, "");
 // Etiqueta base: «Tipo de resolución», «Resolución máxima» y «Resolución» son la misma característica si el valor coincide.
-const etiquetaBase = (e) => claveTexto(normalizarEtiqueta(e)).replace(/^(tipo|clase|nivel) de /, "").replace(/ (maxima|maximo|nativa|nativo|principal|del producto|real)$/, "").trim();
+const etiquetaBase = (e) => claveTexto(normalizarEtiqueta(e)).replace(/^materiales\b/, "material").replace(/^(tipo|clase|nivel) de /, "").replace(/ (maxima|maximo|nativa|nativo|principal|del producto|real)$/, "").trim();
 const numerosDe = (v) => (String(v).match(/\d+(?:[.,]\d+)?/g) || []).map((n) => n.replace(",", ".")).sort().join("|");
 // ¿b repite la información de a? (misma etiqueta base y valor, o misma categoría de medidas con los mismos números)
 export function filaRepetida(a, b) {
@@ -281,7 +286,8 @@ export function filasDeFicha(ficha) {
   const filas = [];
   const vistos = new Set();
   const push = (etiqueta, valor) => {
-    const e = espacios(etiqueta), v = espacios(valor);
+    // Un valor breve con punto final («espuma.», «180kg.») se imprime sin el punto.
+    const e = espacios(etiqueta), v = espacios(valor).replace(/^([^.]{1,40})\.$/, "$1");
     if (!e && !v) return;
     const k = `${claveTexto(e)}|${claveTexto(v)}`; if (vistos.has(k)) return null; vistos.add(k);
     const fila = { etiqueta: e ? normalizarEtiqueta(e) : "", valor: v, categoria: e ? categoriaDe(e) : "otras" };
@@ -301,7 +307,10 @@ export function filasDeFicha(ficha) {
   for (let i = 0; i < filas.length; i++) {
     for (let j = i + 1; j < filas.length; j++) {
       if (!filas[i] || !filas[j] || !filas[i].etiqueta || !filas[j].etiqueta || !filaRepetida(filas[i], filas[j])) continue;
-      const quitar = claveValor(filas[i].valor) !== claveValor(filas[j].valor) && filas[j].valor.length < filas[i].valor.length ? i : j;
+      const mismo = claveValor(filas[i].valor) === claveValor(filas[j].valor);
+      const mejorEscrito = (a, b) => (/[.;,]\s*$/.test(a) && !/[.;,]\s*$/.test(b)) || (normalizarUnidades(a) !== a && normalizarUnidades(b) === b) || (/^[a-zà-ÿ]/.test(a) && /^[A-ZÀ-Ý]/.test(b));
+      if (mismo && mejorEscrito(filas[i].valor, filas[j].valor)) filas[i] = { ...filas[i], valor: filas[j].valor };
+      const quitar = !mismo && filas[j].valor.length < filas[i].valor.length ? i : j;
       filas[quitar] = null; if (quitar === i) break;
     }
   }
@@ -333,9 +342,12 @@ export function reestructurarFicha(ficha) {
   const desc1 = desc0.replace(INVISIBLES, "").replace(/\r/g, "").split("\n").filter((l) => !TITULOS_PAGINA.test(l.trim())).join("\n");
   const sucio = desc1 !== desc0 || [...(f0.generales || []), ...(f0.especificaciones || [])].some((p) => HAY_INVISIBLE.test(`${p?.etiqueta || ""}${p?.valor || ""}`));
   const f = sucio ? { ...f0, descripcion: desc1, generales: (f0.generales || []).map(limpiaPar), especificaciones: (f0.especificaciones || []).map(limpiaPar) } : f0;
+  const corrida = (lista) => (lista || []).some((p) => valorClaro(espacios(p?.etiqueta)) && espacios(p?.valor));
+  const reparar = {};
+  for (const k of ["generales", "especificaciones"]) if (corrida(f[k])) reparar[k] = (f[k] || []).flatMap((p) => [espacios(p?.etiqueta), espacios(p?.valor)].filter(Boolean));
   const conValor = (lista) => (lista || []).filter((p) => espacios(p?.valor));
   const sueltas = (lista) => (lista || []).filter((p) => !espacios(p?.valor) && espacios(p?.etiqueta)).map((p) => espacios(p.etiqueta));
-  const bloques = { generales: sueltas(f.generales), especificaciones: sueltas(f.especificaciones),
+  const bloques = { generales: reparar.generales || sueltas(f.generales), especificaciones: reparar.especificaciones || sueltas(f.especificaciones),
     descripcion: String(f.descripcion || "").replace(/\r/g, "").split("\n").map((l) => l.trim()).filter(Boolean) };
   const nuevas = []; const textos = []; const cambiado = {};
   for (const [k, lineas] of Object.entries(bloques)) {
@@ -343,7 +355,7 @@ export function reestructurarFicha(ficha) {
     const r = procesarTextoTecnico(lineas.join("\n"));
     const claras = r.filas.filter((x) => !x.incompleto);
     // Solo se reordena si el bloque trae pares en otro formato que «Etiqueta: valor» (ese ya se leía siempre).
-    if (claras.filter((x) => x.origen !== "dos_puntos").length < 2) continue;
+    if (!reparar[k] && claras.filter((x) => x.origen !== "dos_puntos").length < 2) continue;
     cambiado[k] = true;
     nuevas.push(...claras.map((x) => ({ etiqueta: x.etiqueta, valor: x.valor, categoria: x.categoria })));
     const usadas = new Set([...r.dosLineas, ...r.duplicadas, ...claras.flatMap((x) => x.idx)]);
@@ -354,8 +366,9 @@ export function reestructurarFicha(ficha) {
   const descripcion = cambiado.descripcion ? textos.join("\n") : [f.descripcion, ...textos].filter((x) => espacios(x)).join("\n");
   return {
     ...f,
-    generales: cambiado.generales ? conValor(f.generales) : f.generales,
-    especificaciones: [...(cambiado.especificaciones ? conValor(f.especificaciones) : f.especificaciones || []), ...nuevas],
+    // Una lista reparada se reemplaza entera por su nueva lectura (no quedan los pares corridos).
+    generales: reparar.generales ? [] : cambiado.generales ? conValor(f.generales) : f.generales,
+    especificaciones: [...(reparar.especificaciones ? [] : cambiado.especificaciones ? conValor(f.especificaciones) : f.especificaciones || []), ...nuevas],
     descripcion,
   };
 }
