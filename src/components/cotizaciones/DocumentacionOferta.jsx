@@ -141,42 +141,6 @@ export function DocumentacionOferta({ canal, cotizacionId, token, showToast, con
 
   return (
     <div data-documentacion-oferta>
-      <Seccion titulo="Documentación de la oferta" nota="Vista previa, descarga y emisión de los tres documentos. La vista previa es exactamente el PDF que se emite.">
-        {instalada === false && <AvisoLinea tono="info" dato="oferta-no-instalada">La emisión con historial y las condiciones guardadas estarán disponibles al instalar la actualización. Mientras tanto puedes ver y descargar los PDF (sin emitir).</AvisoLinea>}
-        {!cotizacionId && <AvisoLinea tono="info" dato="oferta-sin-guardar">Guarda la cotización para emitir documentos. La vista previa ya está disponible.</AvisoLinea>}
-        {error && <AvisoLinea tono="danger" dato="oferta-error">{error}</AvisoLinea>}
-        {ORDEN.map((tipo) => {
-          const ult = porTipo[tipo]?.[0];
-          return (
-            <Tarjeta key={tipo} padding="12px 14px" data-documento-oferta={tipo} style={tipo === "oferta" ? { border: `1.5px solid ${C.teal}` } : undefined}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start" }}>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: T.sm, fontWeight: 700, color: C.ink }}>{TIPOS_DOCUMENTO[tipo].nombre}{tipo === "oferta" ? " · principal" : ""}</div>
-                  <div style={{ fontSize: T.small, color: C.inkMuted, marginTop: 2 }}>{DESCRIPCION[tipo]}</div>
-                </div>
-                {ult ? <Badge tono="ok">v{String(ult.version).padStart(2, "0")} emitida</Badge> : <Badge tono="neutro">Sin emitir</Badge>}
-              </div>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
-                <BotonPrincipal data-previa-documento={tipo} onClick={() => verPrevia(tipo)} disabled={!!ocupado || !items.length} style={{ flex: "2 1 160px", justifyContent: "center", minHeight: 44 }}>
-                  {ocupado === `previa-${tipo}` ? "Preparando…" : !puedeEmitir || !cotizacionId || !instalada ? "Vista previa" : "Vista previa y emitir"}</BotonPrincipal>
-                <BotonSecundario data-descargar-documento={tipo} onClick={() => descargarActual(tipo)} disabled={!!ocupado || !items.length} style={{ flex: "1 1 120px", justifyContent: "center", minHeight: 44 }}>
-                  {ocupado === `descargar-${tipo}` ? "Generando…" : "Descargar PDF"}</BotonSecundario>
-              </div>
-              {porTipo[tipo]?.length > 0 && (
-                <Desplegable dato={`historial-${tipo}`} titulo="Historial de versiones" resumen={`${porTipo[tipo].length} emitida${porTipo[tipo].length === 1 ? "" : "s"}`} plano>
-                  {porTipo[tipo].map((d) => (
-                    <div key={d.id} data-version-emitida={d.version} style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "space-between", fontSize: T.small, color: C.inkMuted, padding: "6px 0", borderBottom: `1px solid ${C.border}` }}>
-                      <span>v{String(d.version).padStart(2, "0")} · {fechaHora(d.emitido_en)}{d.emitido_por_nombre ? ` · ${d.emitido_por_nombre}` : ""} · {d.paginas} pág.</span>
-                      <button type="button" data-descargar-emitido={d.id} onClick={() => descargarEmitido(d)} disabled={!!ocupado} style={{ border: "none", background: "none", color: C.tealDark, textDecoration: "underline", cursor: "pointer", fontSize: T.small }}>
-                        {ocupado === `hist-${d.id}` ? "Generando…" : "Descargar"}</button>
-                    </div>
-                  ))}
-                </Desplegable>
-              )}
-            </Tarjeta>
-          );
-        })}
-      </Seccion>
 
       <Seccion titulo="Condiciones comerciales" nota="El plazo y el despacho ya vienen de Productos (puedes reemplazarlos). Lo demás solo se imprime si lo completas.">
         {propios.filter((p) => String(p.valor || "").trim() || p.aviso).map((p) => (
@@ -240,6 +204,44 @@ export function DocumentacionOferta({ canal, cotizacionId, token, showToast, con
         <BotonSecundario data-guardar-condiciones onClick={() => guardarCondiciones().catch((e) => setError(e.message))} disabled={!sinGuardar || !!ocupado} style={{ minHeight: 44, width: "100%", justifyContent: "center", opacity: sinGuardar ? 1 : 0.55 }}>
           {sinGuardar ? (cotizacionId ? "Guardando condiciones…" : "Se guardan al guardar la cotización") : "✓ Condiciones y matriz guardadas"}</BotonSecundario>
       )}
+
+      {/* 26/11/2026: orden del trabajo — primero condiciones y matriz, al final generar/emitir los documentos (con todo completo). */}
+      <Seccion titulo="Documentación de la oferta" nota="Vista previa, descarga y emisión de los tres documentos. La vista previa es exactamente el PDF que se emite.">
+        {instalada === false && <AvisoLinea tono="info" dato="oferta-no-instalada">La emisión con historial y las condiciones guardadas estarán disponibles al instalar la actualización. Mientras tanto puedes ver y descargar los PDF (sin emitir).</AvisoLinea>}
+        {!cotizacionId && <AvisoLinea tono="info" dato="oferta-sin-guardar">Guarda la cotización para emitir documentos. La vista previa ya está disponible.</AvisoLinea>}
+        {error && <AvisoLinea tono="danger" dato="oferta-error">{error}</AvisoLinea>}
+        {ORDEN.map((tipo) => {
+          const ult = porTipo[tipo]?.[0];
+          return (
+            <Tarjeta key={tipo} padding="12px 14px" data-documento-oferta={tipo} style={tipo === "oferta" ? { border: `1.5px solid ${C.teal}` } : undefined}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start" }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: T.sm, fontWeight: 700, color: C.ink }}>{TIPOS_DOCUMENTO[tipo].nombre}{tipo === "oferta" ? " · principal" : ""}</div>
+                  <div style={{ fontSize: T.small, color: C.inkMuted, marginTop: 2 }}>{DESCRIPCION[tipo]}</div>
+                </div>
+                {ult ? <Badge tono="ok">v{String(ult.version).padStart(2, "0")} emitida</Badge> : <Badge tono="neutro">Sin emitir</Badge>}
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+                <BotonPrincipal data-previa-documento={tipo} onClick={() => verPrevia(tipo)} disabled={!!ocupado || !items.length} style={{ flex: "2 1 160px", justifyContent: "center", minHeight: 44 }}>
+                  {ocupado === `previa-${tipo}` ? "Preparando…" : !puedeEmitir || !cotizacionId || !instalada ? "Vista previa" : "Vista previa y emitir"}</BotonPrincipal>
+                <BotonSecundario data-descargar-documento={tipo} onClick={() => descargarActual(tipo)} disabled={!!ocupado || !items.length} style={{ flex: "1 1 120px", justifyContent: "center", minHeight: 44 }}>
+                  {ocupado === `descargar-${tipo}` ? "Generando…" : "Descargar PDF"}</BotonSecundario>
+              </div>
+              {porTipo[tipo]?.length > 0 && (
+                <Desplegable dato={`historial-${tipo}`} titulo="Historial de versiones" resumen={`${porTipo[tipo].length} emitida${porTipo[tipo].length === 1 ? "" : "s"}`} plano>
+                  {porTipo[tipo].map((d) => (
+                    <div key={d.id} data-version-emitida={d.version} style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "space-between", fontSize: T.small, color: C.inkMuted, padding: "6px 0", borderBottom: `1px solid ${C.border}` }}>
+                      <span>v{String(d.version).padStart(2, "0")} · {fechaHora(d.emitido_en)}{d.emitido_por_nombre ? ` · ${d.emitido_por_nombre}` : ""} · {d.paginas} pág.</span>
+                      <button type="button" data-descargar-emitido={d.id} onClick={() => descargarEmitido(d)} disabled={!!ocupado} style={{ border: "none", background: "none", color: C.tealDark, textDecoration: "underline", cursor: "pointer", fontSize: T.small }}>
+                        {ocupado === `hist-${d.id}` ? "Generando…" : "Descargar"}</button>
+                    </div>
+                  ))}
+                </Desplegable>
+              )}
+            </Tarjeta>
+          );
+        })}
+      </Seccion>
 
       {previa && (
         <VisorDocumento previa={previa} avisos={previa.avisos} emitiendo={ocupado === "emitir"} emitido={emitido} error={error}
