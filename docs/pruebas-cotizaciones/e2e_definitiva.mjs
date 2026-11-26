@@ -186,7 +186,9 @@ async function ingresarProducto(p, d) {
   await tab(p, "productos");
   ok("03_enlace_conservado_al_reabrir", (await H(p).locator('[data-item-cotizacion="1"] [data-abrir-publicacion]').getAttribute("href")) === "https://www.tienda.cl/mesa-plegable");
   ok("03_miniatura_visible_al_reabrir", /^data:image/.test(await H(p).locator('[data-item-cotizacion="1"] img').getAttribute("src").catch(() => "")));
-  await tab(p, "datos"); await H(p).locator('[data-campo="estado"]').selectOption("adjudicada"); await espera(p, 200);
+  // 26/11/2026: el resultado se marca en Documentos › Estado de la oferta (se guarda al tocarlo).
+  await tab(p, "eett"); if (await H(p).locator('[data-estado-a="presentada"]').count()) { await H(p).locator('[data-estado-a="presentada"]').click(); await espera(p, 1300); }
+  await H(p).locator('[data-estado-a="adjudicada"]').click(); await espera(p, 1300);
   await llenar(H(p).locator('[data-campo="oc_codigo"]'), "3390-1082-AG26");
   await H(p).locator("[data-guardar-cotizacion]").click(); await espera(p, 800);
   await tab(p, "productos");

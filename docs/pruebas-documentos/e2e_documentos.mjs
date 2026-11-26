@@ -161,6 +161,9 @@ async function cotizacionConProductos(p, { movil = false } = {}) {
   ok("A21_modelo_emitido_sin_datos_internos", !/Tienda Uno|precio_origen|costo|enlace|recargo|texto_original/i.test(JSON.stringify(rpcEmit[0].b.p_modelo)));
   await visor(p).locator("[data-volver-editar]").click(); await espera(p, 600);
   ok("A22_historial_con_la_version", /v01 emitida/.test(await sec.locator('[data-documento-oferta="oferta"]').innerText()));
+  // 26/11/2026: tras emitir, «Estado de la oferta» pregunta si ya se presentó (no cambia el estado solo).
+  ok("A22b_tras_emitir_pregunta_si_se_presento", (await H(p).locator('[data-aviso-linea="preguntar-presentada"]').count()) === 1
+    && (await H(p).locator('[data-estado-a="presentada"]').count()) === 1 && (await H(p).locator("[data-estado-oferta]").getAttribute("data-estado-oferta")) !== "presentada");
   // EETT con la misma información: conserva la versión 1. Sin precios.
   await sec.locator('[data-previa-documento="eett"]').click(); await visor(p).locator("[data-pagina-doc]").first().waitFor({ timeout: 30000 }); await espera(p, 800);
   const eett = await descargar(p, () => visor(p).locator("[data-emitir-documento]").click());

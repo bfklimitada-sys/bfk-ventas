@@ -32,7 +32,7 @@ const DESCRIPCION = {
 };
 const fechaHora = (iso) => { try { return new Date(iso).toLocaleString("es-CL", { timeZone: "America/Santiago", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }); } catch { return iso; } };
 
-export function DocumentacionOferta({ canal, cotizacionId, token, showToast, construirModelo, asegurarGuardado, propios = [], ocultar = [], sugeridas = {}, origenes = {}, avisos = {}, camposPropios = null, onIrA, pendientes, items = [], propuestaMatriz, soloLectura = false, puedeEmitir = true, cambiosSinGuardar = false }) {
+export function DocumentacionOferta({ canal, cotizacionId, token, showToast, construirModelo, asegurarGuardado, propios = [], ocultar = [], sugeridas = {}, origenes = {}, avisos = {}, camposPropios = null, onIrA, pendientes, onHistorial, items = [], propuestaMatriz, soloLectura = false, puedeEmitir = true, cambiosSinGuardar = false }) {
   const [instalada, setInstalada] = useState(null);          // null = consultando · true · false
   const [condiciones, setCondiciones] = useState({}); const [matriz, setMatriz] = useState([]);
   const [guardadas, setGuardadas] = useState("{}"); const [historial, setHistorial] = useState([]);
@@ -56,6 +56,8 @@ export function DocumentacionOferta({ canal, cotizacionId, token, showToast, con
   useEffect(() => { cargar(); }, [canal, cotizacionId]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const setCond = (k, v) => setCondiciones((c) => ({ ...c, [k]: v }));
+  // El editor conoce lo emitido (p. ej. para preguntar si la oferta ya se presentó en Mercado Público).
+  useEffect(() => { onHistorial?.(historial); }, [historial]);   // eslint-disable-line react-hooks/exhaustive-deps
   // Cotización nueva (sin guardar): lo escrito aquí se entrega al editor, que lo guarda junto con la cotización (al guardarla por
   // primera vez el editor se vuelve a abrir con la cotización guardada y esta sección se monta de nuevo).
   useEffect(() => { if (pendientes) pendientes.current = !cotizacionId && sinGuardar ? { condiciones, matriz } : null; });

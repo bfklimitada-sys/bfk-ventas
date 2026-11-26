@@ -197,6 +197,21 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
     setAviso(null);
     return nueva;
   };
+  // Cambio de estado desde «Estado de la oferta»: se aplica y se guarda de inmediato (tras el siguiente render, para guardar
+  // la cotización ya con el estado nuevo). Si el guardado falla (p. ej. falta el vendedor), se vuelve al estado anterior.
+  const [ofertaEmitida, setOfertaEmitida] = useState(false);
+  const [guardarEstado, setGuardarEstado] = useState(null);
+  const cambiarEstado = (nuevo) => { setGuardarEstado({ anterior: cot.estado }); setCampo("estado", nuevo); };
+  useEffect(() => {
+    if (!guardarEstado) return;
+    const { anterior } = guardarEstado; setGuardarEstado(null);
+    (async () => {
+      setGuardando(true);
+      try { await guardarInterno(); showToast?.(`Estado: ${ESTADOS_COTIZACION[vivo.current.cot.estado]?.label}`); }
+      catch (e) { setCampo("estado", anterior); showToast?.(`No se cambió el estado: ${mensajeVendedor(e)}`, "error"); if (/vendedor/i.test(e.message)) setPestana("datos"); }
+      finally { setGuardando(false); }
+    })();
+  }, [guardarEstado]);   // eslint-disable-line react-hooks/exhaustive-deps
   const guardar = async () => {
     setGuardando(true);
     try { await guardarInterno(); showToast?.("Cotización guardada"); }
@@ -384,8 +399,7 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
             </Seccion>
           )}
           {cot.documentos_mp?.length > 0 && <div data-documentos-mp style={{ fontSize: T.small, color: C.inkMuted, marginBottom: 12 }}><b>Documentos adjuntos en Mercado Público:</b> {cot.documentos_mp.map((d) => d.nombre || d.id).join(", ")}</div>}
-          <Field label="Estado"><select data-campo="estado" value={cot.estado} onChange={(e) => setCampo("estado", e.target.value)} disabled={protegido && !esAdmin} style={selStyle}>{Object.entries(ESTADOS_COTIZACION).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}</select></Field>
-          {cot.estado === "adjudicada" && <Field label="OC adjudicada (opcional)" hint="Solo deja el vínculo: no crea ni modifica la OC."><input data-campo="oc_codigo" value={cot.oc_codigo || ""} disabled={protegido && !!inicial.oc_codigo && !esAdmin} onChange={(e) => setCampo("oc_codigo", e.target.value.trim().toUpperCase())} style={iMono} placeholder="1525570-1082-AG26" /></Field>}
+          {/* 26/11/2026: el estado ya no se elige aquí; avanza al final, en Documentos › Estado de la oferta. */}
           {/* Fase 2 exentas: clasificación tributaria respaldada (solicitud + aprobación de un administrador). Solo cotizaciones ya guardadas. */}
           {tributario && cot.id && <Seccion titulo="Clasificación tributaria"><ClasificacionTributaria ambito="cotizacion" objetivo={{ ...inicial, id: cot.id }} historial={tributario.historial} perfil={perfil} acciones={tributario} /></Seccion>}
           <Field label="Observaciones (internas)"><textarea rows={3} value={cot.observaciones} onChange={(e) => setCampo("observaciones", e.target.value)} style={{ ...iStyle, resize: "vertical" }} /></Field>
@@ -545,7 +559,34 @@ export function EditorCotizacion({ tributario = null, almacen, inicial, token, p
           <DocumentacionOferta canal="mp" cotizacionId={cot.id || null} token={token} showToast={showToast} cambiosSinGuardar={sucio}
             construirModelo={construirModeloOferta} asegurarGuardado={asegurarGuardado}
             {...condicionesAutomaticas(cot.items, cot.plazo)} onIrA={setPestana} pendientes={condOfertaPendientes}
-            items={cot.items.map((it, i) => ({ n: i + 1, nombre: it.ficha?.nombre }))} propuestaMatriz={() => propuestaMatrizMP(cot)} />
+            items={cot.items.map((it, i) => ({ n: i + 1, nombre: it.ficha?.nombre }))} propuestaMatriz={() => propuestaMatrizMP(cot)}
+            onHistorial={(h) => setOfertaEmitida((h || []).some((d) => d.tipo === "oferta" || d.tipo === "cotizacion"))} />
+          {/* Estado de la oferta (26/11/2026): avanza con el trabajo. Al emitir se pregunta si ya se presentó; después del
+              cierre, adjudicada o no. Cada paso se guarda al tocarlo. Un administrador puede corregirlo. */}
+          <Seccion titulo="Estado de la oferta" nota="Avanza con el trabajo. Cada cambio se guarda al tocarlo.">
+            <div data-estado-oferta={cot.estado} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, fontSize: T.body }}>
+              Estado actual: <b>{ESTADOS_COTIZACION[cot.estado]?.label || cot.estado}</b></div>
+            {["borrador", "lista"].includes(cot.estado) && <>
+              {ofertaEmitida && <AvisoLinea tono="info" dato="preguntar-presentada">Ya emitiste la oferta. ¿La presentaste en Mercado Público?</AvisoLinea>}
+              {!cot.vendedor_id && <AvisoLinea tono="warn" dato="estado-falta-vendedor" accion="Ir a Datos" onClick={() => setPestana("datos")}>Para marcarla como presentada falta el vendedor responsable.</AvisoLinea>}
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <BotonPrincipal data-estado-a="presentada" onClick={() => cambiarEstado("presentada")} disabled={guardando} style={{ minHeight: 44, flex: "1 1 200px" }}>Marcar como presentada</BotonPrincipal>
+                <BotonSecundario data-estado-a="descartada" onClick={() => cambiarEstado("descartada")} disabled={guardando} style={{ minHeight: 44, flex: "1 1 160px" }}>Descartar (no se oferta)</BotonSecundario>
+              </div></>}
+            {cot.estado === "presentada" && <>
+              <div style={{ fontSize: T.small, color: C.inkMuted, marginBottom: 8 }}>{cot.fecha_cierre ? `Cierre: ${String(cot.fecha_cierre).slice(0, 16).replace("T", " ")}. ` : ""}Cuando se conozca el resultado:</div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <BotonPrincipal data-estado-a="adjudicada" onClick={() => cambiarEstado("adjudicada")} disabled={guardando} style={{ minHeight: 44, flex: "1 1 160px" }}>Adjudicada</BotonPrincipal>
+                <BotonSecundario data-estado-a="no_adjudicada" onClick={() => cambiarEstado("no_adjudicada")} disabled={guardando} style={{ minHeight: 44, flex: "1 1 160px" }}>No adjudicada</BotonSecundario>
+              </div></>}
+            {cot.estado === "adjudicada" && <Field label="OC adjudicada (opcional)" hint="Solo deja el vínculo: no crea ni modifica la OC."><input data-campo="oc_codigo" value={cot.oc_codigo || ""} disabled={protegido && !!inicial.oc_codigo && !esAdmin} onChange={(e) => setCampo("oc_codigo", e.target.value.trim().toUpperCase())} style={iMono} placeholder="1525570-1082-AG26" /></Field>}
+            {esAdmin && (
+              <details data-corregir-estado style={{ marginTop: 10 }}>
+                <summary style={{ cursor: "pointer", fontSize: T.small, color: C.inkMuted }}>Corregir estado (administrador)</summary>
+                <Field label="Estado"><select data-campo="estado" value={cot.estado} onChange={(e) => setCampo("estado", e.target.value)} style={selStyle}>{Object.entries(ESTADOS_COTIZACION).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}</select></Field>
+              </details>
+            )}
+          </Seccion>
           {historial.length > 0 && (
             <Seccion titulo="EETT generadas con el formato anterior" nota="Registro histórico de cada generación (los PDF quedan en el dispositivo donde se descargaron).">
               {historial.map((h) => (

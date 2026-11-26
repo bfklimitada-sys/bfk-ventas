@@ -64,16 +64,18 @@ const texto = async (p) => (await p.locator("body").innerText()).replace(/\s+/g,
   ok("A02_borrador_sin_vendedor_se_guarda", !!nueva && nueva.estado === "borrador" && !nueva.vendedor_id);
   // 2. Presentar sin vendedor: bloqueado (aviso + sin llamada al servidor).
   const n0 = guardados(M).length;
-  await H(p).locator('[data-campo="estado"]').selectOption("presentada"); await espera(p, 300);
-  ok("A03_aviso_falta_vendedor", await H(p).locator('[data-aviso-linea="falta-vendedor"]').count() === 1);
-  await H(p).locator("[data-guardar-cotizacion]").click();
+  // 26/11/2026: el estado avanza en Documentos › Estado de la oferta (ya no en Datos); cada paso se guarda al tocarlo.
+  await tab(p, "eett");
+  ok("A03_aviso_falta_vendedor", await H(p).locator('[data-aviso-linea="estado-falta-vendedor"]').count() === 1 && (await H(p).locator('[data-campo="estado"]').count()) <= 1);
+  await H(p).locator('[data-estado-a="presentada"]').click();
   const vioMensaje = await p.getByText(/No se puede presentar una cotización sin vendedor responsable/).first().waitFor({ timeout: 5000 }).then(() => true).catch(() => false);
   await espera(p, 600);
   ok("A04_presentar_sin_vendedor_bloqueado", vioMensaje && guardados(M).length === n0 && M.cots.get(nueva.id).estado === "borrador");
   // 3. Presentar con vendedor: permitido, con el nombre del catálogo.
-  await H(p).locator('[data-campo="vendedor"]').selectOption("v1"); await espera(p, 200);
-  ok("A05_aviso_desaparece_al_elegir", await H(p).locator('[data-aviso-linea="falta-vendedor"]').count() === 0);
-  await guardar(p);
+  await tab(p, "datos"); await H(p).locator('[data-campo="vendedor"]').selectOption("v1"); await espera(p, 200);
+  await tab(p, "eett");
+  ok("A05_aviso_desaparece_al_elegir", await H(p).locator('[data-aviso-linea="estado-falta-vendedor"]').count() === 0);
+  await H(p).locator('[data-estado-a="presentada"]').click(); await espera(p, 1300);
   const g = M.cots.get(nueva.id);
   ok("A06_presentada_con_vendedor", g.estado === "presentada" && g.vendedor_id === "v1" && g.vendedor_nombre === "Vendedor Uno");
   // 4. Persistencia: cerrar y volver a abrir.
@@ -113,7 +115,7 @@ const texto = async (p) => (await p.locator("body").innerText()).replace(/\s+/g,
   await espera(p, 600);
   ok("B03_historial_visible", /Vendedor Uno → Vendedora Dos \(administrador\)/.test(await H(p).locator("[data-historial-vendedor]").innerText().catch(() => "")));
   // 8. Adjudicación con vendedor asignado, vinculada a una OC sin vendedor (2005-105-SE26).
-  await H(p).locator('[data-campo="estado"]').selectOption("adjudicada"); await espera(p, 300);
+  await tab(p, "eett"); await H(p).locator('[data-estado-a="adjudicada"]').click(); await espera(p, 1300);
   await H(p).locator('[data-campo="oc_codigo"]').fill("2005-105-SE26"); await guardar(p);
   const adj = M.cots.get("c-pres");
   ok("B04_adjudicada_conserva_vendedor", adj.estado === "adjudicada" && adj.vendedor_id === "v2" && adj.vendedor_nombre === "Vendedora Dos" && adj.oc_codigo === "2005-105-SE26");
@@ -141,13 +143,13 @@ const texto = async (p) => (await p.locator("body").innerText()).replace(/\s+/g,
 // ═════ C. Celular 390 px ═════
 {
   const { p, ctx, M, errs } = await preparar({ usuario: "u2", movil: true, cots: [COT("c-bor", "6666-6-COT26", "borrador", null)] });
-  await irCotizaciones(p, true); await abrirCot(p, "6666-6-COT26"); await tab(p, "datos");
-  await H(p).locator('[data-campo="estado"]').selectOption("presentada"); await espera(p, 300);
+  await irCotizaciones(p, true); await abrirCot(p, "6666-6-COT26"); await tab(p, "eett");
   const sinDesborde = await p.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1);
-  ok("C01_celular_aviso_visible_sin_desborde", await H(p).locator('[data-aviso-linea="falta-vendedor"]').isVisible() && sinDesborde);
-  await guardar(p);
+  ok("C01_celular_aviso_visible_sin_desborde", await H(p).locator('[data-aviso-linea="estado-falta-vendedor"]').isVisible() && sinDesborde);
+  await H(p).locator('[data-estado-a="presentada"]').click(); await espera(p, 1300);
   ok("C02_celular_presentar_sin_vendedor_bloqueado", M.cots.get("c-bor").estado === "borrador");
-  await H(p).locator('[data-campo="vendedor"]').selectOption("v2"); await guardar(p);
+  await tab(p, "datos"); await H(p).locator('[data-campo="vendedor"]').selectOption("v2"); await guardar(p);
+  await tab(p, "eett"); await H(p).locator('[data-estado-a="presentada"]').click(); await espera(p, 1300);
   ok("C03_celular_presentar_con_vendedor", M.cots.get("c-bor").estado === "presentada" && M.cots.get("c-bor").vendedor_id === "v2");
   ok("C04_sin_errores_js", errs.length === 0, errs);
   await ctx.close();
